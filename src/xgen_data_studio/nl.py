@@ -161,3 +161,23 @@ def answer(studio, question: str, llm: Callable[[str, str], str], *, backend: st
     res = studio.run(target, gen.params, backend=backend, role=role, principal=principal)
     return {"ok": True, "attempts": len(gen.attempts), "query": gen.registered or gen.query.to_dict(),
             "columns": res.columns, "rows": [list(r) for r in res.rows], "text": res.compiled.text}
+
+
+def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = None,
+                timeout: float = 90) -> Callable[[str, str], str]:
+    """An llm(system, user) callable over any OpenAI-compatible chat completions endpoint (vLLM, Ollama, ...)."""
+    import urllib.request
+
+    endpoint = url.rstrip("/") + ("" if url.rstrip("/").endswith("/chat/completions") else "/chat/completions")
+
+    def call(system: str, user: str) -> str:
+        body = {"model": model, "temperature": 0,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                **(extra or {})}
+        headers = {"Content-Type": "application/json", **({"Authorization": f"Bearer {key}"} if key else {})}
+        req = urllib.request.Request(endpoint, data=json.dumps(body).encode("utf-8"), headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        return data["choices"][0]["message"].get("content") or ""
+
+    return call

@@ -1,7 +1,7 @@
 # xgen-data-studio
 
-**One domain ontology, executed wherever the data already lives.** Describe the business once — object
-types, properties, links, states, decisions, actions, roles — and bind it to the source tables. A question
+**One domain ontology, executed wherever the data already lives.** Describe the business once (object
+types, properties, links, states, decisions, actions, roles) and bind it to the source tables. A question
 then becomes *one* ontology query, and the studio compiles it for the store a deployment actually has:
 SQL in any dialect, Cypher, ISO GQL, SPARQL or SQL/PGQ. SPARQL and Cypher written by people or agents are read
 back into the same query, so they run on any of those stores too. **Zero hard dependencies, zero infra to try it.**
@@ -35,6 +35,11 @@ The screens below are the studio page that `xds preview` writes for the example 
 databases). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the
 decision with its evidence and the reach of a column change are what the library computed for that example.
 
+`xds serve` turns the same screens into a working page: plug modules in and out, run a query in seven
+languages or write one in SPARQL or Cypher yourself, decide, file an agent's request and approve it, run the
+questions and the database check. Every visitor gets a studio of their own, built from the same studio file, so
+nothing one person does reaches another.
+
 <p align="center">
   <img src="assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
 </p>
@@ -56,7 +61,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
     <td><img src="assets/screens/map.png" alt="Data map screen: everything that depends on one column, what an agent can reach, and the data nobody uses"></td>
   </tr>
   <tr>
-    <td><b>Decide and act.</b> A decision table — here with the customer's own VIP rule plugged in ahead of the standard ones, each rule citing its policy — the source column behind every input, and an agent's action request waiting for a person.</td>
+    <td><b>Decide and act.</b> A decision table (here with the customer's own VIP rule plugged in ahead of the standard ones, each rule citing its policy), the source column behind every input, and an agent's action request waiting for a person.</td>
     <td><b>The data map.</b> What a column change touches, from property to agent; what one agent can reach; what nobody uses.</td>
   </tr>
 </table>
@@ -78,7 +83,8 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 | `exchange` | OWL and R2RML export with a report of what each format cannot hold; OWL/RDFS import as a starting definition |
 | `catalog` | The data space as a graph: databases, tables, columns, files, collections, ontology objects, queries, decisions, actions, roles, agents |
 | `nl` | A schema card and IR guide for a language model, and a loop that checks its answer and asks again with the issues |
-| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xds` command; the MCP server; the studio page |
+| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xds` command; the MCP server; the studio page as a file |
+| `web` | The studio page served over HTTP with the standard library only: library, ontology graph, queries, decisions and approvals, checks; one studio per visitor, dropped after an idle hour |
 
 ## Define once
 
@@ -124,7 +130,7 @@ Domain knowledge comes and goes, so it is packaged. A library keeps each package
 
 | Kind | Example | What it holds |
 |---|---|---|
-| `core` | `core` — 공통 개념 | Concepts every domain hangs from: party, agreement, the `Named` interface |
+| `core` | `core` (공통 개념) | Concepts every domain hangs from: party, agreement, the `Named` interface |
 | `domain` | `commerce`, `finance` | The standard definition of a domain, aligned to schema.org, GS1 or FIBO, with no tables in it |
 | `industry` | `fashion`, `food` | What one industry adds on top of the standard: material and season, expiry and storage |
 | `customer` | `acme-overlay` | Only what one customer does differently: an extra property, a VIP rule placed ahead of the standard ones, a query taken out |
@@ -190,9 +196,9 @@ parameters, so a model or a person can pick one by name.
 |---|---|---|---|---|---|---|
 | SQL | PostgreSQL and SQLite natively; MySQL, Oracle, SQL Server, Snowflake, BigQuery, … through sqlglot | LEFT JOIN | EXISTS | recursive CTE | strpos · instr | `SqliteBackend`, `DbApiBackend` (qmark · format · numeric) |
 | Cypher 25 | Neo4j, Memgraph, Neptune openCypher, Apache AGE | OPTIONAL MATCH | `EXISTS {}` | `*1..3` + WITH DISTINCT | CONTAINS | `Neo4jBackend`, loads by UNWIND · MERGE |
-| GQL | Spanner Graph, BigQuery Graph, Fabric Graph | OPTIONAL MATCH | `EXISTS {}` | `{1,3}` + ANY | — (refused) | `CallableBackend` around your driver |
+| GQL | Spanner Graph, BigQuery Graph, Fabric Graph | OPTIONAL MATCH | `EXISTS {}` | `{1,3}` + ANY | refused | `CallableBackend` around your driver |
 | SPARQL 1.1 | rdflib, Fuseki, GraphDB, Stardog, Virtuoso, Oxigraph | OPTIONAL | FILTER EXISTS | path alternatives + DISTINCT | CONTAINS | `RdflibBackend`, `SparqlEndpointBackend` (Graph Store Protocol · Update) |
-| SQL/PGQ | Oracle 26ai, Spanner | — (refused) | — (refused) | `{1,3}` | POSITION | `graph_ddl()` writes the property graph over the tables |
+| SQL/PGQ | Oracle 26ai, Spanner | refused | refused | `{1,3}` | POSITION | `graph_ddl()` writes the property graph over the tables |
 
 A backend declares its `Capabilities`; a query that needs something a backend lacks is refused before it runs,
 with the reason. Values stay in the source: a graph backend gets a projection only when you ask for one, and
@@ -248,7 +254,8 @@ cat.unused()                                      # what no agent or workflow us
 `nl.IRGenerator(onto, llm)` gives a model a schema card (only what the role may read) and the IR format, and
 takes back either an IR object or a registered query name with parameters. The answer is checked against the
 ontology; if it fails, the model is asked again with the list of issues. The model never writes backend
-query text. `llm` is any `(system, prompt) -> str`.
+query text. `llm` is any `(system, prompt) -> str`; `nl.openai_chat(url, model)` makes one for any
+OpenAI-compatible endpoint, and `xds serve --llm-url ... --llm-model ...` adds a question box to the page.
 
 ## Agents over MCP
 
@@ -288,6 +295,7 @@ xds decide examples/commerce/studio.yaml returnEligibility I1001
 xds questions examples/commerce/studio.yaml                    # validation questions and accuracy
 xds conformance examples/commerce/studio.yaml                  # every registered query on every backend
 xds preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
+xds serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
 xds library list examples/library                              # every package, its kind, versions and requirements
 xds library create my-lib energy --kind domain --label "에너지 설비" --requires core
 xds library import-owl my-lib fibo-loans.ttl fibo-loans --requires core
@@ -340,6 +348,7 @@ src/xgen_data_studio/
   reason/                   # rules · shacl · owl_rl
   exchange/                 # owl · r2rml · importer
   catalog.py nl.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
+  web/                      # xds serve: api.py (answers from one studio), server.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus finance, fashion, food and a customer overlay
 tools/                      # render_screens.py (the README images), architecture.html
@@ -351,7 +360,7 @@ tools/                      # render_screens.py (the README images), architectur
 - binding suggestions from source column names, types and value spreads, confirmed by a person
 - review of a new module version before it is plugged in: its impact, the database check and the questions, in one approval
 - conformance runs against live PostgreSQL, Neo4j and Fuseki in CI; Gremlin once TinkerPop 4 is released
-- the studio page as a served application rather than a static file
+- editing a module from the page, with the review above before it is saved as a new version
 
 ## Repository model
 

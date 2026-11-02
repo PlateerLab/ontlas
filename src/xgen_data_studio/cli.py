@@ -162,6 +162,18 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--read-only", action="store_true")
     s.add_argument("--transport", default="stdio")
 
+    s = sub.add_parser("serve", help="serve the studio page; every visitor gets a studio of their own")
+    s.add_argument("config")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=7710)
+    s.add_argument("--sessions", type=int, default=24, help="studios kept at once; the least recent goes first")
+    s.add_argument("--idle", type=int, default=3600, help="seconds before an unused studio is dropped")
+    s.add_argument("--llm-url", default="", help="OpenAI-compatible base URL for natural-language questions")
+    s.add_argument("--llm-model", default="")
+    s.add_argument("--llm-key-env", default="", help="environment variable that holds the API key")
+    s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
+    s.add_argument("--quiet", action="store_true")
+
     a = ap.parse_args(argv)
 
     if a.cmd == "validate":
@@ -275,6 +287,20 @@ def main(argv: list[str] | None = None) -> int:
         args = [a.config, "--transport", a.transport] + (["--role", a.role] if a.role else [])
         args += sum((["--principal", p] for p in a.principal), []) + (["--read-only"] if a.read_only else [])
         mcp_main(args)
+        return 0
+
+    if a.cmd == "serve":
+        import os
+
+        from xgen_data_studio.web import serve_config
+
+        llm = None
+        if a.llm_url:
+            from xgen_data_studio.nl import openai_chat
+
+            llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
+                              extra=json.loads(a.llm_extra) if a.llm_extra else None)
+        serve_config(a.config, llm=llm, host=a.host, port=a.port, limit=a.sessions, idle=a.idle, quiet=a.quiet)
         return 0
 
     from xgen_data_studio.config import load_studio

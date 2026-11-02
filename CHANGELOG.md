@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+- `xds serve`: the studio page as a working application on the standard library's HTTP server. Library tab with
+  switches that plug modules in and out (the impact first, dependents offered together), the schema graph
+  (laid out once and still, modules as dashed groups, concepts as rings), one query in seven languages with the
+  rows from every backend, SPARQL, Cypher or IR written by hand and run everywhere, queries under a role's row
+  filters, decisions with the rule, its citation, the evidence path and the same verdict on ZEN, an agent's
+  request checked and approved by a person with the change written back and projected, the validation questions
+  and conformance, the database check, OWL and JDM downloads.
+- Every visitor gets a studio of their own from the same studio file (one kept ready ahead), dropped after an
+  idle hour; the page is one HTML response with its style and script inlined, so a cache in front never mixes
+  versions.
+- `nl.openai_chat(url, model)`: an `llm` callable for any OpenAI-compatible endpoint; `xds serve --llm-url`
+  adds a question box.
+
 ## 0.2.0
 
 - Modules: domain knowledge packaged as common concepts, domains, industry extensions, a customer's
