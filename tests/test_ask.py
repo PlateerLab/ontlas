@@ -20,6 +20,7 @@ def test_a_question_tries_again_only_while_the_page_can_still_wait(monkeypatch):
 
 
 def test_a_column_named_after_another_property_is_sent_back():
+    pytest.importorskip("rdflib")
     from xgen_data_studio.nl import IRGenerator
 
     s = _build()

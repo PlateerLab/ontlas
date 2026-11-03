@@ -72,6 +72,7 @@ def test_expressions_are_checked_against_the_definition(onto):
 
 
 def test_languages_without_a_form_say_so(onto):
+    pytest.importorskip("sqlglot")  # the Oracle form at the end
     q = {"match": {"o": "Order"}, "return": ["o.order_id", "o.total"]}
     with pytest.raises(CompileError, match="GQL"):
         compiler_for(onto, "gql").compile(q)

@@ -55,6 +55,7 @@ def test_roles_and_questions_come_with_the_draft_and_hold():
 
 def test_a_decision_table_is_drawn_from_past_outcomes_with_its_accuracy():
     pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")
     from xgen_data_studio.config import load_studio
     from xgen_data_studio.induce import InduceError, induce
 

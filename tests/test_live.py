@@ -29,11 +29,11 @@ def _need(var: str) -> str:
 
 
 def _pg():
-    import psycopg
+    dsn = _need("XDS_LIVE_PG")  # before the import: without the address the test skips, wherever it runs
+    psycopg = pytest.importorskip("psycopg")
 
     from xgen_data_studio.backends.sql import DbApiBackend
 
-    dsn = _need("XDS_LIVE_PG")
     admin = psycopg.connect(dsn, autocommit=True)
     admin.execute("DROP SCHEMA IF EXISTS xds_live CASCADE")
     admin.execute("CREATE SCHEMA xds_live")
@@ -167,8 +167,17 @@ def test_gremlin_server_answers_like_sqlite():
         st.project()
         rep = st.conformance()
         assert rep.passed, rep.summary()
-        ran = [q for q in rep.queries if q.outcomes["gremlin"].rows is not None]
-        assert len(ran) >= 8  # the rest use what Gremlin here declares it does not do (optional, computed)
+        from xgen_data_studio.compile.base import CompileError, compiler_for
+
+        def takes(q) -> bool:  # the rest use what Gremlin here declares it does not do (optional, computed)
+            try:
+                compiler_for(st.onto, "gremlin").compile(q)
+                return True
+            except CompileError:
+                return False
+
+        ran = {q.name for q in rep.queries if q.outcomes["gremlin"].rows is not None}
+        assert ran == {n for n, (q, _) in st.registered().items() if takes(q)} and len(ran) >= 7
         assert st.run("categoryAncestors", {"category": "K3"}, backend="gremlin").rows == [("상의",), ("의류",)]
         from xgen_data_studio.ir import Query
 
