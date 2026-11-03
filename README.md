@@ -437,6 +437,17 @@ may read in clear). `xds nl-eval studio.yaml questions.yaml --llm-url ... --llm-
 own questions by execution: the gold query's rows must be in the answer's;
 [`examples/commerce/nl_questions.yaml`](examples/commerce/nl_questions.yaml) has sixteen.
 
+## Rules from policy text
+
+`policy.PolicyDrafter(modules, llm).draft(text, target="OrderItem")` gives a model the same schema card, the
+decision table format and the policy's clauses, and takes back one decision table. The engine checks it as a module
+(inputs it can read from the target or along a path, tests it can evaluate, outputs the rules set) and checks that
+every rule cites a clause the text numbers; whatever is wrong goes back to the model. The draft is a module of its
+own, and a person files it as a change request, so it is tried on a copy and approved before it decides anything.
+On the page, `xds serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
+command is `xds policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`.
+[`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
+
 ## Agents over MCP
 
 ```bash
@@ -488,6 +499,7 @@ xds review examples/library/studio.yaml acme-1.1.0.yaml        # a new module ve
 xds identity examples/library/studio.yaml Person --write       # join the records, write the crosswalk
 xds sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
 xds nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
+xds policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
 xds users add users.yaml kim --roles editor                    # a person of a team studio (xds serve --users)
 xds library list examples/library                              # every package, its kind, versions and requirements
 xds library create my-lib energy --kind domain --label "에너지 설비" --requires core
@@ -543,7 +555,7 @@ src/xgen_data_studio/
   decide/ actions.py roles.py
   reason/                   # rules · shacl · owl_rl
   exchange/                 # owl · r2rml · importer
-  catalog.py nl.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
+  catalog.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
   web/                      # xds serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus finance, fashion, food and a customer overlay

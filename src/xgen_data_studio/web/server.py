@@ -425,6 +425,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if not ask_limit.allow():
                     return {"ok": False, "error": "분당 질문 한도를 초과해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."}
                 return s.ask(str(a.get("question", "")), role=role, principal=principal)
+            if route == "policy/draft":  # the same model and the same limit as questions
+                if not ask_limit.allow():
+                    return {"ok": False, "error": "분당 모델 호출 한도를 초과해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."}
+                return s.policy_draft(str(a.get("text", "")), str(a.get("target", "")), str(a.get("name", "")))
+            if route == "policy/sample":
+                return s.policy_sample()
             if route == "decide":
                 return s.decide(a["name"], str(a["key"]))
             if route == "request":

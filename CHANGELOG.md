@@ -72,6 +72,11 @@
   needs takes those out (`remove: {states: [...]}`; removing an action takes it out of the roles that held it), and
   the standard's questions answered on its example data are asked again with the answers the tables give, or left
   out when they cannot be answered; each kept query without parameters is asked its row count.
+- `policy`: a decision table drafted from policy text by a language model and checked by the engine (inputs on the
+  target or along a path, evaluable tests, known outputs, and a cite for every rule that the text numbers), sent back
+  with what is wrong, and written as a module a person files as a change request. On the page with `--llm-url`:
+  "정책서로 규칙 초안" in the library (`--policies DIR` for example texts); `xds policy-draft`. Example
+  `examples/policies/교환정책서.md`.
 - `nl`: a returned column named after another property of its object (`c.customer_id` as `name`) goes back to the
   model; on the page a question tries again only within 45 seconds of starting, so it ends before a proxy in front
   (Cloudflare, 100 s) gives up, and an answer that fails says what the model last got wrong.

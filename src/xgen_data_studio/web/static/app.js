@@ -80,6 +80,7 @@
       '식품 업종 모듈을 적용하면 원천 DB에 없는 컬럼이 오류로 표시됩니다.']],
   ];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
+  const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
   const FLOW = [
     ['source', '원천 데이터', '테이블과 행 수', 'data'],
     ['define', '온톨로지 정의', '적용 모듈과 객체, 관계, 속성', 'library'],
@@ -100,6 +101,7 @@
       ed: { drop: {}, labels: {}, keys: {}, types: {}, values: {}, card: {}, add: [] }, add: { source: '', property: '', target: '', label: '' } },
     ed: null, me: null, change: null, changes: null, flset: null, agree: null, ident: null,
     map: { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false },
+    pol: { open: false, text: '', target: '', busy: false, res: null },
     ind: { target: '', inputs: {} },
   };
 
@@ -270,8 +272,8 @@
       : '<div class="muted">변경 이력이 없습니다.</div>';
     return `
 <div class="head"><div><h1>온톨로지 라이브러리</h1><div class="sub">도메인별 온톨로지 모듈과 버전을 관리하고 스튜디오 적용 여부를 설정합니다</div></div>
-  <div class="right"><button class="btn" data-act="mnew">새 모듈</button><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
-<div class="tabs">${tabs.join('')}</div>${editorCard()}
+  <div class="right">${st.ask ? '<button class="btn" data-act="popen">정책서로 규칙 초안</button>' : ''}<button class="btn" data-act="mnew">새 모듈</button><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
+<div class="tabs">${tabs.join('')}</div>${policyCard()}${editorCard()}
 <div class="grid" style="grid-template-columns:minmax(0,1.62fr) minmax(320px,1fr)">
   <div class="card"><div class="ch">모듈<div class="right muted" style="font-weight:600;font-size:12px">적용 ${st.modules_on}개</div></div>
     <div class="cb scroll" style="padding:0"><table><tr><th>온톨로지</th><th>종류</th><th>버전</th><th>의존 모듈</th><th>구성</th><th style="text-align:center">적용</th></tr>${rows}</table></div></div>
@@ -282,6 +284,39 @@
     <div class="card"><div class="ch">변경 이력</div><div class="cb loglist">${log}</div></div>
   </div>
 </div>`;
+  }
+
+  // policy text -> a decision table drafted by the language model and checked by the engine, opened in the editor
+  function policyCard() {
+    const p = S.pol;
+    if (!p.open) return '';
+    const nodes = S.st.graph.nodes.filter((n) => n.table);
+    const targets = `<option value="">자동</option>${nodes.map((n) => `<option value="${esc(n.id)}"${n.id === p.target ? ' selected' : ''}>${esc(n.label)} · ${esc(n.id)}</option>`).join('')}`;
+    let body = '';
+    const r = p.res;
+    if (r && !r.ok) body = `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.error)}</div></div>`;
+    else if (r) {
+      const when = (w) => Object.keys(w).length ? Object.entries(w).map(([k, v]) => `<span class="mono">${esc(k)} ${esc(v)}</span>`).join('<br>') : '<span class="muted">그 밖의 경우</span>';
+      const rows = r.rules.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="font-size:12px">${when(x.when)}</td><td style="font-size:12px">${showObj(x.then)}</td><td>${x.cite ? `<span class="chip sm">${esc(x.cite)}</span>` : '<span class="chip sm bad">출처 없음</span>'}</td></tr>`).join('');
+      const from = (x) => {  // where an input is read: along the path to a property, its days since, or a count
+        if (x.param) return `파라미터 ${x.param}`;
+        const end = x.count ? '개수' : (x.days_since ? `${x.days_since} 경과일` : x.property);
+        return [...(x.path || x.count || []), end].filter(Boolean).join(' → ');
+      };
+      const inputs = r.inputs.map((x) => `<span class="chip sm"><span class="mono">${esc(x.name)}</span> ← ${esc(from(x))}</span>`).join('');
+      const issues = r.issues.length ? `<div class="banner no" style="margin-top:10px"><div><div class="big" style="font-size:14px">초안 검사 오류 ${r.issues.length}건</div><div class="loglist">${r.issues.map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div><div class="why">편집기에서 고친 뒤 [검사]를 선택하세요.</div></div></div>` : '';
+      body = `<div class="chips" style="margin-top:12px"><span class="chip ${r.issues.length ? 'warn' : 'ok'}">${r.issues.length ? '검사 오류 있음' : '✓ 초안 검사 통과'}</span><span class="chip mono">${esc(r.decision)}</span><span class="chip">대상 ${esc(r.target)}</span><span class="chip">모델 시도 ${r.attempts}회</span></div>
+        <div class="sec">입력</div><div class="chips">${inputs}</div>
+        <table class="tight" style="margin-top:10px"><tr><th>규칙</th><th>조건</th><th>결과</th><th>출처 조항</th></tr>${rows}</table>${issues}
+        <div class="hint" style="margin-top:8px">아래 편집기에 모듈 초안을 열었습니다. 규칙과 출처 조항을 확인하고 고친 뒤 [적용 변경 요청]을 선택하면 사본 스튜디오에서 검토하고 승인 대기로 등록됩니다.</div>`;
+    }
+    return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right"><button class="btn sm ghost" data-act="pclose">닫기</button></div></div><div class="cb">
+      <div class="hint" style="margin-bottom:8px">정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고, 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 사람이 확인하고 승인해야 반영됩니다.</div>
+      <textarea class="code" data-in="ptext" spellcheck="false" style="min-height:180px" placeholder="제1조 (목적) ...">${esc(p.text)}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <label class="field" style="margin:0;min-width:220px"><span>대상 객체</span><select data-in="ptarget">${targets}</select></label>
+        ${S.st.data.policy_sample ? '<button class="btn" data-act="psample">예시 정책서 불러오기</button>' : ''}
+        <button class="btn primary" data-act="pdraft"${p.busy || !p.text.trim() ? ' disabled' : ''}>${p.busy ? '<span class="spin"></span>초안 생성 중 · 최대 1분 30초' : '초안 생성'}</button></div>${body}</div></div>`;
   }
 
   function moduleTemplate() {
@@ -1085,7 +1120,8 @@ ${controls}${body}`;
     const g = S.guide || { video: '', chapters: [] };
     const head = `<div class="head"><div><h1>사용 안내</h1><div class="sub">${g.video ? '화면별 사용 방법과 시연 영상입니다' : '화면별 사용 방법입니다'}</div></div></div>`;
     const sections = GUIDE.map(([tab, what, steps], i) => {
-      if (tab === 'query' && S.st && S.st.ask) steps = steps.concat(ASK_STEP);  // only where a language model is connected
+      if (S.st && S.st.ask && tab === 'query') steps = steps.concat(ASK_STEP);  // only where a language model is connected
+      if (S.st && S.st.ask && tab === 'library') steps = steps.concat(POLICY_STEP);
       const ch = g.chapters.find((c) => c.tab === tab);
       return `<div class="card gsec" data-gtab="${tab}"><div class="cb">
         <div class="fhead"><span class="fno">${i + 1}</span><svg class="gic" viewBox="0 0 24 24">${ICON[tab]}</svg><b>${navLabel(tab)}</b></div>
@@ -1770,6 +1806,27 @@ ${controls}${body}`;
     },
     mnew: () => { S.ed = { name: '', label: '새 모듈', applied: false, isNew: true, text: moduleTemplate(), check: null, busy: false }; render(); },
     mclose: () => { S.ed = null; S.change = null; render(); },
+    popen: () => { S.pol.open = !S.pol.open; render(); },
+    pclose: () => { S.pol.open = false; render(); },
+    psample: async () => {
+      try {
+        const r = await api('policy/sample', {});
+        if (!r.ok) throw new Error(r.error);
+        S.pol.text = r.text; S.pol.res = null; render();
+      } catch (e) { fail(e); }
+    },
+    pdraft: async () => {
+      S.pol.busy = true; S.pol.res = null; render();
+      try {
+        const r = await api('policy/draft', { text: S.pol.text, target: S.pol.target });
+        S.pol.res = r;
+        if (r.ok) {
+          S.ed = { name: '', label: r.label, applied: false, isNew: true, text: r.yaml, check: null, busy: false };
+          S.change = null;
+        }
+      } catch (e) { S.pol.res = { ok: false, error: e.message }; }
+      S.pol.busy = false; render();
+    },
     mcheck: async () => {
       try { S.ed.check = await api('module/check', { text: S.ed.text }); } catch (e) { S.ed.check = { error: e.message }; }
       const r = $('#mresult');
@@ -1825,6 +1882,11 @@ ${controls}${body}`;
       else if (t.type === 'text') S.dr.rules[t.dataset.k] = t.value.split(',').map((x) => x.trim()).filter(Boolean);
     },
     mtext: (t) => { S.ed.text = t.value; },
+    ptext: (t) => {
+      const was = !S.pol.text.trim();
+      S.pol.text = t.value;
+      if (was !== !t.value.trim()) { const b = $('[data-act=pdraft]'); if (b) b.disabled = !t.value.trim(); }
+    },
     fgate: (t) => {
       const g = S.flset.settings.gates;
       const stage = t.dataset.s, k = t.dataset.k;
@@ -1835,6 +1897,7 @@ ${controls}${body}`;
   };
 
   const CHANGE = {
+    ptarget: (t) => { S.pol.target = t.value; },
     role: async (t) => { S.q.role = t.value; S.q.principal = {}; await principalDefaults(S.q); render(); },
     lang: (t) => { S.q.lang = t.value; if (!S.q.dirty || !S.q.text) { S.q.text = textFor(S.q.lang) || S.q.text; S.q.dirty = false; } render(); },
     decision: async (t) => { S.d.name = t.value; S.d.key = null; S.d.res = null; S.d.proposal = null; render(); await startDecide(); },

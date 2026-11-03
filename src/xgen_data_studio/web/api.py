@@ -46,6 +46,7 @@ READ_ERROR = {
 }
 MODULE_TEXT_MAX = 48 * 1024
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
+POLICY_MAX = 12000  # characters of policy text a draft reads
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
             (r"^no answer$", "답 없음")]
@@ -101,6 +102,7 @@ class DataOptions:
     columns: int = 80
     samples: Path | None = None
     allow_connect: bool = False
+    policies: Path | None = None  # example policy texts (.md, .txt) for drafting rules
 
 
 class StudioSession:
@@ -215,7 +217,8 @@ class StudioSession:
             "log": self.log,
             "origin": self.origin,
             "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
-                     "files": len(self.uploads)},
+                     "files": len(self.uploads),
+                     "policy_sample": bool(self._policy_files())},
             "identities": [{"name": i.name, "label": i.label or i.name} for i in o.identities.values()],
             "who": self.who, "self_approve": self.self_approve,
             "changes": sum(c.status == "pending" for c in st.changes.requests.values()),
@@ -392,16 +395,7 @@ class StudioSession:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 자연어 질문을 처리하지 못했습니다."}
         from xgen_data_studio.nl import IRGenerator, probe
 
-        started, tries = time.monotonic(), []
-
-        def llm(system: str, user: str) -> str:
-            # a proxy in front of the page may give up on a request (Cloudflare at 100 s) and a model that reasons
-            # first takes 20 to 40 s: another attempt starts only early enough to end in time
-            if tries and time.monotonic() - started > ASK_RETRY_WITHIN:
-                raise TimeoutError("no time left for another attempt")
-            tries.append(1)
-            return self.llm(system, user)
-
+        llm, tries = self._budgeted()
         gen = IRGenerator(self.studio.onto, llm, role=role or None,
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
@@ -413,6 +407,68 @@ class StudioSession:
         out = self.run_query(gen.registered or gen.query, gen.params, role=role, principal=principal)
         out["attempts"] = len(gen.attempts)
         return out
+
+    def _budgeted(self) -> tuple[Callable[[str, str], str], list]:
+        """The model for one page request, and the calls it has made. A proxy in front of the page may give up on
+        a request (Cloudflare at 100 s) and a model that reasons first takes 20 to 40 s: another attempt starts only
+        early enough to end in time."""
+        started, tries = time.monotonic(), []
+
+        def llm(system: str, user: str) -> str:
+            if tries and time.monotonic() - started > ASK_RETRY_WITHIN:
+                raise TimeoutError("no time left for another attempt")
+            tries.append(1)
+            return self.llm(system, user)
+
+        return llm, tries
+
+    def _policy_files(self) -> list[Path]:
+        d = self.data.policies
+        if not d or not Path(d).is_dir():
+            return []
+        return sorted(p for p in Path(d).iterdir() if p.suffix.lower() in (".md", ".txt"))
+
+    def policy_sample(self) -> dict:
+        found = self._policy_files()
+        if not found:
+            return {"ok": False, "error": "예시 정책서가 설정되지 않아 불러오지 못했습니다."}
+        return {"ok": True, "name": found[0].name, "text": found[0].read_text(encoding="utf-8")[:POLICY_MAX]}
+
+    def policy_draft(self, text: str, target: str = "", name: str = "") -> dict:
+        """A decision table drafted from policy text by the model and checked by the engine, as module text for
+        the editor; a person files it as a change request (see policy.py)."""
+        if self.llm is None:
+            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 정책서 규칙 초안을 만들지 못했습니다."}
+        text = str(text or "").strip()[:POLICY_MAX]
+        if not text:
+            raise ValueError("정책서 내용이 없어 규칙 초안을 만들지 못했습니다. 정책서 조항을 입력해 주세요.")
+        comp = self.studio.composition
+        if comp is None:
+            return {"ok": False, "error": "모듈로 구성된 스튜디오가 아니어서 규칙 초안을 모듈로 만들지 못했습니다."}
+        if target and target not in self.studio.onto.objects:
+            raise ValueError(f"대상 객체 {target} 이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요.")
+        import yaml
+
+        from xgen_data_studio.policy import PolicyDrafter
+
+        llm, tries = self._budgeted()
+        d = PolicyDrafter(list(comp.modules), llm, compose_kw=self.studio._compose_kw).draft(
+            text, target=target, name=str(name or ""))
+        late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(d.attempts) else ""
+        if d.module is None:
+            answered = [a for a in d.attempts if a.raw]
+            issues = (answered or d.attempts)[-1].issues if d.attempts else []
+            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. " + " / ".join(issues[:3]) + late
+                                          + " 정책서 내용이나 대상을 바꿔 다시 시도해 주세요."}
+        (dname, table), = d.module.body["decisions"].items()
+        return plain({
+            "ok": True, "module": d.module.name, "label": d.module.label, "decision": dname, "target": table["target"],
+            "yaml": yaml.safe_dump(d.module.to_dict(), allow_unicode=True, sort_keys=False, default_flow_style=None,
+                                   width=110),
+            "inputs": [{"name": k, **v} for k, v in (table.get("inputs") or {}).items()],
+            "rules": [{"id": r.get("id"), "when": r.get("when") or {}, "then": r.get("then") or {},
+                       "cite": r.get("cite", "")} for r in table.get("rules") or []],
+            "issues": d.issues, "attempts": len(d.attempts), "late": bool(late)})
 
     # ---- decisions and actions -------------------------------------------------------------------------------
 

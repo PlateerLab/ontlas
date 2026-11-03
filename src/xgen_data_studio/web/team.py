@@ -26,7 +26,7 @@ NEEDS = {
     "draft": "editor", "draft/preview": "editor", "draft/apply": "editor", "connect": "editor",
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
-    "draft/map/apply": "editor", "change/decide": "approver", "approve": "approver", "rollback": "approver",
+    "draft/map/apply": "editor", "policy/draft": "editor", "change/decide": "approver", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
 }
 

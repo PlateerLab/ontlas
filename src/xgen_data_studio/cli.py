@@ -180,6 +180,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--llm-key-env", default="")
     s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
     s.add_argument("--repairs", type=int, default=2)
+    s = sub.add_parser("policy-draft", help="draft a decision table module from policy text with a language model")
+    s.add_argument("config")
+    s.add_argument("policy", help="the policy text (.md or .txt)")
+    s.add_argument("--target", default="", help="the object type the decision is about")
+    s.add_argument("--name", default="", help="the decision's name")
+    s.add_argument("--out", default="", help="write the module here (.yaml); otherwise print it")
+    s.add_argument("--llm-url", required=True)
+    s.add_argument("--llm-model", required=True)
+    s.add_argument("--llm-key-env", default="")
+    s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
+    s.add_argument("--repairs", type=int, default=2)
     s = sub.add_parser("sync", help="bring the graphs up to date with the source, once or every N seconds")
     s.add_argument("config")
     s.add_argument("--every", type=float, default=0)
@@ -287,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--llm-key-env", default="", help="environment variable that holds the API key")
     s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
     s.add_argument("--samples", default="", help="folder of example files a visitor can load with one click")
+    s.add_argument("--policies", default="", help="folder of example policy texts for drafting rules from policy")
     s.add_argument("--allow-connect", action="store_true",
                    help="let visitors connect a database by address (for a studio inside your own network)")
     s.add_argument("--file-kb", type=int, default=1024, help="largest file a visitor may upload")
@@ -427,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
         from xgen_data_studio.web import DataOptions
 
         data = DataOptions(file_bytes=a.file_kb << 10, total_bytes=max(4 << 20, a.file_kb << 12), rows=a.rows,
-                           samples=Path(a.samples) if a.samples else None, allow_connect=a.allow_connect)
+                           samples=Path(a.samples) if a.samples else None, allow_connect=a.allow_connect,
+                           policies=Path(a.policies) if a.policies else None)
         serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
                      quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
                      sync=a.sync, library_write=a.library_write)
@@ -510,6 +523,32 @@ def main(argv: list[str] | None = None) -> int:
         rep = evaluate(studio, yaml.safe_load(Path(a.questions).read_text(encoding="utf-8")), llm,
                        max_repairs=a.repairs)
         _out(rep)
+    elif a.cmd == "policy-draft":
+        import yaml
+
+        from xgen_data_studio.nl import openai_chat
+        from xgen_data_studio.policy import PolicyDrafter
+
+        if studio.composition is None:
+            print("policy-draft needs a studio made of modules", file=sys.stderr)
+            return 2
+        llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
+                          extra=json.loads(a.llm_extra) if a.llm_extra else None)
+        d = PolicyDrafter(list(studio.composition.modules), llm, max_repairs=a.repairs,
+                          compose_kw=studio._compose_kw).draft(Path(a.policy).read_text(encoding="utf-8"),
+                                                               target=a.target, name=a.name)
+        for i in d.issues:
+            print(f"issue: {i}", file=sys.stderr)
+        if d.module is None:
+            return 1
+        text = yaml.safe_dump(d.module.to_dict(), allow_unicode=True, sort_keys=False, default_flow_style=None,
+                              width=110)
+        if a.out:
+            Path(a.out).write_text(text, encoding="utf-8")
+            print(a.out)
+        else:
+            print(text)
+        return 0 if d.ok else 1
     elif a.cmd == "sync":
         import time
 
