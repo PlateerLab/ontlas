@@ -2,7 +2,7 @@ module: commerce
 version: 1.0.0
 kind: domain
 label: 이커머스 표준 온톨로지
-description: 고객 · 주문 · 주문상품 · 단품 · 상품 · 카테고리 · 클레임과 반품 판정. 원천 테이블 바인딩은 따로 둡니다.
+description: 고객, 주문, 주문상품, 단품, 상품, 카테고리, 클레임과 반품 판정을 정의합니다. 원천 테이블 연결은 바인딩 모듈에서 관리합니다.
 requires: [core]
 
 objects:
@@ -14,6 +14,9 @@ objects:
     properties:
       customer_id: {type: string, label: 고객 번호, required: true}
       grade: {type: enum, values: [BASIC, SILVER, VIP], label: 등급}
+      order_count: {type: integer, label: 주문 수, expr: "count(placed)"}
+      spent: {type: decimal, unit: KRW, label: 구매 금액, description: 취소된 주문은 빼고 합한 주문 금액,
+              expr: "coalesce(sum(placed.billed), 0)"}
 
   Category:
     label: 카테고리
@@ -48,6 +51,18 @@ objects:
       color: {type: string, label: 색상}
       price: {type: decimal, unit: KRW, label: 판매가}
       stock: {type: integer, label: 재고}
+      first_price: {type: decimal, unit: KRW, label: 최초 판매가, expr: "earliest(priceChanges.price)"}
+      last_price: {type: decimal, unit: KRW, label: 최근 변경 판매가, expr: "latest(priceChanges.price)"}
+
+  PriceChange:
+    label: 판매가 변경 이력
+    key: change_id
+    series: {time: changed_at, of: priceOf}
+    properties:
+      change_id: {type: string, label: 변경 번호, required: true}
+      sku_id: {type: string, label: 단품 번호}
+      changed_at: {type: datetime, label: 변경 일시}
+      price: {type: decimal, unit: KRW, label: 판매가}
 
   Order:
     label: 주문
@@ -59,6 +74,10 @@ objects:
       customer_id: {type: string, label: 고객 번호}
       ordered_at: {type: datetime, label: 주문 일시}
       status: {type: enum, values: [ORDERED, PAID, SHIPPED, DELIVERED, CANCELLED], label: 주문 상태}
+      total: {type: decimal, unit: KRW, label: 주문 금액, expr: "coalesce(sum(hasItem.line_total), 0)"}
+      item_count: {type: integer, label: 주문상품 수, expr: "count(hasItem)"}
+      billed: {type: decimal, unit: KRW, label: 청구 금액, description: 취소된 주문은 0,
+               expr: "if(status = 'CANCELLED', 0, total)"}
     states:
       property: status
       initial: ORDERED
@@ -82,6 +101,7 @@ objects:
       unit_price: {type: decimal, unit: KRW, label: 결제 단가}
       delivered_at: {type: datetime, label: 배송 완료 일시}
       item_status: {type: enum, values: [NORMAL, RETURN_REQUESTED, RETURNED], label: 주문상품 상태}
+      line_total: {type: decimal, unit: KRW, label: 결제 금액, expr: "unit_price * quantity"}
     states:
       property: item_status
       initial: NORMAL
@@ -111,6 +131,7 @@ links:
   broader: {from: Category, to: Category, cardinality: many_to_one, transitive: true, inverse: narrower, label: 상위 카테고리}
   hasClaim: {from: OrderItem, to: Claim, cardinality: one_to_many, inverse: claimOf, label: 클레임}
   wishes: {from: Customer, to: Product, label: 찜}
+  priceOf: {from: PriceChange, to: Sku, cardinality: many_to_one, inverse: priceChanges, label: 판매가 변경 단품}
 
 decisions:
   returnEligibility:
@@ -134,7 +155,8 @@ actions:
   requestReturn:
     label: 반품 신청
     target: OrderItem
-    parameters: {reason: string}
+    parameters:
+      reason: {type: string, label: 반품 사유, max_length: 200}
     criteria:
       - {decision: returnEligibility, expect: {eligible: true}}
     transition_to: RETURN_REQUESTED
@@ -153,12 +175,17 @@ roles:
           where: {eq: [own.customer_id, {principal: customer_id}]}
     run: [myOrders, returnEligibility]
     request: [requestReturn]
+  support_agent:
+    label: 상담원
+    read: [Customer, Order, OrderItem]
+    run: [customerValue, orderTotals]
   operator:
     label: 운영자
     read: ["*"]
     run: ["*"]
     request: ["*"]
     execute: ["*"]
+    unmask: ["*"]
 
 queries:
   ordersOfCustomer:
@@ -183,8 +210,29 @@ queries:
       match: {o: Order, i: OrderItem, s: Sku, p: Product, k: Category}
       edges: [[o, hasItem, i], [i, ofSku, s], [s, skuOf, p], [p, inCategory, k]]
       where: {ne: [o.status, CANCELLED]}
-      return: [{col: k.name, as: category}, {sum: i.unit_price, as: revenue}, {count: i, as: items}]
+      return: [{col: k.name, as: category}, {sum: i.line_total, as: revenue}, {count: i, as: items}]
       order: [-revenue]
+  orderTotals:
+    label: 주문별 금액
+    query:
+      match: {o: Order}
+      return: [o.order_id, o.status, o.item_count, o.total]
+      order: [order_id]
+  customerValue:
+    label: 구매 금액 이상 고객
+    params: {least: decimal}
+    example: {least: 50000}
+    query:
+      match: {c: Customer}
+      where: {gte: [c.spent, {param: least}]}
+      return: [c.customer_id, c.name, c.phone, c.order_count, c.spent]
+      order: [customer_id]
+  skuPrices:
+    label: 단품별 판매가 변화
+    query:
+      match: {s: Sku}
+      return: [s.sku_id, s.first_price, s.last_price, s.price]
+      order: [sku_id]
   wishlistCount:
     label: 고객별 찜 수
     query:

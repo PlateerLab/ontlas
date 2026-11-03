@@ -1,6 +1,7 @@
 """IR -> SPARQL 1.1 over the projected graph (same IRIs as the projection and R2RML export)."""
 from __future__ import annotations
 
+from xgen_data_studio import expr as ex
 from xgen_data_studio.check import aliases_of, find_prop
 from xgen_data_studio.compile.base import Compiled, CompileError, Compiler, Params, marker
 from xgen_data_studio.ir import Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref, filter_refs
@@ -23,6 +24,8 @@ class SparqlCompiler(Compiler):
         self._types = aliases_of(q)
         self._iris = Iris(self.onto)
         self._params = Params(chk.param_types)
+        self._n = 0
+        self._bound: set[str] = set()
         where = self._filter(q.where) if q.where is not None else None
         body = self._group(q, where)
         cols, group = [], []
@@ -41,7 +44,11 @@ class SparqlCompiler(Compiler):
             keys = []
             for o in q.order:
                 e = by[o.name]
-                if isinstance(e, Ref):
+                if q.aggregated:  # after GROUP BY order by the selected names; rdflib loses grouped variables
+                    expr = f"?{o.name}"
+                    if isinstance(e, Ref):
+                        keys.append(f"(IF(BOUND({expr}), 0, 1))")
+                elif isinstance(e, Ref):
                     keys.append(f"(IF(BOUND({var(e)}), 0, 1))")
                     expr = var(e)
                 else:
@@ -66,11 +73,103 @@ class SparqlCompiler(Compiler):
         return f"{{ SELECT DISTINCT ?{s} ?{t} WHERE {{ ?{s} ({path}) ?{t} . }} }}"
 
     def _props(self, alias: str, props: set[str]) -> list[str]:
-        out = []
+        """Patterns that bind each property's variable: a stored one by its triple, a computed one by BIND."""
+        stored, binds = set(), []
         for p in sorted(props):
-            find_prop(self.onto, self._types[alias], p)
-            out.append(f"OPTIONAL {{ ?{alias} {iri(self._iris.prop(p))} {var(Ref(alias, p))} . }}")
-        return out
+            prop = find_prop(self.onto, self._types[alias], p)
+            if not prop.expr or self.by_name:
+                stored.add(p)
+                continue
+            v = var(Ref(alias, p))
+            if v in self._bound:
+                continue
+            text, needed, blocks = self._computed(alias, prop.expr)
+            stored |= needed
+            binds += [*blocks, f"BIND({text} AS {v})"]
+            self._bound.add(v)
+        out = [f"OPTIONAL {{ ?{alias} {iri(self._iris.prop(p))} {var(Ref(alias, p))} . }}" for p in sorted(stored)]
+        return out + binds
+
+    def _computed(self, alias: str, text: str) -> tuple[str, set[str], list[str]]:
+        """The expression over the alias's variables, the stored properties it reads, and its aggregate blocks."""
+        needed: set[str] = set()
+        blocks: list[str] = []
+
+        def prop(n: ex.Prop) -> str:
+            p = find_prop(self.onto, self._types[alias], n.name)
+            if p.expr:
+                inner, more, extra = self._computed(alias, p.expr)
+                needed.update(more)
+                blocks.extend(extra)
+                return inner
+            needed.add(n.name)
+            return var(Ref(alias, n.name))
+
+        def aggregate(a: ex.Agg) -> str:
+            value, block = self._aggregate(alias, a)
+            blocks.extend(block)
+            return value
+
+        try:
+            return ex.SparqlRenderer(prop, aggregate).render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text))), needed, blocks
+        except ex.ExprError as e:
+            raise CompileError(str(e)) from None
+
+    def _path(self, alias: str, steps: list[ex.Step]) -> tuple[list[str], str]:
+        lines, prev = [], alias
+        for st in steps:
+            self._n += 1
+            nxt = f"g{self._n}"
+            self._types[nxt] = st.type
+            p = iri(self._iris.link(st.link))
+            lines.append(f"?{prev} {p} ?{nxt} ." if st.forward else f"?{nxt} {p} ?{prev} .")
+            lines.append(self._type(nxt))
+            prev = nxt
+        return lines, prev
+
+    def _value(self, alias: str, prop: str) -> tuple[list[str], str]:
+        """Patterns that bind a property of alias to a fresh variable, leaving out the rows without a value."""
+        self._n += 1
+        v = f"?_v{self._n}"
+        p = find_prop(self.onto, self._types[alias], prop)
+        if not p.expr:
+            return [f"?{alias} {iri(self._iris.prop(prop))} {v} ."], v
+        text, needed, blocks = self._computed(alias, p.expr)
+        lines = [f"OPTIONAL {{ ?{alias} {iri(self._iris.prop(n))} {var(Ref(alias, n))} . }}" for n in sorted(needed)]
+        return [*lines, *blocks, f"BIND({text} AS {v})", f"FILTER(BOUND({v}))"], v
+
+    def _aggregate(self, alias: str, a: ex.Agg) -> tuple[str, list[str]]:
+        steps, prop = ex.resolve_agg(self.onto, self._types[alias], a)
+        path, last = self._path(alias, steps)
+        self._n += 1
+        out = f"?_a{self._n}"
+        if a.fn in ("latest", "earliest"):
+            obj = self.onto.obj(self._types[last])
+            tv = f"?_t{self._n}"
+            kv = f"?_k{self._n}"
+            pick = "MAX" if a.fn == "latest" else "MIN"
+            stamp = f'CONCAT(STR({tv}), "|", STR({kv}))'
+            first = (f"OPTIONAL {{ SELECT ?{alias} ({pick}({stamp}) AS {out}_s) WHERE {{ {' '.join(path)} "
+                     f"?{last} {iri(self._iris.prop(obj.series['time']))} {tv} . "
+                     f"?{last} {iri(self._iris.prop(obj.key))} {kv} . }} GROUP BY ?{alias} }}")
+            again, hit = self._path(alias, steps)
+            t2, k2 = f"?_t{self._n}b", f"?_k{self._n}b"
+            value, v = self._value(hit, prop)
+            value = [x for x in value if not x.startswith("FILTER(BOUND")]
+            if value and value[0].startswith(f"?{hit} ") and not value[0].startswith("OPTIONAL"):
+                value[0] = f"OPTIONAL {{ {value[0]} }}"
+            second = (f"OPTIONAL {{ {' '.join(again)} ?{hit} {iri(self._iris.prop(obj.series['time']))} {t2} . "
+                      f"?{hit} {iri(self._iris.prop(obj.key))} {k2} . "
+                      f'FILTER(CONCAT(STR({t2}), "|", STR({k2})) = {out}_s) {" ".join(value)} BIND({v} AS {out}) }}')
+            return out, [first, second]
+        if a.fn == "count" and not prop:
+            body, arg = path, f"?{last}"
+        else:
+            lines, arg = self._value(last, prop)
+            body = [*path, *lines]
+        fn = "COUNT" if a.fn == "count" else a.fn.upper()
+        block = f"OPTIONAL {{ SELECT ?{alias} ({fn}({arg}) AS {out}) WHERE {{ {' '.join(body)} }} GROUP BY ?{alias} }}"
+        return (f"COALESCE({out}, 0)" if a.fn == "count" else out), [block]
 
     def _needed(self, q: Query) -> dict[str, set[str]]:
         need: dict[str, set[str]] = {}

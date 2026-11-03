@@ -159,6 +159,16 @@ def from_ontology(onto: Ontology, *, database: str = "source", catalog: Catalog 
             pid = f"property:{o.name}.{p.name}"
             cat.add(pid, "property", p.label or p.name, type=p.type)
             cat.relate(oid, "hasProperty", pid)
+            if p.expr:
+                from xgen_data_studio.expr import ExprError, dependencies
+
+                try:
+                    deps = dependencies(onto, o.name, p.name)
+                except ExprError:
+                    deps = set()
+                for t, n in sorted(deps):
+                    cat.relate(pid, "uses", f"property:{t}.{n}")
+                continue
             if o.table:
                 cid = f"column:{o.table}.{p.col}"
                 cat.add(cid, "column", f"{o.table}.{p.col}")

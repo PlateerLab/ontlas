@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from xgen_data_studio.check import all_props, find_prop
+from xgen_data_studio.check import find_prop, stored_props
 from xgen_data_studio.ir import Column, Edge, Query, Ref
 from xgen_data_studio.model import Ontology
 from xgen_data_studio.rdf import RDF_TYPE, Iris, iri, literal
@@ -143,7 +143,7 @@ def project(onto: Ontology, source) -> Projection:
     for t in onto.objects.values():
         if not t.table:
             continue
-        names = all_props(onto, t.name)
+        names = stored_props(onto, t.name)  # computed properties are compiled into each language, not copied
         types = {p: find_prop(onto, t.name, p).type for p in names}
         q = Query(nodes={"x": t.name}, columns=[Column(Ref("x", p), p) for p in names])
         for row in _read_rows(onto, source, q):
@@ -188,6 +188,11 @@ def load(onto: Ontology, projection: Projection, backend, *, clear: bool = True)
         for text, params in projection.cypher(onto):
             backend.run(text, params)
         return
+    if backend.capabilities.language == "gremlin":
+        from xgen_data_studio.backends.gremlin import load_gremlin
+
+        load_gremlin(onto, projection, backend, clear=clear)
+        return
     raise ValueError(f"backend {backend.name} does not take projections")
 
 
@@ -201,4 +206,10 @@ def apply_changes(onto: Ontology, changes: ChangeSet, backend) -> None:
         for text, params in changes.cypher(onto):
             backend.run(text, params)
         return
+    if backend.capabilities.language == "gremlin":  # small graphs: load the new projection whole
+        raise _Reload()
     raise ValueError(f"backend {backend.name} does not take change sets")
+
+
+class _Reload(Exception):
+    """The backend takes a whole projection instead of a change set."""

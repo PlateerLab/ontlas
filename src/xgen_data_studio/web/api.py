@@ -3,26 +3,60 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import threading
 import time
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from xgen_data_studio.actions import Actor
 from xgen_data_studio.check import all_props, column_of, find_prop
-from xgen_data_studio.compile.base import CompileError
+from xgen_data_studio.compile.base import CompileError, compiler_for
 from xgen_data_studio.conformance import normalize_rows
 from xgen_data_studio.ir import Column, Query, Ref
-from xgen_data_studio.modules import ModuleError
+from xgen_data_studio.library import OverlayLibrary
+from xgen_data_studio.modules import Module, ModuleError, compose
 from xgen_data_studio.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_text
 from xgen_data_studio.roles import apply_role
 from xgen_data_studio.studio import Studio
 
 KIND_ORDER = list(MODULE_KIND)
 CHECK_LABEL = {"role": "역할 권한", "parameters": "파라미터", "target": "대상 확인", "state": "상태 전이",
-               "states": "허용 상태"}
-EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영"}
+               "states": "허용 상태", "call": "외부 호출"}
+EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
+               "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
+               "rolled_back": "되돌림"}
+GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
+              ("query", "min_agree"): "백엔드 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
+              ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소"}
+STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영",
+               "query": "질의", "decide": "판정 · 처리", "check": "검증"}
+CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
+READ_ERROR = {
+    "format": "지원하지 않는 파일 형식이라 업로드하지 못했습니다. CSV, TSV, XLSX 파일을 업로드해 주세요.",
+    "encoding": "파일 인코딩을 확인할 수 없어 읽지 못했습니다. UTF-8 또는 CP949로 저장해 다시 업로드해 주세요.",
+    "empty": "데이터 행이 없어 테이블을 만들지 못했습니다. 첫 행에 컬럼 이름이 있는지 확인해 주세요.",
+    "workbook": "XLSX 형식이 아니어서 파일을 열지 못했습니다. XLSX로 저장해 다시 업로드해 주세요.",
+    "workbook_size": "압축 해제 크기가 64MB 한도를 초과해 파일을 열지 못했습니다. 시트를 나누어 다시 업로드해 주세요.",
+    "openpyxl": "Excel 읽기 모듈이 설치되지 않아 XLSX 파일을 처리하지 못했습니다. CSV로 저장해 업로드해 주세요.",
+}
+MODULE_TEXT_MAX = 48 * 1024
+ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
+GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
+            (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
+            (r"^no answer$", "답 없음")]
+
+
+def _gap_text(gap: str) -> str:
+    """What a question's answer lacks of its grounds, as the page says it."""
+    for pattern, text in GAP_TEXT:
+        if re.match(pattern, gap):
+            return re.sub(pattern, text, gap)
+    return gap
 
 
 def plain(v: Any) -> Any:
@@ -56,16 +90,47 @@ def principal_keys(node: Any) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+@dataclass
+class DataOptions:
+    """What a visitor may bring in: files within these limits, the bundled samples, and (off unless asked) a database."""
+
+    file_bytes: int = 1 << 20
+    total_bytes: int = 4 << 20
+    files: int = 8
+    rows: int = 10_000
+    columns: int = 80
+    samples: Path | None = None
+    allow_connect: bool = False
+
+
 class StudioSession:
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
-    def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None):
+    def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
+                 data: DataOptions | None = None, origin: dict | None = None):
         self.studio = studio
         self.llm = llm
+        self.data = data or DataOptions()
+        self.origin = origin or {"kind": "config"}
         self.lock = threading.RLock()
         self.log: list[dict] = []
         self.used = time.time()
+        if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
+            studio.library = OverlayLibrary(studio.library, [])  # a visitor's edited modules are kept here
         self._library_rows = studio.library.list() if studio.library is not None else []
+        self.uploads: dict[str, list] = {}  # file name -> the tables read from it
+        self.sizes: dict[str, int] = {}
+        self.pending = None  # (draft, the database it was drawn from, the tables loaded into it, the rules)
+        self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
+        self.self_approve = True  # one visitor is both sides of a change; a team studio turns this off
+        self.store = None  # a library folder approved changes are written to (xds serve --library-write)
+        self._adopt(studio)
+
+    def _adopt(self, studio: Studio) -> None:
+        """Make a studio this session's: its change requests follow the session's approval and storage."""
+        self.studio = studio
+        studio.changes.self_approve = self.self_approve
+        studio.changes.store = self.store
 
     # ---- helpers -------------------------------------------------------------------------------------------
 
@@ -148,6 +213,12 @@ class StudioSession:
             "ask": self.llm is not None,
             "zen": _has_zen(),
             "log": self.log,
+            "origin": self.origin,
+            "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
+                     "files": len(self.uploads)},
+            "identities": [{"name": i.name, "label": i.label or i.name} for i in o.identities.values()],
+            "who": self.who, "self_approve": self.self_approve,
+            "changes": sum(c.status == "pending" for c in st.changes.requests.values()),
         })
 
     def graph(self) -> dict:
@@ -159,8 +230,8 @@ class StudioSession:
             clusters.setdefault(owner, self._label(owner))
             nodes.append({"id": t.name, "label": t.label or t.name, "table": t.table, "abstract": t.abstract,
                           "key": t.key, "module": owner})
-        edges = [{"source": lk.source, "target": lk.target, "label": lk.label or lk.name, "subtype": False}
-                 for lk in o.links.values()]
+        edges = [{"id": lk.name, "source": lk.source, "target": lk.target, "label": lk.label or lk.name,
+                  "subtype": False} for lk in o.links.values()]
         edges += [{"source": t.name, "target": t.parent, "label": "하위 유형", "subtype": True}
                   for t in o.objects.values() if t.parent in o.objects]
         return {"nodes": nodes, "edges": edges, "clusters": [{"id": k, "label": v} for k, v in clusters.items()]}
@@ -176,9 +247,10 @@ class StudioSession:
             owner = comp.owner(f"property:{name}.{p}") if comp and not inherited else ""
             props.append({"name": p, "label": prop.label or p, "type": prop.type, "unit": prop.unit,
                           "values": prop.values, "required": prop.required, "cite": prop.cite,
-                          "column": column_of(o, name, p) if t.table else "", "key": p == t.key,
+                          "column": column_of(o, name, p) if t.table and not prop.expr else "", "key": p == t.key,
                           "module": owner, "module_label": self._label(owner) if owner else "",
-                          "inherited": inherited})
+                          "inherited": inherited, "expr": prop.expr, "mask": prop.mask,
+                          "description": prop.description})
         links = []
         for lk in o.links.values():
             if name in (lk.source, lk.target):
@@ -195,8 +267,10 @@ class StudioSession:
             "children": [{"name": c, "label": self._obj_label(c)} for c in children],
             "aligned": t.aligned, "cite": t.cite, "module": owner, "module_label": self._label(owner) if owner else "",
             "touched": [self._label(m) for m in (comp.touched.get(f"object:{name}", []) if comp else [])],
-            "states": {"property": t.states.property, "states": t.states.states, "initial": t.states.initial}
+            "states": {"property": t.states.property, "states": t.states.states, "initial": t.states.initial,
+                       "transitions": [{"from": x.source, "to": x.target} for x in t.states.transitions]}
             if t.states else None,
+            "series": dict(t.series), "identity": name in o.identities,
             "properties": props, "links": links,
         })
 
@@ -219,8 +293,8 @@ class StudioSession:
         gone = [name, *imp.dependents] if cascade else [name]
         proj = self._reproject()
         warning = _projection_warning(proj)
-        self._note("detach", f"{', '.join(self._label(x) for x in gone)} 모듈을 뺐습니다. "
-                   f"{len(imp.removed)}개 항목이 빠졌습니다. {warning}".strip(), removed=imp.removed[:12])
+        self._note("detach", f"{', '.join(self._label(x) for x in gone)} 모듈을 해제했습니다. "
+                   f"항목 {len(imp.removed)}개가 제거되었습니다. {warning}".strip(), removed=imp.removed[:12])
         return {"ok": True, "impact": imp.to_dict(), "projection": proj, "warning": warning}
 
     def attach(self, name: str) -> dict:
@@ -232,7 +306,7 @@ class StudioSession:
         added = [m.name for m in comp.modules if m.name not in before]
         proj = self._reproject()
         warning = _projection_warning(proj)
-        self._note("attach", f"{', '.join(self._label(x) for x in added)} 모듈을 꽂았습니다. {warning}".strip(),
+        self._note("attach", f"{', '.join(self._label(x) for x in added)} 모듈을 적용했습니다. {warning}".strip(),
                    added=added)
         return {"ok": True, "added": added, "projection": proj, "warning": warning}
 
@@ -254,7 +328,7 @@ class StudioSession:
         shown, extra = q, {}
         if role:
             if name and not st.onto.roles[role].can("run", name):
-                return {"ok": False, "error": f"{st.onto.roles[role].label or role} 역할은 이 질의를 실행할 수 없습니다."}
+                return {"ok": False, "error": f"{st.onto.roles[role].label or role} 역할에 실행 권한이 없어 질의를 실행하지 못했습니다."}
             shown, extra = apply_role(st.onto, q, role, principal)
         bound = {**values, **extra}
         translations = []
@@ -277,15 +351,17 @@ class StudioSession:
                     agree = False
                 results.append({"backend": bname, "language": b.capabilities.language,
                                 "dialect": b.capabilities.dialect, "columns": res.columns, "rows": plain(rows),
-                                "ok": True})
+                                "ok": True, "masked": res.masked})
             except Exception as e:
                 agree = False
                 results.append({"backend": bname, "language": b.capabilities.language,
                                 "dialect": b.capabilities.dialect, "ok": False, "error": f"{type(e).__name__}: {e}"})
         source = {"ir": _ir_text(q.to_dict())}
-        for lang in ("sparql", "cypher"):
+        for lang in ("sparql", "cypher"):  # what a person would write: computed properties by their names
             try:
-                c = st.translate(q, lang)
+                comp = compiler_for(st.onto, lang)
+                comp.by_name = True
+                c = comp.compile(q)
                 source[lang] = c.preview(values) if set(c.params) <= set(values) | set(c.literals) else c.text
             except CompileError:
                 pass
@@ -295,7 +371,7 @@ class StudioSession:
 
     def run_text(self, language: str, text: str, *, role: str = "", principal: dict | None = None) -> dict:
         if len(text) > 8000:
-            return {"ok": False, "error": "쿼리문이 8,000자 한도를 넘었습니다. 줄여서 다시 입력해 주세요."}
+            return {"ok": False, "error": "쿼리 길이가 8,000자 한도를 초과해 실행하지 못했습니다. 쿼리를 줄여 다시 입력해 주세요."}
         try:
             if language == "sparql":
                 from xgen_data_studio.parse.sparql import parse_sparql
@@ -308,18 +384,32 @@ class StudioSession:
             else:
                 q = Query.from_dict(json.loads(text))
         except Exception as e:
-            return {"ok": False, "error": f"쿼리문을 온톨로지 질의로 읽지 못했습니다. {e}"}
+            return {"ok": False, "error": f"쿼리 문법을 해석하지 못했습니다. {e}"}
         return self.run_query(q, role=role, principal=principal)
 
     def ask(self, question: str, *, role: str = "", principal: dict | None = None) -> dict:
         if self.llm is None:
-            return {"ok": False, "error": "자연어 질문을 받을 언어 모델이 연결되어 있지 않습니다."}
-        from xgen_data_studio.nl import IRGenerator
+            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 자연어 질문을 처리하지 못했습니다."}
+        from xgen_data_studio.nl import IRGenerator, probe
 
-        gen = IRGenerator(self.studio.onto, self.llm, role=role or None).generate(question[:500])
+        started, tries = time.monotonic(), []
+
+        def llm(system: str, user: str) -> str:
+            # a proxy in front of the page may give up on a request (Cloudflare at 100 s) and a model that reasons
+            # first takes 20 to 40 s: another attempt starts only early enough to end in time
+            if tries and time.monotonic() - started > ASK_RETRY_WITHIN:
+                raise TimeoutError("no time left for another attempt")
+            tries.append(1)
+            return self.llm(system, user)
+
+        gen = IRGenerator(self.studio.onto, llm, role=role or None,
+                          runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
-            issues = gen.attempts[-1].issues if gen.attempts else []
-            return {"ok": False, "error": "질문을 온톨로지 질의로 바꾸지 못했습니다. " + " / ".join(issues[:3])}
+            answered = [a for a in gen.attempts if a.raw]  # what the model last said, not the attempt time stopped
+            issues = (answered or gen.attempts)[-1].issues if gen.attempts else []
+            late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(gen.attempts) else ""
+            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. " + " / ".join(issues[:3]) + late
+                                          + " 질문을 바꿔 다시 입력해 주세요."}
         out = self.run_query(gen.registered or gen.query, gen.params, role=role, principal=principal)
         out["attempts"] = len(gen.attempts)
         return out
@@ -391,7 +481,7 @@ class StudioSession:
                 detail = ", ".join(f"{k} {_word(v)}" for k, v in res.items()) if isinstance(res, dict) else c.detail
             elif c.name == "role":
                 labels = [st.onto.roles[r].label or r for r in p.requested_by.roles if r in st.onto.roles]
-                detail = ", ".join(labels) if c.passed else f"{', '.join(labels) or '역할 없음'} 역할에는 요청 권한이 없습니다"
+                detail = ", ".join(labels) if c.passed else f"{', '.join(labels) or '역할 없음'} 역할에 요청 권한이 없습니다"
                 title = CHECK_LABEL[c.name]
             elif c.name == "target":
                 detail = f"{self._obj_label(p.target)} {p.key}"
@@ -406,35 +496,685 @@ class StudioSession:
         return plain({"id": p.id, "action": p.action, "label": a.label if a else p.action, "target": p.target,
                       "target_label": self._obj_label(p.target), "key": p.key, "params": p.params,
                       "requested_by": p.requested_by.id, "status": p.status, "checks": checks,
-                      "changes": p.changes, "before": p.before, "approved_by": p.approved_by})
+                      "changes": p.changes, "before": p.before, "approved_by": p.approved_by, "call": p.call,
+                      "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
+                          not (a and a.call) or bool(a and a.undo))})
 
     def request(self, action: str, key: str, params: dict, role: str) -> dict:
         actor = Actor(self.studio.onto.roles[role].label or role if role else "에이전트", "agent",
                       [role] if role else [])
         p = self.studio.actions.request(action, key, params, actor=actor)
-        state = "승인을 기다립니다." if p.status == "pending" else "검사를 통과하지 못해 반려했습니다."
-        self._note("request", f"요청: {actor.id}, {self._obj_label(p.target)} {key} {self._proposal(p)['label']}. {state}")
+        state = "승인 대기 중입니다." if p.status == "pending" else "검사를 통과하지 못해 반려되었습니다."
+        self._note("request", f"요청 접수: {actor.id}, {self._obj_label(p.target)} {key} {self._proposal(p)['label']}. "
+                   f"{state}")
         return {"ok": True, "proposal": self._proposal(p)}
 
-    def approve(self, proposal_id: str, approve: bool) -> dict:
+    def _approver(self) -> Actor:
         approver_role = next((r.name for r in self.studio.onto.roles.values()
                               if any(r.can("execute", a) for a in self.studio.onto.actions)), "")
-        approver = Actor("운영자", "human", [approver_role] if approver_role else [])
+        return Actor(self.who if self.who != "방문자" else "운영자", "human", [approver_role] if approver_role else [])
+
+    def rollback(self, proposal_id: str) -> dict:
+        from xgen_data_studio.actions import ActionError
+
+        try:
+            p = self.studio.actions.rollback(proposal_id, actor=self._approver(), reason="화면에서 되돌림")
+        except (ActionError, PermissionError) as e:
+            return {"ok": False, "error": f"되돌릴 수 없는 상태라 되돌리지 못했습니다. {e}"}
+        proj = self._reproject()
+        self._note("approve", f"요청 {p.id}: 실행 전 값으로 되돌렸습니다.", projection=proj)
+        return {"ok": True, "proposal": self._proposal(p), "projection": proj}
+
+    def approve(self, proposal_id: str, approve: bool) -> dict:
+        approver = self._approver()
         acts = self.studio.actions
         try:
             p = acts.approve(proposal_id, approver=approver) if approve else \
-                acts.reject(proposal_id, approver=approver, reason="화면에서 반려")
+                acts.reject(proposal_id, approver=approver, reason="운영자 반려")
         except (PermissionError, ValueError, RuntimeError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
-        verb = "승인해 원천에 반영했습니다" if p.status == "executed" else "반려했습니다"
-        self._note("approve", f"요청 {p.id}: 운영자가 {verb}.", projection=proj)
+        verb = {"executed": "승인 후 원천 DB에 반영했습니다", "failed": "외부 호출이 실패해 원천 DB를 실행 전 값으로 복원했습니다"
+                }.get(p.status, "반려했습니다")
+        self._note("approve", f"요청 {p.id}: {verb}.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def audit(self) -> list[dict]:
         return [{"at": a.at, "actor": a.actor, "kind": a.actor_kind, "event": EVENT_LABEL.get(a.event, a.event),
                  "proposal": a.proposal, "key": a.key, "detail": plain(a.detail)}
                 for a in reversed(self.studio.actions.audit)]
+
+    # ---- data in: files or a database, drafted into modules, plugged in ---------------------------------------
+
+    def _sample_files(self) -> list[Path]:
+        d = self.data.samples
+        if d is None or not d.is_dir():
+            return []
+        return sorted(p for p in d.iterdir() if p.suffix.lower() in (".csv", ".tsv", ".xlsx"))
+
+    def files_state(self) -> dict:
+        lim = self.data
+        files = [{"source": src, "bytes": self.sizes.get(src, 0),
+                  "tables": [{"name": t.name, "sheet": t.source, "rows": len(t.rows), "columns": t.columns,
+                              "truncated": t.truncated, "preview": t.rows[:5]} for t in ts]}
+                 for src, ts in self.uploads.items()]
+        from xgen_data_studio.draft import DraftRules
+
+        base = DraftRules.from_dict(self._method_rules())  # an attached method module's rules, or the defaults
+        rules = self.pending[3] if self.pending else base
+        comp = self.studio.composition
+        return plain({"files": files, "pending": self._draft_view() if self.pending else None,
+                      "rules": rules.to_dict(), "defaults": base.to_dict(),
+                      "rules_by": [self._label(m) for m in (comp.rules_by if comp else [])],
+                      "limits": {"file_bytes": lim.file_bytes, "total_bytes": lim.total_bytes, "files": lim.files,
+                                 "rows": lim.rows, "columns": lim.columns},
+                      "samples": [p.name for p in self._sample_files()], "connect": lim.allow_connect})
+
+    def upload(self, source: str, data: bytes) -> dict:
+        from xgen_data_studio.draft import ReadError, read_file
+
+        lim = self.data
+        source = Path(source.replace("\\", "/")).name[:120] or "file.csv"
+        others = {k: v for k, v in self.sizes.items() if k != source}
+        if len(data) > lim.file_bytes:
+            raise ValueError(f"{source}: 파일 크기가 {_size(lim.file_bytes)} 한도를 초과해 업로드하지 못했습니다. "
+                             "파일을 나누어 다시 업로드해 주세요.")
+        if len(others) >= lim.files:
+            raise ValueError(f"업로드 파일 수가 {lim.files}개 한도에 도달해 추가하지 못했습니다. "
+                             "파일을 삭제한 뒤 다시 업로드해 주세요.")
+        if sum(others.values()) + len(data) > lim.total_bytes:
+            raise ValueError(f"전체 업로드 용량이 {_size(lim.total_bytes)} 한도를 초과해 업로드하지 못했습니다. "
+                             "파일을 삭제한 뒤 다시 업로드해 주세요.")
+        try:
+            tables = read_file(data, source, max_rows=lim.rows)
+        except ReadError as e:
+            raise ValueError(f"{source}: " + READ_ERROR.get(
+                e.reason, "파일을 테이블로 읽지 못했습니다. 파일 형식을 확인해 주세요.")) from None
+        wide = [t.name for t in tables if len(t.columns) > lim.columns]
+        if wide:
+            raise ValueError(f"{', '.join(wide)}: 컬럼 수가 {lim.columns}개 한도를 초과해 업로드하지 못했습니다. "
+                             "컬럼을 줄여 다시 업로드해 주세요.")
+        self.uploads = {**{k: v for k, v in self.uploads.items() if k != source}, source: tables}
+        self.sizes = {**others, source: len(data)}
+        self.pending = None
+        return self.files_state()
+
+    def use_samples(self) -> dict:
+        files = self._sample_files()
+        if not files:
+            raise ValueError("샘플 데이터가 설정되지 않아 불러오지 못했습니다.")
+        self.uploads, self.sizes, self.pending = {}, {}, None
+        for p in files:
+            self.upload(p.name, p.read_bytes())
+        return self.files_state()
+
+    def remove_file(self, source: str) -> dict:
+        self.uploads.pop(source, None)
+        self.sizes.pop(source, None)
+        self.pending = None
+        return self.files_state()
+
+    def _method_rules(self) -> dict:
+        comp = self.studio.composition
+        return dict(comp.draft_rules) if comp else {}
+
+    def _rules(self, rules: dict | None):
+        from xgen_data_studio.draft import DraftRules
+
+        try:  # what the visitor set, over an attached method module's rules
+            return DraftRules.from_dict({**self._method_rules(), **(rules if isinstance(rules, dict) else {})})
+        except (TypeError, ValueError):
+            raise ValueError("생성 설정 값을 확인할 수 없어 초안을 생성하지 못했습니다. 숫자 항목을 확인해 주세요.") from None
+
+    def make_draft(self, label: str = "", rules: dict | None = None, tables: list | None = None) -> dict:
+        from xgen_data_studio.backends.sql import SqliteBackend
+        from xgen_data_studio.draft import draft, load_sqlite
+
+        all_tables = [t for ts in self.uploads.values() for t in ts]
+        if not all_tables:
+            raise ValueError("업로드한 파일이 없어 초안을 생성하지 못했습니다. 파일을 업로드해 주세요.")
+        wanted = {str(x) for x in tables} if tables else None
+        chosen = [t for t in all_tables if wanted is None or t.name in wanted]
+        if not chosen:
+            raise ValueError("선택된 테이블이 없어 초안을 생성하지 못했습니다. 테이블을 하나 이상 선택해 주세요.")
+        r = self._rules(rules)
+        b = SqliteBackend()
+        loaded = load_sqlite(chosen, b, row_keys=r.row_keys)
+        d = draft(b, name="my-data", label=(label or "내 데이터")[:40], loaded=loaded, lang="ko", rules=r,
+                  origin={"kind": "files", "files": list(self.uploads), "detail": f"업로드 파일 {len(self.uploads)}개"})
+        self.pending = (d, b, chosen, r)
+        return self.files_state()
+
+    def connect(self, dsn: str, label: str = "", rules: dict | None = None) -> dict:
+        if not self.data.allow_connect:
+            raise PermissionError("공개 데모에서는 DB 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
+        from xgen_data_studio.config import open_backend
+        from xgen_data_studio.draft import draft
+
+        dsn = dsn.strip()
+        u = urlparse(dsn)
+        if u.scheme in ("postgres", "postgresql"):
+            b = open_backend({"kind": "postgres", "dsn": dsn}, Path("."))
+            where = f"PostgreSQL {u.hostname or 'localhost'}{u.path}"  # never the user or the password
+        else:
+            path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
+            if not Path(path).is_file():
+                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. "
+                                 "postgresql:// 주소 또는 SQLite 파일 경로를 입력해 주세요.")
+            b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
+            where = f"SQLite {Path(path).name}"
+        r = self._rules(rules)
+        d = draft(b, name="my-db", label=(label or "내 데이터베이스")[:40], lang="ko", rules=r,
+                  origin={"kind": "database", "detail": where})
+        self.uploads, self.sizes = {}, {}
+        self.pending = (d, b, [], r)
+        return self.files_state()
+
+    def _draft_view(self) -> dict:
+        d = self.pending[0]
+        return {"label": d.label, "origin": d.origin, "steps": d.steps(), **self._revised(d)}
+
+    @staticmethod
+    def _revised(d) -> dict:
+        """What a draft would plug in: the graph, the two module files, and the checks it does not pass."""
+        import yaml
+
+        modules = d.modules()
+        comp = compose(modules, name=d.name)
+        graph = StudioSession(Studio.from_modules(modules, name=d.name)).graph() if not comp.issues else None
+        return {"graph": graph, "issues": list(comp.issues), "queries": list(d.queries()),
+                "query_items": [{"element": f"query:{k}", "label": v["label"], "on": k not in d.no_queries}
+                                for k, v in d.queries(dropped=True).items()],
+                "counts": {"objects": len(d.objects), "links": len(d.links),
+                           "properties": sum(len(o.properties) for o in d.objects), "queries": len(d.queries()),
+                           "states": len(d.states), "actions": len(d.actions()), "roles": len(d.roles()),
+                           "questions": len(d.questions()), "decisions": len(d.decisions)},
+                "modules": [{"name": m.name, "kind": m.kind, "label": m.label,
+                             "yaml": yaml.safe_dump(m.to_dict(), allow_unicode=True, sort_keys=False)}
+                            for m in modules]}
+
+    @staticmethod
+    def _edit(d, edits: dict | None):
+        """The page's edits as revise() takes them."""
+        e = edits if isinstance(edits, dict) else {}
+
+        def pairs(k: str) -> dict:
+            v = e.get(k)
+            return {str(a): str(b) for a, b in v.items()} if isinstance(v, dict) else {}
+
+        values = {}
+        for k, v in (e.get("values") or {}).items():
+            items = v.split(",") if isinstance(v, str) else v if isinstance(v, list) else []
+            values[str(k)] = [str(x).strip() for x in items if str(x).strip()]
+        return d.revise(drop=[str(x) for x in e.get("drop") or []],
+                        labels={k: v[:60] for k, v in pairs("labels").items() if v.strip()},
+                        keys=pairs("keys"), types=pairs("types"), values=values, cardinality=pairs("cardinality"),
+                        add_links=[x for x in e.get("add_links") or [] if isinstance(x, dict)])
+
+    # ---- a decision table from past outcomes, and bindings onto a standard ----------------------------------------
+
+    def induce_decision(self, target: str, inputs: list, label: str = "", edits: dict | None = None) -> dict:
+        from xgen_data_studio.induce import InduceError, induce
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 판정 표를 만들지 못했습니다. 초안을 먼저 생성해 주세요.")
+        d0, b, _, _ = self.pending
+        try:
+            d = self._edit(d0, edits)
+            onto = compose(d.modules(), name=d.name).ontology
+            out = induce(b, onto, str(target), [str(x) for x in inputs or []], label=label[:60])
+        except (InduceError, ValueError) as e:
+            return {"ok": False, "error": f"판정 표를 만들지 못했습니다. {e}"}
+        d0.decisions[out["name"]] = {**out["decision"], "report": out["report"]}
+        self._note("draft", f"{out['decision']['label']}: 지난 {out['report']['cases']}건으로 규칙 "
+                            f"{out['report']['rules']}개를 만들었습니다.")
+        return plain({"ok": True, **out})
+
+    def drop_decision(self, name: str) -> dict:
+        if self.pending:
+            self.pending[0].decisions.pop(name, None)
+        return {"ok": True}
+
+    def standards(self) -> dict:
+        lib = self.studio.library
+        rows = lib.list() if lib is not None else []
+        return {"standards": [{"name": r["name"], "label": r["label"] or r["name"], "kind": r["kind"],
+                               "kind_label": MODULE_KIND.get(r["kind"], r["kind"])}
+                              for r in rows if r["kind"] in ("domain", "industry")]}
+
+    def _standard(self, names: list) -> tuple[list[Module], Any]:
+        lib = self.studio.library
+        if lib is None:
+            raise ValueError("라이브러리가 없어 표준에 연결하지 못했습니다.")
+        names = [str(n) for n in names or []]
+        if not names:
+            raise ValueError("연결할 표준 모듈을 선택하지 않아 제안을 만들지 못했습니다. 표준 모듈을 선택해 주세요.")
+        try:
+            mods = lib.resolve(names)
+            onto = compose(mods, **self.studio._compose_kw).ontology
+        except ModuleError as e:
+            raise ValueError(f"표준 모듈을 구성하지 못했습니다. {e}") from None
+        return mods, onto
+
+    def suggest_mapping(self, standard: list, edits: dict | None = None) -> dict:
+        from xgen_data_studio.mapping import suggest
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 연결을 제안하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        _, onto = self._standard(standard)
+        d = self._edit(self.pending[0], edits)
+        s = suggest(d, onto, [str(x) for x in standard])
+        objs = []
+        for m in s.objects:
+            o = onto.objects[m.object]
+            objs.append({**m.__dict__, "label": o.label or m.object,
+                         "columns": [{**c.__dict__, "label": (find_prop(onto, m.object, c.property).label
+                                                              or c.property)} for c in m.columns],
+                         "missing": [{"property": p, "label": find_prop(onto, m.object, p).label or p}
+                                     for p in m.missing]})
+        tables = [{"table": o.table, "columns": [p.column for p in o.properties]} for o in d.objects]
+        return plain({"ok": True, "objects": objs, "links": s.links, "unmatched_tables": s.unmatched_tables,
+                      "unbound_objects": [{"name": t, "label": onto.objects[t].label or t} for t in s.unbound_objects],
+                      "tables": tables, "standard": [str(x) for x in standard]})
+
+    def apply_mapping(self, standard: list, edits: dict | None = None, mapping: dict | None = None) -> dict:
+        from xgen_data_studio.backends.rdf import RdflibBackend
+        from xgen_data_studio.draft import LABELS
+        from xgen_data_studio.mapping import binding, suggest
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 표준에 연결하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        mods, onto = self._standard(standard)
+        d = self._edit(self.pending[0], edits)
+        s = suggest(d, onto, [str(x) for x in standard])
+        m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, base=mods)
+        comp = compose([*mods, m], **self.studio._compose_kw)
+        if comp.issues:
+            raise ValueError("정의 검사에서 오류가 발견되어 연결하지 못했습니다. " + "; ".join(comp.issues[:5]))
+
+        def build() -> Studio:
+            st = Studio.from_modules([*mods, m], library=OverlayLibrary(self.studio.library, [m]),
+                                     use_zen=self.studio.use_zen, **self.studio._compose_kw)
+            st.add_backend("source", self.pending[1], source=True)
+            st.add_backend("graph", RdflibBackend())
+            st.project()
+            return st
+
+        st = build()
+        # the standard's questions were answered on its own example data. On these tables a question on a query with
+        # parameters is asked again with the answer the tables give now (it also gives the query the values the
+        # backends are compared with); one on a decision goes. Each kept query without parameters is asked its row
+        # count now, as a draft does.
+        words = LABELS.get(d.lang, LABELS["en"])["question"]
+        asked, wrong, renewed = [], [], 0
+        for name, rq in st.onto.queries.items():
+            if not rq.params:
+                asked.append({"id": f"{m.name}-q{len(asked) + 1}", "text": words.format(q=rq.label or name),
+                              "query": name, "expect": {"rows": len(st.run(name, {}, backend="source").rows)}})
+        failed = {r.id for r in st.questions(backend="source").results if not r.passed}
+        for qs in [q for q in st.onto.questions if q.id in failed]:
+            wrong.append(qs.id)
+            if qs.query and st.onto.queries[qs.query].params:
+                try:
+                    rows = len(st.run(qs.query, qs.params, backend="source").rows)
+                except Exception:  # a question the tables cannot answer goes
+                    continue
+                asked.append({"id": f"{m.name}-{qs.id}", "text": qs.text, "query": qs.query,
+                              "params": dict(qs.params), "expect": {"rows": rows}})
+                renewed += 1
+        if wrong or asked:
+            if wrong:
+                m.remove["questions"] = [*m.remove.get("questions", []), *wrong]
+            m.body["questions"] = asked
+            st = build()
+        self._adopt(st)
+        self._library_rows = st.library.list()
+        self.origin = {**d.origin, "label": d.label, "standard": [str(x) for x in standard]}
+        self.pending, self.log = None, []
+        removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
+        uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
+                                                              ("actions", "액션")) if m.remove.get(k)]
+        self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
+                            f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
+                            f"테이블에 없는 속성 {removed}개 제외"
+                            + (f"(이 속성을 쓰는 {', '.join(uses)} 제외)" if uses else "")
+                            + (f", 예시 데이터 기준 표준 검증 질문 {renewed}개는 업로드 데이터의 답으로 다시 등록" if renewed else "")
+                            + (f", 업로드 데이터로 답할 수 없는 표준 검증 질문 {len(wrong) - renewed}개 제외"
+                               if len(wrong) > renewed else ""))
+        return plain({"ok": True, "module": m.to_dict()})
+
+    def preview_draft(self, edits: dict | None = None) -> dict:
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 미리 보지 못했습니다. 초안을 먼저 생성해 주세요.")
+        try:
+            r = self._edit(self.pending[0], edits)
+        except ValueError as e:
+            return {"ok": False, "issues": [str(e)]}
+        return plain({"ok": True, **self._revised(r)})
+
+    def apply_draft(self, edits: dict | None = None) -> dict:
+        from xgen_data_studio.backends.sql import SqliteBackend
+        from xgen_data_studio.draft import ReadError, load_sqlite, studio_from
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 적용하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        d0, b, tables, rules = self.pending
+        try:
+            d = self._edit(d0, edits)
+        except ValueError as e:
+            raise ValueError(f"편집 내용을 확인할 수 없어 적용하지 못했습니다. {e}") from None
+        if not d.objects:
+            raise ValueError("선택된 객체가 없어 적용하지 못했습니다. 객체를 하나 이상 선택해 주세요.")
+        if d.origin.get("kind") == "files":  # a type the person chose is how the values are stored
+            was = {(o.table, p.column): p.type for o in d0.objects for p in o.properties}
+            original = {lo.table: t.name for t, lo in zip(tables, d0.loaded)}
+            asked: dict[str, dict[str, str]] = {}
+            for o in d.objects:
+                for p in o.properties:
+                    if was.get((o.table, p.column)) != p.type:
+                        asked.setdefault(original.get(o.table, o.table), {})[p.column] = p.type
+            if asked:
+                b = SqliteBackend()
+                try:
+                    load_sqlite(tables, b, row_keys=rules.row_keys, types=asked)
+                except ReadError as e:
+                    i = e.info
+                    raise ValueError(f"{i.get('table')}.{i.get('column')} 값 {i.get('value')!r} 을(를) "
+                                     f"{i.get('type')} 타입으로 변환하지 못해 적용하지 못했습니다. 타입을 다시 선택해 "
+                                     "주세요.") from None
+        try:
+            self._adopt(studio_from(d, b, library=self.studio.library, use_zen=self.studio.use_zen))
+        except ModuleError as e:
+            raise ValueError(f"정의 검사에서 오류가 발견되어 적용하지 못했습니다. {e}") from None
+        self._library_rows = self.studio.library.list()
+        self.origin = {**d.origin, "label": d.label}
+        self.pending, self.log = None, []
+        self._note("draft", f"{d.label} 온톨로지를 적용했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
+        return {"ok": True}
+
+    # ---- module files: read, check, save into this visitor's library, plug in ---------------------------------
+
+    def _module(self, name: str) -> Module:
+        comp = self.studio.composition
+        for m in comp.modules if comp else []:
+            if m.name == name:
+                return m
+        if self.studio.library is None:
+            raise LookupError(name)
+        try:
+            return self.studio.library.get(name)
+        except ModuleError:
+            raise LookupError(name) from None
+
+    def module_source(self, name: str) -> dict:
+        import yaml
+
+        m = self._module(name)
+        comp = self.studio.composition
+        return {"name": m.name, "label": m.label or m.name, "kind": m.kind, "version": m.version,
+                "applied": bool(comp) and m.name in {x.name for x in comp.modules},
+                "yaml": yaml.safe_dump(m.to_dict(), allow_unicode=True, sort_keys=False)}
+
+    @staticmethod
+    def _parse_module(text: str) -> Module:
+        import yaml
+
+        if len(text.encode("utf-8")) > MODULE_TEXT_MAX:
+            raise ValueError("정의 파일 크기가 48KB 한도를 초과해 읽지 못했습니다. 모듈을 나누어 저장해 주세요.")
+        try:
+            d = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            mark = getattr(e, "problem_mark", None)
+            where = f"{mark.line + 1}행의 " if mark is not None else ""
+            raise ValueError(f"{where}YAML 형식이 올바르지 않아 읽지 못했습니다. 들여쓰기와 따옴표를 확인해 주세요.") from None
+        if not isinstance(d, dict) or not d.get("module"):
+            raise ValueError("module 이름이 없어 읽지 못했습니다. 첫 줄에 module: 이름을 입력해 주세요.")
+        try:
+            return Module.from_dict(d)
+        except (ModuleError, KeyError, TypeError, ValueError, AttributeError) as e:
+            raise ValueError(f"모듈 형식이 올바르지 않아 읽지 못했습니다. {e}") from None
+
+    def _module_issues(self, m: Module) -> list[str]:
+        from xgen_data_studio.library import OverlayLibrary
+
+        comp = self.studio.composition
+        current = list(comp.modules) if comp else []
+        names = {x.name for x in current}
+        if m.name in names:
+            mods = [m if x.name == m.name else x for x in current]
+        else:
+            try:
+                picked = OverlayLibrary(self.studio.library, [m]).resolve([*names, m.name])
+            except ModuleError as e:
+                return [str(e)]
+            mods = current + [x for x in picked if x.name not in names]
+        try:
+            return list(compose(mods, **self.studio._compose_kw).issues)
+        except ModuleError as e:
+            return [str(e)]
+
+    def check_module(self, text: str) -> dict:
+        m = self._parse_module(text)
+        comp = self.studio.composition
+        issues = self._module_issues(m)
+        return plain({"ok": not issues, "issues": issues, "name": m.name, "version": m.version, "kind": m.kind,
+                      "counts": m.counts(), "applied": bool(comp) and m.name in {x.name for x in comp.modules}})
+
+    def save_module(self, text: str, apply: bool = False) -> dict:
+        """Propose and, where this visitor may approve their own change, approve it in one step."""
+        comp = self.studio.composition
+        res = self.propose_module(text, attach=apply)
+        change = res["change"]
+        applied = bool(comp) and change["module"] in {x.name for x in comp.modules}
+        if not self.studio.changes.self_approve:
+            return {"ok": True, "applied": False, "pending": True, "change": change, "warning": ""}
+        out = self.decide_change(change["id"], True)
+        if not out["ok"]:
+            raise ValueError(out["error"])
+        warning = _projection_warning(out.get("projection") or {})
+        return {"ok": True, "applied": applied or apply, "warning": warning, "change": out["change"],
+                "bumped": res["bumped"]}
+
+    def export_module(self, name: str) -> str:
+        return self.module_source(name)["yaml"]
+
+    # ---- definition changes: a module version is proposed, reviewed on a copy, approved by a person ------------
+
+    def _change(self, cr) -> dict:
+        rv = cr.review
+        gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
+                  "stage_label": STAGE_LABEL.get(g["stage"], g["stage"])} for g in rv.get("gates") or []]
+        m = rv.get("measured") or {}
+        return plain({
+            "id": cr.id, "module": cr.module, "module_label": self._label(cr.module), "version": cr.version,
+            "base_version": rv.get("base_version", ""), "mode": rv.get("mode", ""), "status": cr.status,
+            "status_label": CHANGE_STATUS.get(cr.status, cr.status), "requested_by": cr.requested_by,
+            "decided_by": cr.decided_by, "reason": cr.reason, "at": cr.at, "passed": rv.get("passed"),
+            "issues": rv.get("issues") or [], "diff": rv.get("diff") or {}, "gates": gates,
+            "measured": {"bind": {k: v for k, v in (m.get("bind") or {}).items() if k != "findings"},
+                         "findings": (m.get("bind") or {}).get("findings", [])[:20],
+                         "query": m.get("query"), "check": m.get("check"),
+                         "decide": {k: v for k, v in (m.get("decide") or {}).items() if k != "mismatches"},
+                         "mismatches": (m.get("decide") or {}).get("mismatches", [])[:20]}})
+
+    def propose_module(self, text: str, attach: bool = False) -> dict:
+        m = self._parse_module(text)
+        issues = self._module_issues(m)
+        if issues:
+            raise ValueError("정의 검사에서 오류가 발견되어 변경을 요청하지 못했습니다. " + "; ".join(issues[:5]))
+        lib = self.studio.changes.store or self.studio.library
+        bumped = ""
+        if m.version in lib.versions(m.name):
+            if lib.get(m.name, m.version).to_dict() == m.to_dict():
+                raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
+            bumped, m.version = m.version, _next_version(lib.versions(m.name))
+        cr = self.studio.changes.propose(m, by=self.who, attach=attach)
+        extra = f" 버전 {bumped} 이(가) 이미 있어 {m.version} (으)로 올렸습니다." if bumped else ""
+        state = "흐름 통과 조건을 모두 충족합니다" if cr.review.get("passed") else "흐름 통과 조건을 충족하지 못했습니다"
+        self._note("change", f"{m.label or m.name} {m.version} 변경을 요청했습니다. {state}.{extra}")
+        return {"ok": True, "change": self._change(cr), "bumped": bumped}
+
+    def changes_state(self) -> dict:
+        ch = self.studio.changes
+        return {"changes": [self._change(c) for c in reversed(list(ch.requests.values()))], "who": self.who,
+                "self_approve": ch.self_approve, "writes_folder": ch.store is not None}
+
+    def decide_change(self, change_id: str, approve: bool, reason: str = "") -> dict:
+        from xgen_data_studio.review import ChangeError
+
+        ch = self.studio.changes
+        try:
+            cr = ch.approve(change_id, by=self.who) if approve else                 ch.reject(change_id, by=self.who, reason=reason or "검토 후 반려")
+        except PermissionError:
+            return {"ok": False, "error": "변경을 요청한 사람은 같은 변경을 승인할 수 없어 승인하지 못했습니다. "
+                                          "다른 승인자가 승인해 주세요."}
+        except (ChangeError, ModuleError) as e:
+            cr = ch.requests.get(change_id)
+            failed = [g["label"] for g in (self._change(cr)["gates"] if cr else []) if not g["passed"]]
+            why = ", ".join(failed) if failed else str(e)
+            return {"ok": False, "error": f"흐름 통과 조건({why})을 충족하지 못해 승인하지 못했습니다. "
+                                          "정의를 고쳐 다시 요청해 주세요.",
+                    "change": self._change(cr) if cr else None}
+        proj = {}
+        if cr.status == "approved":
+            proj = self._reproject()
+            self._library_rows = self.studio.library.list()
+        verb = "승인하고 적용했습니다" if cr.status == "approved" else "반려했습니다"
+        self._note("change", f"{self._label(cr.module)} {cr.version} 변경을 {verb}.", projection=proj)
+        return {"ok": True, "change": self._change(cr), "projection": proj}
+
+    # ---- the flow's stages and pass conditions, agreement with past decisions, identities, sync --------------
+
+    def flow_settings(self) -> dict:
+        from xgen_data_studio.review import GATES, STAGES
+
+        st = self.studio
+        qs = [{"name": q.name, "label": q.label or q.name,
+               "columns": [c.name for c in st.query(q.name).columns]} for q in st.onto.queries.values()]
+        ds = [{"name": d.name, "label": d.label or d.name, "inputs": list(d.inputs), "outputs": list(d.outputs)}
+              for d in st.onto.decisions.values()]
+        # the form edits the studio's own conditions; a quality module's that ask more are shown next to them
+        raised = []
+        for ref, m in st.raised_gates().items():
+            stage, cond = ref.split(".")
+            raised.append({"stage": stage, "condition": cond, "value": st.composition.gates[stage][cond], "module": m,
+                           "module_label": self._label(m)})
+        return plain({"settings": st.own_flow.to_dict(), "raised": raised,
+                      "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in STAGES],
+                      "conditions": {s: [{"id": c, "label": GATE_LABEL[(s, c)]} for c in cs]
+                                     for s, cs in GATES.items()},
+                      "queries": qs, "decisions": ds})
+
+    def save_flow(self, settings: dict) -> dict:
+        from xgen_data_studio.review import FlowSettings
+
+        try:
+            fs = FlowSettings.from_dict(settings)
+        except ValueError as e:
+            raise ValueError(f"흐름 설정을 확인할 수 없어 저장하지 못했습니다. {e}") from None
+        self.studio.settings["flow"] = fs.to_dict()
+        self._note("flow", "흐름 단계와 통과 조건을 저장했습니다.")
+        return {"ok": True, "settings": fs.to_dict()}
+
+    def agreement(self) -> dict:
+        st = self.studio
+        if not st.flow.agreement:
+            return {"ok": False, "error": "판정 일치율 설정이 없어 측정하지 못했습니다. 흐름 설정에서 비교할 결정표와 "
+                                          "처리 기록 질의를 지정해 주세요."}
+        try:
+            a = st.agreement()
+        except Exception as e:
+            return {"ok": False, "error": f"처리 기록을 판정하지 못했습니다. {type(e).__name__}: {e}"}
+        d = st.onto.decisions[a["decision"]]
+        return plain({"ok": True, "label": d.label or d.name, **a})
+
+    def identities(self) -> dict:
+        st = self.studio
+        out = []
+        for name, ident in st.onto.identities.items():
+            try:
+                rep = st.resolve_identity(name, write=False)
+            except Exception as e:
+                out.append({"name": name, "label": ident.label or name, "error": f"{type(e).__name__}: {e}"})
+                continue
+            out.append({"name": name, "label": ident.label or name, "table": ident.table,
+                        "members": [{"type": m.type, "label": self._obj_label(m.type), "fields": m.fields}
+                                    for m in ident.members.values()],
+                        "rules": [{"id": r.id, "match": r.match, "normalize": r.normalize} for r in ident.rules],
+                        **rep.to_dict()})
+        return plain({"identities": out})
+
+    def resolve_identity(self, name: str) -> dict:
+        src = self.studio.backends.get(self.studio.source)
+        if src is None or not getattr(src, "capabilities", None) or not src.capabilities.write:
+            return {"ok": False, "error": "원천 DB에 쓸 수 없어 교차표를 만들지 못했습니다. 쓰기 가능한 원천을 연결해 주세요."}
+        if self.origin.get("kind") == "connect":
+            return {"ok": False, "error": "연결한 DB에는 교차표를 쓰지 않습니다. 사내 설치에서 xds 명령으로 실행해 주세요."}
+        rep = self.studio.resolve_identity(name)
+        self._note("identity", f"{name}: 기록 {rep.records}건을 {len(rep.clusters)}개로 묶었습니다 "
+                               f"(묶인 건 {len(rep.joined)}).")
+        return plain({"ok": True, **rep.to_dict()})
+
+    def sync(self) -> dict:
+        res = self.studio.sync()
+        if res.get("error"):
+            return {"ok": False, "error": f"원천을 다시 읽지 못했습니다. {res['error']}"}
+        self._note("sync", "원천 변경분을 반영했습니다." if res["changed"] else "원천에 바뀐 내용이 없습니다.")
+        return plain({"ok": True, **res})
+
+    # ---- the whole flow, from the source to the checks, with what each stage holds now ----------------------
+
+    def flow(self) -> dict:
+        from xgen_data_studio.compile.sql import qi
+
+        st, o = self.studio, self.studio.onto
+        src = st.backends.get(st.source)
+        tables = sorted({t.table for t in o.objects.values() if t.table} |
+                        {lk.via.table for lk in o.links.values() if lk.via})
+        rows = []
+        for t in tables:
+            try:
+                rows.append({"table": t, "rows": src.fetch(f"SELECT COUNT(*) FROM {qi(t)}")[0][0]})
+            except Exception:  # a table the definition names but the database lacks; DB 대조 shows it
+                rows.append({"table": t, "rows": None})
+        comp = st.composition
+        modules = [{"name": m.name, "label": m.label or m.name, "kind": m.kind,
+                    "kind_label": MODULE_KIND.get(m.kind, m.kind)} for m in (comp.modules if comp else [])]
+        from xgen_data_studio.review import gates as pass_gates
+        from xgen_data_studio.review import measure
+
+        settings = st.flow
+        measured = measure(st, settings)
+        by = st.raised_gates()
+        results = [{**g.__dict__, "label": GATE_LABEL.get((g.stage, g.condition), g.condition),
+                    "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else ""}
+                   for g in pass_gates(measured, settings)]
+        bind, conf, qa, agree = (measured.get(k) for k in ("bind", "query", "check", "decide"))
+        proj = st.projection
+        steps = [
+            {"id": "source", "backend": st.source, "dialect": src.capabilities.dialect if src else "",
+             "tables": rows, "rows": sum(r["rows"] or 0 for r in rows)},
+            {"id": "define", "modules": modules, "objects": len(o.objects), "links": len(o.links),
+             "properties": sum(len(t.properties) for t in o.objects.values()),
+             "computed": sum(1 for t in o.objects.values() for p in t.properties.values() if p.expr),
+             "identities": len(o.identities)},
+            {"id": "bind", "ok": bind["ok"] if bind else None, "checked": bind["checked"] if bind else {},
+             "findings": len(bind["findings"]) if bind else 0},
+            {"id": "project", "backends": [n for n, b in st.backends.items() if b.capabilities.load],
+             "nodes": len(proj.nodes) if proj else 0, "edges": len(proj.edges) if proj else 0, "sync": st.last_sync},
+            {"id": "query", "queries": len(o.queries), "targets": len(TARGETS),
+             "conformance": {k: conf[k] for k in ("agree", "queries", "error") if k in conf} if conf else None},
+            {"id": "decide", "decisions": len(o.decisions), "actions": len(o.actions),
+             "rules": sum(len(d.rules) for d in o.decisions.values()),
+             "agreement": {k: agree.get(k) for k in ("cases", "agree", "rate", "error") if k in agree}
+             if agree else None},
+            {"id": "check", "questions": len(o.questions), "accuracy": qa["accuracy"] if qa else None,
+             "grounded": qa["grounded"] if qa else None},
+        ]
+        for s in steps:
+            s["on"] = settings.on(s["id"])
+            s["gates"] = [g for g in results if g["stage"] == s["id"]]
+        return plain({"origin": self.origin, "passed": all(g["passed"] for g in results), "steps": steps})
 
     # ---- checks ----------------------------------------------------------------------------------------------
 
@@ -454,16 +1194,32 @@ class StudioSession:
                                     for r in c.queries]}
             except Exception as e:
                 conf = {"passed": False, "error": f"{type(e).__name__}: {e}"}
-        return plain({"accuracy": rep.accuracy, "results": [r.__dict__ for r in rep.results],
+        return plain({"accuracy": rep.accuracy, "grounded": rep.grounded,
+                      "results": [{**r.__dict__, "gaps": [_gap_text(g) for g in r.gaps]} for r in rep.results],
                       "conformance": conf})
 
     def bindings(self) -> dict:
         source = self.studio.source
         if not source:
-            return {"ok": False, "error": "대조할 원천 데이터베이스가 연결되어 있지 않습니다."}
+            return {"ok": False, "error": "원천 DB가 연결되어 있지 않아 대조하지 못했습니다."}
         rep = self.studio.check_bindings()
         return plain({"ok": rep.ok, "checked": rep.checked, "backend": source,
                       "findings": [f.__dict__ for f in rep.findings]})
+
+
+def _next_version(versions: list[str]) -> str:
+    from xgen_data_studio.modules import version_key
+
+    last = sorted(versions, key=version_key)[-1]
+    parts = last.split(".")
+    if all(p.isdigit() for p in parts):
+        parts[-1] = str(int(parts[-1]) + 1)
+        return ".".join(parts)
+    return f"{last}.1"
+
+
+def _size(n: int) -> str:
+    return f"{n >> 20}MB" if n >= 1 << 20 and not n % (1 << 20) else f"{n >> 10:,}KB"
 
 
 def _word(v: Any) -> str:
@@ -473,7 +1229,7 @@ def _word(v: Any) -> str:
 def _projection_warning(proj: dict) -> str:
     if "error" not in proj:
         return ""
-    return "원천 DB가 이 정의와 맞지 않아 그래프 저장소에 반영하지 못했습니다. DB 대조에서 확인해 주세요."
+    return "원천 DB가 정의와 일치하지 않아 그래프 저장소에 반영하지 못했습니다. DB 대조에서 확인해 주세요."
 
 
 _ZEN: bool | None = None

@@ -30,3 +30,46 @@ jobs:
           python-version: "3.12"
       - run: pip install -e . pytest pyyaml
       - run: pytest -q
+  live:
+    # the same studio on real servers: tests/test_live.py runs each part whose address is set
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_PASSWORD: xds-ci-only, POSTGRES_DB: xds}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      neo4j:
+        image: neo4j:5.26
+        env: {NEO4J_AUTH: neo4j/xds-ci-only-pass}
+        ports: ["7687:7687"]
+      gremlin:
+        image: tinkerpop/gremlin-server:3.8.2
+        ports: ["8182:8182"]
+      fuseki:
+        image: stain/jena-fuseki
+        env: {ADMIN_PASSWORD: xds-ci-only}
+        ports: ["3030:3030"]
+    env:
+      XDS_LIVE_PG: postgresql://postgres:xds-ci-only@localhost:5432/xds
+      XDS_LIVE_NEO4J: bolt://localhost:7687
+      XDS_LIVE_NEO4J_AUTH: neo4j:xds-ci-only-pass
+      XDS_LIVE_GREMLIN: ws://localhost:8182/gremlin
+      XDS_LIVE_FUSEKI: http://localhost:3030/ds
+      XDS_LIVE_FUSEKI_AUTH: admin:xds-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[all,live,dev]"
+      - name: wait for the servers, then make the Fuseki dataset
+        run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:3030/\$/ping > /dev/null && break; sleep 2; done
+          curl -s -u admin:xds-ci-only -X POST -d "dbName=ds&dbType=mem" "http://localhost:3030/\$/datasets"
+          for port in 7687 8182; do
+            for i in $(seq 1 60); do (echo > /dev/tcp/localhost/$port) 2>/dev/null && break; sleep 2; done
+          done
+          sleep 10
+      - run: pytest -q tests/test_live.py

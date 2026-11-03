@@ -28,10 +28,16 @@ class Property:
     required: bool = False
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
+    expr: str = ""   # a computed property: an expression over the object's other properties (see expr.py)
+    mask: str = ""   # partial | full: hidden from every role that is not given it in clear
 
     @property
     def col(self) -> str:
         return self.column or self.name
+
+    @property
+    def computed(self) -> bool:
+        return bool(self.expr)
 
 
 @dataclass
@@ -66,6 +72,7 @@ class ObjectType:
     states: StateMachine | None = None
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
+    series: dict[str, str] = field(default_factory=dict)  # observations over time: {time: property, of: link}
 
     @property
     def abstract(self) -> bool:
@@ -164,6 +171,8 @@ class ActionType:
     transition_to: str = ""
     approval: bool = True
     cite: str = ""
+    call: dict[str, Any] = field(default_factory=dict)  # an external request sent after the change is written
+    undo: dict[str, Any] = field(default_factory=dict)  # the request that reverses `call`, for a rollback
 
 
 @dataclass
@@ -175,6 +184,8 @@ class Role:
     run: list[str] = field(default_factory=list)
     request: list[str] = field(default_factory=list)
     execute: list[str] = field(default_factory=list)
+    mask: dict[str, str] = field(default_factory=dict)  # "Type.prop" -> partial | full, on top of the properties' own
+    unmask: list[str] = field(default_factory=list)     # "Type.prop" or "Type.*" this role sees in clear
 
     def can_read(self, type_name: str) -> bool:
         return "*" in self.read or type_name in self.read
@@ -182,6 +193,40 @@ class Role:
     def can(self, verb: str, name: str) -> bool:
         names = getattr(self, verb)
         return "*" in names or name in names
+
+
+@dataclass
+class IdentityMember:
+    type: str
+    fields: dict[str, str]  # match field -> property of the member type
+
+
+@dataclass
+class IdentityRule:
+    id: str
+    match: list[str]
+    normalize: dict[str, str] = field(default_factory=dict)  # field -> lower | digits | trim | none
+
+
+@dataclass
+class Identity:
+    """One real-world thing that several systems keep under their own keys; resolved into a crosswalk."""
+
+    name: str
+    members: dict[str, IdentityMember]
+    rules: list[IdentityRule]
+    table: str = ""
+    label: str = ""
+
+    @property
+    def key(self) -> str:
+        return "identity_id"
+
+    def member_table(self, member: str) -> str:
+        return f"{self.table}_{member.lower()}"
+
+    def link_name(self, member: str) -> str:
+        return f"{self.name[:1].lower()}{self.name[1:]}{member}"
 
 
 @dataclass
@@ -220,6 +265,7 @@ class Ontology:
     queries: dict[str, RegisteredQuery] = field(default_factory=dict)
     questions: list[Question] = field(default_factory=list)
     exclusive: list[tuple[str, str]] = field(default_factory=list)
+    identities: dict[str, Identity] = field(default_factory=dict)
 
     def obj(self, name: str) -> ObjectType:
         try:
@@ -292,7 +338,8 @@ def _prop(name: str, d: Any) -> Property:
     return Property(name=name, type=d.get("type", "string"), label=d.get("label", ""),
                     description=d.get("description", ""), column=d.get("column", ""), unit=d.get("unit", ""),
                     values=list(d.get("values", [])), required=bool(d.get("required", False)),
-                    cite=d.get("cite", ""), aligned=list(d.get("aligned", [])))
+                    cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
+                    mask=str(d.get("mask", "") or ""))
 
 
 def _states(d: dict | None) -> StateMachine | None:
@@ -309,7 +356,8 @@ def _object(name: str, d: dict) -> ObjectType:
                       label=d.get("label", ""), description=d.get("description", ""),
                       table=source.get("table", d.get("table", "")), title=d.get("title", ""),
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
-                      states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])))
+                      states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
+                      series=dict(d.get("series") or {}))
 
 
 def _link(name: str, d: dict) -> LinkType:
@@ -346,23 +394,64 @@ def _action(name: str, d: dict) -> ActionType:
                       states=list(c.get("states", []))) for c in d.get("criteria", [])]
     return ActionType(name=name, target=d["target"], label=d.get("label", ""), parameters=dict(d.get("parameters", {})),
                       criteria=crit, set=dict(d.get("set", {})), transition_to=d.get("transition_to", ""),
-                      approval=bool(d.get("approval", True)), cite=d.get("cite", ""))
+                      approval=bool(d.get("approval", True)), cite=d.get("cite", ""), call=dict(d.get("call") or {}),
+                      undo=dict(d.get("undo") or {}))
 
 
 def _role(name: str, d: dict) -> Role:
+    mask = d.get("mask") or {}
+    if isinstance(mask, list):
+        mask = {m: "partial" for m in mask}
     return Role(name=name, label=d.get("label", ""), read=list(d.get("read", [])),
                 row_filters=dict(d.get("row_filters", {})), run=list(d.get("run", [])),
-                request=list(d.get("request", [])), execute=list(d.get("execute", [])))
+                request=list(d.get("request", [])), execute=list(d.get("execute", [])),
+                mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])))
+
+
+def _identity(name: str, d: dict) -> Identity:
+    members = {t: IdentityMember(t, {str(f): str(p) for f, p in (spec or {}).items()})
+               for t, spec in (d.get("members") or {}).items()}
+    rules = []
+    for i, r in enumerate(d.get("rules") or []):
+        norm = r.get("normalize") or {}
+        match = [str(x) for x in (r.get("match") or [])]
+        if isinstance(norm, str):
+            norm = {f: norm for f in match}
+        rules.append(IdentityRule(str(r.get("id") or f"rule{i + 1}"), match, {str(k): str(v) for k, v in norm.items()}))
+    table = d.get("table") or re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower() + "_identity"
+    return Identity(name, members, rules, table, d.get("label", ""))
+
+
+def expand_identities(objects: dict[str, ObjectType], links: dict[str, LinkType],
+                      identities: dict[str, Identity]) -> None:
+    """Each identity becomes an object over its crosswalk table and one link to every member type."""
+    for ident in identities.values():
+        if ident.name in objects:
+            continue
+        objects[ident.name] = ObjectType(
+            ident.name, ident.key, {ident.key: Property(ident.key, "string", "통합 번호", required=True),
+                                    "members": Property("members", "integer", "묶인 기록 수")},
+            label=ident.label or ident.name, table=ident.table, title=ident.key)
+        for member in ident.members:
+            name = ident.link_name(member)
+            if name not in links:
+                links[name] = LinkType(name, ident.name, member, "one_to_many",
+                                       via=Via(ident.member_table(member), ident.key, "member_key"),
+                                       label=f"{ident.label or ident.name} 구성원")
 
 
 def _from_dict(d: dict) -> Ontology:
+    objects = {k: _object(k, v) for k, v in d.get("objects", {}).items()}
+    links = {k: _link(k, v) for k, v in d.get("links", {}).items()}
+    identities = {k: _identity(k, v) for k, v in (d.get("identities") or {}).items()}
+    expand_identities(objects, links, identities)
     return Ontology(
         name=d.get("ontology") or d.get("name") or "ontology",
         namespace=d["namespace"],
         version=str(d.get("version", "0.1.0")),
         label=d.get("label", ""),
-        objects={k: _object(k, v) for k, v in d.get("objects", {}).items()},
-        links={k: _link(k, v) for k, v in d.get("links", {}).items()},
+        objects=objects,
+        links=links,
         interfaces={k: Interface(k, list(v.get("properties", [])), v.get("label", ""))
                     for k, v in d.get("interfaces", {}).items()},
         decisions={k: _decision(k, v) for k, v in d.get("decisions", {}).items()},
@@ -375,6 +464,7 @@ def _from_dict(d: dict) -> Ontology:
                             decision=q.get("decision", ""), key=str(q.get("key", "")),
                             params=dict(q.get("params", {}))) for q in d.get("questions", [])],
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
+        identities=identities,
     )
 
 
@@ -384,10 +474,14 @@ def _clean(d: dict) -> dict:
 
 def _to_dict(o: Ontology) -> dict:
     objects = {}
+    generated = set(o.identities)
+    generated_links = {i.link_name(m) for i in o.identities.values() for m in i.members}
     for t in o.objects.values():
+        if t.name in generated:
+            continue
         props = {p.name: _clean({"type": p.type, "label": p.label, "description": p.description,
                                  "column": p.column, "unit": p.unit, "values": p.values, "required": p.required,
-                                 "cite": p.cite, "aligned": p.aligned})
+                                 "cite": p.cite, "aligned": p.aligned, "expr": p.expr, "mask": p.mask})
                  for p in t.properties.values()}
         sm = None
         if t.states:
@@ -397,7 +491,7 @@ def _to_dict(o: Ontology) -> dict:
         objects[t.name] = _clean({"label": t.label, "description": t.description,
                                   "source": {"table": t.table} if t.table else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
-                                  "aligned": t.aligned, "properties": props, "states": sm})
+                                  "aligned": t.aligned, "series": t.series, "properties": props, "states": sm})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,
                               "via": {"table": lk.via.table, "source": lk.via.source_column,
@@ -405,7 +499,7 @@ def _to_dict(o: Ontology) -> dict:
                               "label": lk.label, "description": lk.description, "inverse": lk.inverse,
                               "transitive": lk.transitive, "symmetric": lk.symmetric, "required": lk.required,
                               "cite": lk.cite, "aligned": lk.aligned})
-             for lk in o.links.values()}
+             for lk in o.links.values() if lk.name not in generated_links}
     decisions = {}
     for dt in o.decisions.values():
         decisions[dt.name] = _clean({
@@ -417,10 +511,16 @@ def _to_dict(o: Ontology) -> dict:
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
                                "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states})
                                             for c in a.criteria],
-                               "set": a.set, "transition_to": a.transition_to, "cite": a.cite})
+                               "set": a.set, "transition_to": a.transition_to, "cite": a.cite,
+                               "call": a.call, "undo": a.undo})
                | {"approval": a.approval} for a in o.actions.values()}
     roles = {r.name: _clean({"label": r.label, "read": r.read, "row_filters": r.row_filters, "run": r.run,
-                             "request": r.request, "execute": r.execute}) for r in o.roles.values()}
+                             "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask})
+             for r in o.roles.values()}
+    identities = {i.name: _clean({"label": i.label, "table": i.table,
+                                  "members": {m.type: m.fields for m in i.members.values()},
+                                  "rules": [_clean({"id": r.id, "match": r.match, "normalize": r.normalize})
+                                            for r in i.rules]}) for i in o.identities.values()}
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
@@ -430,5 +530,5 @@ def _to_dict(o: Ontology) -> dict:
         "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
         "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "questions": questions,
-        "exclusive": [list(x) for x in o.exclusive],
+        "exclusive": [list(x) for x in o.exclusive], "identities": identities,
     })

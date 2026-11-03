@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xgen-data-studio"
-version = "0.3.0"
-description = "One domain ontology definition, executed on whatever database, graph store or reasoner a deployment has: a query IR compiled to SQL, Cypher, GQL, SPARQL and SQL/PGQ, with decisions, actions, roles, an asset graph and conformance tests."
+version = "0.5.0"
+description = "One domain ontology definition, executed on whatever database, graph store or reasoner a deployment has: a query IR compiled to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin, with computed properties, decisions, actions, roles, reviewed definition changes, an asset graph and conformance tests."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "jinsoo96", email = "wlstn010203@gmail.com" }]
 keywords = [
     "ontology", "knowledge-graph", "semantic-layer", "sparql", "cypher", "gql", "sql-pgq", "r2rml",
-    "shacl", "owl", "decision-table", "mcp",
+    "shacl", "owl", "decision-table", "mcp", "gremlin",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -45,8 +45,13 @@ owl = ["owlrl>=7", "rdflib>=7"]
 zen = ["zen-engine>=2"]
 postgres = ["psycopg[binary]>=3"]
 neo4j = ["neo4j>=5"]
+gremlin = ["gremlinpython>=3.7"]
 mcp = ["mcp>=1.2"]
-all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2"]
+# Drafting from Excel workbooks.
+xlsx = ["openpyxl>=3.1"]
+all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1"]
+# The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
+live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7"]
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.scripts]

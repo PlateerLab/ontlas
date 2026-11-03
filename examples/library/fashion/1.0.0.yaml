@@ -2,7 +2,7 @@ module: fashion
 version: 1.0.0
 kind: industry
 label: 패션 업종 확장
-description: 이커머스 표준은 그대로 두고 패션 업종에 필요한 소재 · 시즌과 질의를 얹습니다.
+description: 패션 업종의 소재, 시즌 속성과 질의를 이커머스 표준에 추가합니다.
 requires: [commerce]
 
 extend:

@@ -65,7 +65,7 @@ def run(onto, backends: dict[str, Any], queries: dict[str, tuple[Query, dict]]) 
     for name, (q, params) in queries.items():
         outcomes: dict[str, Outcome] = {}
         for bname, b in backends.items():
-            missing = b.unsupported(q)
+            missing = b.unsupported(q, onto)
             if missing:
                 outcomes[bname] = Outcome(bname, error="unsupported: " + ", ".join(missing))
                 continue
@@ -82,9 +82,12 @@ def run(onto, backends: dict[str, Any], queries: dict[str, tuple[Query, dict]]) 
         if failed:
             agree, detail = False, "; ".join(f"{o.backend}: {o.error}" for o in failed)
         elif len(ran) >= 2:
+            from xgen_data_studio.check import check
+
+            resolved = check(q, onto).query  # order keys named as alias.property resolve to their columns
             first = ran[0]
             for o in ran[1:]:
-                ok, why = _same(q, first.rows, o.rows, [c.name for c in q.columns])
+                ok, why = _same(resolved, first.rows, o.rows, [c.name for c in resolved.columns])
                 if not ok:
                     agree, detail = False, f"{first.backend} vs {o.backend}: {why}"
                     break

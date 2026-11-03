@@ -2,7 +2,7 @@ module: core
 version: 1.0.0
 kind: core
 label: 공통 개념
-description: 모든 도메인이 기대는 상위 개념입니다. 도메인의 객체는 이 개념의 하위 유형으로 붙어, 도메인이 달라도 같은 개념으로 함께 조회됩니다.
+description: 모든 도메인이 공유하는 상위 개념입니다. 도메인 객체를 하위 유형으로 연결해 도메인 간 통합 조회를 지원합니다.
 namespace: https://example.org/studio#
 
 interfaces:
@@ -20,6 +20,7 @@ objects:
     properties:
       party_id: {type: string, label: 당사자 번호}
       name: {type: string, label: 이름}
+      phone: {type: string, label: 연락처, mask: partial}
 
   Agreement:
     label: 약정

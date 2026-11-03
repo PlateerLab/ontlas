@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,72 @@ def _query(arg: str) -> Any:
 def _text(arg: str) -> str:
     p = Path(arg)
     return p.read_text(encoding="utf-8") if p.exists() else arg
+
+
+def _draft(a) -> int:
+    """Draft from files (loaded into data.sqlite), a SQLite file or PostgreSQL; write a studio folder or print."""
+    import yaml
+
+    from xgen_data_studio.draft import DraftRules, draft, load_sqlite, read_file
+
+    rules = DraftRules.from_dict(json.loads(_text(a.rules)) if a.rules else None)
+    out = Path(a.out) if a.out else None
+    if out is not None and (out / "studio.yaml").exists():
+        raise SystemExit(f"{out / 'studio.yaml'} already exists; give another --out")
+    loaded, origin = None, {}
+    if a.files:
+        import sqlite3
+
+        from xgen_data_studio.backends.sql import SqliteBackend
+
+        tables = [t for f in a.files for t in read_file(Path(f).read_bytes(), Path(f).name)]
+        if out is not None:
+            out.mkdir(parents=True, exist_ok=True)
+        path = str(out / "data.sqlite") if out is not None else ":memory:"
+        backend = SqliteBackend(conn=sqlite3.connect(path, check_same_thread=False))
+        loaded = load_sqlite(tables, backend, row_keys=rules.row_keys)
+        source = {"kind": "sqlite", "path": "data.sqlite", "source": True}
+        origin = {"kind": "files", "detail": ", ".join(Path(f).name for f in a.files)}
+    elif a.sqlite:
+        import sqlite3
+
+        from xgen_data_studio.backends.sql import SqliteBackend
+
+        db = Path(a.sqlite).resolve()
+        backend = SqliteBackend(conn=sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, check_same_thread=False))
+        source = {"kind": "sqlite", "path": str(db), "source": True}
+        origin = {"kind": "database", "detail": f"SQLite {db.name}"}
+    elif a.dsn:
+        from urllib.parse import urlparse
+
+        from xgen_data_studio.config import open_backend
+
+        backend = open_backend({"kind": "postgres", "dsn": a.dsn}, Path("."))
+        source = {"kind": "postgres", "dsn": "${XDS_DSN}", "source": True}  # the password stays out of the file
+        u = urlparse(a.dsn)
+        origin = {"kind": "database", "detail": f"PostgreSQL {u.hostname or 'localhost'}{u.path}"}
+    else:
+        raise SystemExit("give files, --sqlite or --dsn")
+    d = draft(backend, name=a.name, label=a.label, loaded=loaded, origin=origin, lang=a.lang, rules=rules).revise(
+        drop=a.drop)
+    modules = d.modules()
+    summary = {"objects": [o.name for o in d.objects], "links": [f"{lk.source} -{lk.name}-> {lk.target}"
+                                                                  for lk in d.links],
+               "skipped": d.skipped, "queries": len(d.queries())}
+    if out is None:
+        _out("\n---\n".join(yaml.safe_dump(m.to_dict(), allow_unicode=True, sort_keys=False) for m in modules))
+        return 0
+    from xgen_data_studio.library import Library
+
+    lib = Library(out / "library")
+    written = [str(lib.save(m)) for m in modules]
+    studio = {"library": "library", "name": a.name, "modules": [m.name for m in modules],
+              "backends": {"source": source, "graph": {"kind": "rdflib"}}, "project": ["graph"]}
+    (out / "studio.yaml").write_text(yaml.safe_dump(studio, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    written.append(str(out / "studio.yaml"))
+    _out({**summary, "written": written, "next": f"xds serve {out / 'studio.yaml'}" +
+          ("  (set XDS_DSN first)" if a.dsn else "")})
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +159,42 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("conformance", help="run registered queries on several backends and compare")
     s.add_argument("config")
     s.add_argument("--backends", help="comma-separated; default all")
+
+    s = sub.add_parser("gates", help="measure the studio against its flow's pass conditions")
+    s.add_argument("config")
+    s = sub.add_parser("agreement", help="decide past cases again and compare with what was decided then")
+    s.add_argument("config")
+    s = sub.add_parser("identity", help="join the records several systems keep for one thing")
+    s.add_argument("config")
+    s.add_argument("name")
+    s.add_argument("--write", action="store_true", help="write the crosswalk into the source")
+    s = sub.add_parser("review", help="review a new module version against the studio before it is approved")
+    s.add_argument("config")
+    s.add_argument("module", help="the module file (.yaml or .json)")
+    s.add_argument("--attach", action="store_true", help="review it as plugged in, for a module not attached")
+    s = sub.add_parser("nl-eval", help="ask a language model each question of a file and score its answers")
+    s.add_argument("config")
+    s.add_argument("questions", help="YAML list of {id, text, gold}")
+    s.add_argument("--llm-url", required=True)
+    s.add_argument("--llm-model", required=True)
+    s.add_argument("--llm-key-env", default="")
+    s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
+    s.add_argument("--repairs", type=int, default=2)
+    s = sub.add_parser("sync", help="bring the graphs up to date with the source, once or every N seconds")
+    s.add_argument("config")
+    s.add_argument("--every", type=float, default=0)
+    s.add_argument("--times", type=int, default=0, help="stop after this many rounds (0: keep going)")
+    s = sub.add_parser("users", help="the people of a team studio (xds serve --users)")
+    us = s.add_subparsers(dest="ucmd", required=True)
+    x = us.add_parser("add")
+    x.add_argument("file")
+    x.add_argument("id")
+    x.add_argument("--name", default="")
+    x.add_argument("--roles", default="viewer", help="viewer, editor, approver, admin (comma-separated)")
+    x.add_argument("--password-env", default="XDS_PASSWORD",
+                   help="environment variable holding the password; asked for when it is not set")
+    x = us.add_parser("list")
+    x.add_argument("file")
 
     s = sub.add_parser("catalog", help="the asset graph: what an agent sees, what a change touches")
     s.add_argument("config")
@@ -162,6 +265,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--read-only", action="store_true")
     s.add_argument("--transport", default="stdio")
 
+    s = sub.add_parser("draft", help="draft modules from files or a database: objects, keys, types, relations")
+    s.add_argument("files", nargs="*", help=".csv, .tsv or .xlsx files, one table each (a workbook, one per sheet)")
+    s.add_argument("--sqlite", default="", help="a SQLite database file, opened read-only")
+    s.add_argument("--dsn", default="", help="a PostgreSQL database, postgresql://...")
+    s.add_argument("--name", default="my-data")
+    s.add_argument("--label", default="")
+    s.add_argument("--lang", default="en", choices=["en", "ko"], help="language of the generated query labels")
+    s.add_argument("--drop", action="append", default=[], help="leave out object:Name, link:name, property:X.p, query:q")
+    s.add_argument("--rules", default="", help='draft rules as JSON or a .json file, e.g. {"enum_max": 10, "infer_links": false}')
+    s.add_argument("-o", "--out", default="", help="write library/, studio.yaml (and data.sqlite for files) here")
+
     s = sub.add_parser("serve", help="serve the studio page; every visitor gets a studio of their own")
     s.add_argument("config")
     s.add_argument("--host", default="127.0.0.1")
@@ -172,6 +286,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--llm-model", default="")
     s.add_argument("--llm-key-env", default="", help="environment variable that holds the API key")
     s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
+    s.add_argument("--samples", default="", help="folder of example files a visitor can load with one click")
+    s.add_argument("--allow-connect", action="store_true",
+                   help="let visitors connect a database by address (for a studio inside your own network)")
+    s.add_argument("--file-kb", type=int, default=1024, help="largest file a visitor may upload")
+    s.add_argument("--video", default="", help="a demo .mp4 shown beside the manual (chapters from x.chapters.json)")
+    s.add_argument("--rows", type=int, default=10_000, help="rows read from each uploaded table")
+    s.add_argument("--users", default="", help="a users file: one studio the team shares, behind a sign-in")
+    s.add_argument("--library-write", action="store_true", help="save approved module versions to the library folder")
+    s.add_argument("--sync", type=float, default=0, help="re-read the source every N seconds and update the graphs")
     s.add_argument("--quiet", action="store_true")
 
     a = ap.parse_args(argv)
@@ -289,9 +412,10 @@ def main(argv: list[str] | None = None) -> int:
         mcp_main(args)
         return 0
 
-    if a.cmd == "serve":
-        import os
+    if a.cmd == "draft":
+        return _draft(a)
 
+    if a.cmd == "serve":
         from xgen_data_studio.web import serve_config
 
         llm = None
@@ -300,7 +424,28 @@ def main(argv: list[str] | None = None) -> int:
 
             llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
                               extra=json.loads(a.llm_extra) if a.llm_extra else None)
-        serve_config(a.config, llm=llm, host=a.host, port=a.port, limit=a.sessions, idle=a.idle, quiet=a.quiet)
+        from xgen_data_studio.web import DataOptions
+
+        data = DataOptions(file_bytes=a.file_kb << 10, total_bytes=max(4 << 20, a.file_kb << 12), rows=a.rows,
+                           samples=Path(a.samples) if a.samples else None, allow_connect=a.allow_connect)
+        serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
+                     quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
+                     sync=a.sync, library_write=a.library_write)
+        return 0
+    if a.cmd == "users":
+        from xgen_data_studio.web.team import Users
+
+        users = Users.load(a.file)
+        if a.ucmd == "list":
+            _out([{"id": u.id, "name": u.name, "roles": u.roles} for u in users.users.values()])
+            return 0
+        password = os.environ.get(a.password_env) or ""
+        if not password:
+            import getpass
+
+            password = getpass.getpass(f"password for {a.id}: ")
+        u = users.add(a.id, password, name=a.name, roles=[r.strip() for r in a.roles.split(",") if r.strip()])
+        _out({"added": u.id, "name": u.name, "roles": u.roles, "file": a.file})
         return 0
 
     from xgen_data_studio.config import load_studio
@@ -340,6 +485,41 @@ def main(argv: list[str] | None = None) -> int:
         rep = validate(studio.onto, studio.projection or project(studio.onto, studio.backend()))
         _out(rep.to_dict())
         return 0 if rep.conforms else 1
+    elif a.cmd == "gates":
+        rep = studio.gates()
+        _out(rep)
+        return 0 if rep["passed"] else 1
+    elif a.cmd == "agreement":
+        _out(studio.agreement())
+    elif a.cmd == "identity":
+        _out(studio.resolve_identity(a.name, write=a.write).to_dict())
+    elif a.cmd == "review":
+        from xgen_data_studio.modules import Module
+        from xgen_data_studio.review import review
+
+        rep = review(studio, Module.load(a.module), attach=a.attach)
+        _out(rep)
+        return 0 if rep["passed"] else 1
+    elif a.cmd == "nl-eval":
+        import yaml
+
+        from xgen_data_studio.nl import evaluate, openai_chat
+
+        llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
+                          extra=json.loads(a.llm_extra) if a.llm_extra else None)
+        rep = evaluate(studio, yaml.safe_load(Path(a.questions).read_text(encoding="utf-8")), llm,
+                       max_repairs=a.repairs)
+        _out(rep)
+    elif a.cmd == "sync":
+        import time
+
+        n = 0
+        while True:
+            _out(studio.sync())
+            n += 1
+            if not a.every or (a.times and n >= a.times):
+                break
+            time.sleep(a.every)
     elif a.cmd == "modules":
         if a.impact:
             imp = studio.detach_impact(a.impact, cascade=a.cascade)

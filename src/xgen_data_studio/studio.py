@@ -15,8 +15,8 @@ from xgen_data_studio.decide.table import DecisionError, DecisionResult, Evidenc
 from xgen_data_studio.ir import Cmp, Column, Edge, Query, Ref
 from xgen_data_studio.model import Ontology
 from xgen_data_studio.modules import Composition, Impact, Module, ModuleError, compose, removal_impact
-from xgen_data_studio.projection import ChangeSet, Projection, apply_changes, load, project
-from xgen_data_studio.roles import AccessDenied, apply_role
+from xgen_data_studio.projection import ChangeSet, Projection, _Reload, apply_changes, load, project
+from xgen_data_studio.roles import AccessDenied, apply_role, mask_rows, mask_style, mask_value, masking
 from xgen_data_studio.values import from_source, normalize, parse_datetime
 
 
@@ -28,6 +28,8 @@ class QuestionResult:
     expected: Any
     got: Any
     error: str = ""
+    grounded: bool = False  # the answer carries its condition, its source and the version it was answered by
+    gaps: list[str] = field(default_factory=list)  # what of those it lacks
 
 
 @dataclass
@@ -38,8 +40,13 @@ class QuestionReport:
     def accuracy(self) -> float:
         return sum(r.passed for r in self.results) / len(self.results) if self.results else 0.0
 
+    @property
+    def grounded(self) -> float:
+        """The share of questions answered with condition, source and version (근거 제시율)."""
+        return sum(r.grounded for r in self.results) / len(self.results) if self.results else 0.0
+
     def to_dict(self) -> dict:
-        return {"accuracy": self.accuracy, "results": [asdict(r) for r in self.results]}
+        return {"accuracy": self.accuracy, "grounded": self.grounded, "results": [asdict(r) for r in self.results]}
 
 
 class Studio:
@@ -55,6 +62,11 @@ class Studio:
         self.composition: Composition | None = None
         self.library = None
         self._compose_kw: dict[str, str] = {}
+        self.settings: dict[str, Any] = {}
+        self.last_sync: dict[str, Any] = {}
+        from xgen_data_studio.review import ChangeService
+
+        self.changes = ChangeService(self)
 
     @classmethod
     def from_modules(cls, modules: list[Module], *, library=None, namespace: str = "", name: str = "",
@@ -99,6 +111,13 @@ class Studio:
         if not extra:
             raise ModuleError(f"{module} is already attached")
         return self._use(compose(current + extra, **self._compose_kw))
+
+    def replace(self, module: Module) -> Composition:
+        """Swap a plugged-in module for an edited version of it, keeping the rest; refused if the result does not hold."""
+        current = self._modules()
+        if module.name not in {m.name for m in current}:
+            raise ModuleError(f"{module.name} is not attached")
+        return self._use(compose([module if m.name == module.name else m for m in current], **self._compose_kw))
 
     def detach(self, name: str, *, cascade: bool = False) -> Impact:
         """Unplug a module; refused, with the impact, when something left would point at what it took away."""
@@ -152,17 +171,27 @@ class Studio:
             role: str | None = None, principal: dict | None = None) -> Result:
         query = self.query(q)
         values = dict(params or {})
+        plan: dict[str, str] = {}
         if role:
             if isinstance(q, str) and not self.onto.roles[role].can("run", q):
                 raise AccessDenied(f"role {role} may not run '{q}'")
+            plan = masking(self.onto, check(query, self.onto).query, role)
             query, extra = apply_role(self.onto, query, role, principal)
             values.update(extra)
         b = self.backend(backend)
-        missing = b.unsupported(query)
+        missing = b.unsupported(query, self.onto)
         if missing:
             raise CompileError(f"backend {b.name} does not support {missing}")
         compiled = b.compiler(self.onto).compile(query)
-        return b.execute(compiled, values)
+        res = b.execute(compiled, values)
+        hidden = check(query, self.onto).hidden
+        if hidden:  # columns added only to order by
+            keep = [i for i, c in enumerate(res.columns) if c not in hidden]
+            res.columns = [res.columns[i] for i in keep]
+            res.rows = [tuple(r[i] for i in keep) for r in res.rows]
+        if plan:
+            res.rows, res.masked = mask_rows(res.columns, res.rows, plan), plan
+        return res
 
     def run_sparql(self, text: str, params: dict | None = None, **kw) -> Result:
         from xgen_data_studio.parse.sparql import parse_sparql
@@ -240,8 +269,10 @@ class Studio:
                 value = raw
             values[inp.name] = value
             obj = self.onto.obj(here)
-            evidence.append(Evidence(inp.name, value, here, obj_key, prop,
-                                     f"{obj.table}.{column_of(self.onto, here, prop)}" if obj.table else ""))
+            pdef = find_prop(self.onto, here, prop)
+            where = (f"{here}.{prop} = {pdef.expr}" if pdef.expr else
+                     f"{obj.table}.{column_of(self.onto, here, prop)}" if obj.table else "")
+            evidence.append(Evidence(inp.name, value, here, obj_key, prop, where))
         if self.use_zen:
             from xgen_data_studio.decide.zen import evaluate_zen
 
@@ -249,7 +280,15 @@ class Studio:
         else:
             outputs, matched, notes = evaluate_table(table, values)
             engine = "native"
-        return DecisionResult(name, outputs, matched, values, evidence, notes, engine, table.target,
+        shown = dict(values)
+        if role:  # the verdict uses the real values; what the role is shown of them follows its masks
+            r = self.onto.roles[role]
+            for ev in evidence:
+                style = mask_style(self.onto, r, ev.object_type, ev.property) if ev.object_type else ""
+                if style:
+                    ev.value = mask_value(ev.value, style)
+                    shown[ev.input] = ev.value
+        return DecisionResult(name, outputs, matched, shown, evidence, notes, engine, table.target,
                               "" if key is None else str(key))
 
     def project(self, *, into: list[str] | None = None, source: str | None = None) -> dict[str, Any]:
@@ -266,7 +305,10 @@ class Studio:
                 report[name] = {"loaded": {"nodes": len(proj.nodes), "edges": len(proj.edges)}}
             else:
                 changes: ChangeSet = prev.diff(proj)
-                apply_changes(self.onto, changes, b)
+                try:
+                    apply_changes(self.onto, changes, b)
+                except _Reload:
+                    load(self.onto, proj, b, clear=True)
                 report[name] = {"changes": changes.summary()}
             self._loaded[name] = proj
         return report
@@ -289,14 +331,36 @@ class Studio:
                     res = self.decide(qs.decision, qs.key, qs.params)
                     got = res.outputs
                     passed = isinstance(got, dict) and all(got.get(k) == v for k, v in qs.expect.items())
+                    gaps = self._decision_gaps(res)
                 else:
                     res = self.run(qs.query, qs.params, backend=backend)
                     got, passed = _judge(qs.expect, res, check(self.query(qs.query), self.onto).column_types)
-                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got))
+                    gaps = []  # a registered query answers with its own definition and the source columns it reads
+                if not self.version_of(f"{'decision' if qs.decision else 'query'}:{qs.decision or qs.query}"):
+                    gaps.append("no version")
+                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps))
             except Exception as e:
                 report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None,
-                                                     f"{type(e).__name__}: {e}"))
+                                                     f"{type(e).__name__}: {e}", False, ["no answer"]))
         return report
+
+    def _decision_gaps(self, res: DecisionResult) -> list[str]:
+        """What a verdict lacks of its grounds: a rule that matched, a cite for it (its own or its table's), a source
+        column for each value."""
+        table = self.onto.decisions[res.decision]
+        matched = res.matched or evaluate_table(table, res.inputs)[1]  # the ZEN engine names no rules
+        by_id = {r.id: r for r in table.rules}
+        gaps = [] if matched else ["no rule matched"]
+        gaps += [f"rule {i} has no cite" for i in matched if i in by_id and not (by_id[i].cite or table.cite)]
+        gaps += [f"{e.input} has no source column" for e in res.evidence if e.object_type and not e.source]
+        return gaps
+
+    def version_of(self, element: str) -> str:
+        """The version an element was defined by: its module's, or the ontology's when it has no modules."""
+        if self.composition is None:
+            return self.onto.version
+        owner = self.composition.owner(element)
+        return next((m.version for m in self.composition.modules if m.name == owner), "")
 
     def describe(self) -> dict:
         o = self.onto
@@ -316,6 +380,75 @@ class Studio:
                                  "approval": a.approval} for a in o.actions.values()},
             "backends": {n: b.capabilities.to_dict() for n, b in self.backends.items()},
         }
+
+    @property
+    def own_flow(self):
+        """The flow as the studio file's `flow:` (and what is saved over it) gives it, before any module raises it."""
+        from xgen_data_studio.review import FlowSettings
+
+        return FlowSettings.from_dict(self.settings.get("flow"))
+
+    @property
+    def flow(self):
+        """The flow's stages and pass conditions: the studio's own, held to an attached quality module's where that
+        asks more (see review.py)."""
+        from xgen_data_studio.review import tighten
+
+        s = self.own_flow
+        if self.composition is not None and self.composition.gates:
+            s.gates, _ = tighten(s.gates, self.composition.gates)
+        return s
+
+    def raised_gates(self) -> dict[str, str]:
+        """The pass conditions an attached module sets because it asks more than the studio: {stage.condition: module}."""
+        from xgen_data_studio.review import tighten
+
+        if self.composition is None or not self.composition.gates:
+            return {}
+        _, raised = tighten(self.own_flow.gates, self.composition.gates)
+        return {k: self.composition.gate_by[k] for k in raised}
+
+    def gates(self) -> dict[str, Any]:
+        """Measure this studio against its flow's pass conditions."""
+        from dataclasses import asdict as _asdict
+
+        from xgen_data_studio.review import gates, measure
+
+        settings = self.flow
+        measured = measure(self, settings)
+        results = gates(measured, settings)
+        return {"measured": measured, "gates": [_asdict(g) for g in results], "passed": all(g.passed for g in results)}
+
+    def agreement(self, spec: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Decide past cases again and compare with what was decided then (spec: see review.agreement)."""
+        from xgen_data_studio.review import agreement
+
+        spec = spec or self.flow.agreement
+        if not spec:
+            raise ValueError("no agreement is configured: give the flow an agreement with decision, query, expect")
+        return agreement(self, spec)
+
+    def sync(self) -> dict[str, Any]:
+        """Read the source again and send each graph only what changed since its last load; the result is kept."""
+        at = self.now().isoformat(timespec="seconds")
+        graphs = list(self._loaded) or [n for n, b in self.backends.items() if b.capabilities.load]
+        try:
+            report = self.project(into=graphs) if graphs else {}
+        except Exception as e:  # a source that is gone or a definition that no longer binds: kept as the result
+            self.last_sync = {"at": at, "error": f"{type(e).__name__}: {e}", "changed": False}
+            return self.last_sync
+        changed = any(sum((v.get("changes") or {}).values()) for v in report.values())
+        self.last_sync = {"at": at, "report": report, "changed": changed}
+        return self.last_sync
+
+    def resolve_identity(self, name: str, *, write: bool = True):
+        """Join the records several systems keep for one thing (see identity.py); graphs are brought up to date."""
+        from xgen_data_studio.identity import resolve
+
+        report = resolve(self, name, write=write)
+        if write and self._loaded:
+            self.project(into=list(self._loaded))
+        return report
 
     def column(self, type_name: str, prop: str) -> str:
         obj = self.onto.obj(type_name)

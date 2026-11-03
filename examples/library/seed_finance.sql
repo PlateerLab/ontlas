@@ -1,9 +1,10 @@
-CREATE TABLE borrowers (borrower_id TEXT PRIMARY KEY, name TEXT, credit_grade TEXT);
+CREATE TABLE borrowers (borrower_id TEXT PRIMARY KEY, name TEXT, credit_grade TEXT, phone TEXT);
 CREATE TABLE accounts (account_id TEXT PRIMARY KEY, borrower_id TEXT, balance REAL, opened_at TEXT);
 CREATE TABLE loans (loan_id TEXT PRIMARY KEY, borrower_id TEXT, account_id TEXT, principal REAL, rate REAL,
                     loan_status TEXT, opened_at TEXT);
 
-INSERT INTO borrowers VALUES ('B01', '정하린', 'A'), ('B02', '최민준', 'C'), ('B03', '한유나', 'B');
+INSERT INTO borrowers VALUES ('B01', '정하린', 'A', '010-5550-0201'), ('B02', '최민준', 'C', '010-5550-0202'),
+                             ('B03', '박서연', 'B', '01055500103');
 INSERT INTO accounts VALUES ('A01', 'B01', 1200000, '2025-03-02T09:00:00'), ('A02', 'B02', 80000, '2024-11-20T09:00:00'),
                             ('A03', 'B03', 540000, '2026-01-15T09:00:00');
 INSERT INTO loans VALUES

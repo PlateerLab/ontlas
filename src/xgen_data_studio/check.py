@@ -10,6 +10,7 @@ from xgen_data_studio.ir import (
     Agg,
     And,
     Cmp,
+    Column,
     Contains,
     Edge,
     Exists,
@@ -39,6 +40,7 @@ class Checked:
     issues: list[str] = field(default_factory=list)
     param_types: dict[str, str] = field(default_factory=dict)
     column_types: dict[str, str] = field(default_factory=dict)
+    hidden: list[str] = field(default_factory=list)  # columns added only to order by; the studio drops them
 
     @property
     def ok(self) -> bool:
@@ -217,13 +219,29 @@ class _Checker:
         for c in q.columns:
             col_types[c.name] = self._column_type(c.expr, scope) or "string"
         names = {c.name for c in q.columns}
-        for o in q.order:
-            if o.name not in names:
-                self.issue(f"order by '{o.name}' is not a returned column; columns are: {sorted(names)}")
+        by_expr = {str(c.expr): c.name for c in q.columns if isinstance(c.expr, Ref)}
+        order, extra, hidden = [], [], []
+        for o in q.order:  # a returned property may be named by its column or by alias.property
+            name = o.name if o.name in names else by_expr.get(o.name, o.name)
+            if name not in names and name.count(".") == 1 and name.split(".")[0] in scope                     and not q.aggregated and not q.distinct:
+                ref = Ref(*name.split("."))
+                t = self.prop_type(scope, ref)  # ordered by a property it does not return: a hidden column
+                if t is not None:
+                    hide = f"__order_{ref.alias}_{ref.prop}"
+                    if hide not in hidden:
+                        extra.append(Column(ref, hide))
+                        hidden.append(hide)
+                        col_types[hide] = t
+                    name = hide
+            elif name not in names:
+                self.issue(f"order by '{o.name}' is not a returned column; order by a returned column name "
+                           f"({sorted(names)}), or return the property first")
+            order.append(replace(o, name=name))
+        q = replace(q, order=order, columns=list(q.columns) + extra)
         if q.limit is not None and q.limit <= 0:
             self.issue("limit must be positive")
         resolved = replace(q, edges=edges, where=where)
-        return Checked(resolved, self.issues, self.params, col_types)
+        return Checked(resolved, self.issues, self.params, col_types, hidden)
 
     def _column_type(self, e: Ref | Agg, scope: dict[str, str]) -> str | None:
         if isinstance(e, Ref):
@@ -291,6 +309,11 @@ def concrete_subtypes(onto: Ontology, type_name: str) -> list[str]:
 
 def all_props(onto: Ontology, type_name: str) -> list[str]:
     return sorted(_all_props(onto, type_name))
+
+
+def stored_props(onto: Ontology, type_name: str) -> list[str]:
+    """The properties read from a column, leaving out the computed ones."""
+    return [p for p in all_props(onto, type_name) if not _find_prop(onto, type_name, p).expr]
 
 
 def find_prop(onto: Ontology, type_name: str, name: str):

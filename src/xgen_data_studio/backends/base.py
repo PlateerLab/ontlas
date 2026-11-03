@@ -20,6 +20,7 @@ class Capabilities:
     load: bool = False
     write: bool = False
     reasoning: list[str] = field(default_factory=list)
+    computed: str = "all"  # computed properties it compiles: all, simple (no links or dates), none
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -31,6 +32,7 @@ class Result:
     rows: list[tuple]
     backend: str = ""
     compiled: Compiled | None = None
+    masked: dict[str, str] = field(default_factory=dict)
 
     def records(self) -> list[dict[str, Any]]:
         return [dict(zip(self.columns, r)) for r in self.rows]
@@ -46,7 +48,7 @@ class Backend:
     def execute(self, compiled: Compiled, values: dict[str, Any] | None = None) -> Result:
         raise NotImplementedError
 
-    def unsupported(self, query) -> list[str]:
+    def unsupported(self, query, onto: Ontology | None = None) -> list[str]:
         """Features the query uses that this backend does not declare."""
         from xgen_data_studio.ir import Contains, Exists, walk_filters
 
@@ -62,4 +64,31 @@ class Backend:
             out.append("contains")
         if not caps.aggregates and query.aggregated:
             out.append("aggregates")
+        if onto is not None and caps.computed != "all" and _computed_kinds(onto, query) - {
+                "simple" if caps.computed == "simple" else ""} - {""}:
+            out.append("computed properties")
         return out
+
+
+def _computed_kinds(onto: Ontology, query) -> set[str]:
+    """simple / linked (aggregates or dates) for each computed property the query reads."""
+    from xgen_data_studio import expr as ex
+    from xgen_data_studio.check import _find_prop, aliases_of
+    from xgen_data_studio.ir import Agg, Ref, filter_refs
+
+    types = aliases_of(query)
+    refs = list(filter_refs(query.where))
+    for c in query.columns:
+        e = c.expr
+        r = e if isinstance(e, Ref) else (e.ref if isinstance(e, Agg) else None)
+        if r is not None:
+            refs.append(r)
+    out = set()
+    for r in refs:
+        p = _find_prop(onto, types.get(r.alias), r.prop) if r.alias in types else None
+        if p is None or not p.expr:
+            continue
+        nodes = list(ex.walk(ex.parse_expr(p.expr)))
+        linked = any(isinstance(n, ex.Agg) or (isinstance(n, ex.Call) and n.fn in ex.DATE_FUNCTIONS) for n in nodes)
+        out.add("linked" if linked else "simple")
+    return out

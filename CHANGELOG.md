@@ -1,5 +1,117 @@
 # Changelog
 
+## 0.5.0
+
+- Computed properties (`expr`): arithmetic, comparisons, `coalesce if abs round floor ceil lower upper length concat
+  year month day days_between`, aggregates along link paths (`sum avg min max count`) and `latest` / `earliest` on a
+  series (`series: {time, of}`), typed and checked for loops, compiled into SQL (scalar subqueries), SPARQL (`BIND`,
+  grouped subqueries, day numbers from the date's digits) and Cypher (pattern comprehensions folded once with
+  `head([l IN [list] | ...])`); GQL and SQL/PGQ take the ones without links and dates and refuse the rest. Never
+  projected into a graph, so conformance compares the expression across backends. Nulls: division by zero and an
+  `if` on a null condition give null. The SPARQL reader reads a computed property's `BIND` back by name; the page's
+  editable SPARQL and Cypher write computed properties by name.
+- The IR orders by `alias.property` as well as by a returned column, and by a property it does not return (a hidden
+  column the studio drops), for queries without aggregates.
+- Masks: `mask: partial | full` on a property, `mask` and `unmask` on a role; a computed property built from a masked
+  one is masked; filtering or ordering on a masked property is refused; decision evidence follows the role's masks.
+- Actions: parameter specs `{type, required, min, max, values, pattern, max_length}`; `call` sends an external request
+  after the change is written, only to `actions.call_hosts`, with `${ENV}` filled into headers only, and a failed
+  request puts the row back (`failed`); `ActionService.rollback()` restores the values an executed action replaced
+  when nothing has changed them since, and sends `undo` for an action that called out.
+- Identities: `identities:` with members, match fields and rules (normalize `lower digits trim alnum`) become an object
+  and one link per member over a crosswalk; `Studio.resolve_identity()` joins the records (union of rule matches, with
+  evidence and the same-system duplicates it finds) and writes the crosswalk in one transaction (`run_many`).
+- `review`: the flow's stages and pass conditions (`flow: {off, gates, agreement}`: database errors and warnings,
+  backend agreement, agreement with past decisions, question accuracy), `Studio.gates()`, `Studio.agreement()`
+  (past cases decided again with the values they had then, the cases that differ with the rule that fired, a
+  confusion table), and `ChangeService`: a module version proposed, tried on a copy of the studio, reviewed (added,
+  removed and changed elements, the measures, the gates), approved by someone other than its author when it passes,
+  saved to the library and swapped in.
+- Drafts gain state machines (a status column; transitions and the first state read from a table of past states,
+  which becomes a series), one action per state things move into, roles (viewer, operator, a person's own rows),
+  questions (each generated query with the rows it gives now) and decision tables drawn from past outcomes
+  (`induce`: a shallow decision tree, each rule with the cases it covers and gets right, five-fold cross-validation).
+- `mapping`: tables and columns matched onto a standard module (names, labels, aligned vocabulary, romanized Korean,
+  types, allowed values, keys; relations from the draft's), and a binding module from the confirmed matches that
+  leaves out what the tables do not carry, and the computed properties, queries and questions that need it.
+- Gremlin: `compile/gremlin.py` (TinkerPop 3.8 scripts with every value a binding; `repeat().emit()` for hops,
+  `where()` filters, grouping from per-row maps) and `GremlinBackend` (Gremlin Server; a projection loaded with one
+  list binding per script, within the server's binding limit). Backends declare which computed properties they take.
+- `DbApiBackend` closes the transaction a read opens (no idle-in-transaction locks) and rolls back after a failed
+  statement; `run_many()` runs writes as one transaction on SQLite and DB-API.
+- The page: flow pass conditions and settings (stages, conditions, the agreement mapping), reading the source again,
+  change requests with their review and approval, agreement and rollback on the decision screen, computed properties,
+  masks, series and identities on the ontology screen, masked columns in results, the draft's rules step with a
+  decision drawn from outcomes, and binding uploaded files onto a standard. `xds serve --users users.yaml`: a team
+  signs in (PBKDF2, HttpOnly SameSite=Strict cookie, writes only with the page's header and origin, sign-in attempts
+  limited) and shares one studio; viewer, editor, approver, admin. `--library-write` saves approved versions to the
+  library folder; `--sync N` reads the source again every N seconds.
+- `nl`: the schema card shows computed properties with their expressions and descriptions, link cardinalities and
+  the property each registered query's parameter is compared with; an answer that finds no rows goes back once with
+  sample values of the properties it compared; a model that does not answer in time is a failed attempt.
+  `nl.evaluate()` and `xds nl-eval` score a model by execution against gold queries.
+- Commands: `xds gates`, `agreement`, `identity`, `review`, `sync`, `nl-eval`, `users add | list`; `serve --users
+  --library-write --sync`. Extras `[gremlin]` and `[live]`; `tests/test_live.py` runs on PostgreSQL, Fuseki, Neo4j and
+  Gremlin Server when their addresses are set, and a CI job runs it against service containers.
+- Examples: a price history, computed totals and the purchase amount without cancelled orders, a masked phone number
+  and a support role, a customer who is also a borrower (`party-identity`), past return cases and the flow's pass
+  conditions, a loan status history among the sample files, sixteen plain-language questions with gold queries.
+  Revenue by category sums line totals (it summed unit prices).
+- Two more module kinds, so the way a definition is checked and the way a draft is built plug in and out like the
+  definition itself: `quality` carries questions and `flow: {gates}` (an attached module holds the studio's pass
+  conditions to its own where they ask more, and detaching it lowers them again; the page shows which module set a
+  condition) and `method` carries `draft_rules` (the defaults the data tab drafts with). Examples `return-quality` and
+  `build-rules`. A change to a quality module is reviewed against the bar it sets.
+- Grounded answers: each question reports whether its answer carries its condition (the rule that matched, or the
+  query), its source (the rule's cite or its table's, the source column of each value) and the version it was
+  answered by, and what it lacks; `QuestionReport.grounded` and the pass condition `check.min_grounded`. The return
+  decision of the single-file commerce example cites its policy clauses.
+- `mapping`: a column only one type has goes to an inherited property only (an order's agreement date), never to a
+  type's own property or an ancestor's key (a SKU number took the order number); a relation joins on the first
+  property matched to a column. A binding over tables without the columns a state machine, a decision or an action
+  needs takes those out (`remove: {states: [...]}`; removing an action takes it out of the roles that held it), and
+  the standard's questions answered on its example data are asked again with the answers the tables give, or left
+  out when they cannot be answered; each kept query without parameters is asked its row count.
+- `nl`: a returned column named after another property of its object (`c.customer_id` as `name`) goes back to the
+  model; on the page a question tries again only within 45 seconds of starting, so it ends before a proxy in front
+  (Cloudflare, 100 s) gives up, and an answer that fails says what the model last got wrong.
+
+## 0.4.0
+
+- `draft`: a definition and its bindings drafted from files or a database, every choice kept with its reason.
+  Tables become objects (the W3C Direct Mapping), a table of two relation columns a many-to-many link; keys are
+  the declared primary key or a column of present, distinct values (a row number for files that have none);
+  types are declared, or read from the values for files (thousands separators, dates in several spellings, codes
+  with leading zeros kept as text); repeating text values become allowed values; relations are declared foreign
+  keys, or a column named after another table's key whose values all appear in it. A list, a count per relation
+  and a count per allowed value are generated as queries. CSV (UTF-8 or CP949, any common delimiter) and Excel
+  (`[xlsx]` extra); the SQLite catalog and the PostgreSQL information schema.
+- `xds draft FILES | --sqlite PATH | --dsn DSN`: prints the two modules, or with `-o` writes a library, the loaded
+  data and a studio file that `xds serve` and `xds conformance` take as they are.
+- `DraftRules`: every rule the draft decides by (allowed-value limits, relation inference, link tables, row keys,
+  the title, parent, key-suffix and generic-key name hints, the kinds of generated query), with the defaults above;
+  `xds draft --rules`. `Draft.revise()` takes keys, types, allowed values, labels, left-out objects, properties and
+  queries, cardinalities and relations added by hand. `load_sqlite(types=...)` loads a column as the type a person
+  chose; a value that does not fit raises `ReadError(reason="convert")` with its table, column and value.
+  `ReadError.reason` names why a file could not be read.
+- `OverlayLibrary`: modules held in memory over a library folder, so a draft plugs in next to the saved packages.
+- `Studio.replace(module)`: swap a plugged-in module for an edited version, refused if the result does not hold.
+- The page: a flow tab with every stage of the studio and what it holds now; a data tab that takes uploaded files
+  (within size and row limits, `--file-kb` and `--rows`, kept in memory for the visit), builds the draft step by step on the schema graph,
+  shows the reason for each object, key, type and relation and the module files, lets a person leave out and
+  rename, and plugs the result into that visitor's studio. `--samples` offers example files; `--allow-connect`
+  lets a studio inside your own network take a database address.
+- The page lets a person adapt every layer: the draft rules and the tables to draft from; on each step the key, a
+  property's type, allowed values and label, a relation's cardinality and label, relations added by hand and the
+  generated queries, with the definition checked after each change and the errors shown before it can be plugged
+  in; and on the library tab any module as its file, checked, saved into that visitor's library, swapped in when
+  plugged in, or downloaded. New modules start from a template.
+- A guide tab: what each screen is for and what to try on it. With `xds serve --video demo.mp4` the demo plays
+  beside it (served in byte ranges so it can seek), its chapters (`demo.chapters.json`) list next to the player,
+  and the chapter playing lights up its section; each section starts the video at its own chapter.
+- SPARQL: an aggregated query is ordered by its selected names; rdflib dropped the grouped variable and returned
+  the groups unordered.
+
 ## 0.3.0
 
 - `xds serve`: the studio page as a working application on the standard library's HTTP server. Library tab with

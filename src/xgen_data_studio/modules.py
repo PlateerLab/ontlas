@@ -10,10 +10,12 @@ from typing import Any
 
 from xgen_data_studio.model import Ontology
 
-KINDS = ("core", "domain", "industry", "customer", "binding")
-SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries")
+# quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
+# data (the draft rules). Both plug in and out like the rest.
+KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method")
+SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
-            "actions": "action", "roles": "role", "queries": "query"}
+            "actions": "action", "roles": "role", "queries": "query", "identities": "identity"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -61,6 +63,8 @@ class Module:
     body: dict[str, Any] = field(default_factory=dict)
     extend: dict[str, Any] = field(default_factory=dict)
     remove: dict[str, Any] = field(default_factory=dict)
+    flow: dict[str, Any] = field(default_factory=dict)  # {gates: {stage: {condition: value}}}, held to the stricter
+    draft_rules: dict[str, Any] = field(default_factory=dict)  # what a draft decides by (draft.DraftRules)
 
     @property
     def key(self) -> str:
@@ -76,7 +80,8 @@ class Module:
         return cls(name=d["module"], version=str(d.get("version", "0.1.0")), kind=d.get("kind", "domain"),
                    label=d.get("label", ""), description=d.get("description", ""), namespace=d.get("namespace", ""),
                    requires=[Requirement.parse(r) for r in d.get("requires", [])], body=body,
-                   extend=copy.deepcopy(d.get("extend") or {}), remove=copy.deepcopy(d.get("remove") or {}))
+                   extend=copy.deepcopy(d.get("extend") or {}), remove=copy.deepcopy(d.get("remove") or {}),
+                   flow=copy.deepcopy(d.get("flow") or {}), draft_rules=copy.deepcopy(d.get("draft_rules") or {}))
 
     def to_dict(self) -> dict:
         out: dict[str, Any] = {"module": self.name, "version": self.version, "kind": self.kind}
@@ -92,6 +97,9 @@ class Module:
             out["extend"] = copy.deepcopy(self.extend)
         if self.remove:
             out["remove"] = copy.deepcopy(self.remove)
+        for k in ("flow", "draft_rules"):
+            if getattr(self, k):
+                out[k] = copy.deepcopy(getattr(self, k))
         return out
 
     @classmethod
@@ -135,6 +143,8 @@ class Module:
         c["properties"] = sum(len((v.get("properties") or {})) for v in self.body.get("objects", {}).values())
         c["questions"] = len(self.body.get("questions", []))
         c["extends"] = sum(len(v or {}) for v in self.extend.values())
+        c["gates"] = sum(len(v or {}) for v in (self.flow.get("gates") or {}).values())
+        c["draft_rules"] = len(self.draft_rules)
         return c
 
 
@@ -146,6 +156,10 @@ class Composition:
     touched: dict[str, list[str]]
     removed: dict[str, str]
     issues: list[str]
+    gates: dict[str, dict[str, float]] = field(default_factory=dict)  # the modules' pass conditions, strictest kept
+    gate_by: dict[str, str] = field(default_factory=dict)  # "stage.condition" -> the module that set it
+    draft_rules: dict[str, Any] = field(default_factory=dict)  # the modules' draft rules, later modules last
+    rules_by: list[str] = field(default_factory=list)  # the modules that gave draft rules
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -216,9 +230,9 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite"):
+    for k in ("label", "description", "title", "parent", "cite", "series"):
         if k in patch:
-            obj[k] = patch[k]
+            obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
         obj["source"] = {"table": patch.get("table") or (patch.get("source") or {}).get("table", "")}
     for k in ("aligned", "implements"):
@@ -300,11 +314,17 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
     r = acc["roles"].get(name)
     if r is None:
         raise ModuleError(f"{m.key} extends role '{name}', which no attached module defines")
-    for k in ("read", "run", "request", "execute"):
+    for k in ("read", "run", "request", "execute", "unmask"):
         if patch.get(k):
             r[k] = list(dict.fromkeys(list(r.get(k) or []) + list(patch[k])))
     if patch.get("row_filters"):
         r.setdefault("row_filters", {}).update(copy.deepcopy(patch["row_filters"]))
+    if patch.get("mask"):
+        mask = patch["mask"]
+        cur = r.get("mask") or {}
+        cur = {x: "partial" for x in cur} if isinstance(cur, list) else dict(cur)
+        cur.update({x: "partial" for x in mask} if isinstance(mask, list) else mask)
+        r["mask"] = cur
     touched.setdefault(f"role:{name}", []).append(m.name)
 
 
@@ -360,6 +380,13 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                 acc["questions"] = [q for q in acc["questions"] if q["id"] not in items]
                 removed.update({f"question:{q}": m.name for q in items})
                 continue
+            if s == "states":  # a type's state machine, when the source has no state column
+                for t in items:
+                    if not (acc["objects"].get(t) or {}).get("states"):
+                        raise ModuleError(f"{m.key} removes the states of {t}, which has none")
+                    del acc["objects"][t]["states"]
+                    removed[f"states:{t}"] = m.name
+                continue
             if s not in SECTIONS:
                 raise ModuleError(f"{m.key}: cannot remove '{s}'")
             for k in items:
@@ -370,6 +397,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                 if s == "objects":
                     for e in [e for e in origin if e.startswith(f"property:{k}.")]:
                         removed[e] = m.name
+                if s == "actions":  # a role cannot keep the right to an action that is gone
+                    for r in acc["roles"].values():
+                        for grant in ("request", "execute"):
+                            if k in (r.get(grant) or []):
+                                r[grant] = [x for x in r[grant] if x != k]
     namespace = namespace or next((m.namespace for m in reversed(ordered) if m.namespace), "")
     if not namespace:
         raise ModuleError("no namespace: give one, or set it on a module")
@@ -378,10 +410,54 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
          "version": version or " ".join(m.key for m in ordered),
          "label": label or " + ".join(m.label or m.name for m in ordered if m.kind in ("domain", "industry")), **acc}
     onto = Ontology.from_dict(d)
+    for iname, ident in onto.identities.items():  # the object and links an identity expands into are its module's
+        who = origin.get(f"identity:{iname}")
+        if who:
+            origin.setdefault(f"object:{iname}", who)
+            for p in onto.objects[iname].properties:
+                origin.setdefault(f"property:{iname}.{p}", who)
+            for member in ident.members:
+                origin.setdefault(f"link:{ident.link_name(member)}", who)
     for e in list(removed):
         origin.pop(e, None)
         touched.pop(e, None)
-    return Composition(onto, ordered, origin, touched, removed, onto.validate())
+    gates, gate_by, rules, rules_by = _methods(ordered)
+    return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by)
+
+
+def _methods(ordered: list[Module]) -> tuple[dict, dict, dict, list]:
+    """The pass conditions (the strictest of each) and the draft rules (later modules last) the modules carry."""
+    from dataclasses import fields
+
+    from xgen_data_studio.draft import DraftRules
+    from xgen_data_studio.review import FlowSettings, tighter
+
+    gates: dict[str, dict[str, float]] = {}
+    gate_by: dict[str, str] = {}
+    rules: dict[str, Any] = {}
+    rules_by: list[str] = []
+    known = {f.name for f in fields(DraftRules)}
+    for m in ordered:
+        extra = set(m.flow) - {"gates"}
+        if extra:
+            raise ModuleError(f"{m.key}: a module's flow gives only gates, not {sorted(extra)}")
+        given = {s: dict(c or {}) for s, c in (m.flow.get("gates") or {}).items()}
+        bad = FlowSettings(gates=given).issues()
+        if bad:
+            raise ModuleError(f"{m.key} flow: " + "; ".join(bad))
+        for stage, conds in given.items():
+            for cond, v in conds.items():
+                cur = gates.get(stage, {}).get(cond)
+                if v is not None and (cur is None or tighter(cond, v, cur)):
+                    gates.setdefault(stage, {})[cond] = v
+                    gate_by[f"{stage}.{cond}"] = m.name
+        unknown = set(m.draft_rules) - known
+        if unknown:
+            raise ModuleError(f"{m.key}: unknown draft rules {sorted(unknown)}; use {sorted(known)}")
+        if m.draft_rules:
+            rules.update(copy.deepcopy(m.draft_rules))
+            rules_by.append(m.name)
+    return gates, gate_by, rules, rules_by
 
 
 @dataclass

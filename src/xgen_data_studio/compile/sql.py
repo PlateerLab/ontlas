@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from xgen_data_studio.check import aliases_of, all_props, column_of, concrete_subtypes, find_prop
+from xgen_data_studio import expr as ex
+from xgen_data_studio.check import aliases_of, column_of, concrete_subtypes, find_prop, stored_props
 from xgen_data_studio.compile.base import Compiled, CompileError, Compiler, Params
 from xgen_data_studio.ir import Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref
 
@@ -52,7 +53,7 @@ class SqlCompiler(Compiler):
         subs = concrete_subtypes(self.onto, obj.name)
         if not subs:
             raise CompileError(f"{obj.name} has no source table and no bound subtype")
-        names = all_props(self.onto, obj.name)
+        names = stored_props(self.onto, obj.name)
         parts = []
         for s in subs:
             cols = ", ".join(f"{qi(column_of(self.onto, s, n))} AS {qi(n)}" for n in names)
@@ -61,10 +62,46 @@ class SqlCompiler(Compiler):
 
     def _col(self, ref: Ref) -> str:
         t = self._types[ref.alias]
-        find_prop(self.onto, t, ref.prop)
+        p = find_prop(self.onto, t, ref.prop)
+        if p.expr:
+            return self._computed(ref.alias, p.expr)
         if not self.onto.objects[t].table:
             return f"t_{ref.alias}.{qi(ref.prop)}"
         return f"t_{ref.alias}.{qi(column_of(self.onto, t, ref.prop))}"
+
+    def _computed(self, alias: str, text: str) -> str:
+        r = ex.SqlRenderer(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
+        try:
+            return r.render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
+        except ex.ExprError as e:
+            raise CompileError(str(e)) from None
+
+    def _aggregate(self, alias: str, a: ex.Agg) -> str:
+        """A correlated subquery that follows the aggregate's links from the alias."""
+        steps, prop = ex.resolve_agg(self.onto, self._types[alias], a)
+        edges, prev = [], alias
+        for st in steps:
+            self._n += 1
+            nxt = f"g{self._n}"
+            self._types[nxt] = st.type
+            edges.append(Edge(prev, st.link, nxt, reverse=not st.forward))
+            prev = nxt
+        path, extra = self._pattern(edges, {alias})
+        first, rest = path[0][0], path[1:]
+        body = [f"FROM {first.table} {first.alias}", *(f"JOIN {s.table} {s.alias} ON {s.cond}" for s, _ in rest)]
+        conds = [first.cond, *extra]
+        if a.fn in ("latest", "earliest"):
+            obj = self.onto.obj(self._types[prev])
+            time, key = self._col(Ref(prev, obj.series["time"])), self._key(prev)
+            way = "DESC" if a.fn == "latest" else "ASC"
+            conds.append(f"{time} IS NOT NULL")
+            return (f"(SELECT {self._col(Ref(prev, prop))} {' '.join(body)} WHERE {' AND '.join(conds)} "
+                    f"ORDER BY {time} {way}, CAST({key} AS VARCHAR) {way} LIMIT 1)")
+        if a.fn == "count":
+            val = f"COUNT({self._col(Ref(prev, prop))})" if prop else "COUNT(*)"
+        else:
+            val = f"{a.fn.upper()}({self._col(Ref(prev, prop))})"
+        return f"(SELECT {val} {' '.join(body)} WHERE {' AND '.join(conds)})"
 
     def _key(self, alias: str) -> str:
         obj = self.onto.obj(self._types[alias])

@@ -109,6 +109,7 @@ class Params:
 class Compiler:
     language = ""
     dialect = ""
+    by_name = False  # write computed properties by their names, as a person writes a query, not as expressions
 
     def __init__(self, onto: Ontology):
         self.onto = onto
@@ -143,8 +144,12 @@ def compiler_for(onto: Ontology, language: str, dialect: str = "") -> Compiler:
         from xgen_data_studio.compile.sparql import SparqlCompiler
 
         return SparqlCompiler(onto)
+    if language == "gremlin":
+        from xgen_data_studio.compile.gremlin import GremlinCompiler
+
+        return GremlinCompiler(onto)
     if language in ("sqlpgq", "pgq"):
         from xgen_data_studio.compile.pgq import PgqCompiler
 
         return PgqCompiler(onto, dialect or "oracle")
-    raise CompileError(f"unknown language '{language}'; use sql, cypher, gql, sparql or sqlpgq")
+    raise CompileError(f"unknown language '{language}'; use sql, cypher, gql, sparql, sqlpgq or gremlin")

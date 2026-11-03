@@ -1,0 +1,25 @@
+module: party-identity
+version: 1.0.0
+kind: binding
+label: 고객 · 차주 식별 통합
+description: 커머스 고객과 금융 차주 가운데 같은 사람을 연락처와 이름으로 묶습니다. 시스템마다 다른 번호를 하나의 통합 번호로 연결합니다.
+requires: [commerce-bindings, finance-bindings]
+
+identities:
+  Person:
+    label: 통합 고객
+    table: person_identity
+    members:
+      Customer: {phone: phone, name: name}
+      Borrower: {phone: phone, name: name}
+    rules:
+      - {id: same-phone-name, match: [phone, name], normalize: {phone: digits, name: trim}}
+
+queries:
+  customersWhoBorrow:
+    label: 대출이 있는 고객
+    query:
+      match: {p: Person, c: Customer, b: Borrower}
+      edges: [[p, personCustomer, c], [p, personBorrower, b]]
+      return: [p.identity_id, c.customer_id, b.borrower_id, c.name]
+      order: [identity_id]

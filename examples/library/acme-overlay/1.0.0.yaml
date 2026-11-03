@@ -2,8 +2,32 @@ module: acme-overlay
 version: 1.0.0
 kind: customer
 label: 고객사 차이 · ACME
-description: 표준은 두고 이 고객사만 다른 것만 얹습니다. 선물 포장 속성, VIP 반품기간 연장 규칙, 쓰지 않는 찜 질의 제거.
+description: 고객사별 차이를 표준 위에 추가합니다. 선물 포장 속성, VIP 반품 기간 연장 규칙, 찜 질의 제외.
 requires: [commerce, commerce-bindings]
+
+objects:
+  ReturnCase:
+    label: 반품 처리 기록
+    description: 상담원이 실제로 처리한 반품 건과 그때의 값. 결정표 판정과 비교해 판정 일치율을 잽니다.
+    source: {table: return_cases}
+    key: case_id
+    properties:
+      case_id: {type: string, label: 처리 번호, required: true}
+      item_id: {type: string, label: 주문상품 번호}
+      decided_at: {type: datetime, label: 처리 일시}
+      days_after_delivery: {type: integer, label: 배송 후 경과일}
+      status_then: {type: string, label: 그때 주문상품 상태}
+      returnable_then: {type: boolean, label: 그때 카테고리 반품 가능}
+      grade_then: {type: string, label: 그때 고객 등급}
+      approved: {type: boolean, label: 실제 승인}
+
+queries:
+  pastReturnCases:
+    label: 지난 반품 처리
+    query:
+      match: {r: ReturnCase}
+      return: [r.case_id, r.days_after_delivery, r.status_then, r.returnable_then, r.grade_then, r.approved]
+      order: [case_id]
 
 extend:
   objects:

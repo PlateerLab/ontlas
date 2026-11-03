@@ -15,6 +15,8 @@ def to_shacl(onto: Ontology) -> str:
         pairs = [("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", SH + "NodeShape"),
                  (SH + "targetClass", ir.cls(o.name))]
         for p in o.properties.values():
+            if p.expr:  # computed in queries, never stored in the graph
+                continue
             body = [f"sh:path {iri(ir.prop(p.name))}", f"sh:datatype xsd:{XSD_OF[p.type]}", "sh:maxCount 1"]
             if p.required or p.name == o.key:
                 body.append("sh:minCount 1")

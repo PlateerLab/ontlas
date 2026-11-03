@@ -110,6 +110,31 @@ class _Reader:
                 return
         raise ParseError(f"unsupported property path {p}")
 
+    def computed_ref(self, a: str) -> Ref | None:
+        """?alias__prop bound by BIND is a computed property, as the SPARQL compiler writes it."""
+        from xgen_data_studio.check import _find_prop
+
+        alias, _, prop = a.partition("__")
+        t = self.nodes.get(alias)
+        p = _find_prop(self.onto, t, prop) if t and prop else None
+        return Ref(alias, prop) if p is not None and p.expr else None
+
+    @staticmethod
+    def _computed_block(node) -> bool:
+        """The OPTIONAL blocks the compiler adds for a computed property's aggregates (sub-selects, ?_a binds)."""
+        name = getattr(node, "name", "")
+        if name == "ToMultiSet":
+            return True
+        if name == "Extend" and str(node["var"]).startswith("_a"):
+            return True
+        parts = []
+        for k in ("p", "p1", "p2"):
+            try:
+                parts.append(node[k])
+            except (KeyError, TypeError):
+                continue
+        return any(_Reader._computed_block(x) for x in parts if x is not None)
+
     def pattern(self, node, *, optional: bool, scope: dict[str, str], edges: list, filters: list) -> None:
         name = getattr(node, "name", "")
         if name == "BGP":
@@ -120,6 +145,8 @@ class _Reader:
             self.pattern(node["p2"], optional=optional, scope=scope, edges=edges, filters=filters)
         elif name == "LeftJoin":
             self.pattern(node["p1"], optional=optional, scope=scope, edges=edges, filters=filters)
+            if self._computed_block(node["p2"]):
+                return
             inner: dict[str, str] = {}
             self.pattern(node["p2"], optional=True, scope=inner, edges=edges, filters=filters)
             for a, t in inner.items():
@@ -130,6 +157,8 @@ class _Reader:
             self.pattern(node["p"], optional=optional, scope=scope, edges=edges, filters=filters)
             filters.append(("expr", node["expr"], scope))
         elif name == "ToMultiSet":
+            self.pattern(node["p"], optional=optional, scope=scope, edges=edges, filters=filters)
+        elif name == "Extend":  # BIND(<expression> AS ?alias__prop): a computed property, read by its name
             self.pattern(node["p"], optional=optional, scope=scope, edges=edges, filters=filters)
         elif name in ("Project", "Distinct", "Slice", "SelectQuery"):
             self.pattern(node["p"], optional=optional, scope=scope, edges=edges, filters=filters)
@@ -142,6 +171,9 @@ class _Reader:
             return self.props[a]
         if a in self.nodes:
             return Ref(a, self.onto.objects[self.nodes[a]].key)
+        computed = self.computed_ref(a)
+        if computed is not None:
+            return computed
         raise ParseError(f"variable ?{a} is not bound to a property")
 
     def value(self, t) -> Any:
@@ -240,6 +272,8 @@ def parse_sparql(text: str, onto: Ontology) -> Query:
 
     def column_expr(v) -> Ref | Agg:
         a = _alias(v)
+        if a in extends and rd.computed_ref(a) is not None:
+            return rd.computed_ref(a)
         if a in extends:
             inner = extends[a]
             if hasattr(inner, "name"):

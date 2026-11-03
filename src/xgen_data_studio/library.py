@@ -133,3 +133,46 @@ class Library:
                    requires=[Requirement.parse(r) for r in requires], body=body)
         self.save(m)
         return m, report
+
+
+class OverlayLibrary(Library):
+    """Modules held in memory over a library folder (or over nothing), e.g. a draft that has not been saved. The
+    folder is never written: a module saved here is kept in memory, as the newest version of its name."""
+
+    def __init__(self, base: Library | None, modules: list[Module]):
+        self.base = base
+        self.root = base.root if base is not None else Path(".")
+        self.extra = {m.name: m for m in modules}
+        self.held: dict[str, dict[str, Module]] = {}  # earlier in-memory versions, by name
+
+    def names(self) -> list[str]:
+        return sorted(set(self.base.names() if self.base is not None else []) | set(self.extra))
+
+    def versions(self, name: str) -> list[str]:
+        below = self.base.versions(name) if self.base is not None else []
+        mine = [*self.held.get(name, {}), *([self.extra[name].version] if name in self.extra else [])]
+        return sorted(set(below) | set(mine), key=version_key)
+
+    def get(self, name: str, version: str = "") -> Module:
+        m = self.extra.get(name)
+        if m is not None and (not version or version == m.version):
+            return m
+        if version and version in self.held.get(name, {}):
+            return self.held[name][version]
+        if self.base is None or not self.base.versions(name):
+            if m is not None:
+                raise ModuleError(f"module '{name}' has no version {version}; it has {self.versions(name)}")
+            raise ModuleError(f"no module '{name}'")
+        return self.base.get(name, version)
+
+    def save(self, module: Module, *, overwrite: bool = False, fmt: str = "yaml") -> Path:
+        if module.version in self.versions(module.name) and not overwrite:
+            raise ModuleError(f"{module.key} already exists; raise the version or pass overwrite=True")
+        prev = self.extra.get(module.name)
+        if prev is not None and prev.version != module.version:
+            self.held.setdefault(module.name, {})[prev.version] = prev
+        self.extra[module.name] = module
+        return self.root / module.name / f"{module.version}.{fmt}"
+
+    def delete(self, name: str, version: str = "") -> None:
+        raise ModuleError("modules held in memory are not deleted from here")

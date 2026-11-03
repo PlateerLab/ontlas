@@ -33,7 +33,7 @@ def composed(lib) -> Studio:
 
 def test_library_lists_every_package(lib):
     rows = {r["name"]: r for r in lib.list()}
-    assert set(rows) == {*ALL, "food"}
+    assert set(rows) == {*ALL, "food", "party-identity", "return-quality", "build-rules"}
     assert rows["finance"]["kind"] == "domain" and rows["acme-overlay"]["kind"] == "customer"
     assert rows["commerce-bindings"]["requires"] == ["commerce"]
 
@@ -193,5 +193,5 @@ def test_library_screen(composed):
     from xgen_data_studio.preview import render
 
     html = render(composed, query="revenueByCategory", decision="returnEligibility", key="I1001")
-    assert 'id="library"' in html and "식품 업종 확장" in html and "빼기 전 영향" in html
+    assert 'id="library"' in html and "식품 업종 확장" in html and "해제 영향" in html
     assert "상위 개념" in html and "하위 유형" in html

@@ -1,0 +1,54 @@
+# Questions in plain language with the answer a person wrote as IR, for measuring a language model end to end:
+# xds nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
+# A generated query passes when its rows hold the gold rows: every gold column is one of its columns, row for row.
+- id: N01
+  text: VIP 등급 고객의 이름을 알려 주세요
+  gold: {match: {c: Customer}, where: {eq: [c.grade, VIP]}, return: [c.name]}
+- id: N02
+  text: 재고가 5개 미만인 단품 번호는?
+  gold: {match: {s: Sku}, where: {lt: [s.stock, 5]}, return: [s.sku_id]}
+- id: N03
+  text: 배송 완료된 주문의 주문 번호를 보여 주세요
+  gold: {match: {o: Order}, where: {eq: [o.status, DELIVERED]}, return: [o.order_id]}
+- id: N04
+  text: 김하늘 고객이 한 주문의 번호는?
+  gold: {match: {c: Customer, o: Order}, edges: [[c, placed, o]], where: {eq: [c.name, 김하늘]}, return: [o.order_id]}
+- id: N05
+  text: 주문 O1 에 들어 있는 주문상품 번호
+  gold: {match: {o: Order, i: OrderItem}, edges: [[o, hasItem, i]], where: {eq: [o.order_id, O1]}, return: [i.item_id]}
+- id: N06
+  text: 취소된 주문을 빼고 카테고리별 매출 합계를 구해 주세요
+  gold: {match: {o: Order, i: OrderItem, s: Sku, p: Product, k: Category},
+         edges: [[o, hasItem, i], [i, ofSku, s], [s, skuOf, p], [p, inCategory, k]],
+         where: {ne: [o.status, CANCELLED]}, return: [k.name, {sum: i.line_total, as: revenue}]}
+- id: N07
+  text: 클레임이 접수된 주문상품 번호는?
+  gold: {match: {i: OrderItem, c: Claim}, edges: [[i, hasClaim, c]], return: [i.item_id]}
+- id: N08
+  text: 브랜드가 하늘섬유인 상품의 이름
+  gold: {match: {p: Product}, where: {eq: [p.brand, 하늘섬유]}, return: [p.name]}
+- id: N09
+  text: 주문 금액이 6만 원을 넘는 주문 번호와 금액
+  gold: {match: {o: Order}, where: {gt: [o.total, 60000]}, return: [o.order_id, o.total]}
+- id: N10
+  text: 니트 카테고리의 모든 상위 카테고리 이름
+  gold: {match: {k: Category, a: Category}, edges: [{from: k, link: broader, to: a, hops: [1, 5]}],
+         where: {eq: [k.name, 니트]}, return: [a.name]}
+- id: N11
+  text: 고객별로 찜한 상품 수
+  gold: {match: {c: Customer, p: Product}, edges: [[c, wishes, p]], return: [c.name, {count: p, as: n}]}
+- id: N12
+  text: 2026년 10월 20일 이후에 들어온 주문 번호
+  gold: {match: {o: Order}, where: {gte: [o.ordered_at, "2026-10-20T00:00:00"]}, return: [o.order_id]}
+- id: N13
+  text: 반품 신청 상태인 주문상품은 무엇인가요?
+  gold: {match: {i: OrderItem}, where: {eq: [i.item_status, RETURN_REQUESTED]}, return: [i.item_id]}
+- id: N14
+  text: 단품 S1 의 가장 최근에 바뀐 판매가는?
+  gold: {match: {s: Sku}, where: {eq: [s.sku_id, S1]}, return: [s.last_price]}
+- id: N15
+  text: 주문상품이 2개인 주문 번호
+  gold: {match: {o: Order}, where: {eq: [o.item_count, 2]}, return: [o.order_id]}
+- id: N16
+  text: 이도윤 고객이 지금까지 구매한 금액 합계(취소 제외)
+  gold: {match: {c: Customer}, where: {eq: [c.name, 이도윤]}, return: [c.spent]}

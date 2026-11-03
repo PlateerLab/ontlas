@@ -118,6 +118,8 @@ def run_rules(onto: Ontology, proj: Projection, *, max_depth: int = 5) -> RuleRe
     for (t, k), props in proj.nodes.items():
         obj = onto.objects[t]
         for p in obj.properties.values():
+            if p.expr:
+                continue
             v = props.get(p.name)
             if p.required and v is None:
                 res.findings.append(Finding("required", t, k, f"'{p.name}' is empty"))

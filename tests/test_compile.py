@@ -11,7 +11,7 @@ def _q(onto, name):
 def test_sql_runs_every_registered_query(studio):
     expected = {
         "ordersOfCustomer": [("O1", "DELIVERED", "2026-10-20T10:00:00"), ("O2", "SHIPPED", "2026-10-27T09:30:00")],
-        "revenueByCategory": [("니트", 177000.0, 3), ("상의", 19000.0, 1), ("속옷", 15000.0, 1)],
+        "revenueByCategory": [("니트", 177000.0, 3), ("상의", 38000.0, 1), ("속옷", 15000.0, 1)],
         "deliveredWithoutClaim": [("I1001", "O1", "2026-10-25T15:00:00"), ("I1003", "O3", "2026-10-18T10:00:00"),
                                   ("I1004", "O3", "2026-10-18T10:00:00")],
         "categoryAncestors": [("상의",), ("의류",)],

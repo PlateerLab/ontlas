@@ -13,11 +13,12 @@ from xgen_data_studio.conformance import normalize_rows
 from xgen_data_studio.studio import Studio
 
 TARGETS = [("sql:postgres", "PostgreSQL"), ("sql:mysql", "MySQL"), ("sql:oracle", "Oracle"),
-           ("cypher", "Cypher 25"), ("gql", "GQL"), ("sparql", "SPARQL 1.1"), ("sqlpgq", "SQL/PGQ")]
+           ("cypher", "Cypher 25"), ("gql", "GQL"), ("sparql", "SPARQL 1.1"), ("sqlpgq", "SQL/PGQ"),
+           ("gremlin", "Gremlin")]
 MODULE_COLOR = {"core": "#7a5af8", "domain": "#1a73e8", "industry": "#0f9d8a", "customer": "#d9822b",
-                "binding": "#8a96a5"}
+                "binding": "#8a96a5", "quality": "#c2367a", "method": "#5f7a1f"}
 MODULE_KIND = {"core": "공통 개념", "domain": "도메인", "industry": "업종 확장", "customer": "고객사 차이",
-               "binding": "바인딩"}
+               "binding": "바인딩", "quality": "검증 기준", "method": "구축 규칙"}
 KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의", "decision": "결정", "action": "액션",
               "role": "역할", "agent": "에이전트", "link": "관계", "object": "객체", "table": "테이블", "file": "파일",
               "collection": "컬렉션", "folder": "폴더", "database": "데이터베이스"}
@@ -177,13 +178,12 @@ def _frame(screen_id: str, active: str, studio: Studio, body: str, counts: dict[
         ident = (f'<span class="chip b">{_e(" · ".join(domains) or o.name)}</span>'
                  f'<span class="chip">모듈 {len(comp.modules)}개</span>')
     else:
-        ident = f'<span class="chip b">{_e(o.label or o.name)}</span><span class="chip">판본 {_e(o.version)}</span>'
+        ident = f'<span class="chip b">{_e(o.label or o.name)}</span><span class="chip">버전 {_e(o.version)}</span>'
     return f"""<section class="screen" id="{screen_id}">
   <div class="top"><div class="brand"><div class="logo">X</div>XGEN 데이터 스튜디오</div>
     {ident}
     <div class="grow"></div>{backends}<div class="who"><div class="avatar">운영</div>운영자</div></div>
-  <aside class="side"><h6>데이터 스튜디오</h6>{nav}
-    <div class="foot"><b>정의는 한곳에, 값은 원천에</b>같은 정의가 원천 DB · 그래프 · 추론기에서 같은 답을 냅니다.</div></aside>
+  <aside class="side"><h6>데이터 스튜디오</h6>{nav}</aside>
   <main class="main">{body}</main>
 </section>"""
 
@@ -322,7 +322,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
                       for a in obj.aligned)
     if aligned:
         aligned = ('<div style="margin-top:14px"><div class="muted" style="font-size:12px;font-weight:700;'
-                   f'margin-bottom:6px">표준 개념 정렬</div><div style="display:flex;gap:6px;flex-wrap:wrap">{aligned}</div></div>')
+                   f'margin-bottom:6px">표준 개념 매핑</div><div style="display:flex;gap:6px;flex-wrap:wrap">{aligned}</div></div>')
     if obj.parent:
         aligned = (f'<div style="margin-top:14px"><div class="muted" style="font-size:12px;font-weight:700;'
                    f'margin-bottom:6px">상위 개념</div><span class="chip n">{_e(studio.onto.obj(obj.parent).label)} · '
@@ -339,7 +339,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
         f'<span class="chip">{_e(lk.label or lk.name)} · {_e(o.obj(lk.target if lk.source == selected else lk.source).label)}'
         f'</span>' for lk in links)
     body = f"""
-<div class="head"><div><h1>온톨로지</h1><div class="sub">업무 대상과 관계를 한 번 정의하고 원천 테이블에 바인딩합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 매핑을 확인합니다</div></div>
   <div class="right"><span class="btn ghost">OWL 내보내기</span><span class="btn ghost">SHACL</span>
   <span class="btn ghost">R2RML</span><span class="btn primary">변경 제안</span></div></div>
 <div class="stats">{stat_html}</div>
@@ -378,7 +378,8 @@ def _screen_library(studio: Studio, counts) -> str:
     for r in rows:
         c = r["counts"]
         parts = [f"객체 {c.get('objects', 0)}", f"관계 {c.get('links', 0)}", f"결정 {c.get('decisions', 0)}",
-                 f"질의 {c.get('queries', 0)}", f"확장 {c.get('extends', 0)}"]
+                 f"질의 {c.get('queries', 0)}", f"검증 질문 {c.get('questions', 0)}", f"통과 조건 {c.get('gates', 0)}",
+                 f"구축 규칙 {c.get('draft_rules', 0)}", f"확장 {c.get('extends', 0)}"]
         made = " · ".join(x for x in parts if not x.endswith(" 0")) or "-"
         req = " ".join(f'<span class="chip mono" style="font-size:11px">{_e(x)}</span>' for x in r["requires"]) or \
             '<span class="muted">-</span>'
@@ -410,27 +411,27 @@ def _screen_library(studio: Studio, counts) -> str:
                 items = "".join(f'<span class="chip mono" style="font-size:11px">{_e(e)}</span>' for e in imp.removed[:6])
                 impacts += (f'<div style="padding:10px 0;border-bottom:1px dashed #edf0f4"><div style="display:flex;'
                             f'align-items:center;gap:8px;margin-bottom:6px"><b>{_e(label)}</b><span class="chip ok">'
-                            f'뺄 수 있음</span><span class="muted" style="margin-left:auto;font-size:12px">'
-                            f'{len(imp.removed)}개 항목이 빠집니다</span></div><div style="display:flex;gap:5px;'
+                            f'해제 가능</span><span class="muted" style="margin-left:auto;font-size:12px">'
+                            f'항목 {len(imp.removed)}개 제거</span></div><div style="display:flex;gap:5px;'
                             f'flex-wrap:wrap">{items}</div></div>')
             else:
                 deps = ", ".join(imp.dependents)
                 impacts += (f'<div style="padding:10px 0"><div style="display:flex;align-items:center;gap:8px;'
-                            f'margin-bottom:6px"><b>{_e(label)}</b><span class="chip warn">함께 빼야 함</span></div>'
-                            f'<div class="muted" style="font-size:12.5px">기대고 있는 모듈 {len(imp.dependents)}개: '
+                            f'margin-bottom:6px"><b>{_e(label)}</b><span class="chip warn">의존 모듈 있음</span></div>'
+                            f'<div class="muted" style="font-size:12.5px">이 모듈을 사용하는 모듈 {len(imp.dependents)}개: '
                             f'{_e(deps)}</div></div>')
     body = f"""
-<div class="head"><div><h1>온톨로지 라이브러리</h1><div class="sub">도메인 온톨로지를 따로 만들고 판본을 관리하며, 스튜디오에 꽂고 뺍니다</div></div>
-  <div class="right"><span class="btn ghost">OWL 가져오기</span><span class="btn ghost">판본 비교</span><span class="btn primary">새 온톨로지</span></div></div>
+<div class="head"><div><h1>온톨로지 라이브러리</h1><div class="sub">도메인별 온톨로지 모듈과 버전을 관리하고 스튜디오 적용 여부를 설정합니다</div></div>
+  <div class="right"><span class="btn ghost">OWL 가져오기</span><span class="btn ghost">버전 비교</span><span class="btn primary">새 온톨로지</span></div></div>
 <div class="tabs">{"".join(tabs)}</div>
 <div class="grid" style="grid-template-columns:1.62fr 1fr">
-  <div class="card"><div class="ch">모듈<div class="right muted" style="font-weight:600;font-size:12px">스튜디오에 꽂힌 것 {len(active)}개</div></div>
-    <div class="cb" style="padding:0"><table><tr><th>온톨로지</th><th>종류</th><th>판본</th><th>요구</th><th>구성</th><th style="text-align:center">스튜디오</th></tr>
+  <div class="card"><div class="ch">모듈<div class="right muted" style="font-weight:600;font-size:12px">적용 {len(active)}개</div></div>
+    <div class="cb" style="padding:0"><table><tr><th>온톨로지</th><th>종류</th><th>버전</th><th>의존 모듈</th><th>구성</th><th style="text-align:center">적용</th></tr>
     {"".join(body_rows)}</table></div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
-    <div class="card"><div class="ch">지금 꽂힌 구성<div class="right muted" style="font-weight:600;font-size:12px">아래 층이 위 층에 기댑니다</div></div>
+    <div class="card"><div class="ch">적용 구성</div>
       <div class="cb">{layers}</div></div>
-    <div class="card" style="flex:1"><div class="ch">빼기 전 영향</div><div class="cb">{impacts}</div></div></div>
+    <div class="card" style="flex:1"><div class="ch">해제 영향</div><div class="cb">{impacts}</div></div></div>
 </div>"""
     return _frame("library", "library", studio, body, counts)
 
@@ -512,20 +513,20 @@ def _screen_query(studio: Studio, name: str, active: str, counts) -> str:
                        f'{_e(b.capabilities.dialect)}</span><div class="right"><span class="chip">{len(norm)}행</span>'
                        f'</div></div><div class="cb" style="padding:0"><table><tr>{head}</tr>{body}</table></div></div>')
     ir = _ir_text(q.to_dict())
-    verdict = ('<span class="chip ok">✓ 모든 백엔드 같은 결과</span>' if agree and len(results) > 1
-               else '<span class="chip warn">결과 차이</span>' if len(results) > 1 else "")
+    verdict = ('<span class="chip ok">✓ 백엔드 결과 일치</span>' if agree and len(results) > 1
+               else '<span class="chip warn">백엔드 결과 불일치</span>' if len(results) > 1 else "")
     label = dict(TARGETS)[active]
     body = f"""
 <div class="head"><div><h1>{_e(rq.label or name)} <span class="muted mono" style="font-size:15px">{_e(name)}</span></h1>
-  <div class="sub">질문은 온톨로지 질의로 한 번 쓰고, 백엔드마다 맞는 쿼리문으로 바꿔 실행합니다</div></div>
+  <div class="sub">온톨로지 질의를 백엔드별 쿼리로 변환해 실행합니다</div></div>
   <div class="right">{verdict}<span class="btn primary">실행</span></div></div>
 <div class="grid" style="grid-template-columns:380px 1fr;flex:none;height:520px">
   <div class="card"><div class="ch">온톨로지 질의 IR<div class="right"><span class="chip b">검사 통과</span></div></div>
     <div class="cb"><pre class="code ir" style="height:452px">{_e(ir)}</pre></div></div>
-  <div class="card"><div class="ch">백엔드 쿼리문<div class="right tabs">{"".join(tabs)}</div></div>
+  <div class="card"><div class="ch">백엔드 쿼리<div class="right tabs">{"".join(tabs)}</div></div>
     <div class="cb"><pre class="code" style="height:128px">{_highlight(code, active)}</pre>
-    <div class="muted" style="font-size:12px;margin:6px 0 10px">{_e(label)} · 값은 모두 파라미터로 넘깁니다 (미리 보기에만 채워 보임)</div>
-    <table class="tight"><tr><th>언어</th><th>상태</th><th style="text-align:right">쿼리문</th><th style="text-align:right">파라미터</th></tr>{"".join(langs)}</table></div></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">{_e(label)} · 파라미터 값 표시</div>
+    <table class="tight"><tr><th>언어</th><th>상태</th><th style="text-align:right">쿼리</th><th style="text-align:right">파라미터</th></tr>{"".join(langs)}</table></div></div>
 </div>
 <div class="grid" style="grid-template-columns:repeat({max(len(results), 1)},1fr)">{"".join(results)}</div>"""
     return _frame("query", "query", studio, body, counts)
@@ -575,21 +576,21 @@ def _screen_decision(studio: Studio, name: str, key: str, counts) -> str:
             rows_.append(f'<div class="check">{mark}<b style="min-width:122px">{_e(title)}</b>'
                          f'<span class="muted">{_e(text)}</span></div>')
         checks = "".join(rows_)
-        status = {"pending": ('warn', "승인 대기"), "rejected": ("", "반려"), "executed": ("ok", "실행됨")}[p.status]
+        status = {"pending": ('warn', "승인 대기"), "rejected": ("", "반려"), "executed": ("ok", "원천 반영")}[p.status]
         log = "".join(f'<div><span class="muted">{_e(a.event)}</span><span>{_e(a.actor)}</span>'
                       f'<span class="muted mono">{_e(a.proposal)}</span></div>' for a in studio.actions.audit[-3:])
         action_html = f"""<div class="card" style="flex:1"><div class="ch">{_e(action.label or action.name)}
   <span class="muted mono" style="font-weight:600">{_e(action.name)}</span><div class="right">
   <span class="chip {status[0]}">{status[1]}</span></div></div><div class="cb">
-  <div class="muted" style="font-size:12.5px;margin-bottom:8px">에이전트가 요청했습니다. 검사를 모두 통과하면 사람이 승인한 뒤에만 원천에 씁니다.</div>
-  {checks}<div style="display:flex;gap:8px;margin:12px 0 10px"><span class="btn primary" style="flex:1;text-align:center">승인하고 실행</span>
+  <div class="muted" style="font-size:12.5px;margin-bottom:8px">에이전트 요청입니다. 승인한 요청만 원천 DB에 반영합니다.</div>
+  {checks}<div style="display:flex;gap:8px;margin:12px 0 10px"><span class="btn primary" style="flex:1;text-align:center">승인</span>
   <span class="btn" style="flex:1;text-align:center">반려</span></div>
-  <div class="muted" style="font-size:12px;font-weight:700;margin-bottom:2px">감사 기록</div><div class="log">{log}</div></div></div>"""
+  <div class="muted" style="font-size:12px;font-weight:700;margin-bottom:2px">감사 로그</div><div class="log">{log}</div></div></div>"""
     banner_cls = "ok" if ok else "no"
     verdict = "가능" if ok else "불가"
     body = f"""
 <div class="head"><div><h1>{_e(table.label or name)} <span class="muted mono" style="font-size:15px">{_e(name)}</span></h1>
-  <div class="sub">{_e(studio.onto.obj(table.target).label)} {_e(key)} · 결정표로 판정하고 근거가 된 원천 값을 함께 돌려줍니다</div></div>
+  <div class="sub">{_e(studio.onto.obj(table.target).label)} {_e(key)} · 결정표 판정 결과와 근거</div></div>
   <div class="right"><span class="chip">엔진 {_e(res.engine)}</span><span class="chip">ZEN JDM 내보내기</span></div></div>
 <div class="banner {banner_cls}"><span class="ic {"y" if ok else "x"}" style="width:30px;height:30px;font-size:16px">{"✓" if ok else "!"}</span>
   <div><div class="big">{_e(table.label)} · {verdict}</div><div class="why">{_e(reason)}</div></div>
@@ -658,16 +659,16 @@ def _screen_map(studio: Studio, counts) -> str:
     unused = "".join(f'<tr><td><span class="chip">{_e(KIND_LABEL.get(a.kind, a.kind))}</span></td>'
                      f'<td class="mono">{_e(a.label)}</td></tr>' for a in cat.unused()[:8])
     body = f"""
-<div class="head"><div><h1>데이터 지도</h1><div class="sub">AI 가 쓸 수 있는 데이터 공간 자체를 그래프로 봅니다 · 자산 {len(cat.assets)} · 연결 {len(cat.relations)}</div></div>
-  <div class="right"><span class="chip">에이전트가 보는 것</span><span class="chip b">영향 범위</span><span class="chip">쓰지 않는 데이터</span></div></div>
+<div class="head"><div><h1>데이터 지도</h1><div class="sub">AI가 사용하는 데이터 자산과 연결 관계 · 자산 {len(cat.assets)} · 연결 {len(cat.relations)}</div></div>
+  <div class="right"><span class="chip">에이전트 조회 범위</span><span class="chip b">영향 범위</span><span class="chip">미사용 데이터</span></div></div>
 <div class="grid" style="grid-template-columns:1.7fr 1fr">
   <div class="card"><div class="ch">영향 범위 · <span class="mono" style="font-weight:600">{_e(cat.assets[start].label)}</span>
-    <div class="right"><span class="chip warn">이 컬럼이 바뀌면 {len(impacted)}곳이 영향을 받습니다</span></div></div>
+    <div class="right"><span class="chip warn">변경 시 영향 {len(impacted)}곳</span></div></div>
     <div class="cb" style="flex:1;padding:10px 14px">{svg}</div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
-    <div class="card"><div class="ch">고객응대 에이전트가 보는 것</div><div class="cb">
+    <div class="card"><div class="ch">고객응대 에이전트 조회 범위</div><div class="cb">
       <div class="stats" style="grid-template-columns:repeat(3,1fr)">{see_html}</div></div></div>
-    <div class="card" style="flex:1"><div class="ch">아무도 쓰지 않는 데이터</div><div class="cb" style="padding:0">
+    <div class="card" style="flex:1"><div class="ch">미사용 데이터</div><div class="cb" style="padding:0">
       <table><tr><th>종류</th><th>자산</th></tr>{unused}</table></div></div></div>
 </div>"""
     return _frame("map", "map", studio, body, counts)

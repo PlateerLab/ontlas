@@ -31,6 +31,18 @@ class SqliteBackend(Backend):
         self.conn.commit()
         return cur.rowcount
 
+    def run_many(self, statements: list[tuple[str, tuple]]) -> int:
+        """Run several writes as one transaction: all of them, or none."""
+        n = 0
+        try:
+            for sql, args in statements:
+                n += max(self.conn.execute(sql, args).rowcount, 0)
+        except BaseException:
+            self.conn.rollback()
+            raise
+        self.conn.commit()
+        return n
+
     def fetch(self, sql: str, args: tuple = ()) -> list[tuple]:
         return [tuple(r) for r in self.conn.execute(sql, args).fetchall()]
 
@@ -58,6 +70,12 @@ class DbApiBackend(Backend):
             return _QMARK.sub(lambda _: f":{next(n)}", text)
         raise ValueError(f"unsupported paramstyle '{self.paramstyle}'")
 
+    def _end_read(self) -> None:
+        """Close the transaction a read opened, so the connection holds no locks while it waits (or after an error,
+        so it can be used again)."""
+        if not getattr(self.conn, "autocommit", False):
+            self.conn.rollback()
+
     def execute(self, compiled: Compiled, values: dict[str, Any] | None = None) -> Result:
         text, args = compiled.bind(values)
         cur = self.conn.cursor()
@@ -66,6 +84,7 @@ class DbApiBackend(Backend):
             rows = [tuple(r) for r in cur.fetchall()]
         finally:
             cur.close()
+            self._end_read()
         return Result(compiled.columns, rows, self.name, compiled)
 
     def run(self, sql: str, args: tuple = ()) -> int:
@@ -73,6 +92,24 @@ class DbApiBackend(Backend):
         try:
             cur.execute(self._text(sql), args)
             n = cur.rowcount
+        except BaseException:
+            self.conn.rollback()
+            raise
+        finally:
+            cur.close()
+        self.conn.commit()
+        return n
+
+    def run_many(self, statements: list[tuple[str, tuple]]) -> int:
+        """Run several writes as one transaction: all of them, or none."""
+        n, cur = 0, self.conn.cursor()
+        try:
+            for sql, args in statements:
+                cur.execute(self._text(sql), args)
+                n += max(cur.rowcount, 0)
+        except BaseException:
+            self.conn.rollback()
+            raise
         finally:
             cur.close()
         self.conn.commit()
@@ -85,6 +122,7 @@ class DbApiBackend(Backend):
             return [tuple(r) for r in cur.fetchall()]
         finally:
             cur.close()
+            self._end_read()
 
     def columns(self, table: str) -> dict[str, str] | None:
         dialect = self.capabilities.dialect

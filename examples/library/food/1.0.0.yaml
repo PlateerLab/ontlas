@@ -2,7 +2,7 @@ module: food
 version: 1.0.0
 kind: industry
 label: 식품 업종 확장
-description: 이커머스 표준에 유통기한과 보관 방식을 얹습니다. 라이브러리에는 있지만 예시 스튜디오에는 꽂지 않았습니다.
+description: 식품 업종의 유통기한, 보관 방식 속성을 이커머스 표준에 추가합니다. 예시 스튜디오에는 적용되어 있지 않습니다.
 requires: [commerce]
 
 extend:

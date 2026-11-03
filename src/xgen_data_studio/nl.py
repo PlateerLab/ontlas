@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from xgen_data_studio.check import check
-from xgen_data_studio.ir import IRError, Query
+from xgen_data_studio.check import all_props, check
+from xgen_data_studio.ir import IRError, Query, Ref
 from xgen_data_studio.model import Ontology
 
 SYSTEM = ("You translate a question about business data into one JSON object in the ontology query IR. "
@@ -41,13 +41,17 @@ def schema_card(onto: Ontology, role: str | None = None) -> str:
                 s += f" ({p.label})"
             if p.name == o.key:
                 s += " key"
+            if p.expr:
+                s += f" = {p.expr}"
+            if p.description:
+                s += f" - {p.description}"
             props.append(s)
         lines.append(f"- {o.name}" + (f" ({o.label})" if o.label else "") + ": " + ", ".join(props))
     lines.append("Links:")
     for lk in onto.links.values():
         if r and not (r.can_read(lk.source) and r.can_read(lk.target)):
             continue
-        s = f"- {lk.name}: {lk.source} -> {lk.target}"
+        s = f"- {lk.name}: {lk.source} -> {lk.target} ({lk.cardinality.replace('_', ' ')})"
         if lk.inverse:
             s += f" (inverse: {lk.inverse})"
         if lk.label:
@@ -58,9 +62,29 @@ def schema_card(onto: Ontology, role: str | None = None) -> str:
         for q in onto.queries.values():
             if r and not r.can("run", q.name):
                 continue
-            params = ", ".join(f"{k}: {v}" for k, v in q.params.items())
+            compared = _param_targets(onto, q.query)
+            params = ", ".join(f"{k}: {v}" + (f" {compared[k]}" if k in compared else "") for k, v in q.params.items())
             lines.append(f"- {q.name}({params})" + (f": {q.label}" if q.label else ""))
     return "\n".join(lines)
+
+
+def _param_targets(onto: Ontology, query: dict) -> dict[str, str]:
+    """For each parameter of a registered query, the property it is compared with (e.g. 'eq Category.category_id')."""
+    from xgen_data_studio.check import _find_prop
+    from xgen_data_studio.ir import Cmp, Param, parse_filter, walk_filters
+
+    out: dict[str, str] = {}
+    try:
+        f = parse_filter(query.get("where"))
+    except IRError:
+        return out
+    nodes = dict(query.get("match") or {})
+    for x in walk_filters(f):
+        if isinstance(x, Cmp) and isinstance(x.value, Param) and x.ref.alias in nodes:
+            t = nodes[x.ref.alias]
+            p = _find_prop(onto, t, x.ref.prop)
+            out[x.value.name] = f"{x.op} {t}.{x.ref.prop}" + (f" ({p.label})" if p is not None and p.label else "")
+    return out
 
 
 def extract_json(text: str) -> Any:
@@ -114,8 +138,9 @@ class Generated:
 
 class IRGenerator:
     def __init__(self, onto: Ontology, llm: Callable[[str, str], str], *, role: str | None = None,
-                 max_repairs: int = 2):
+                 max_repairs: int = 2, runner: Callable[[Generated], tuple[int, dict]] | None = None):
         self.onto, self.llm, self.role, self.max_repairs = onto, llm, role, max_repairs
+        self.runner = runner  # runs a checked answer: (rows, {"Type.prop": sample values}) for an empty result
 
     def _issues(self, data: Any) -> tuple[list[str], Query | None, str, dict]:
         if not isinstance(data, dict):
@@ -132,6 +157,11 @@ class IRGenerator:
         except IRError as e:
             return [str(e)], None, "", {}
         res = check(q, self.onto)
+        for c in q.columns:  # a column named after another property of its object answers with the wrong values
+            if isinstance(c.expr, Ref) and c.expr.alias in q.nodes and c.name != c.expr.prop \
+                    and c.name in all_props(self.onto, q.nodes[c.expr.alias]):
+                res.issues.append(f"{c.expr} is returned as '{c.name}', which is another property of "
+                                  f"{q.nodes[c.expr.alias]}; return {c.expr.alias}.{c.name} for it")
         if self.role:
             r = self.onto.roles[self.role]
             res.issues += [f"this role cannot read {t}" for t in q.nodes.values() if not r.can_read(t)]
@@ -141,20 +171,73 @@ class IRGenerator:
         base = f"{schema_card(self.onto, self.role)}\n\n{IR_GUIDE}\n\nQuestion: {question}"
         prompt, out = base, Generated()
         for _ in range(self.max_repairs + 1):
-            raw = self.llm(SYSTEM, prompt)
+            try:
+                raw = self.llm(SYSTEM, prompt)
+            except Exception as e:  # a model that does not answer in time is a failed attempt, not a crash
+                out.attempts.append(Attempt(prompt, "", [f"the model did not answer: {type(e).__name__}"]))
+                continue
             issues, q, name, params = self._issues(extract_json(raw))
             out.attempts.append(Attempt(prompt, raw, issues))
             if not issues:
                 out.query, out.registered, out.params = q, name, params
-                return out
+                if self.runner is None or len(out.attempts) > self.max_repairs:
+                    return out
+                rows, samples = self.runner(out)
+                if rows:
+                    return out
+                # it runs and finds nothing: once more, with values the compared properties hold
+                seen = "; ".join(f"{k} holds values like {v}" for k, v in samples.items()) or "no compared values"
+                issues = [f"it ran and returned no rows ({seen}); if a value was given in another form, use the "
+                          "form the data holds, and keep a filter only if the question asks for it"]
+                out.attempts[-1].issues = issues
             prompt = (base + "\n\nYour last answer:\n" + raw + "\n\nIt has these problems:\n"
                       + "\n".join(f"- {i}" for i in issues) + "\nReturn a corrected JSON object.")
         return out
 
 
+def probe(studio, *, role: str | None = None, principal: dict | None = None,
+          backend: str | None = None) -> Callable[[Generated], tuple[int, dict]]:
+    """Run a generated answer; for an empty result, sample the values of the text properties it compared (only
+    what the role may read in clear)."""
+    from xgen_data_studio.ir import Cmp, Contains, In, Param, parse_filter, walk_filters
+    from xgen_data_studio.roles import mask_style
+
+    def run(gen: Generated) -> tuple[int, dict]:
+        q = studio.query(gen.registered) if gen.registered else gen.query
+        try:
+            n = len(studio.run(q, gen.params, backend=backend, role=role, principal=principal).rows)
+        except Exception:
+            return 1, {}  # a refusal or an error is not 'no rows'; the answer stands as it is
+        if n:
+            return n, {}
+        samples: dict[str, list] = {}
+        r = studio.onto.roles.get(role) if role else None
+        for f in walk_filters(q.where if not gen.registered else parse_filter(
+                studio.onto.queries[gen.registered].query.get("where"))):
+            if not isinstance(f, (Cmp, In, Contains)) or (isinstance(f, Cmp) and not isinstance(
+                    f.value, (str, Param))):
+                continue
+            t = q.nodes.get(f.ref.alias)
+            from xgen_data_studio.check import _find_prop
+
+            p = _find_prop(studio.onto, t, f.ref.prop) if t else None
+            if p is None or p.type not in ("string", "enum") or (r and mask_style(studio.onto, r, t, p.name)):
+                continue
+            look = {"match": {"x": t}, "return": [f"x.{p.name}"], "distinct": True, "limit": 5}
+            try:
+                vals = [row[0] for row in studio.run(look, backend=backend, role=role, principal=principal).rows]
+            except Exception:
+                continue
+            samples[f"{t}.{p.name}"] = [v for v in vals if v is not None]
+        return 0, samples
+
+    return run
+
+
 def answer(studio, question: str, llm: Callable[[str, str], str], *, backend: str | None = None,
            role: str | None = None, principal: dict | None = None) -> dict:
-    gen = IRGenerator(studio.onto, llm, role=role).generate(question)
+    gen = IRGenerator(studio.onto, llm, role=role,
+                      runner=probe(studio, role=role, principal=principal, backend=backend)).generate(question)
     if not gen.ok:
         return {"ok": False, "issues": gen.attempts[-1].issues if gen.attempts else [], "attempts": len(gen.attempts)}
     target = gen.registered or gen.query
@@ -181,3 +264,56 @@ def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = Non
         return data["choices"][0]["message"].get("content") or ""
 
     return call
+
+
+def holds(gold: list[tuple], got: list[tuple]) -> bool:
+    """Do the rows a question got hold the gold rows: as many rows, and every gold column one of its columns,
+    row for row (extra columns are allowed, the order is not compared)."""
+    from collections import Counter
+
+    if len(gold) != len(got):
+        return False
+    if not gold:
+        return True
+    gcols, ocols = list(zip(*gold)), list(zip(*got))
+    options = [[j for j, oc in enumerate(ocols) if Counter(oc) == Counter(gc)] for gc in gcols]
+
+    def assign(i: int, used: tuple) -> bool:
+        if i == len(gcols):
+            return Counter(gold) == Counter(tuple(r[j] for j in used) for r in got)
+        return any(assign(i + 1, used + (j,)) for j in options[i] if j not in used)
+
+    return assign(0, ())
+
+
+def evaluate(studio, questions: list[dict], llm: Callable[[str, str], str], *, role: str | None = None,
+             max_repairs: int = 2) -> dict:
+    """Ask every question, run what comes back, and compare with the gold query's rows (execution match)."""
+    from xgen_data_studio.values import normalize
+
+    def rows_of(res) -> list[tuple]:
+        types = res.compiled.column_types if res.compiled else {}
+        return [tuple(normalize(v, types.get(c, "")) for v, c in zip(r, res.columns)) for r in res.rows]
+
+    results = []
+    for q in questions:
+        gold = rows_of(studio.run(Query.from_dict(q["gold"])))
+        gen = IRGenerator(studio.onto, llm, role=role, max_repairs=max_repairs,
+                          runner=probe(studio, role=role)).generate(q["text"])
+        entry = {"id": q["id"], "text": q["text"], "attempts": len(gen.attempts), "passed": False, "error": "",
+                 "issues": [a.issues for a in gen.attempts]}
+        if not gen.ok:
+            entry["error"] = "; ".join(gen.attempts[-1].issues if gen.attempts else ["no answer"])[:300]
+        else:
+            try:
+                got = rows_of(studio.run(gen.registered or gen.query, gen.params))
+                entry["passed"] = holds(gold, got)
+                entry["query"] = gen.registered or gen.query.to_dict()
+                if not entry["passed"]:
+                    entry["error"] = f"{len(got)} rows, expected {len(gold)}: {got[:3]}"
+            except Exception as e:  # a query that checks but does not run counts as a miss, with why
+                entry["error"] = f"{type(e).__name__}: {e}"[:300]
+        results.append(entry)
+    passed = sum(r["passed"] for r in results)
+    return {"questions": len(results), "passed": passed, "accuracy": passed / len(results) if results else 0.0,
+            "first_try": sum(r["passed"] and r["attempts"] == 1 for r in results), "results": results}

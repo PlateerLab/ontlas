@@ -29,6 +29,8 @@ def to_r2rml(onto: Ontology) -> str:
                  (RR + "logicalTable", f'[ rr:tableName "{escape(o.table)}" ]'),
                  (RR + "subjectMap", f'[ rr:template "{escape(ns + o.name)}/{{{key}}}" ; {classes} ]')]
         for p in o.properties.values():
+            if p.expr:
+                continue
             dtype = "" if p.type in ("string", "enum") else f" ; rr:datatype xsd:{XSD_OF[p.type]}"
             pairs.append((RR + "predicateObjectMap",
                           f'[ rr:predicate ex:{p.name} ; rr:objectMap [ rr:column "{escape(p.col)}"{dtype} ] ]'))

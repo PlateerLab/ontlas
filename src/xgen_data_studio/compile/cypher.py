@@ -1,6 +1,7 @@
 """IR -> Cypher 25 / openCypher, and ISO GQL as a dialect of the same pattern compiler."""
 from __future__ import annotations
 
+from xgen_data_studio import expr as ex
 from xgen_data_studio.check import aliases_of, find_prop
 from xgen_data_studio.compile.base import Compiled, CompileError, Compiler, Params
 from xgen_data_studio.ir import Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref
@@ -22,6 +23,7 @@ class CypherCompiler(Compiler):
         q = chk.query
         self._types = aliases_of(q)
         self._params = Params(chk.param_types)
+        self._n = 0
         lines = self._match(q)
         if q.where is not None:
             cond = self._filter(q.where)
@@ -69,8 +71,57 @@ class CypherCompiler(Compiler):
         return lines
 
     def _prop(self, ref: Ref) -> str:
-        find_prop(self.onto, self._types[ref.alias], ref.prop)
+        p = find_prop(self.onto, self._types[ref.alias], ref.prop)
+        if p.expr and not self.by_name:
+            return self._computed(ref.alias, p.expr)
         return f"{ref.alias}.{bq(ref.prop)}"
+
+    def _computed(self, alias: str, text: str) -> str:
+        r = ex.CypherRenderer(lambda n: self._prop(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.gql)
+        try:
+            return r.render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
+        except ex.ExprError as e:
+            raise CompileError(str(e)) from None
+
+    def _aggregate(self, alias: str, a: ex.Agg) -> str:
+        """A pattern comprehension along the aggregate's links, folded with reduce."""
+        if self.gql:
+            raise CompileError(f"ISO GQL has no list comprehension for {a.fn}() over links; use another backend")
+        steps, prop = ex.resolve_agg(self.onto, self._types[alias], a)
+        pattern, prev = f"({alias})", alias
+        for st in steps:
+            self._n += 1
+            nxt = f"g{self._n}"
+            self._types[nxt] = st.type
+            rel = f"[:{bq(st.link)}]"
+            node = f"({nxt}:{bq(st.type)})"
+            pattern += f"-{rel}->{node}" if st.forward else f"<-{rel}-{node}"
+            prev = nxt
+        n = self._n
+        # head([l IN [list] | f(l)]) evaluates the list once and names it, so nesting stays linear in size
+        if a.fn in ("latest", "earliest"):
+            obj = self.onto.obj(self._types[prev])
+            time, key = bq(obj.series["time"]), bq(obj.key)
+            b, h, best = f"_b{n}", f"_h{n}", f"_n{n}"
+            later = ">" if a.fn == "latest" else "<"
+            stamp = "toString({0}.{1}) + '|' + toString({0}.{2})"
+            nodes = f"[{pattern} WHERE {prev}.{time} IS NOT NULL | {prev}]"
+            pick = (f"reduce({b} = null, {h} IN {nodes} | CASE WHEN {b} IS NULL OR "
+                    f"{stamp.format(h, time, key)} {later} {stamp.format(b, time, key)} THEN {h} ELSE {b} END)")
+            self._types[best] = self._types[prev]
+            return f"head([{best} IN [{pick}] | {self._prop(Ref(best, prop))}])"
+        if a.fn == "count" and not prop:
+            return f"size([{pattern} | {prev}])"
+        y, lst, s, x = f"_y{n}", f"_l{n}", f"_s{n}", f"_x{n}"
+        items = f"[{y} IN [{pattern} | {self._prop(Ref(prev, prop))}] WHERE {y} IS NOT NULL]"
+        if a.fn == "count":
+            return f"size({items})"
+        if a.fn in ("sum", "avg"):
+            total = f"reduce({s} = 0, {x} IN {lst} | {s} + {x})"
+            value = total if a.fn == "sum" else f"toFloat({total}) / size({lst})"
+            return f"head([{lst} IN [{items}] | CASE WHEN size({lst}) = 0 THEN null ELSE {value} END])"
+        cmp = "<" if a.fn == "min" else ">"
+        return f"reduce({s} = null, {x} IN {items} | CASE WHEN {s} IS NULL OR {x} {cmp} {s} THEN {x} ELSE {s} END)"
 
     def _ph(self, value, ref: Ref) -> str:
         p = find_prop(self.onto, self._types[ref.alias], ref.prop)

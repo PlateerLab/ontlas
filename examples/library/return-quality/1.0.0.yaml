@@ -1,0 +1,16 @@
+module: return-quality
+version: 1.0.0
+kind: quality
+label: 검증 기준 · 반품
+description: 반품 판정의 검증 질문과 흐름 통과 조건입니다. 적용하면 정답률 · 근거 제시율 · 판정 일치율 기준이 이 모듈의 값으로 올라가고, 해제하면 스튜디오 설정으로 돌아갑니다.
+requires: [commerce]
+
+flow:
+  gates:
+    check: {min_accuracy: 1.0, min_grounded: 1.0}
+    decide: {min_agreement: 0.9}
+
+questions:
+  - {id: RQ1, text: "반품이 진행 중인 주문상품 I1002 다시 반품할 수 있나요?", decision: returnEligibility, key: I1002, expect: {eligible: false, reason: 이미 반품이 진행 중입니다}}
+  - {id: RQ2, text: "배송 전인 주문상품 I1006 반품 되나요?", decision: returnEligibility, key: I1006, expect: {eligible: false, reason: 배송 완료 전입니다}}
+  - {id: RQ3, text: "주문이 없는 고객 C003 의 주문은 몇 건인가요?", query: ordersOfCustomer, params: {customer: C003}, expect: {rows: 0}}

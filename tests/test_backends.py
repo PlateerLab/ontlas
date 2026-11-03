@@ -30,7 +30,7 @@ def test_dbapi_paramstyles(onto):
 
 def test_projection_round_trip(onto, source):
     proj = project(onto, source)
-    assert len(proj.nodes) == 25 and len(proj.edges) == 30
+    assert len(proj.nodes) == 30 and len(proj.edges) == 35
     assert proj.nodes[("Category", "K4")]["returnable"] is False
     nt = proj.ntriples(onto)
     assert "<https://example.org/commerce#OrderItem/I1001> <https://example.org/commerce#hasClaim>" not in nt

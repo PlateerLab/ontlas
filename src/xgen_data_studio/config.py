@@ -58,6 +58,10 @@ def open_backend(spec: dict, base: Path):
         return SparqlEndpointBackend(spec["query_url"], update_url=spec.get("update_url", ""),
                                      gsp_url=spec.get("gsp_url", ""), user=spec.get("user", ""),
                                      password=spec.get("password", ""))
+    if kind == "gremlin":
+        from xgen_data_studio.backends.gremlin import GremlinBackend
+
+        return GremlinBackend(spec.get("url", "ws://localhost:8182/gremlin"), source=spec.get("source", "g"))
     if kind == "neo4j":
         import neo4j
 
@@ -89,6 +93,14 @@ def load_studio(path: str | Path) -> Studio:
         studio = Studio(Ontology.load(base / spec["ontology"]).check(), **kw)
     for name, b in (spec.get("backends") or {}).items():
         studio.add_backend(name, open_backend(b, base), source=bool(b.get("source", False)))
+    calls = (spec.get("actions") or {}).get("call_hosts")
+    if calls:
+        from xgen_data_studio.actions import HttpCaller
+
+        studio.actions.caller = HttpCaller(list(calls), float((spec.get("actions") or {}).get("timeout", 10)))
+    studio.settings = {k: spec[k] for k in ("flow", "sync", "notice") if k in spec}
+    for name in spec.get("resolve") or []:  # written into the source only when the studio file asks for it
+        studio.resolve_identity(str(name))
     if spec.get("project"):
         studio.project(into=list(spec["project"]))
     return studio

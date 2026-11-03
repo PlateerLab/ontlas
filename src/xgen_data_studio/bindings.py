@@ -65,6 +65,8 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
             continue
         for p in sorted(set(o.properties) | {o.key}):
             prop = o.properties.get(p)
+            if prop is not None and prop.expr:
+                continue
             col = column_of(onto, o.name, p)
             checked["columns"] += 1
             if col.lower() not in have:
@@ -99,6 +101,8 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int]) -
         if dup:
             out.append(Finding("error", "key", f"object:{o.name}", f"key {o.key} repeats: {[r[0] for r in dup]}"))
         for p in o.properties.values():
+            if p.expr:
+                continue
             c = qi(p.col)
             if p.required or p.name == o.key:
                 n = backend.fetch(f"SELECT COUNT(*) FROM {t} WHERE {c} IS NULL")[0][0]

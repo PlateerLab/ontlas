@@ -1,6 +1,7 @@
 """IR -> SQL/PGQ (ISO/IEC 9075-16 GRAPH_TABLE) and the CREATE PROPERTY GRAPH that declares the bound tables."""
 from __future__ import annotations
 
+from xgen_data_studio import expr as ex
 from xgen_data_studio.check import aliases_of, find_prop
 from xgen_data_studio.compile.base import Compiled, CompileError, Compiler, Params
 from xgen_data_studio.compile.sql import qi
@@ -17,7 +18,7 @@ def graph_ddl(onto: Ontology, graph: str = "") -> str:
     for o in onto.objects.values():
         if not o.table:
             continue
-        props = ", ".join(f"{qi(p.col)} AS {qi(p.name)}" for p in o.properties.values())
+        props = ", ".join(f"{qi(p.col)} AS {qi(p.name)}" for p in o.properties.values() if not p.expr)
         verts.append(f"  {qi(o.table)} AS {qi(o.name)} KEY ({qi(o.key_prop.col)}) LABEL {qi(o.name)} "
                      f"PROPERTIES ({props})")
     edges = []
@@ -73,7 +74,7 @@ class PgqCompiler(Compiler):
         for c in q.columns:
             e = c.expr
             if isinstance(e, Ref):
-                inner_cols.append(f"{e.alias}.{qi(e.prop)} AS {qi(c.name)}")
+                inner_cols.append(f"{self._prop(e)} AS {qi(c.name)}")
                 outer.append(f"gt.{qi(c.name)} AS {qi(c.name)}")
                 group.append(f"gt.{qi(c.name)}")
                 continue
@@ -87,7 +88,7 @@ class PgqCompiler(Compiler):
             if col is None:
                 col = f"{ref.alias}__{ref.prop}"
                 seen[str(ref)] = col
-                inner_cols.append(f"{ref.alias}.{qi(ref.prop)} AS {qi(col)}")
+                inner_cols.append(f"{self._prop(ref)} AS {qi(col)}")
             arg = f"gt.{qi(col)}"
             agg = f"COUNT(DISTINCT {arg})" if e.func == "count_distinct" else f"{e.func.upper()}({arg})"
             outer.append(f"{agg} AS {qi(c.name)}")
@@ -125,8 +126,24 @@ class PgqCompiler(Compiler):
         return ", ".join(self._edge(e, seen) for e in q.edges)
 
     def _prop(self, ref: Ref) -> str:
-        find_prop(self.onto, self._types[ref.alias], ref.prop)
+        p = find_prop(self.onto, self._types[ref.alias], ref.prop)
+        if p.expr:
+            return self._computed(ref.alias, p.expr)
         return f"{ref.alias}.{qi(ref.prop)}"
+
+    def _computed(self, alias: str, text: str) -> str:
+        def aggregate(a: ex.Agg) -> str:
+            raise CompileError(f"SQL/PGQ GRAPH_TABLE has no subquery for {a.fn}() over links; use another backend")
+
+        node = ex.prepare(self.onto, self._types[alias], ex.parse_expr(text))
+        used = sorted({n.fn for n in ex.walk(node) if isinstance(n, ex.Call) and n.fn in ex.DATE_FUNCTIONS})
+        if used:
+            raise CompileError(f"SQL/PGQ has no portable form of {', '.join(used)}() over text dates; "
+                               "use another backend")
+        try:
+            return ex.SqlRenderer(lambda n: self._prop(Ref(alias, n.name)), aggregate).render(node)
+        except ex.ExprError as e:
+            raise CompileError(str(e)) from None
 
     def _ph(self, value, ref: Ref) -> str:
         p = find_prop(self.onto, self._types[ref.alias], ref.prop)
