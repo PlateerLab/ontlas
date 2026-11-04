@@ -47,9 +47,44 @@ READ_ERROR = {
 MODULE_TEXT_MAX = 48 * 1024
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
 POLICY_MAX = 12000  # characters of policy text a draft reads
+WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
+EDIT_TEXT = [
+    (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
+    (r"^(object|property|link) name '(.*)' must be letters, digits and _ starting with a letter$",
+     r"이름 '\2'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^object type '(.+)' already exists$", r"객체 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^give the key and the key property$", "키 속성을 정하지 않아 객체를 추가하지 못했습니다. 키와 키 속성을 입력해 주세요."),
+    (r"^object type '(.+)' is unknown$", r"객체 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^key '(.+)' is not a property of (.+)$", r"'\1'은 \2의 속성이 아니어서 키로 정하지 못했습니다."),
+    (r"^the key of (.+) is set where it is defined; change it there$",
+     r"\1의 키는 표준 모듈에서 정해져 있어 여기서 바꾸지 못했습니다. 해당 모듈에서 바꿔 주세요."),
+    (r"^(.+) already has '(.+)'$", r"\1에 속성 '\2'이 이미 있어 추가하지 못했습니다."),
+    (r"^(\w+)\.(\w+) is unknown$", r"속성 \1.\2을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^the type of (.+) comes from its standard; it cannot be changed here$",
+     r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 속성을 추가해 주세요."),
+    (r"^'(.+)' is the key of (.+); delete the object instead$",
+     r"'\1'은 \2의 키라서 지우지 못했습니다. 객체를 지워 주세요."),
+    (r"^'(.+)' comes from (.+), which (.+) specialises; delete it on (.+)$",
+     r"'\1'은 상위 객체 \2에서 물려받은 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
+    (r"^link '(.+)' already exists$", r"관계 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^link '(.+)' is unknown$", r"관계 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^the endpoints of (.+) come from its standard; add a new link instead$",
+     r"\1의 양 끝 객체는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 관계를 추가해 주세요."),
+    (r"^question id '(.*)' is empty or already used$",
+     r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+    (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
             (r"^no answer$", "답 없음")]
+
+
+def _edit_text(msg: str) -> str:
+    """A management edit's refusal, as the page says it; checks the definition raises keep their own words."""
+    for pattern, text in EDIT_TEXT:
+        if re.match(pattern, msg):
+            return re.sub(pattern, text, msg)
+    return f"정의 검사를 통과하지 못해 적용하지 않았습니다. {msg}"
 
 
 def _gap_text(gap: str) -> str:
@@ -126,6 +161,8 @@ class StudioSession:
         self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
         self.self_approve = True  # one visitor is both sides of a change; a team studio turns this off
         self.store = None  # a library folder approved changes are written to (xds serve --library-write)
+        self.workspace = None  # the management screens' pending edits (manage.Workspace), until filed
+        self._ws_sig: tuple = ()
         self._adopt(studio)
 
     def _adopt(self, studio: Studio) -> None:
@@ -1095,9 +1132,193 @@ class StudioSession:
         if cr.status == "approved":
             proj = self._reproject()
             self._library_rows = self.studio.library.list()
+            if cr.module == WORKSPACE:
+                self.workspace = None  # the edits are in the studio now; the next ones start from there
         verb = "승인하고 적용했습니다" if cr.status == "approved" else "반려했습니다"
         self._note("change", f"{self._label(cr.module)} {cr.version} 변경을 {verb}.", projection=proj)
         return {"ok": True, "change": self._change(cr), "projection": proj}
+
+    # ---- management: objects, properties, relations, questions as one pending overlay module --------------------
+
+    def _ws(self):
+        from xgen_data_studio.manage import Workspace
+
+        comp = self.studio.composition
+        if comp is None:
+            raise ValueError("모듈로 구성된 스튜디오가 아니어서 정의를 관리하지 못했습니다.")
+        sig = tuple(m.key for m in comp.modules)
+        if self.workspace is None or self._ws_sig != sig:
+            current = next((m for m in comp.modules if m.name == WORKSPACE), None)
+            old = self.workspace
+            ws = Workspace(list(comp.modules), current, compose_kw=self.studio._compose_kw)
+            if old is not None and old.dirty:  # unsent edits carry over to the new modules; they are checked again
+                ws.module, ws.edits = old.module, old.edits
+            self.workspace, self._ws_sig = ws, sig
+        return self.workspace
+
+    def manage_state(self) -> dict:
+        """The definition as the pending edits would leave it, and what the source holds, for the management screens."""
+        from xgen_data_studio.draft import _catalog
+        from xgen_data_studio.manage import _lineage
+        from xgen_data_studio.review import element_diff
+
+        ws = self._ws()
+        issues: list[str] = []
+        try:
+            comp = ws.composed()
+        except ModuleError as e:  # the modules changed under unsent edits and they no longer hold
+            comp, issues = self.studio.composition, [str(e)]
+        o, base = comp.ontology, self.studio.onto
+        issues += list(comp.issues)
+        mine = ws.module
+        diff = element_diff(base, o) if ws.dirty else {"added": [], "removed": [], "changed": []}
+        touched = set(diff["changed"])  # what the unsent edits change; what they add is marked new
+
+        def owner(element: str) -> dict:
+            m = comp.owner(element)
+            return {"module": m, "module_label": mine.label if m == WORKSPACE else (self._label(m) if m else "")}
+
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+        catalog, rows = self._source_catalog(src, _catalog)
+        bound: dict[str, list[str]] = {}
+        for t in o.objects.values():
+            if t.table:
+                bound.setdefault(t.table, []).append(t.name)
+        linked = {lk.source for lk in o.links.values()} | {lk.target for lk in o.links.values()}
+        objects = []
+        for t in o.objects.values():
+            props = all_props(o, t.name)
+            objects.append({
+                "name": t.name, "label": t.label or t.name, "description": t.description, "table": t.table,
+                "key": t.key, "parent": t.parent, "concept": not t.table, "properties": len(props),
+                "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
+                "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
+                "rows": rows.get(t.table) if t.table else None, "states": bool(t.states),
+                "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
+        properties = []
+        for t in o.objects.values():
+            for pname in all_props(o, t.name):
+                p = find_prop(o, t.name, pname)
+                from_type = t.name if pname in t.properties else next(
+                    (x for x in _lineage(o, t.name) if pname in o.objects[x].properties), t.name)
+                properties.append({
+                    "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr else "",
+                    "values": p.values, "required": p.required, "mask": p.mask, "expr": p.expr, "unit": p.unit,
+                    "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
+                    "pending": f"property:{t.name}.{pname}" in touched,
+                    "new": t.name not in base.objects or pname not in all_props(base, t.name),
+                    **owner(f"property:{from_type}.{pname}")})
+        links = [{"name": lk.name, "label": lk.label, "source": lk.source, "target": lk.target,
+                  "on": list(lk.on) if lk.on else None,
+                  "via": {"table": lk.via.table, "source": lk.via.source_column, "target": lk.via.target_column}
+                  if lk.via else None, "cardinality": lk.cardinality, "inverse": lk.inverse, "required": lk.required,
+                  "pending": f"link:{lk.name}" in touched, "new": lk.name not in base.links, **owner(f"link:{lk.name}")}
+                 for lk in o.links.values()]
+        questions = [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
+                      "params": q.params, "expect": q.expect, "pending": f"question:{q.id}" in diff["added"],
+                      **owner(f"question:{q.id}")} for q in o.questions]
+        via: dict[str, list[str]] = {}
+        for lk in o.links.values():
+            if lk.via:
+                via.setdefault(lk.via.table, []).append(lk.name)
+        tables = [{"table": t, "columns": [{"name": c, "type": ty} for c, ty in cols], "key": pk,
+                   "fks": [{"column": c, "table": rt, "ref": rc} for c, rt, rc in fks], "rows": rows.get(t),
+                   "objects": bound.get(t, []), "links": via.get(t, [])} for t, cols, pk, fks in catalog]
+        import yaml
+
+        return plain({
+            "objects": objects, "properties": properties, "links": links, "questions": questions,
+            "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
+            "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
+                                   "tables": tables,
+                                   "unbound": [x["table"] for x in tables if not x["objects"] and not x["links"]]},
+                        "graphs": [{"name": n, "language": b.capabilities.language}
+                                   for n, b in self.studio.backends.items() if n != self.studio.source]},
+            "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label,
+                          "version": ws.current.version if ws.current else "",
+                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits],
+                          "issues": issues, "diff": diff,
+                          "yaml": yaml.safe_dump(mine.to_dict(), allow_unicode=True, sort_keys=False)},
+        })
+
+    def _source_catalog(self, src, read) -> tuple[list, dict]:
+        """The source's tables and their row counts, read once per source (edits re-read the state often)."""
+        if src is None:
+            return [], {}
+        if getattr(self, "_catalog_of", None) is src:
+            return self._catalog_rows
+        try:
+            catalog = read(src)
+        except Exception:  # a source the catalog reader does not know (a graph, a DB-API driver): tables unknown
+            catalog = []
+        from xgen_data_studio.compile.sql import qi
+
+        rows: dict = {}
+        for t, *_ in catalog:
+            try:
+                rows[t] = src.fetch(f"SELECT COUNT(*) FROM {qi(t)}")[0][0]
+            except Exception:  # a view or a table this account may not read
+                rows[t] = None
+        self._catalog_of, self._catalog_rows = src, (catalog, rows)
+        return catalog, rows
+
+    def manage_edit(self, op: str, args: dict) -> dict:
+        from xgen_data_studio.manage import EditError
+
+        try:
+            edit = self._ws().apply(str(op), dict(args or {}))
+        except EditError as e:
+            raise ValueError(_edit_text(str(e))) from None
+        return {"ok": True, "edit": {"op": edit.op, "target": edit.target, "took_out": edit.took_out},
+                **self.manage_state()}
+
+    def manage_import_questions(self, text: str) -> dict:
+        """Questions from a YAML or JSON list ({id, text, query, params, expect} or {id, text, decision, key, expect})."""
+        import yaml
+
+        from xgen_data_studio.manage import EditError
+
+        try:
+            items = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise ValueError(f"파일을 읽지 못했습니다. YAML 또는 JSON 목록인지 확인해 주세요. {e}") from None
+        if isinstance(items, dict):
+            items = items.get("questions")
+        if not isinstance(items, list) or not items:
+            raise ValueError("검증 질문 목록이 없어 불러오지 못했습니다. questions 목록을 넣어 주세요.")
+        added, failed = [], []
+        for q in items[:200]:
+            try:
+                self._ws().apply("add_question", dict(q))
+                added.append(str(q.get("id")))
+            except (EditError, AttributeError) as e:
+                failed.append(f"{q.get('id') if isinstance(q, dict) else q}: {_edit_text(str(e))}")
+        return {"ok": True, "added": added, "failed": failed, **self.manage_state()}
+
+    def manage_discard(self) -> dict:
+        self.workspace = None
+        return {"ok": True, **self.manage_state()}
+
+    def manage_propose(self) -> dict:
+        """File the pending edits as a change to the workspace module: tried on a copy, then approved by a person."""
+        import yaml
+
+        ws = self._ws()
+        if not ws.dirty:
+            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 객체 · 속성 · 관계를 고친 뒤 다시 요청해 주세요.")
+        text = yaml.safe_dump(ws.module.to_dict(), allow_unicode=True, sort_keys=False)
+        res = self.propose_module(text, attach=ws.current is None)
+        change = res["change"]
+        if not self.studio.changes.self_approve:  # a person approves it on the library screen
+            self.workspace = None
+            return {"ok": True, "pending": True, "change": change, **self.manage_state()}
+        out = self.decide_change(change["id"], True)
+        if not out["ok"]:  # the trial did not pass: the edits stay to be fixed, the request goes back with its review
+            cr = self.studio.changes.reject(change["id"], by=self.who, reason="흐름 통과 조건 미충족 · 관리 화면에서 수정")
+            return {"ok": False, "error": out["error"], "change": self._change(cr), **self.manage_state()}
+        self.workspace = None  # approved: what comes next starts from the studio as it now stands
+        return {"ok": True, "pending": False, "change": out["change"],
+                "warning": _projection_warning(out.get("projection") or {}), **self.manage_state()}
 
     # ---- the flow's stages and pass conditions, agreement with past decisions, identities, sync --------------
 

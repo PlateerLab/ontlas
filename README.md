@@ -40,7 +40,9 @@ decision with its evidence and the reach of a column change are what the library
 
 `xds serve` turns the same screens into a working page: plug modules in and out, edit any module as its file,
 run a query in eight languages or write one in SPARQL or Cypher yourself, decide, file an agent's request and
-approve it, run the questions and the database check. A flow tab shows every stage (source, definition, database
+approve it, run the questions and the database check. Management screens list the source's tables and the
+objects, properties and relations over them, and change any of them without editing a standard (see
+[Manage objects, properties and relations](#manage-objects-properties-and-relations)). A flow tab shows every stage (source, definition, database
 check, projection, queries, decisions, questions) with what it holds now, a data tab drafts a studio from uploaded
 files (see [Start from your own data](#start-from-your-own-data)), and a guide tab explains each screen, beside a
 demo video when `--video` gives one. Every visitor gets a studio of their own, built from the
@@ -389,6 +391,40 @@ studio (the same source, a fresh graph) and records what it adds, removes and ch
 conformance run, the questions and the agreement; `approve(id, by="lee")` refuses a change that does not pass the
 flow or that its own author approves, then saves the version to the library and swaps it in. On the page, saving a
 module files a change request and shows its review; `xds review studio.yaml module.yaml` prints the same review.
+
+## Manage objects, properties and relations
+
+The page's data management screens come before the library: the source's tables with their rows, keys and
+references and the objects and relations that read each one; the objects with their tables, keys and parents; every
+property with its type, column, allowed values, unit, required flag and mask; the relations with the columns they
+join on, with the ones the source's foreign keys suggest; and, on the checks screen, the questions with known
+answers (add, remove, or import a YAML or JSON list).
+
+<p align="center">
+  <img src="assets/screens/manage.png" alt="Object management screen: every object with its source table, key, parent, property and relation counts and the module that defines it, a pending change waiting to be filed, and the selected object's form" width="920">
+</p>
+
+Every edit goes into one overlay module, `workspace` ("내 변경"). What it defines it changes directly; a standard's
+objects, properties and relations it extends or removes, so a standard is never edited in place, and a standard's
+type and key and a property a type inherits stay where they are defined. Each edit takes out what it leaves broken
+elsewhere and says what that was:
+
+```python
+from xgen_data_studio.manage import Workspace
+
+ws = Workspace(studio.composition.modules)
+ws.apply("update_property", {"object": "Customer", "name": "grade", "label": "회원 등급"})
+edit = ws.apply("delete_link", {"name": "placed"})
+edit.took_out    # ['action:requestReturn', 'decision:returnEligibility', 'property:Customer.order_count', ...]
+ws.apply("add_question", {"id": "G1", "text": "...", "query": "nope"})    # EditError: question G1: unknown query 'nope'
+studio.changes.propose(ws.module, by="kim", attach=True)                  # tried on a copy, then approved
+```
+
+`modules.settle(module, base)` does the taking out for any module: the queries, decisions, actions, questions,
+links, identities, state machines and computed properties that read what the module removes, and the roles that read,
+filter or mask it. What the module defines itself is left for a person to fix, so an edit that breaks its own element
+is refused. On the page the edits are filed as one change request; a request the trial stops comes back with its
+review (the conditions it failed and what the database check found), and the edits stay to be fixed.
 
 ## A team studio
 

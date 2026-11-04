@@ -282,39 +282,9 @@ def binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | No
     m = _binding(s, onto, name=name, label=label, edits=edits)
     if base is None:
         return m
-    from xgen_data_studio.modules import compose
+    from xgen_data_studio.modules import settle
 
-    for _ in range(30):
-        issues = compose([*base, m]).issues
-        if not issues:
-            break
-        progress = False
-        for issue in issues:
-            head = issue.split(":", 1)[0]
-            kind, _, ident = head.partition(" ")
-            section = {"query": "queries", "question": "questions", "decision": "decisions",
-                       "action": "actions"}.get(kind)
-            if kind == "decision":
-                ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the table cannot feed the decision
-            if section and ident not in m.remove.get(section, []):
-                m.remove.setdefault(section, []).append(ident)
-                progress = True
-            elif head in onto.objects and "state property" in issue:  # the tables have no state column
-                if head not in m.remove.get("states", []):
-                    m.remove.setdefault("states", []).append(head)
-                    progress = True
-            elif "." in head and " " not in head:
-                t, prop = head.split(".", 1)
-                props = m.remove.setdefault("properties", {}).setdefault(t, [])
-                if prop not in props:
-                    props.append(prop)
-                    progress = True
-        if not progress:
-            break
-    gone = set(m.remove.get("queries", [])) | set(m.remove.get("decisions", []))
-    for q in [q.id for q in onto.questions if q.query in gone or q.decision in gone]:
-        if q not in m.remove.get("questions", []):
-            m.remove.setdefault("questions", []).append(q)
+    settle(m, base)
     return m
 
 

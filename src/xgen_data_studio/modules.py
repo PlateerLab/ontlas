@@ -375,6 +375,7 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                             raise ModuleError(f"{m.key} removes {t}.{p}, which is not there")
                         del acc["objects"][t]["properties"][p]
                         removed[f"property:{t}.{p}"] = m.name
+                        _forget_in_roles(acc, prop=f"{t}.{p}")
                 continue
             if s == "questions":
                 acc["questions"] = [q for q in acc["questions"] if q["id"] not in items]
@@ -397,6 +398,7 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                 if s == "objects":
                     for e in [e for e in origin if e.startswith(f"property:{k}.")]:
                         removed[e] = m.name
+                    _forget_in_roles(acc, type_name=k)
                 if s == "actions":  # a role cannot keep the right to an action that is gone
                     for r in acc["roles"].values():
                         for grant in ("request", "execute"):
@@ -423,6 +425,64 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
     return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by)
+
+
+def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:
+    """A role cannot keep reading, filtering or masking a type or a property that is gone."""
+    for r in acc["roles"].values():
+        if type_name:
+            r["read"] = [x for x in r.get("read") or [] if x != type_name]
+            (r.get("row_filters") or {}).pop(type_name, None)
+        gone = (lambda ref: ref.startswith(f"{type_name}.")) if type_name else (lambda ref: ref == prop)
+        if isinstance(r.get("mask"), dict):
+            r["mask"] = {k: v for k, v in r["mask"].items() if not gone(k)}
+        elif isinstance(r.get("mask"), list):
+            r["mask"] = [k for k in r["mask"] if not gone(k)]
+        r["unmask"] = [k for k in r.get("unmask") or [] if not gone(k)]
+
+
+def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
+    """Take out of `module`'s reach what its removals leave broken in `base` (a query on a removed property, a
+    decision reading it, a link to a removed type, a state machine without its column), so the composition holds
+    again; what the module defines itself is left for a person to fix. Returns the elements it took out."""
+    taken: list[str] = []
+    own = {f"{SINGULAR[s]}:{k}" for s in SECTIONS for k in (module.body.get(s) or {})}
+    own |= {f"question:{q.get('id')}" for q in module.body.get("questions") or []}
+    for _ in range(30):
+        comp = compose([*base, module], **compose_kw)
+        progress = False
+        for issue in comp.issues:
+            head = issue.split(":", 1)[0]
+            kind, _, ident = head.partition(" ")
+            section = {"query": "queries", "question": "questions", "decision": "decisions", "action": "actions",
+                       "link": "links", "identity": "identities"}.get(kind)
+            if kind == "decision":
+                ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
+            if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:
+                if ident not in module.remove.get(section, []):
+                    module.remove.setdefault(section, []).append(ident)
+                    taken.append(f"{SINGULAR.get(section, 'question')}:{ident}")
+                    progress = True
+            elif head in comp.ontology.objects and "state property" in issue and f"object:{head}" not in own:
+                if head not in module.remove.get("states", []):
+                    module.remove.setdefault("states", []).append(head)
+                    taken.append(f"states:{head}")
+                    progress = True
+            elif "." in head and " " not in head and f"object:{head.split('.', 1)[0]}" not in own:
+                t, prop = head.split(".", 1)
+                props = module.remove.setdefault("properties", {}).setdefault(t, [])
+                if prop not in props:
+                    props.append(prop)
+                    taken.append(f"property:{t}.{prop}")
+                    progress = True
+        if not progress:
+            break
+    gone = set(module.remove.get("queries", [])) | set(module.remove.get("decisions", []))
+    for q in compose(base, **compose_kw).ontology.questions:  # a question on what is gone goes with it
+        if (q.query in gone or q.decision in gone) and q.id not in module.remove.get("questions", []):
+            module.remove.setdefault("questions", []).append(q.id)
+            taken.append(f"question:{q.id}")
+    return taken
 
 
 def _methods(ordered: list[Module]) -> tuple[dict, dict, dict, list]:

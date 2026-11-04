@@ -119,3 +119,24 @@ def test_a_visitor_who_proposes_a_change_may_approve_it_alone_but_a_team_may_not
         cid = s.propose_module(src.replace("<= 14", "<= 13"))["change"]["id"]
         out = s.decide_change(cid, True)
     assert not out["ok"] and "다른 승인자" in out["error"]
+
+
+def test_an_editor_files_management_edits_and_an_approver_applies_them(team):
+    base, root, _ = team
+    kim, lee, park = (_login(base, u, f"{u}-password-1") for u in ("kim", "lee", "park"))
+    edit = {"op": "update_object", "args": {"name": "Customer", "label": "회원"}}
+    assert _call(base, "/api/manage/edit", edit, cookie=park)[0] == 403  # a viewer reads the screens only
+    assert _call(base, "/api/manage", cookie=park)[0] == 200
+    code, out, _ = _call(base, "/api/manage/edit", edit, cookie=kim)
+    assert code == 200 and out["workspace"]["dirty"]
+    code, out, _ = _call(base, "/api/manage/edit", {"op": "delete_property", "args": {"object": "Customer",
+                                                                                      "name": "name"}}, cookie=kim)
+    assert code == 400 and "상위 객체" in out["error"]
+    code, out, _ = _call(base, "/api/manage/propose", {}, cookie=kim)
+    assert code == 200 and out["pending"] and out["change"]["module"] == "workspace"
+    assert not out["workspace"]["dirty"]  # filed: the request holds the edits now
+    code, out, _ = _call(base, "/api/change/decide", {"id": out["change"]["id"]}, cookie=lee)
+    assert code == 200 and out["ok"]
+    state = _call(base, "/api/manage", cookie=park)[1]
+    assert next(o for o in state["objects"] if o["name"] == "Customer")["label"] == "회원"
+    assert (root / "library" / "workspace" / "0.1.0.yaml").is_file()

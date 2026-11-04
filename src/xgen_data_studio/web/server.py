@@ -389,6 +389,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
+                if route == "manage":
+                    return s.manage_state()
                 if route == "flow":
                     return s.flow()
                 if route == "flow/settings":
@@ -471,6 +473,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.save_module(str(a.get("text", "")), bool(a.get("apply")))
             if route == "module/propose":
                 return s.propose_module(str(a.get("text", "")), bool(a.get("apply")))
+            if route == "manage/edit":
+                return s.manage_edit(str(a.get("op", "")), a.get("args") if isinstance(a.get("args"), dict) else {})
+            if route == "manage/questions":
+                return s.manage_import_questions(str(a.get("text", "")))
+            if route == "manage/discard":
+                return s.manage_discard()
+            if route == "manage/propose":
+                return s.manage_propose()
             if route == "change/decide":
                 return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")))
             if route == "flow/save":

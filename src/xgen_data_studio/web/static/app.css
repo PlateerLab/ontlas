@@ -153,6 +153,15 @@ input.inline.wide { max-width:280px; margin-top:4px; display:block; font-weight:
 .fstep.off { opacity:.55; }
 .mrow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 8px; align-items:center; margin:4px 0; font-size:12.5px; }
 .mrow > span:last-child { grid-column:1 / 3; }
+.side h6:not(:first-child) { margin-top:18px; }
+.side h6 .chip { margin-left:4px; font-size:10px; padding:0 6px; letter-spacing:0; }
+.head .right { align-items:center; flex-wrap:wrap; }
+.head .right input, .head .right select { width:auto; padding:5px 9px; font-size:12.5px; }
+.mgpend { border-color:#f2d9a8; }
+.mgpend > .ch { background:var(--warn-soft); flex-wrap:wrap; }
+.mgnote { font-size:12px; color:var(--muted); line-height:1.55; padding:9px 16px !important; border-top:1px solid #f2d9a8; }
+.chip.sm.bad { font-size:11px; }
+tr[data-act]:hover td { background:#f7faff; }
 @media (max-width: 1100px) {
   .guide { grid-template-columns:1fr; }
   .rgrid, .rgrid.two { grid-template-columns:1fr; }

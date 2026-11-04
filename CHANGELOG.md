@@ -80,6 +80,21 @@
 - `nl`: a returned column named after another property of its object (`c.customer_id` as `name`) goes back to the
   model; on the page a question tries again only within 45 seconds of starting, so it ends before a proxy in front
   (Cloudflare, 100 s) gives up, and an answer that fails says what the model last got wrong.
+- `manage`: the page's data management screens, before the library: 데이터 소스 (the source's tables with rows,
+  columns, keys and references, and the objects and relations that read each; a relation's junction table counts as
+  read), 객체 관리, 속성 관리, 관계 관리 (with the relations the source's foreign keys suggest) and 검증 질문 관리 on the
+  checks screen (add, remove, import a YAML or JSON list). Every edit goes into one overlay module, `workspace` (kind
+  `customer`, "내 변경"): what it defines it changes directly; a standard's elements it extends or removes, and a
+  standard's type and key and an inherited property are refused there. An edit that leaves the module's own element
+  broken is refused. The edits are filed as one change request and tried on a copy; one the trial stops is sent back
+  with its review and the edits stay. Routes `manage`, `manage/edit`, `manage/questions`, `manage/discard`,
+  `manage/propose` (editor).
+- `modules.settle()`: takes out of a module's reach what its removals leave broken in the modules under it (queries,
+  decisions, actions, questions, links, identities, state machines, properties), skipping what the module defines;
+  `mapping.binding()` uses it. Removing a property or an object also takes it out of the roles that read, filter or
+  mask it.
+- The page's menu is grouped (시작, 데이터 관리, 온톨로지, 활용 · 검증), and a change review lists what the database check
+  found.
 
 ## 0.4.0
 
