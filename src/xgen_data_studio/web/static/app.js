@@ -53,6 +53,7 @@
       '파일을 끌어 놓거나 [샘플 데이터 불러오기]를 선택합니다. 업로드한 파일은 세션 종료 시 삭제됩니다.',
       '생성 설정에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의를 지정하고 초안에 넣을 테이블을 선택합니다.',
       '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, 바인딩 순서로 초안이 생성됩니다.',
+      '테이블 정의서 · 코드 정의서(CSV, Excel, JSON)를 함께 올리면 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 이름과 허용값을 채웁니다. 정의서만 올리면 행 없이 키, 참조, 코드값으로 초안을 만듭니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, 카디널리티, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
       '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 골라 판정 표를 만듭니다.',
       '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 대응시킨 제안이 표시됩니다. 확인하고 고친 뒤 [표준에 연결해 적용]을 선택합니다.',
@@ -222,6 +223,7 @@
   function originChip(o) {
     if (o.kind === 'files') return `<span class="chip ok hide-sm">업로드 데이터 · ${esc(o.label || '')}</span>`;
     if (o.kind === 'database') return `<span class="chip ok hide-sm">연결 DB · ${esc(o.detail || '')}</span>`;
+    if (o.kind === 'definitions') return `<span class="chip ok hide-sm">정의서 · ${esc(o.label || '')}</span>`;
     return o.notice ? `<span class="chip warn hide-sm">${esc(o.notice)}</span>` : '';
   }
 
@@ -537,7 +539,7 @@
     const rows = o.properties.map((p) => `<tr><td><b>${esc(p.label)}</b><div class="muted mono">${esc(p.name)}</div>
         ${p.inherited ? '<span class="chip sm" style="margin-top:4px">상위 개념 상속</span>' : (p.module && p.module !== o.module ? `<span class="chip sm b" style="margin-top:4px">${esc(p.module_label)}</span>` : '')}</td>
       <td><span class="chip${p.key ? ' b' : ''}">${esc(p.type)}${p.unit ? ' · ' + esc(p.unit) : ''}</span>
-        ${p.values.length ? `<div class="muted" style="font-size:11.5px;margin-top:3px">${esc(p.values.join(' · '))}</div>` : ''}</td>
+        ${p.values.length ? `<div class="muted" style="font-size:11.5px;margin-top:3px">${esc(valueText(p, ' · '))}</div>` : ''}</td>
       <td class="mono">${p.expr ? `<span class="chip sm b">계산</span> <span style="font-size:11.5px">${esc(p.expr)}</span>` : (p.column ? esc(p.column) : '<span class="muted">-</span>')}
         ${p.mask ? `<div><span class="chip sm warn" style="margin-top:4px">가림 · ${p.mask === 'full' ? '전체' : '일부'}</span></div>` : ''}</td></tr>`).join('');
     const links = o.links.map((l) => `<button class="chip" data-act="select" data-obj="${esc(l.other)}">${l.out ? '' : '← '}${esc(l.label)} · ${esc(l.other_label)}${l.out ? ' →' : ''}</button>`).join('');
@@ -1342,7 +1344,7 @@ ${controls}${body}`;
     ['states', '상태 컬럼을 상태 전이로'], ['roles', '역할 생성'], ['questions', '검증 질문 생성']];
   const RULE_QUERY = [['list', '객체 목록'], ['count_by', '관계별 집계'], ['values', '허용값별 집계']];
   const RULE_LIST = [['title_hints', '표시 이름 컬럼'], ['parent_hints', '상위 관계 접두어'], ['key_suffixes', '키 컬럼 접미어'], ['generic_keys', '공용 키 이름'],
-    ['state_hints', '상태 컬럼 이름'], ['person_hints', '본인 조회 기준 테이블 이름']];
+    ['state_hints', '상태 컬럼 이름'], ['person_hints', '본인 조회 기준 테이블 이름'], ['table_prefixes', '객체 이름에서 뺄 테이블 접두어']];
   const TYPES = ['string', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'enum'];
 
   function refreshDraft() {
@@ -1470,7 +1472,8 @@ ${controls}${body}`;
           <td><select class="inline" data-in="dkey" data-obj="${esc(id)}">${options(o.propsOf(id).map((n) => [n, n]), o.keyOf(id))}</select></td>
           <td class="muted" style="font-size:12px">${e.keys[id] && e.keys[id] !== x.key ? '직접 지정' : why(o, 'object', x)}</td></tr>`;
       }).join('');
-      const skipped = st.skipped.length ? `<div class="hint" style="margin-top:10px">키 컬럼이 없어 제외된 테이블: ${st.skipped.map((x) => esc(x.table)).join(', ')}</div>` : '';
+      const left = (k, text) => { const xs = st.skipped.filter((x) => x.why === k); return xs.length ? `<div class="hint" style="margin-top:10px">${text}: ${xs.map((x) => esc(x.table)).join(', ')}</div>` : ''; };
+      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블') + left('composite_key', '여러 컬럼이 함께 키인 테이블(복합 키, 아직 객체로 만들지 않음)');
       return `<table class="tight"><tr><th></th><th>이름</th><th>테이블</th><th>키</th><th>근거</th></tr>${rows}</table>${skipped}`;
     }
     if (st.id === 'properties') {
@@ -1664,18 +1667,25 @@ ${controls}${body}`;
         ${x.tables.map((t) => `<div class="muted" style="font-size:12px"><label class="tick inline-tick"><input type="checkbox" data-in="dtable" data-t="${esc(t.name)}"${S.dr.tables[t.name] === false ? '' : ' checked'}>${x.tables.length > 1 ? esc(t.sheet) + ' · ' : ''}테이블 <span class="mono">${esc(t.name)}</span> · ${show(t.rows)}행 · 컬럼 ${t.columns.length}개${t.truncated ? ' · 행 한도까지 읽음' : ''}</label>
           <div class="chips" style="margin-top:4px">${t.columns.slice(0, 10).map((c) => `<span class="chip sm">${esc(c)}</span>`).join('')}${t.columns.length > 10 ? `<span class="chip sm">외 ${t.columns.length - 10}개</span>` : ''}</div></div>`).join('')}</div>
         <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('')
-      : '<div class="muted" style="font-size:12.5px">업로드한 파일이 없습니다.</div>';
+      : (f.definitions.length ? '' : '<div class="muted" style="font-size:12.5px">업로드한 파일이 없습니다.</div>');
+    const defs = f.definitions.map((x) => `<div class="fileitem"><div style="flex:1;min-width:0"><b>${esc(x.source)}</b> <span class="chip sm b">정의서</span>
+        <div class="muted" style="font-size:12px;margin:3px 0">테이블 ${show(x.tables.length)} · 컬럼 ${show(x.columns)} · 참조 ${show(x.references)} · 코드 그룹 ${show(x.codes)} · 코드값 ${show(x.code_values)}</div>
+        ${x.tables.length ? `<div class="scroll deflist">${x.tables.map((t) => `<label class="tick inline-tick" style="display:flex"><input type="checkbox" data-in="dtable" data-t="${esc(t.name)}"${S.dr.tables[t.name] === false ? '' : ' checked'}><span class="mono">${esc(t.name)}</span>&nbsp;<span class="muted">${esc(t.label)} · 컬럼 ${t.columns}${t.key.length > 1 ? ' · 복합 키' : (t.key.length ? '' : ' · 키 없음')}</span></label>`).join('')}</div>
+          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm ghost" data-act="dtall" data-src="${esc(x.source)}" data-on="1">전체 선택</button><button class="btn sm ghost" data-act="dtall" data-src="${esc(x.source)}" data-on="0">전체 해제</button></div>` : ''}
+        ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}</div>
+        <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('');
+    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다. 복합 키 테이블은 아직 객체로 만들지 않습니다.'}</div>` : '';
     const connect = f.connect ? `<div class="sec">데이터베이스 연결</div><div style="display:flex;gap:8px"><input type="text" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://… 또는 SQLite 파일 경로" style="flex:1">
         <button class="btn" data-act="connect"${S.dr.busy ? ' disabled' : ''}>연결</button></div><div class="hint" style="margin-top:6px">데이터는 원본 DB에 그대로 유지됩니다.</div>`
       : '<div class="hint" style="margin-top:12px">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, SQLite를 연결할 수 있습니다.</div>';
     const samples = f.samples.length ? `<button class="btn" data-act="fsample"${S.dr.busy ? ' disabled' : ''}>샘플 데이터 불러오기</button>` : '';
     const left = `<div class="card"><div class="ch">데이터 가져오기</div><div class="cb">
-      <label class="drop" data-drop="1"><input type="file" id="fileinput" multiple accept=".csv,.tsv,.txt,.xlsx" hidden>
-        <b>CSV, Excel 파일을 끌어 놓거나 클릭해 선택하세요</b><span class="muted">최대 ${lim.files}개 · 파일당 ${bytes(lim.file_bytes)} · 테이블당 ${show(lim.rows)}행. 업로드한 파일은 세션 종료 시 삭제됩니다. 개인정보가 포함된 파일은 업로드하지 마세요.</span></label>
+      <label class="drop" data-drop="1"><input type="file" id="fileinput" multiple accept=".csv,.tsv,.txt,.xlsx,.json" hidden>
+        <b>CSV, Excel 파일을 끌어 놓거나 클릭해 선택하세요</b><span class="muted">테이블 정의서 · 코드 정의서(CSV, Excel, JSON)도 올릴 수 있습니다.</span><span class="muted">최대 ${lim.files}개 · 파일당 ${bytes(lim.file_bytes)} · 테이블당 ${show(lim.rows)}행. 업로드한 파일은 세션 종료 시 삭제됩니다. 개인정보가 포함된 파일은 업로드하지 마세요.</span></label>
       <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">${samples}</div>
-      ${list}${connect}
+      ${list}${defs}${defHint}${connect}
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
-        <button class="btn primary" data-act="draft"${f.files.length && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
+        <button class="btn primary" data-act="draft"${(f.files.length || f.definitions.length) && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
     const draft = f.pending ? `<div id="draft" style="display:flex;flex-direction:column;gap:16px">${draftBody()}</div>${mappingCard()}` : '';
     return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);align-items:start">${left}${rulesCard(f)}</div>${draft}`;
   }
@@ -1709,6 +1719,7 @@ ${controls}${body}`;
   const mgProps = (obj) => S.mg.st.properties.filter((p) => p.object === obj);
   const opt = (v, label, cur) => `<option value="${esc(v)}"${String(v) === String(cur ?? '') ? ' selected' : ''}>${esc(label)}</option>`;
   const own = (x) => x.module === 'workspace';
+  const valueText = (p, sep) => p.values.map((x) => ((p.labels || {})[x] ? `${x}=${p.labels[x]}` : x)).join(sep);
 
   async function loadManage() {
     S.mg.busy = true;
@@ -1881,7 +1892,7 @@ ${controls}${body}`;
       return `<tr class="${S.mg.sel === id ? 'sel' : ''}" data-act="mgprop" data-id="${esc(id)}" style="cursor:pointer">
         ${S.mg.obj ? '' : `<td>${esc(mgLabel(p.object))}</td>`}
         <td><b>${esc(p.label || p.name)}</b> ${p.key ? '<span class="chip sm b">키</span>' : ''}${p.inherited ? `<span class="chip sm">상속 · ${esc(mgLabel(p.inherited))}</span>` : ''}<div class="muted mono">${esc(p.name)}</div></td>
-        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px">허용값 ${p.values.length}개</div>` : ''}</td>
+        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px" title="${esc(valueText(p, ', '))}">허용값 ${p.values.length}개${Object.keys(p.labels || {}).length ? ' · 이름 있음' : ''}</div>` : ''}</td>
         <td class="mono" style="font-size:11.5px">${p.expr ? '<span class="chip sm">계산 속성</span>' : esc(p.column)}</td>
         <td><div class="chips">${p.required ? '<span class="chip sm">필수</span>' : ''}${p.mask ? `<span class="chip sm warn">${MASK_WORD[p.mask]}</span>` : ''}</div></td>
         <td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`;
@@ -1916,7 +1927,7 @@ ${controls}${body}`;
     const common = `${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}">`)}
       ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}
       ${v.expr ? field('계산식', `<input type="text" data-in="mgf" data-f="expr" value="${esc(v.expr)}" class="mono">`) : field('원천 컬럼', colSel)}
-      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP">`)}
+      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 붙입니다.')}
       <div class="rgrid two">${field('단위', `<input type="text" data-in="mgf" data-f="unit" value="${esc(v.unit)}" placeholder="예: 원">`)}
         ${field('가림', `<select data-in="mgf" data-f="mask">${Object.entries(MASK_WORD).map(([k, l]) => opt(k, l, v.mask)).join('')}</select>`)}</div>
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 값</label>
@@ -2079,7 +2090,9 @@ ${controls}${body}`;
       return;
     }
     if (f.kind === 'prop') {
-      const spec = { label: v.label, description: v.description, type: v.type, unit: v.unit, values: list(v.values), required: !!v.required, mask: v.mask || '' };
+      const pairs = list(v.values).map((x) => { const i = x.indexOf('='); return i > 0 ? [x.slice(0, i).trim(), x.slice(i + 1).trim()] : [x, '']; });
+      const spec = { label: v.label, description: v.description, type: v.type, unit: v.unit, values: pairs.map(([c]) => c),
+        labels: Object.fromEntries(pairs.filter(([, n]) => n)), required: !!v.required, mask: v.mask || '' };
       if (v.expr) spec.expr = v.expr; else spec.column = v.column || '';
       if (f.mode === 'new') {
         if (!IDENT.test(v.name || '')) { toast('이름은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있습니다.', true); return; }
@@ -2146,7 +2159,7 @@ ${controls}${body}`;
     if (kind === 'prop') {
       const [obj, name] = key.split('.');
       const p = m.properties.find((x) => x.object === obj && x.name === name);
-      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', values: p.values.join(', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr } };
+      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', values: valueText(p, ', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr } };
     }
     if (kind === 'link') {
       const l = m.links.find((x) => x.name === key);
@@ -2285,9 +2298,16 @@ ${controls}${body}`;
       if (t.classList.contains('btn')) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
     fsample: () => filesCall('files/sample', {}),
+    dtall: (t) => {
+      const x = (S.files.definitions || []).find((d) => d.source === t.dataset.src);
+      if (x) x.tables.forEach((tb) => { S.dr.tables[tb.name] = t.dataset.on === '1'; });
+      render();
+    },
     fremove: (t) => filesCall('files/remove', { name: t.dataset.name }),
     draft: () => {
-      const tables = (S.files.files || []).flatMap((x) => x.tables.map((t) => t.name)).filter((n) => S.dr.tables[n] !== false);
+      const data = (S.files.files || []).flatMap((x) => x.tables.map((t) => t.name));
+      const all = data.length ? data : (S.files.definitions || []).flatMap((x) => x.tables.map((t) => t.name));
+      const tables = all.filter((n) => S.dr.tables[n] !== false);
       filesCall('draft', { label: S.dr.label, rules: S.dr.rules, tables }, startDraft);
     },
     connect: () => filesCall('connect', { dsn: S.dr.dsn, label: S.dr.label, rules: S.dr.rules }, startDraft),

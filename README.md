@@ -257,6 +257,24 @@ decisions, questions or roles, check it, and save it into that visitor's library
 in at once (`Studio.replace`). The library folder itself is not written; download the file to keep it.
 `examples/files` holds a fictional library's files to try it with.
 
+Table and code definitions, the way projects keep them, name what the draft finds and give coded columns their
+allowed values with their names: a table definition sheet (a row per column: table, column, their names, type, key,
+code group, referenced table) and a code definition sheet (a row per code: group, code, name, in use), as CSV or
+Excel with the usual Korean or English headers, or as JSON (`definitions.Definitions`). A column whose name says
+its group, `주문상태(OD01)`, needs no group column. With definitions alone the draft reads the schema: an empty
+database with the declared keys and references, so objects, keys, relations, allowed values and state machines
+come before any row does. A table keyed by several columns together is left out for now and said so.
+
+```bash
+xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
+xds draft --sqlite shop.db --definitions 코드정의서.xlsx                                       # names and codes for data
+```
+
+An allowed value carries its name in the definition itself: `values: {"10": 주문접수, "20": 결제완료}`, or `values`
+with `labels`; an extension adds names to the ones given (`values_add: {"30": 배송중}`). On the page the data tab
+takes the same files beside the data (`examples/definitions` holds a fictional pair), and the properties screen
+edits a value and its name as `10=주문접수`.
+
 Two more ways to start. A decision table drawn from past outcomes (`induce.induce`, the page's rules step): a person
 picks the column that holds what was decided and the inputs, of the same table or one relation away; each leaf of a
 shallow decision tree becomes a rule with how many past cases it covers and gets right, and a five-fold

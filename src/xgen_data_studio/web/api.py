@@ -156,6 +156,7 @@ class StudioSession:
             studio.library = OverlayLibrary(studio.library, [])  # a visitor's edited modules are kept here
         self._library_rows = studio.library.list() if studio.library is not None else []
         self.uploads: dict[str, list] = {}  # file name -> the tables read from it
+        self.definitions: dict = {}  # file name -> the table and code definitions read from it (definitions.py)
         self.sizes: dict[str, int] = {}
         self.pending = None  # (draft, the database it was drawn from, the tables loaded into it, the rules)
         self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
@@ -286,7 +287,7 @@ class StudioSession:
             inherited = p not in t.properties
             owner = comp.owner(f"property:{name}.{p}") if comp and not inherited else ""
             props.append({"name": p, "label": prop.label or p, "type": prop.type, "unit": prop.unit,
-                          "values": prop.values, "required": prop.required, "cite": prop.cite,
+                          "values": prop.values, "labels": prop.labels, "required": prop.required, "cite": prop.cite,
                           "column": column_of(o, name, p) if t.table and not prop.expr else "", "key": p == t.key,
                           "module": owner, "module_label": self._label(owner) if owner else "",
                           "inherited": inherited, "expr": prop.expr, "mask": prop.mask,
@@ -651,12 +652,18 @@ class StudioSession:
                   "tables": [{"name": t.name, "sheet": t.source, "rows": len(t.rows), "columns": t.columns,
                               "truncated": t.truncated, "preview": t.rows[:5]} for t in ts]}
                  for src, ts in self.uploads.items()]
+        defs = [{"source": src, "bytes": self.sizes.get(src, 0), **d.counts(),
+                 "tables": [{"name": t.name, "label": t.label, "columns": len(t.columns), "key": t.primary_key}
+                            for t in list(d.tables.values())[:600]],
+                 "groups": [{"name": g.name, "label": g.label, "values": len(g.values)}
+                            for g in list(d.codes.values())[:600]]}
+                for src, d in self.definitions.items()]
         from xgen_data_studio.draft import DraftRules
 
         base = DraftRules.from_dict(self._method_rules())  # an attached method module's rules, or the defaults
         rules = self.pending[3] if self.pending else base
         comp = self.studio.composition
-        return plain({"files": files, "pending": self._draft_view() if self.pending else None,
+        return plain({"files": files, "definitions": defs, "pending": self._draft_view() if self.pending else None,
                       "rules": rules.to_dict(), "defaults": base.to_dict(),
                       "rules_by": [self._label(m) for m in (comp.rules_by if comp else [])],
                       "limits": {"file_bytes": lim.file_bytes, "total_bytes": lim.total_bytes, "files": lim.files,
@@ -678,11 +685,35 @@ class StudioSession:
         if sum(others.values()) + len(data) > lim.total_bytes:
             raise ValueError(f"전체 업로드 용량이 {_size(lim.total_bytes)} 한도를 초과해 업로드하지 못했습니다. "
                              "파일을 삭제한 뒤 다시 업로드해 주세요.")
+        from xgen_data_studio.definitions import from_sheets, read_definitions
+
+        if source.lower().endswith(".json"):  # only a definitions file comes as JSON
+            defs = read_definitions(data, source)
+            if defs is None:
+                raise ValueError(f"{source}: tables 또는 codes 항목이 없어 정의서로 읽지 못했습니다. "
+                                 "테이블 정의서 · 코드 정의서 JSON 인지 확인해 주세요.")
+            self.definitions = {**{k: v for k, v in self.definitions.items() if k != source}, source: defs}
+            self.uploads.pop(source, None)
+            self.sizes = {**others, source: len(data)}
+            self.pending = None
+            return self.files_state()
         try:
             tables = read_file(data, source, max_rows=lim.rows)
         except ReadError as e:
             raise ValueError(f"{source}: " + READ_ERROR.get(
                 e.reason, "파일을 테이블로 읽지 못했습니다. 파일 형식을 확인해 주세요.")) from None
+        sheets = [t for t in tables if from_sheets([t]) is not None]  # definition sheets, not data
+        if sheets:
+            self.definitions = {**{k: v for k, v in self.definitions.items() if k != source},
+                                source: from_sheets(sheets, source)}
+        else:
+            self.definitions.pop(source, None)
+        tables = [t for t in tables if t not in sheets]
+        if not tables:
+            self.uploads.pop(source, None)
+            self.sizes = {**others, source: len(data)}
+            self.pending = None
+            return self.files_state()
         wide = [t.name for t in tables if len(t.columns) > lim.columns]
         if wide:
             raise ValueError(f"{', '.join(wide)}: 컬럼 수가 {lim.columns}개 한도를 초과해 업로드하지 못했습니다. "
@@ -696,13 +727,14 @@ class StudioSession:
         files = self._sample_files()
         if not files:
             raise ValueError("샘플 데이터가 설정되지 않아 불러오지 못했습니다.")
-        self.uploads, self.sizes, self.pending = {}, {}, None
+        self.uploads, self.sizes, self.pending, self.definitions = {}, {}, None, {}
         for p in files:
             self.upload(p.name, p.read_bytes())
         return self.files_state()
 
     def remove_file(self, source: str) -> dict:
         self.uploads.pop(source, None)
+        self.definitions.pop(source, None)
         self.sizes.pop(source, None)
         self.pending = None
         return self.files_state()
@@ -719,14 +751,35 @@ class StudioSession:
         except (TypeError, ValueError):
             raise ValueError("생성 설정 값을 확인할 수 없어 초안을 생성하지 못했습니다. 숫자 항목을 확인해 주세요.") from None
 
+    def _defs(self):
+        """The uploaded definitions as one, or None."""
+        out = None
+        for d in self.definitions.values():
+            out = d if out is None else out.merge(d)
+        return out
+
     def make_draft(self, label: str = "", rules: dict | None = None, tables: list | None = None) -> dict:
         from xgen_data_studio.backends.sql import SqliteBackend
         from xgen_data_studio.draft import draft, load_sqlite
 
         all_tables = [t for ts in self.uploads.values() for t in ts]
+        defs = self._defs()
+        wanted = {str(x) for x in tables} if tables else None
+        if not all_tables and defs is not None and defs.tables:  # the schema alone: an empty database, keys and refs
+            from xgen_data_studio.definitions import schema_backend
+
+            names = [t for t in defs.tables if wanted is None or t in wanted]
+            if not names:
+                raise ValueError("선택된 테이블이 없어 초안을 생성하지 못했습니다. 테이블을 하나 이상 선택해 주세요.")
+            r = self._rules(rules)
+            b = schema_backend(defs, names)
+            d = draft(b, name="my-schema", label=(label or "내 스키마")[:40], lang="ko", rules=r, definitions=defs,
+                      origin={"kind": "definitions", "files": list(self.definitions),
+                              "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개(행 없음)"})
+            self.pending = (d, b, [], r)
+            return self.files_state()
         if not all_tables:
             raise ValueError("업로드한 파일이 없어 초안을 생성하지 못했습니다. 파일을 업로드해 주세요.")
-        wanted = {str(x) for x in tables} if tables else None
         chosen = [t for t in all_tables if wanted is None or t.name in wanted]
         if not chosen:
             raise ValueError("선택된 테이블이 없어 초안을 생성하지 못했습니다. 테이블을 하나 이상 선택해 주세요.")
@@ -734,7 +787,7 @@ class StudioSession:
         b = SqliteBackend()
         loaded = load_sqlite(chosen, b, row_keys=r.row_keys)
         d = draft(b, name="my-data", label=(label or "내 데이터")[:40], loaded=loaded, lang="ko", rules=r,
-                  origin={"kind": "files", "files": list(self.uploads), "detail": f"업로드 파일 {len(self.uploads)}개"})
+                  definitions=defs, origin={"kind": "files", "files": list(self.uploads), "detail": f"업로드 파일 {len(self.uploads)}개"})
         self.pending = (d, b, chosen, r)
         return self.files_state()
 
@@ -758,7 +811,7 @@ class StudioSession:
             where = f"SQLite {Path(path).name}"
         r = self._rules(rules)
         d = draft(b, name="my-db", label=(label or "내 데이터베이스")[:40], lang="ko", rules=r,
-                  origin={"kind": "database", "detail": where})
+                  definitions=self._defs(), origin={"kind": "database", "detail": where})
         self.uploads, self.sizes = {}, {}
         self.pending = (d, b, [], r)
         return self.files_state()
@@ -1203,7 +1256,8 @@ class StudioSession:
                     (x for x in _lineage(o, t.name) if pname in o.objects[x].properties), t.name)
                 properties.append({
                     "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr else "",
-                    "values": p.values, "required": p.required, "mask": p.mask, "expr": p.expr, "unit": p.unit,
+                    "values": p.values, "labels": p.labels, "required": p.required, "mask": p.mask, "expr": p.expr,
+                    "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,
                     "new": t.name not in base.objects or pname not in all_props(base, t.name),

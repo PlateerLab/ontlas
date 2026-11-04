@@ -51,8 +51,30 @@ def _draft(a) -> int:
     out = Path(a.out) if a.out else None
     if out is not None and (out / "studio.yaml").exists():
         raise SystemExit(f"{out / 'studio.yaml'} already exists; give another --out")
-    loaded, origin = None, {}
-    if a.files:
+    loaded, origin, defs = None, {}, None
+    for f in a.definitions:
+        from xgen_data_studio.definitions import read_definitions
+
+        got = read_definitions(Path(f).read_bytes(), Path(f).name)
+        if got is None:
+            raise SystemExit(f"{f}: no table or code definitions found")
+        defs = got if defs is None else defs.merge(got)
+    if defs is not None and not (a.files or a.sqlite or a.dsn):  # the schema alone
+        import fnmatch
+        import sqlite3
+
+        from xgen_data_studio.definitions import schema_backend
+
+        pats = [x.strip() for x in a.tables.split(",") if x.strip()]
+        names = [t for t in defs.tables if not pats or any(fnmatch.fnmatch(t.lower(), x.lower()) for x in pats)]
+        if out is not None:
+            out.mkdir(parents=True, exist_ok=True)
+        path = str(out / "data.sqlite") if out is not None else ":memory:"
+        backend = schema_backend(defs, names, conn=sqlite3.connect(path, check_same_thread=False))
+        source = {"kind": "sqlite", "path": "data.sqlite", "source": True}
+        origin = {"kind": "definitions", "detail": f"{', '.join(Path(f).name for f in a.definitions)} "
+                                                   f"({len(names)} tables, no rows)"}
+    elif a.files:
         import sqlite3
 
         from xgen_data_studio.backends.sql import SqliteBackend
@@ -84,9 +106,9 @@ def _draft(a) -> int:
         u = urlparse(a.dsn)
         origin = {"kind": "database", "detail": f"PostgreSQL {u.hostname or 'localhost'}{u.path}"}
     else:
-        raise SystemExit("give files, --sqlite or --dsn")
-    d = draft(backend, name=a.name, label=a.label, loaded=loaded, origin=origin, lang=a.lang, rules=rules).revise(
-        drop=a.drop)
+        raise SystemExit("give files, --sqlite, --dsn or --definitions")
+    d = draft(backend, name=a.name, label=a.label, loaded=loaded, origin=origin, lang=a.lang, rules=rules,
+              definitions=defs).revise(drop=a.drop)
     modules = d.modules()
     summary = {"objects": [o.name for o in d.objects], "links": [f"{lk.source} -{lk.name}-> {lk.target}"
                                                                   for lk in d.links],
@@ -285,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--lang", default="en", choices=["en", "ko"], help="language of the generated query labels")
     s.add_argument("--drop", action="append", default=[], help="leave out object:Name, link:name, property:X.p, query:q")
     s.add_argument("--rules", default="", help='draft rules as JSON or a .json file, e.g. {"enum_max": 10, "infer_links": false}')
+    s.add_argument("--definitions", action="append", default=[],
+                   help="table and code definitions (.csv, .xlsx or .json): names and code values; alone, the schema")
+    s.add_argument("--tables", default="", help="with --definitions alone: the tables to draft, e.g. 'TB_*,ORDERS'")
     s.add_argument("-o", "--out", default="", help="write library/, studio.yaml (and data.sqlite for files) here")
 
     s = sub.add_parser("serve", help="serve the studio page; every visitor gets a studio of their own")

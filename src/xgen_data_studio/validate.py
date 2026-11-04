@@ -35,6 +35,9 @@ def validate_ontology(o: Ontology) -> list[str]:
                 add(f"{t.name}.{p.name}: type '{p.type}' is not one of {TYPES}")
             if p.type == "enum" and not p.values:
                 add(f"{t.name}.{p.name}: enum needs values")
+            if p.labels and p.values and set(p.labels) - {str(v) for v in p.values}:
+                add(f"{t.name}.{p.name}: labels for values it does not allow: "
+                    f"{sorted(set(p.labels) - {str(v) for v in p.values})}")
             if p.mask and p.mask not in MASKS:
                 add(f"{t.name}.{p.name}: mask '{p.mask}' is not one of {MASKS}")
             if p.expr and p.column:

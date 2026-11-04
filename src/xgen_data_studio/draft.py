@@ -72,6 +72,7 @@ class DraftRules:
     questions: bool = True  # each generated query with the answer it gives now, to check later changes against
     state_hints: list[str] = field(default_factory=lambda: list(STATE_HINTS))
     person_hints: list[str] = field(default_factory=lambda: list(PERSON_HINTS))
+    table_prefixes: list[str] = field(default_factory=lambda: ["tb_", "tbl_"])  # left out of an object's name
 
     @classmethod
     def from_dict(cls, d: dict | None) -> DraftRules:
@@ -84,7 +85,8 @@ class DraftRules:
         for k in ("infer_links", "link_tables", "row_keys", "states", "roles", "questions"):
             if k in d:
                 setattr(r, k, bool(d[k]))
-        for k in ("title_hints", "parent_hints", "key_suffixes", "generic_keys", "state_hints", "person_hints"):
+        for k in ("title_hints", "parent_hints", "key_suffixes", "generic_keys", "state_hints", "person_hints",
+                  "table_prefixes"):
             if k in d:
                 items = d[k].split(",") if isinstance(d[k], str) else d[k]
                 setattr(r, k, [str(x).strip().lower() for x in items if str(x).strip()])
@@ -537,6 +539,7 @@ class PlannedProperty:
     nulls: int = 0
     distinct: int = 0
     declared: str = ""
+    labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (from a code definition)
 
 
 @dataclass
@@ -634,7 +637,8 @@ class Draft:
                 ptype = types.get(ref, p.type)
                 vals = [str(v) for v in values[ref]] if ref in values else (p.values if ptype == "enum" else [])
                 props.append(PlannedProperty(**{**asdict(p), "type": ptype, "values": vals if ptype == "enum" else [],
-                                                "label": labels.get(f"property:{ref}", p.label)}))
+                                                "label": labels.get(f"property:{ref}", p.label),
+                                                "labels": {k: v for k, v in p.labels.items() if k in vals}}))
             kept = {p.name for p in props}
             objs.append(PlannedObject(**{**asdict(o), "properties": props, "key": key,
                                          "title": o.title if o.title in kept else "",
@@ -773,6 +777,8 @@ class Draft:
                 d: dict[str, Any] = {"type": p.type, "label": p.label}
                 if p.values:
                     d["values"] = list(p.values)
+                if p.labels:
+                    d["labels"] = dict(p.labels)
                 if p.name == o.key:
                     d["required"] = True
                 props[p.name] = d
@@ -859,8 +865,11 @@ def _names_target(col: str, own: TableProfile, other: TableProfile, key: str, ru
 
 def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] | None = None,
           loaded: list[Loaded] | None = None, origin: dict | None = None, lang: str = "en",
-          rules: DraftRules | None = None) -> Draft:
-    """Read the catalog and the values, then decide objects, keys, properties, relations and their bindings."""
+          rules: DraftRules | None = None, definitions=None) -> Draft:
+    """Read the catalog and the values, then decide objects, keys, properties, relations and their bindings.
+
+    `definitions` (definitions.Definitions) names the objects and properties and gives coded columns their allowed
+    values with their names; with `definitions.schema_backend` it drafts from the schema alone."""
     rules = rules or DraftRules()
     profs = profile(backend, tables, rules)
     loaded = loaded or []
@@ -912,7 +921,8 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     # a table of two relation columns and nothing else is a many-to-many relation, not an object
     joins = {t.name for t in profs if rules.link_tables and not t.primary_key and len(refs[t.name]) == 2 and
              {c.name for c in t.columns} - {row_keys.get(t.name, "")} == {r[0] for r in refs[t.name]}}
-    skipped = [{"table": t.name, "why": "no_key"} for t in profs if t.name not in keys and t.name not in joins]
+    skipped = [{"table": t.name, "why": "composite_key" if len(t.primary_key) > 1 else "no_key"}
+               for t in profs if t.name not in keys and t.name not in joins]
 
     objects: dict[str, PlannedObject] = {}
     seen_types: dict[str, str] = {}
@@ -920,9 +930,11 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     for i, t in enumerate(profs):
         if t.name in joins or t.name not in keys:
             continue
-        oname, n = _pascal(t.name, f"Object{i + 1}"), 2
+        bare = next((t.name[len(x):] for x in rules.table_prefixes
+                     if t.name.lower().startswith(x) and len(t.name) > len(x)), t.name)
+        oname, n = _pascal(bare, f"Object{i + 1}"), 2
         while oname in taken:
-            oname, n = f"{_pascal(t.name, f'Object{i + 1}')}{n}", n + 1
+            oname, n = f"{_pascal(bare, f'Object{i + 1}')}{n}", n + 1
         taken.add(oname)
         fk_cols = {r[0] for r in refs[t.name]}
         props, used = [], set()
@@ -946,6 +958,8 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
                        "")
         objects[t.name] = o
 
+    if definitions is not None:
+        _annotate(objects, definitions)
     names = set(taken) | {p.name for o in objects.values() for p in o.properties}
     links: list[PlannedLink] = []
 
@@ -983,6 +997,27 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     if rules.questions:
         d.answers = _answers(backend, d)
     return d
+
+
+def _annotate(objects: dict[str, PlannedObject], defs) -> None:
+    """Names from the definitions, and the code values (with their names) of the columns that hold a code group."""
+    strip = re.compile(r"\s*\([A-Za-z]{1,6}\d{1,6}\)\s*")
+    for table, o in objects.items():
+        td = defs.table(table)
+        if td is None:
+            continue
+        if td.label:
+            o.label = td.label
+        for p in o.properties:
+            cd = td.column(p.column)
+            if cd is None:
+                continue
+            if cd.label:
+                p.label = strip.sub(" ", cd.label).strip() or p.label
+            g = defs.code_of(cd)
+            if g is not None and g.values and p.name != o.key and p.type in ("string", "enum"):
+                p.type, p.values = "enum", [v["code"] for v in g.values]
+                p.labels = {v["code"]: v["name"] for v in g.values if v.get("name")}
 
 
 def _states(backend, d: Draft, refs: dict, rules: DraftRules) -> list[PlannedStates]:

@@ -253,9 +253,24 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
         if "type" in pd and cur.get("type") and pd["type"] != cur["type"]:
             raise ModuleError(f"{m.key} changes the type of {name}.{p} from {cur['type']} to {pd['type']}")
         add = pd.pop("values_add", [])
+        names = pd.pop("labels", None)
+        if isinstance(pd.get("values"), dict) or isinstance(add, dict):  # {code: name}: the values and their names
+            got = {**(pd["values"] if isinstance(pd.get("values"), dict) else {}), **(add if isinstance(add, dict)
+                                                                                     else {})}
+            names = {**{str(k): v for k, v in got.items() if v not in (None, "")}, **(names or {})}
+            if isinstance(pd.get("values"), dict):
+                pd["values"] = [str(k) for k in pd["values"]]
+            if isinstance(add, dict):
+                add = [str(k) for k in add]
+        if isinstance(cur.get("values"), dict):
+            cur["labels"] = {**{str(k): v for k, v in cur["values"].items() if v not in (None, "")},
+                             **(cur.get("labels") or {})}
+            cur["values"] = [str(k) for k in cur["values"]]
         cur.update(pd)
         if add:
             cur["values"] = list(dict.fromkeys(list(cur.get("values") or []) + list(add)))
+        if names:  # a value's name is added to the names already given, not in place of them
+            cur["labels"] = {**(cur.get("labels") or {}), **{str(k): str(v) for k, v in names.items()}}
         props[p] = cur
         touched.setdefault(f"property:{name}.{p}", []).append(m.name)
     for p, col in (patch.get("columns") or {}).items():

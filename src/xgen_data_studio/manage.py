@@ -16,7 +16,8 @@ from xgen_data_studio.modules import Module, ModuleError, Requirement, compose, 
 
 NAME = "workspace"
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "required", "mask", "expr", "cite")
+PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
+               "cite")
 OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite")
 LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite")
 
@@ -355,6 +356,8 @@ def _prop_spec(a: dict) -> dict:
             spec[k] = a[k]
     if a.get("values"):
         spec["values"] = [str(v) for v in a["values"]]
+    if a.get("labels"):
+        spec["labels"] = {str(k): str(v) for k, v in dict(a["labels"]).items() if str(v).strip()}
     if a.get("required"):
         spec["required"] = True
     return spec

@@ -95,6 +95,17 @@
   mask it.
 - The page's menu is grouped (시작, 데이터 관리, 온톨로지, 활용 · 검증), and a change review lists what the database check
   found.
+- Value names: a property's allowed values carry their names (`labels: {value: name}`, or `values: {value: name}`
+  at once); an extension adds names to the ones given; a name for a value the property does not allow is reported.
+  The page shows them with the values and edits them as `value=name`.
+- `definitions`: table and code definitions read from CSV or Excel sheets (Korean and English header names; a nullable
+  flag or a required one; a type with its length; a code group named in a column's name) or JSON. `draft(...,
+  definitions=)` names objects and properties from them and gives coded columns their values with their names;
+  `schema_backend()` builds an empty database with the declared keys and single-column references, so a studio is
+  drafted from the schema alone. A table keyed by several columns is skipped as `composite_key`. `xds draft
+  --definitions FILE [--tables PATTERNS]`; the data tab takes definition files beside data files (or alone).
+  `DraftRules.table_prefixes` (default `tb_`, `tbl_`) are left out of object names. Example
+  `examples/definitions`.
 
 ## 0.4.0
 

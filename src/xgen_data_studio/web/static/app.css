@@ -162,6 +162,7 @@ input.inline.wide { max-width:280px; margin-top:4px; display:block; font-weight:
 .mgnote { font-size:12px; color:var(--muted); line-height:1.55; padding:9px 16px !important; border-top:1px solid #f2d9a8; }
 .chip.sm.bad { font-size:11px; }
 tr[data-act]:hover td { background:#f7faff; }
+.deflist { max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12px; }
 @media (max-width: 1100px) {
   .guide { grid-template-columns:1fr; }
   .rgrid, .rgrid.two { grid-template-columns:1fr; }

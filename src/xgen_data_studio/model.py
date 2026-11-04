@@ -30,6 +30,7 @@ class Property:
     aligned: list[str] = field(default_factory=list)
     expr: str = ""   # a computed property: an expression over the object's other properties (see expr.py)
     mask: str = ""   # partial | full: hidden from every role that is not given it in clear
+    labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (a code's name), by value
 
     @property
     def col(self) -> str:
@@ -335,11 +336,16 @@ def valid_name(name: str) -> bool:
 def _prop(name: str, d: Any) -> Property:
     if isinstance(d, str):
         d = {"type": d}
+    values = d.get("values", [])
+    labels = {str(k): str(v) for k, v in (d.get("labels") or {}).items()}
+    if isinstance(values, dict):  # values: {code: name} gives the values and their names at once
+        labels = {**{str(k): str(v) for k, v in values.items() if v not in (None, "")}, **labels}
+        values = [str(k) for k in values]
     return Property(name=name, type=d.get("type", "string"), label=d.get("label", ""),
                     description=d.get("description", ""), column=d.get("column", ""), unit=d.get("unit", ""),
-                    values=list(d.get("values", [])), required=bool(d.get("required", False)),
+                    values=list(values), required=bool(d.get("required", False)),
                     cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
-                    mask=str(d.get("mask", "") or ""))
+                    mask=str(d.get("mask", "") or ""), labels=labels)
 
 
 def _states(d: dict | None) -> StateMachine | None:
@@ -481,7 +487,8 @@ def _to_dict(o: Ontology) -> dict:
             continue
         props = {p.name: _clean({"type": p.type, "label": p.label, "description": p.description,
                                  "column": p.column, "unit": p.unit, "values": p.values, "required": p.required,
-                                 "cite": p.cite, "aligned": p.aligned, "expr": p.expr, "mask": p.mask})
+                                 "cite": p.cite, "aligned": p.aligned, "expr": p.expr, "mask": p.mask,
+                                 "labels": p.labels})
                  for p in t.properties.values()}
         sm = None
         if t.states:
