@@ -229,7 +229,7 @@ tr[data-act]:hover td { background:#f7faff; }
 .pill.quiet { color:var(--muted); }
 .pill.quiet .ui { color:var(--muted); }
 kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:1px solid var(--line); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--panel); }
-.main a:not(.btn):not(.chip):not(.nav) { color:var(--blue); }
+.main a:not(.btn):not(.chip):not(.nav):not(.mfloor):not(.malert):not(.tag):not(.badge) { color:var(--blue); }
 .btn.primary:hover:not(:disabled) { background:#2b2f37; }
 
 /* catalog */
@@ -335,7 +335,9 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 @keyframes mlive { 0% { box-shadow:0 0 0 0 rgba(34,160,107,.5); } 100% { box-shadow:0 0 0 9px rgba(34,160,107,0); } }
 .mcard { overflow:hidden; }
 .mtop { display:flex; align-items:center; gap:14px; padding:12px 18px; flex-wrap:wrap; }
-.mtitle { display:block; font-size:15.5px; font-weight:800; margin-top:1px; }
+.mtitle { font-size:15.5px; font-weight:800; }
+.mhead .sub { color:var(--muted); font-size:12.5px; margin-top:2px; }
+.pipesel { width:auto; max-width:190px; height:30px; padding:0 8px; font-size:12.5px; font-weight:600; border-radius:8px; }
 .mseg { margin:0 0 0 auto; flex:none; }
 .mseg button { flex:none; padding:5px 11px; }
 .mctl { display:flex; gap:6px; align-items:center; }
@@ -390,7 +392,6 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 .mfloors { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; }
 .mfloor { border:1px solid var(--line); border-left:3px solid #22a06b; border-radius:9px; padding:10px 12px; text-decoration:none; color:var(--ink); background:#fff; }
 .mfloor:hover { background:var(--panel); }
-.main a.mfloor, .main a.malert { color:var(--ink); }
 .mtick { position:absolute; right:14px; bottom:10px; z-index:2; font-size:11.5px; color:#475467; background:rgba(255,255,255,.86); border:1px solid var(--line); border-radius:999px; padding:3px 11px; display:flex; gap:8px; }
 .mtick .mono { color:var(--muted); }
 .mfloor.st-warn { border-left-color:#e2a03f; }

@@ -59,32 +59,33 @@
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
   // the manual: one section per screen, in the order a first visit goes through them
   const GUIDE = [
-    ['monitor', '원천 데이터부터 검증까지 파이프라인 전체의 현재 상태를 층별로 확인합니다.', [
-      '층마다 현재 스페이스의 실제 값을 표시하고 2초마다 갱신합니다. 정의와 데이터가 바뀌면 바로, 그 밖에는 20초마다 다시 측정합니다.',
-      '값을 선택하면 해당 화면으로 이동합니다. 상단 탭에서 층을 고르면 그 층을 강조합니다.',
-      '통과 조건을 충족하지 못한 단계가 있으면 그 층부터 데이터 흐름이 멈춥니다. 층을 넘은 이상에서 원인 경로를 확인합니다.',
-      '[이상 재현]을 선택하면 예시 모듈을 실제로 적용해 파이프라인이 어떻게 멈추는지 확인합니다. [복구]로 되돌립니다.']],
+    ['monitor', '원천 데이터부터 검증까지 파이프라인 상태를 단계별로 확인합니다.', [
+      '단계별 수치는 2초마다 갱신합니다. 정의나 파일이 바뀌면 즉시, 그 밖에는 20초마다 파이프라인을 점검합니다.',
+      '수치를 선택하면 해당 화면으로 이동합니다. 상단 탭에서 단계를 선택하면 해당 단계를 강조합니다.',
+      '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 연쇄 장애에서 원인 경로를 확인합니다.',
+      '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
+      '[장애 테스트]를 선택하면 예시 모듈을 적용해 장애 상황을 확인합니다. [복구]를 선택하면 원래 상태로 돌아갑니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 백엔드 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
       '상단 정보에서 현재 데이터 출처를 확인합니다.',
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
-    ['catalog', 'CSV, Excel, 정의서, 문서 파일을 리포지토리 단위로 관리하고 파일별 유형, 분량, 처리 경로를 확인합니다.', [
-      '파일이나 폴더를 끌어 놓거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드하고 폴더는 하위 구조를 유지합니다.',
-      '읽지 못한 파일도 보관합니다. 유형에 읽지 못함으로 표시하고 파일을 선택하면 사유가 표시됩니다.',
+    ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
+      '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
+      '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다.',
       '초안 열의 선택을 해제하면 파일 또는 폴더를 초안과 변환 결과에서 제외합니다.',
       '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 삭제를 합니다.',
-      '[다른 리포지토리 선택]에서 리포지토리를 바꾸거나 새로 만듭니다. 리포지토리를 바꾸면 초안에 쓰는 파일도 함께 바뀝니다.']],
+      '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
     ['db', '데이터베이스를 연결해 온톨로지 초안을 생성합니다.', [
       'PostgreSQL, MySQL, Oracle 주소 또는 SQLite 파일 경로를 입력하고 [연결]을 선택합니다.',
       '데이터는 원본 DB에 그대로 유지됩니다.']],
-    ['convert', '초안에 포함한 파일을 하나의 JSON으로 모은 결과를 확인합니다.', [
+    ['convert', '초안에 포함한 파일의 통합 JSON을 확인합니다.', [
       '파일별 변환 결과와 테이블, 코드, 용어, 메시지, 문서 수를 확인합니다.',
-      '형식이 달라도 같은 JSON으로 모아 같은 방식으로 모듈을 만듭니다.',
+      '파일 형식과 관계없이 같은 구조의 JSON으로 변환합니다.',
       '[JSON 내려받기]로 전체 내용을 저장합니다.']],
     ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 객체를 확인합니다.', [
       '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
-      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 객체 관리에서 바로 객체로 만듭니다.',
+      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 객체 관리에서 객체로 추가합니다.',
       '파일 업로드는 [데이터 카탈로그], DB 연결은 [DB 연결]에서 합니다.']],
     ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 생성하고 스페이스에 적용합니다.', [
       '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
@@ -93,25 +94,25 @@
       'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, Word, PowerPoint, 한글, PDF 문서를 함께 사용할 수 있습니다.',
       '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 묶습니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, 카디널리티, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
-      '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 골라 판정 표를 만듭니다.',
-      '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 대응시킨 제안이 표시됩니다. 확인하고 고친 뒤 [표준에 연결해 적용]을 선택합니다.',
-      '[스페이스에 적용]을 선택하면 모든 화면이 업로드 데이터 기준으로 바뀝니다. [초기화]를 선택하면 예시 스페이스로 돌아갑니다.']],
+      '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
+      '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 매핑한 제안이 표시됩니다. 내용을 확인하고 수정한 뒤 [표준에 연결해 적용]을 선택합니다.',
+      '[스페이스에 적용]을 선택하면 새 파이프라인으로 추가되고 모든 화면이 해당 데이터 기준으로 변경됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.']],
     ['objects', '객체의 라벨, 원천 테이블, 키, 상위 객체를 관리합니다.', [
-      '[새 객체]에서 원천 테이블을 고르면 키와 속성을 테이블 컬럼에서 채웁니다.',
-      '표준 모듈의 객체를 바꾸면 표준 모듈은 그대로 두고 \'관리 변경\' 모듈에 확장으로 기록합니다. 키는 정의한 모듈에서만 바꿀 수 있습니다.',
-      '[객체 제외]를 선택하면 그 객체를 쓰는 관계, 질의, 결정, 검증 질문이 함께 빠지고, 빠진 항목은 대기 중인 변경에 표시됩니다.',
+      '[새 객체]에서 원천 테이블을 선택하면 키와 속성이 테이블 컬럼 기준으로 입력됩니다.',
+      '표준 모듈의 객체를 변경하면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 변경되지 않습니다. 키는 정의한 모듈에서만 바꿀 수 있습니다.',
+      '[객체 제외]를 선택하면 해당 객체를 사용하는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다.',
       '관계가 없는 객체는 화면 위에 표시됩니다. [관계 관리]에서 관계를 추가하세요.',
       '대기 중인 변경에서 [변경 요청]을 선택하면 사본 스페이스에서 흐름 통과 조건을 검토하고, 승인 후 모든 화면에 반영됩니다. [변경 취소]로 되돌립니다.']],
     ['props', '객체별 속성의 라벨, 자료형, 원천 컬럼, 허용값, 단위, 필수, 가림을 관리합니다.', [
-      '객체를 고르거나 검색어를 입력해 속성을 좁힙니다. 상위 객체에서 물려받은 속성은 상속으로 표시됩니다.',
+      '객체를 선택하거나 검색어를 입력해 속성을 필터링합니다. 상위 객체의 속성은 상속으로 표시됩니다.',
       '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가합니다.',
-      '키 속성과 물려받은 속성은 제외할 수 없습니다. 물려받은 속성은 상위 객체에서 제외합니다.']],
+      '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 객체에서 제외합니다.']],
     ['links', '객체 사이의 관계와 연결 기준 컬럼, 카디널리티, 역관계를 관리합니다.', [
       '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 위에 표시됩니다. [관계 추가]로 바로 추가합니다.',
-      '[새 관계]에서 출발 객체와 속성, 도착 객체와 속성을 고르면 두 속성 값이 같은 행끼리 연결합니다.',
+      '[새 관계]에서 출발 객체와 속성, 도착 객체와 속성을 선택하면 두 속성 값이 같은 행끼리 연결됩니다.',
       '표준 모듈의 관계는 라벨, 카디널리티, 역관계, 필수 여부만 바꿀 수 있습니다.',
       '관계 그래프는 [온톨로지]에서 확인합니다.']],
-    ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, 바인딩, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다. 도메인 경험이 쌓일수록 모듈이 늘어납니다.', [
+    ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, 바인딩, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
       '적용 스위치를 끄면 함께 해제되는 모듈과 제거되는 항목을 먼저 표시합니다.',
       '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 올라갑니다. 해제하면 스페이스 설정으로 돌아갑니다.',
       '구축 규칙 모듈을 적용하면 초안 생성의 생성 설정 기본값이 모듈의 규칙으로 바뀝니다.',
@@ -120,7 +121,7 @@
       '[편집]을 선택하면 모듈 정의 파일에서 객체, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, 백엔드 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
-    ['onto', '데이터 계층을 바탕으로 객체 사이의 관계를 그래프로 확인합니다.', [
+    ['onto', '객체 간 관계를 그래프로 확인합니다.', [
       '노드를 선택하면 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 매핑이 표시됩니다.',
       '식별 통합 객체를 선택하면 묶인 기록과 근거를 확인하고, [다시 묶어 교차표 저장]으로 다시 묶습니다.',
       '관계를 선택하면 연결된 객체로 이동합니다.',
@@ -137,7 +138,7 @@
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
     ['check', '검증 질문 정답률, 근거 제시율, 백엔드 간 결과 일치 여부를 확인합니다.', [
       '[다시 실행]으로 현재 상태를 다시 검증합니다.',
-      '근거 제시율은 답에 적용 규칙 또는 질의, 출처(규정 조항, 원천 컬럼), 판본(모듈 버전)이 모두 있는 질문의 비율입니다. 빠진 항목은 근거 열에 표시됩니다.',
+      '근거 제시율은 답에 적용 규칙 또는 질의, 출처(규정 조항, 원천 컬럼), 판본(모듈 버전)이 모두 있는 질문의 비율입니다. 누락 항목은 근거 열에 표시됩니다.',
       '검증 질문 관리에서 정답이 정해진 질문을 추가하거나 제외하고, [목록 불러오기]로 YAML · JSON 목록을 한 번에 넣습니다. 변경 요청이 승인되면 정답률 계산에 들어갑니다.',
       '승인 처리로 데이터가 바뀐 경우 [초기화]로 되돌립니다.']],
     ['bind', '온톨로지 정의와 원천 DB의 테이블, 컬럼, 타입, 키, 값을 대조합니다.', [
@@ -279,8 +280,9 @@
     $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#monitor">홈</a><i>›</i>${g ? `<span>${esc((g[0] ? g[0] + ' ' : '') + g[1])}</span><i>›</i>` : ''}<b>${esc(navLabel(S.tab))}</b></nav>
       <div class="grow"></div>
       ${originChip(st.origin)}
-      <button class="pill" data-act="repopick" aria-label="리포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>
-      <button class="pill quiet hide-sm" data-act="palette">${ui('search')}이동<kbd>Ctrl K</kbd></button>
+      <select class="pipesel" data-top="pipe" aria-label="파이프라인 선택">${st.pipelines.map((p) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
+      <button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>
+      <button class="pill quiet hide-sm" data-act="palette">${ui('search')}메뉴 검색<kbd>Ctrl K</kbd></button>
       ${S.tab === 'guide' ? '' : '<a class="btn sm" href="#guide">사용 안내</a>'}
       ${who}${u && !u.roles.includes('admin') ? '' : '<button class="btn sm ghost" data-act="reset">초기화</button>'}`;
   }
@@ -420,11 +422,11 @@
         return [...(x.path || x.count || []), end].filter(Boolean).join(' → ');
       };
       const inputs = r.inputs.map((x) => `<span class="chip sm"><span class="mono">${esc(x.name)}</span> ← ${esc(from(x))}</span>`).join('');
-      const issues = r.issues.length ? `<div class="banner no" style="margin-top:10px"><div><div class="big" style="font-size:14px">초안 검사 오류 ${r.issues.length}건</div><div class="loglist">${r.issues.map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div><div class="why">편집기에서 고친 뒤 [검사]를 선택하세요.</div></div></div>` : '';
+      const issues = r.issues.length ? `<div class="banner no" style="margin-top:10px"><div><div class="big" style="font-size:14px">초안 검사 오류 ${r.issues.length}건</div><div class="loglist">${r.issues.map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div><div class="why">편집기에서 수정한 뒤 [검사]를 선택하세요.</div></div></div>` : '';
       body = `<div class="chips" style="margin-top:12px"><span class="chip ${r.issues.length ? 'warn' : 'ok'}">${r.issues.length ? '검사 오류 있음' : '✓ 초안 검사 통과'}</span><span class="chip mono">${esc(r.decision)}</span><span class="chip">대상 ${esc(r.target)}</span><span class="chip">모델 시도 ${r.attempts}회</span></div>
         <div class="sec">입력</div><div class="chips">${inputs}</div>
         <table class="tight" style="margin-top:10px"><tr><th>규칙</th><th>조건</th><th>결과</th><th>출처 조항</th></tr>${rows}</table>${issues}
-        <div class="hint" style="margin-top:8px">아래 편집기에 모듈 초안을 열었습니다. 규칙과 출처 조항을 확인하고 고친 뒤 [적용 변경 요청]을 선택하면 사본 스페이스에서 검토하고 승인 대기로 등록됩니다.</div>`;
+        <div class="hint" style="margin-top:8px">아래 편집기에 모듈 초안을 열었습니다. 규칙과 출처 조항을 확인하고 수정한 뒤 [적용 변경 요청]을 선택하면 사본 스페이스에서 검토하고 승인 대기로 등록됩니다.</div>`;
     }
     return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right"><button class="btn sm ghost" data-act="pclose">닫기</button></div></div><div class="cb">
       <div class="hint" style="margin-bottom:8px">정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고, 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 사람이 확인하고 승인해야 반영됩니다.</div>
@@ -1685,12 +1687,12 @@ ${controls}${body}`;
       body = `<table class="tight" style="margin-top:12px"><tr><th>표준 객체</th><th>테이블</th><th>속성 ↔ 컬럼</th></tr>${rows}</table>
         ${links ? `<div class="sec">관계</div><div class="chips">${links}</div>` : ''}
         ${sg.unmatched_tables.length ? `<div class="hint" style="margin-top:8px">표준에 대응하지 않은 테이블: ${esc(sg.unmatched_tables.join(', '))}</div>` : ''}
-        ${sg.unbound_objects.length ? `<div class="hint">연결할 테이블이 없는 표준 객체: ${esc(sg.unbound_objects.map((y) => y.label).join(', '))}. 이 객체를 쓰는 질의는 제외됩니다.</div>` : ''}
+        ${sg.unbound_objects.length ? `<div class="hint">연결할 테이블이 없는 표준 객체: ${esc(sg.unbound_objects.map((y) => y.label).join(', '))}. 이 객체를 사용하는 질의는 제외됩니다.</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="mapapply"${m.busy ? ' disabled' : ''}>표준에 연결해 적용</button></div>`;
     } else if (sg && !sg.ok) body = `<div class="banner no" style="margin-top:10px"><div class="why">${esc(sg.error)}</div></div>`;
     return `<div class="card"><div class="ch">표준에 연결<div class="right muted" style="font-weight:600;font-size:12px">새 객체 대신 표준 정의에 바인딩</div></div><div class="cb">
       <div class="chips">${picks}</div><button class="btn sm" data-act="mapsuggest" style="margin-top:10px"${m.picked.length && !m.busy ? '' : ' disabled'}>${m.busy ? '<span class="spin"></span>처리 중' : '연결 제안'}</button>
-      <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키로 대응시킵니다. 제안을 확인하고 고친 뒤 적용하세요.</div>${body}</div></div>`;
+      <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키로 대응시킵니다. 제안을 확인하고 수정한 뒤 적용하세요.</div>${body}</div></div>`;
   }
 
   function checkBar() {
@@ -1761,7 +1763,7 @@ ${controls}${body}`;
         ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}
         ${x.document_list.length ? `<div class="chips" style="margin-top:6px">${x.document_list.slice(0, 12).map((d) => `<span class="chip sm">${esc(d.name)} · ${docKind[d.kind] || '문서'} · 섹션 ${show(d.sections)}</span>`).join('')}</div>` : ''}</div>
         <button class="btn sm ghost" data-act="fout" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 초안에서 제외">제외</button></div>`).join('');
-    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
+    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 입력합니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
     const left = `<div class="card"><div class="ch">초안에 넣을 파일<span class="chip sm">${esc(S.st.repository.label)}</span></div><div class="cb">
       ${list}${defs}${defHint}
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
@@ -1779,7 +1781,7 @@ ${controls}${body}`;
   const baseName = (p) => p.split('/').pop();
 
   function kindChip(f) {
-    if (f.error) return '<span class="chip sm bad">읽지 못함</span>';
+    if (f.error) return '<span class="chip sm bad">읽기 실패</span>';
     const k = (f.facts || {}).kind;
     if (k === 'data') return '<span class="chip sm b">테이블 데이터</span>';
     if (k === 'definition') return '<span class="chip sm ok">정의서</span>';
@@ -1914,12 +1916,12 @@ ${controls}${body}`;
 
   function viewCatalog() {
     const c = S.cat;
-    const title = (right) => `<div class="chead"><h1>데이터 카탈로그</h1><div class="sub">파일을 리포지토리 단위로 관리하고 유형, 분량, 처리 경로를 표시합니다</div>${right}</div>`;
+    const title = (right) => `<div class="chead"><h1>데이터 카탈로그</h1><div class="sub">파일을 레포지토리 단위로 관리하고 유형, 규모, 처리 경로를 표시합니다</div>${right}</div>`;
     if (!c.st) return title('') + '<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>';
     if (c.st.error) return title('') + `<div class="banner no"><div class="why">${esc(c.st.error)}</div></div>`;
     const st = c.st, lim = st.limits;
     const here = c.folder ? baseName(c.folder) : st.repository.label;
-    const right = `<div class="chere"><b>${esc(here)}</b><span class="muted">${count(st.repository.files)}개 파일</span><button class="btn sm" data-act="repopick">다른 리포지토리 선택</button></div>`;
+    const right = `<div class="chere"><b>${esc(here)}</b><span class="muted">${count(st.repository.files)}개 파일</span><button class="btn sm" data-act="repopick">다른 레포지토리 선택</button></div>`;
     const rows = sortedRows(c);
     const exts = [...new Set(st.files.map((f) => f.ext).filter(Boolean))].sort();
     const arrow = (k) => (c.sort === k ? `<span class="arrow">${c.dir > 0 ? '↑' : '↓'}</span>` : '');
@@ -1927,11 +1929,11 @@ ${controls}${body}`;
     const picked = Object.keys(c.sel).filter((k) => c.sel[k]);
     const bulk = picked.length ? `<div class="cbulk"><b>${picked.length}개 선택</b><button class="btn sm" data-act="cbulk" data-on="1">초안 포함</button><button class="btn sm" data-act="cbulk" data-on="">초안 제외</button><button class="btn sm danger" data-act="cdelete">삭제</button><button class="btn sm ghost" data-act="cclear">선택 해제</button></div>` : '';
     const adding = c.edit && c.edit.path === '' ? `<tr class="crow"><td></td><td></td><td colspan="9"><input type="text" id="cedit" data-in="cedit" value="${esc(c.edit.value)}" placeholder="새 폴더 이름" aria-label="새 폴더 이름"></td></tr>` : '';
-    const table = rows.length || adding ? `<div class="cwrap"><table class="ctable"><thead><tr><th style="width:34px"><input type="checkbox" data-in="call"${rows.length && picked.length === rows.length ? ' checked' : ''} aria-label="전체 선택"></th><th style="width:44px">No.</th>${th('name', '파일명')}<th>유형</th><th>형식</th>${th('bytes', '크기')}<th>분량</th>${th('uploaded', '업로드일')}<th>처리 경로</th><th style="width:52px">초안</th><th style="width:48px">작업</th></tr></thead>
+    const table = rows.length || adding ? `<div class="cwrap"><table class="ctable"><thead><tr><th style="width:34px"><input type="checkbox" data-in="call"${rows.length && picked.length === rows.length ? ' checked' : ''} aria-label="전체 선택"></th><th style="width:44px">No.</th>${th('name', '파일명')}<th>유형</th><th>형식</th>${th('bytes', '크기')}<th>규모</th>${th('uploaded', '업로드일')}<th>처리 경로</th><th style="width:52px">초안</th><th style="width:48px">작업</th></tr></thead>
       <tbody>${adding}${rows.map((x, i) => catalogRow(x, i, c)).join('')}</tbody></table></div>`
-      : `<div class="cempty"><b>${c.folder ? '폴더가 비어 있습니다' : '업로드한 파일이 없습니다'}</b><span class="muted">파일이나 폴더를 위 영역에 끌어 놓으세요.</span>${st.samples && !c.folder ? '<button class="btn sm" data-act="fsample">샘플 데이터 불러오기</button>' : ''}</div>`;
+      : `<div class="cempty"><b>${c.folder ? '폴더가 비어 있습니다' : '업로드한 파일이 없습니다'}</b><span class="muted">파일이나 폴더를 위 영역으로 드래그하세요.</span>${st.samples && !c.folder ? '<button class="btn sm" data-act="fsample">샘플 데이터 불러오기</button>' : ''}</div>`;
     const up = c.up ? `<div class="cprog"><span class="spin"></span><b>${count(c.up.done)} / ${count(c.up.total)}</b><span class="muted">${esc(c.up.name)}</span><div class="bar"><i style="width:${Math.round(c.up.done / c.up.total * 100)}%"></i></div></div>`
-      : `<span class="cdropic">${ui('upload')}</span><span class="cdroptext">파일 · 폴더를 끌어 놓거나 클릭해 업로드합니다<span class="muted">현재 폴더에 업로드하고, 폴더는 하위 구조를 유지합니다</span></span>
+      : `<span class="cdropic">${ui('upload')}</span><span class="cdroptext">파일 또는 폴더를 드래그하거나 클릭해 업로드하세요<span class="muted">현재 폴더에 업로드되며, 폴더는 하위 구조를 유지합니다</span></span>
         <span class="cdropbtns"><button class="btn sm" data-act="cfile">파일 선택</button><button class="btn sm" data-act="cdir">폴더 선택</button>${st.server_paths ? '<button class="btn sm" data-act="cpaste">경로 입력</button>' : ''}</span>`;
     const paste = c.paste !== null ? `<div class="cpaste"><input type="text" data-in="cpath" value="${esc(c.paste)}" placeholder="서버의 파일 또는 폴더 경로"><button class="btn sm primary" data-act="cimport">가져오기</button><button class="btn sm ghost" data-act="cpaste">취소</button></div>` : '';
     const rule = st.persistent ? `파일당 ${bytes(lim.file_bytes)} · 사용 ${count(lim.used_files)} / ${count(lim.files)}개 · ${fileSize(lim.used_bytes)} / ${bytes(lim.total_bytes)}`
@@ -1957,9 +1959,9 @@ ${controls}${body}`;
     let html = '';
     if (S.pick) {
       const rows = S.st.repositories.map((r) => `<button class="pitem${r.id === S.st.repository.id ? ' on' : ''}" data-act="repouse" data-id="${esc(r.id)}"><b>${esc(r.label)}</b><span class="muted">${count(r.files)}개 파일 · ${fileSize(r.bytes)}</span></button>`).join('');
-      html += `<div class="pop" style="top:${S.pick.top}px;right:${S.pick.right}px" role="dialog" aria-label="리포지토리 선택"><div class="ptitle">리포지토리</div>${rows}
-        <div class="pform"><input type="text" id="repolabel" value="${esc(S.pick.label || '')}" placeholder="리포지토리 이름" aria-label="리포지토리 이름"><button class="btn sm primary" data-act="repomake">새로 만들기</button></div>
-        <div class="pfoot"><button class="btn sm ghost" data-act="reporename">현재 이름 변경</button><button class="btn sm ghost danger" data-act="repodelete"${S.st.repositories.length > 1 ? '' : ' disabled'}>현재 리포지토리 삭제</button></div></div>`;
+      html += `<div class="pop" style="top:${S.pick.top}px;right:${S.pick.right}px" role="dialog" aria-label="레포지토리 선택"><div class="ptitle">레포지토리</div>${rows}
+        <div class="pform"><input type="text" id="repolabel" value="${esc(S.pick.label || '')}" placeholder="레포지토리 이름" aria-label="레포지토리 이름"><button class="btn sm primary" data-act="repomake">추가</button></div>
+        <div class="pfoot"><button class="btn sm ghost" data-act="reporename">이름 변경</button><button class="btn sm ghost danger" data-act="repodelete"${S.st.repositories.length > 1 ? '' : ' disabled'}>삭제</button></div></div>`;
     }
     if (S.menu) {
       const p = esc(S.menu.path);
@@ -1981,7 +1983,7 @@ ${controls}${body}`;
 
   function fileDrawer(c) {
     const f = c.file;
-    const facts = [['유형', kindChip(f)], ['크기', fileSize(f.bytes)], ['분량', esc(amount(f))], ['업로드일', esc(dayOf(f.uploaded))], ['처리 경로', esc(routeOf(f))], ['경로', `<span class="mono">${esc(f.path)}</span>`]];
+    const facts = [['유형', kindChip(f)], ['크기', fileSize(f.bytes)], ['규모', esc(amount(f))], ['업로드일', esc(dayOf(f.uploaded))], ['처리 경로', esc(routeOf(f))], ['경로', `<span class="mono">${esc(f.path)}</span>`]];
     const table = (t) => `<div class="sec">${esc(t.sheet || t.name)} · ${count(t.rows)}행</div><div class="cwrap"><table class="tight"><tr>${t.columns.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>${t.preview.map((r) => `<tr>${r.map((v) => `<td>${show(v)}</td>`).join('')}</tr>`).join('')}</table></div>`;
     const sections = f.sections.length ? `<div class="loglist">${f.sections.slice(0, 60).map((x) => `<div>${esc(x.title || x.document)} <span class="muted">${count(x.chars)}자</span></div>`).join('')}</div>` : '';
     const preview = f.tables.map(table).join('') + sections || '<div class="muted" style="font-size:12.5px">표시할 미리보기가 없습니다. JSON에서 내용을 확인합니다.</div>';
@@ -1999,8 +2001,8 @@ ${controls}${body}`;
   function paletteBox() {
     const items = palItems();
     S.pal.i = Math.min(S.pal.i, Math.max(items.length - 1, 0));
-    return `<div class="palback" data-act="palclose"></div><div class="pal" role="dialog" aria-label="화면 이동"><input type="text" id="palq" value="${esc(S.pal.q)}" placeholder="이동할 화면 이름" aria-label="이동할 화면 이름">
-      <div class="pallist">${items.map(([k, l], i) => `<a class="${i === S.pal.i ? 'on' : ''}" href="#${k}" data-act="palgo"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${esc(l)}</span><span class="muted">${esc(groupOf(k)[1])}</span></a>`).join('') || '<div class="muted" style="padding:10px 12px;font-size:12.5px">일치하는 화면이 없습니다.</div>'}</div></div>`;
+    return `<div class="palback" data-act="palclose"></div><div class="pal" role="dialog" aria-label="메뉴 검색"><input type="text" id="palq" value="${esc(S.pal.q)}" placeholder="메뉴 이름을 입력하세요" aria-label="메뉴 이름">
+      <div class="pallist">${items.map(([k, l], i) => `<a class="${i === S.pal.i ? 'on' : ''}" href="#${k}" data-act="palgo"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${esc(l)}</span><span class="muted">${esc(groupOf(k)[1])}</span></a>`).join('') || '<div class="muted" style="padding:10px 12px;font-size:12.5px">검색 결과가 없습니다.</div>'}</div></div>`;
   }
 
   function closeFloats() {
@@ -2020,7 +2022,7 @@ ${controls}${body}`;
   function viewConvert() {
     const c = S.conv;
     const has = c && c.counts && Object.keys(c.counts).length;
-    const head = `<div class="head"><div><h1>변환 결과</h1><div class="sub">초안에 포함한 파일을 하나의 JSON으로 모은 결과입니다</div></div>
+    const head = `<div class="head"><div><h1>변환 결과</h1><div class="sub">초안에 포함한 파일의 변환 결과입니다</div></div>
       <div class="right">${has ? '<a class="btn sm" href="/api/catalog/json">JSON 내려받기</a>' : ''}<a class="btn sm primary" href="#data">초안 생성</a></div></div>`;
     if (!c || c.busy) return head + '<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>';
     if (c.error) return head + `<div class="banner no"><div class="why">${esc(c.error)}</div></div>`;
@@ -2033,13 +2035,13 @@ ${controls}${body}`;
     }).join('');
     return `${head}${tiles ? `<div class="stats">${tiles}</div>` : ''}
       <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start">
-        <div class="card"><div class="ch">파일별 변환<span class="chip sm">${esc(c.repository.label)}</span></div><div class="cb scroll"><table class="tight"><tr><th>파일</th><th>유형</th><th>분량</th><th>상태</th></tr>${rows}</table></div></div>
-        <div class="card"><div class="ch">하나의 JSON<span class="chip sm">${fileSize(c.bytes)}</span></div><div class="cb">${c.json ? `<pre class="code cjson">${esc(c.json)}</pre>${c.cut ? '<div class="hint" style="margin-top:8px">앞부분만 표시합니다. 전체 내용은 [JSON 내려받기]로 저장합니다.</div>' : ''}` : '<div class="muted" style="font-size:12.5px">초안에 포함한 파일이 없습니다.</div>'}</div></div></div>`;
+        <div class="card"><div class="ch">파일별 변환<span class="chip sm">${esc(c.repository.label)}</span></div><div class="cb scroll"><table class="tight"><tr><th>파일</th><th>유형</th><th>규모</th><th>상태</th></tr>${rows}</table></div></div>
+        <div class="card"><div class="ch">통합 JSON<span class="chip sm">${fileSize(c.bytes)}</span></div><div class="cb">${c.json ? `<pre class="code cjson">${esc(c.json)}</pre>${c.cut ? '<div class="hint" style="margin-top:8px">앞부분만 표시합니다. 전체 내용은 [JSON 내려받기]로 저장합니다.</div>' : ''}` : '<div class="muted" style="font-size:12.5px">초안에 포함한 파일이 없습니다.</div>'}</div></div></div>`;
   }
 
   // ---- control board: the pipeline as floors, every number from the space as it is now ---------------------------
 
-  const ST_WORD = { ok: '정상', warn: '주의', bad: '이상', off: '꺼짐' };
+  const ST_WORD = { ok: '정상', warn: '주의', bad: '장애', off: '꺼짐' };
   const hms = (v) => String(v || '').slice(11, 19);
 
   function spark(list) {
@@ -2051,22 +2053,22 @@ ${controls}${body}`;
 
   function monitorBrief(m) {
     const cards = [...m.floors].reverse().map((f) => `<a class="mfloor st-${f.status}" href="#${f.tab}"><div class="mfh"><b>${esc(f.no)} ${esc(f.label)}</b><span>${ST_WORD[f.status]}</span></div>
-      <div class="mfn"><b>${f.alerts}</b> 경보</div><div class="mfk">${f.tags.slice(0, 3).map((t) => `<span>${esc(t.label)} <b>${esc(t.value)}</b></span>`).join('')}</div></a>`).join('');
-    const chain = m.chain ? `<div class="mchain"><div class="mchainh"><span class="chip sm bad">${m.chain.floors > 1 ? '층을 넘은 이상' : '이상'}</span><b>${m.chain.steps.map((x) => esc(x.label)).join(' ← ')}</b></div>
+      <div class="mfn"><b>${f.alerts}</b> 알람</div><div class="mfk">${f.tags.slice(0, 3).map((t) => `<span>${esc(t.label)} <b>${esc(t.value)}</b></span>`).join('')}</div></a>`).join('');
+    const chain = m.chain ? `<div class="mchain"><div class="mchainh"><span class="chip sm bad">${m.chain.floors > 1 ? '연쇄 장애' : '장애'}</span><b>${m.chain.steps.map((x) => esc(x.label)).join(' ← ')}</b></div>
       <ol>${m.chain.steps.map((x) => `<li><a href="#${esc(x.tab)}">${esc(x.label)}</a>${x.detail ? `<span class="muted">${esc(x.detail)}</span>` : ''}</li>`).join('')}</ol></div>`
-      : '<div class="mclear"><span class="ic y" style="width:22px;height:22px">✓</span>충족하지 못한 통과 조건이 없습니다.</div>';
-    const alerts = m.alerts.length ? m.alerts.map((a) => `<a class="malert" href="#${esc(a.tab)}"><i style="background:${a.level === 'bad' ? '#e5484d' : '#e2a03f'}"></i><b>${esc(a.title)}</b><span class="muted">${esc(a.detail)}</span></a>`).join('') : '<div class="muted" style="font-size:12.5px">활성 경보가 없습니다.</div>';
-    const events = m.events.length ? m.events.map((e) => `<div class="mevent"><span class="mono muted">${esc(hms(e.at))}</span><span>${esc(e.text)}</span></div>`).join('') : '<div class="muted" style="font-size:12.5px">기록된 활동이 없습니다.</div>';
-    return `<div class="card mbrief"><div class="meyebrow">PIPELINE OVERVIEW</div><h2>파이프라인 브리핑</h2>
+      : '<div class="mclear"><span class="ic y" style="width:22px;height:22px">✓</span>모든 통과 조건을 충족했습니다.</div>';
+    const alerts = m.alerts.length ? m.alerts.map((a) => `<a class="malert" href="#${esc(a.tab)}"><i style="background:${a.level === 'bad' ? '#e5484d' : '#e2a03f'}"></i><b>${esc(a.title)}</b><span class="muted">${esc(a.detail)}</span></a>`).join('') : '<div class="muted" style="font-size:12.5px">활성 알람이 없습니다.</div>';
+    const events = m.events.length ? m.events.map((e) => `<div class="mevent"><span class="mono muted">${esc(hms(e.at))}</span><span>${esc(e.text)}</span></div>`).join('') : '<div class="muted" style="font-size:12.5px">최근 활동이 없습니다.</div>';
+    return `<div class="card mbrief"><h2>단계별 현황</h2>
       <div class="mfloors">${cards}</div>${chain}
-      <div class="mcols"><div><div class="sec">활성 경보</div>${alerts}</div><div><div class="sec">최근 활동</div><div class="mevents">${events}</div></div></div></div>`;
+      <div class="mcols"><div><div class="sec">활성 알람</div>${alerts}</div><div><div class="sec">최근 활동</div><div class="mevents">${events}</div></div></div></div>`;
   }
 
   function monitorStrip(m) {
     const rtt = S.mon.rtt;
     return `<span class="mdot st-${m.status}"></span><span>파이프라인 상태 <b>${ST_WORD[m.status]}</b></span>
-      <span>활성 경보 <b>${m.alerts.length}</b></span><span>통과 조건 <b>${m.gates.met} / ${m.gates.all}</b></span>
-      <span>최근 측정 <b>${esc(hms(m.measured_at))}</b> <span class="muted">${count(m.took)}ms</span></span><span>접속 세션 <b>${count(m.visitors)}</b></span>
+      <span>활성 알람 <b>${m.alerts.length}</b></span><span>통과 조건 <b>${m.gates.met} / ${m.gates.all}</b></span>
+      <span>최근 점검 <b>${esc(hms(m.measured_at))}</b> <span class="muted">${count(m.took)}ms</span></span><span>접속자 <b>${count(m.visitors)}</b></span>
       <span class="mgrow"></span><span>응답 시간 <b>${rtt.length ? `${rtt[rtt.length - 1]}ms` : '-'}</b></span>${spark(rtt)}`;
   }
 
@@ -2075,19 +2077,19 @@ ${controls}${body}`;
   function viewMonitor() {
     const m = S.mon.st;
     const now = new Date();
-    const head = `<div class="mhead"><div class="logo">X</div><div><div class="meyebrow">XGEN SPACE · ONTOLOGY PIPELINE</div><h1>파이프라인 관제</h1></div>
+    const head = `<div class="mhead"><div class="logo">X</div><div><h1>파이프라인 관제</h1><div class="sub">원천 데이터부터 검증까지 단계별 상태를 표시합니다</div></div>
       <div class="mclock"><i class="dot mlive"></i><b id="mclock">${now.toTimeString().slice(0, 8)}</b><span class="muted">${now.toISOString().slice(0, 10).replaceAll('-', '.')}</span></div></div>`;
-    if (!m) return head + '<div class="empty"><span class="spin"></span>파이프라인을 측정하는 중입니다.</div>';
+    if (!m) return head + '<div class="empty"><span class="spin"></span>파이프라인을 점검하는 중입니다.</div>';
     const short = { source: '원천', convert: '변환', ontology: '구축', use: '활용', verify: '검증' };
     const seg = [['', '전체'], ...m.floors.map((f) => [f.id, short[f.id] || f.label])].map(([k, l]) => `<button class="${S.mon.focus === k ? 'on' : ''}" data-act="mfocus" data-k="${k}"${k ? ` aria-label="${esc(m.floors.find((f) => f.id === k).label)}"` : ''}>${esc(l)}</button>`).join('');
     const active = m.faults.find((f) => f.on);
-    const fault = m.faults.length ? `<select class="inline" data-in="mfault" aria-label="재현할 이상"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
-      <button class="btn sm ${active ? '' : 'mwarn'}" data-act="mfault"${S.mon.busy ? ' disabled' : ''}>${S.mon.busy ? '<span class="spin"></span>처리 중' : (active ? '복구' : '이상 재현')}</button>` : '';
-    return `${head}<div class="card mcard"><div class="mtop"><div><div class="meyebrow">LIVE PIPELINE</div><b class="mtitle">데이터가 온톨로지가 되는 과정</b></div>
+    const fault = m.faults.length ? `<select class="inline" data-in="mfault" aria-label="장애 테스트 항목"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
+      <button class="btn sm ${active ? '' : 'mwarn'}" data-act="mfault"${S.mon.busy ? ' disabled' : ''}>${S.mon.busy ? '<span class="spin"></span>처리 중' : (active ? '복구' : '장애 테스트')}</button>` : '';
+    return `${head}<div class="card mcard"><div class="mtop"><b class="mtitle">파이프라인 현황</b><a class="btn sm" href="#catalog">새 파이프라인</a>${S.st.pipeline === 'p1' ? '' : '<button class="btn sm ghost" data-act="mpipedel">파이프라인 삭제</button>'}
         <div class="seg mseg">${seg}</div><div class="mctl">${fault}</div></div>
-      <div class="mstage"><div class="mlink"><i class="dot mlive"></i>실시간 갱신 · 2초</div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}
+      <div class="mstage"><div class="mlink"><i class="dot mlive"></i>2초마다 갱신</div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}
         <div id="mscene"></div>
-        <div class="mlegend"><span><i style="background:#22a06b"></i>정상</span><span><i style="background:#e2a03f"></i>주의</span><span><i style="background:#e5484d"></i>이상</span></div><div class="mtick" id="mtick">${monitorTicker(m)}</div></div>
+        <div class="mlegend"><span><i style="background:#22a06b"></i>정상</span><span><i style="background:#e2a03f"></i>주의</span><span><i style="background:#e5484d"></i>장애</span></div><div class="mtick" id="mtick">${monitorTicker(m)}</div></div>
       <div class="mstrip" id="mstrip">${monitorStrip(m)}</div></div><div id="mbrief">${monitorBrief(m)}</div>`;
   }
 
@@ -2098,12 +2100,14 @@ ${controls}${body}`;
       S.mon.shape = m.shape;
       window.SpaceScene.focus(S.mon.focus);
     }
-    if (!S.mon.timer) monitorTick();
+    if (!S.mon.st || !S.mon.timer) monitorTick();
   }
 
   async function monitorTick() {
     clearTimeout(S.mon.timer);
+    if (S.mon.ticking) return;
     if (S.tab !== 'monitor') { S.mon.timer = 0; return; }
+    S.mon.ticking = true;
     if (!document.hidden) {
       const start = performance.now();
       try {
@@ -2114,6 +2118,7 @@ ${controls}${body}`;
         S.mon.st = m;
         if (S.tab === 'monitor') {
           if (first || m.shape !== S.mon.shape || !$('#mscene')) {
+            S.mon.ticking = false;
             S.mon.timer = setTimeout(monitorTick, 2000);
             render();
             return;
@@ -2126,6 +2131,7 @@ ${controls}${body}`;
         }
       } catch (e) { fail(e); }
     }
+    S.mon.ticking = false;
     S.mon.timer = setTimeout(monitorTick, 2000);
   }
 
@@ -2186,7 +2192,7 @@ ${controls}${body}`;
       S.mg.form = null;
       S.mg.review = null;
       const out = r.edit.took_out.length;
-      toast(`${done} ${out ? `함께 빠진 항목 ${out}개는 대기 중인 변경에서 확인하세요.` : '변경 요청 후 승인되면 모든 화면에 반영됩니다.'}`);
+      toast(`${done} ${out ? `함께 제외된 항목 ${out}개는 대기 중인 변경에서 확인하세요.` : '변경 요청 후 승인되면 모든 화면에 반영됩니다.'}`);
     } catch (e) { fail(e); }
     S.mg.busy = false;
     render();
@@ -2213,7 +2219,7 @@ ${controls}${body}`;
     const body = S.mg.open ? `<div class="cb" style="border-top:1px solid var(--line)">
         ${edits ? `<div class="loglist">${edits}</div>` : '<div class="muted" style="font-size:12.5px">이전 세션에서 이어진 변경입니다. 정의 파일에서 확인하세요.</div>'}${issues}
         <div class="sec" style="margin-top:12px">정의 파일 · ${esc(w.label)}</div><pre class="code" style="max-height:260px;overflow:auto">${esc(w.yaml)}</pre></div>` : '';
-    const review = S.mg.review ? `<div class="cb" style="border-top:1px solid var(--line)"><div class="banner no" style="margin:0 0 4px"><span class="ic x" style="width:24px;height:24px">!</span><div class="why">사본 스페이스에서 흐름 통과 조건을 충족하지 못해 적용하지 않았습니다. 아래 항목을 고친 뒤 다시 [변경 요청]을 선택하세요.</div></div>${changeReview(S.mg.review)}</div>` : '';
+    const review = S.mg.review ? `<div class="cb" style="border-top:1px solid var(--line)"><div class="banner no" style="margin:0 0 4px"><span class="ic x" style="width:24px;height:24px">!</span><div class="why">사본 스페이스에서 흐름 통과 조건을 충족하지 못해 적용하지 않았습니다. 아래 항목을 수정한 뒤 다시 [변경 요청]을 선택하세요.</div></div>${changeReview(S.mg.review)}</div>` : '';
     return `<div class="card mgpend"><div class="ch"><span class="chip warn">대기 중인 변경 ${w.edits.length || ''}</span>
       <span class="muted" style="font-weight:600;font-size:12.5px">추가 ${d.added.length} · 변경 ${d.changed.length} · 제외 ${d.removed.length}</span>
       <div class="right"><button class="btn sm" data-act="mgopen">${S.mg.open ? '접기' : '내용 보기'}</button><button class="btn sm ghost" data-act="mgdiscard"${S.mg.busy ? ' disabled' : ''}>변경 취소</button>
@@ -2300,14 +2306,14 @@ ${controls}${body}`;
       const keySel = t ? `<select data-in="mgf" data-f="key">${t.columns.map((c) => opt(c.name, `${c.name} · ${c.type}`, v.key)).join('')}</select>`
         : `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: coupon_id">`;
       return `<div class="card"><div class="ch">새 객체<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
-        ${field('원천 테이블', tableSel, '테이블을 고르면 키와 속성을 컬럼에서 채웁니다.')}
+        ${field('원천 테이블', tableSel, '테이블을 선택하면 키와 속성이 컬럼 기준으로 입력됩니다.')}
         ${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: Coupon">`)}
         ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 쿠폰">`)}
         ${t && t.key.length > 1 ? field('키', `<input type="text" value="${esc(t.key.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field(t ? '키 컬럼' : '키 속성', keySel)}
-        ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 고르세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류로 막힙니다.</div>` : ''}
+        ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 선택하세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류로 막힙니다.</div>` : ''}
         ${t && t.links.length ? `<div class="hint" style="margin:-4px 0 12px">관계 ${esc(t.links.map(linkLabel).join(', '))}의 연결 테이블입니다. 객체로 만들 필요가 없으면 [닫기]를 선택하세요.</div>` : ''}
         ${t ? `<label class="tick"><input type="checkbox" data-in="mgf" data-f="cols"${v.cols ? ' checked' : ''}>테이블 컬럼 ${t.columns.length}개를 속성으로 추가</label>` : ''}
-        ${field('상위 객체', parents, '상위 객체의 속성과 관계를 물려받습니다.')}
+        ${field('상위 객체', parents, '상위 객체의 속성과 관계를 상속합니다.')}
         ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>객체 추가</button></div></div>`;
     }
@@ -2321,7 +2327,7 @@ ${controls}${body}`;
       ${field('원천 테이블', tableSel)}
       ${field('키', keyField, own(o) ? '' : '키는 정의한 모듈에서만 바꿀 수 있습니다.')}
       ${field('상위 객체', parents)}
-      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 바꾼 내용은 표준 모듈을 고치지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
+      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button>
         <a class="btn" href="#props" data-act="mgpropsof" data-name="${esc(o.name)}">속성 보기</a><a class="btn" href="#links" data-act="mglinksof" data-name="${esc(o.name)}">관계 보기</a>
         <div class="grow" style="flex:1"></div><button class="btn danger" data-act="mgdel"${S.mg.busy ? ' disabled' : ''}>객체 제외</button></div></div></div>`;
@@ -2378,7 +2384,7 @@ ${controls}${body}`;
       ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}
       ${v.expr ? field('계산식', `<input type="text" data-in="mgf" data-f="expr" value="${esc(v.expr)}" class="mono">`)
         : (p && p.columns.length ? field('원천 컬럼', `<input type="text" value="${esc(p.columns.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field('원천 컬럼', colSel))}
-      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 붙입니다.')}
+      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 지정합니다.')}
       <div class="rgrid two">${field('단위', `<input type="text" data-in="mgf" data-f="unit" value="${esc(v.unit)}" placeholder="예: 원">`)}
         ${field('가림', `<select data-in="mgf" data-f="mask">${Object.entries(MASK_WORD).map(([k, l]) => opt(k, l, v.mask)).join('')}</select>`)}</div>
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 값</label>
@@ -2389,7 +2395,7 @@ ${controls}${body}`;
         ${field('객체', objSel)}${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: nickname">`)}${common}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>속성 추가</button></div></div>`;
     }
-    const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 객체 ${mgLabel(p.inherited)}에서 물려받은 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
+    const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 객체 ${mgLabel(p.inherited)}에서 상속한 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
     return `<div class="card"><div class="ch">${esc(mgLabel(p.object))} · ${esc(p.label || p.name)} <span class="muted mono" style="font-weight:600">${esc(p.name)}</span><div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
       <div class="chips" style="margin-bottom:12px">${ownerChip(p)}${stateChips(p)}${p.key ? '<span class="chip sm b">키</span>' : ''}</div>${common}
       ${own(p) || p.new ? '' : `<div class="hint" style="margin-bottom:12px">${esc(p.module_label)} 모듈의 속성입니다. 바꾼 내용은 '관리 변경'에 확장으로 기록됩니다.</div>`}
@@ -2562,7 +2568,7 @@ ${controls}${body}`;
     if (f.kind === 'link') {
       if (f.mode === 'new') {
         if (!IDENT.test(v.name || '')) { toast('이름은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있습니다.', true); return; }
-        if (!v.source || !v.target || !v.sp || !v.tp) { toast('출발 · 도착 객체와 연결할 속성을 모두 골라 주세요.', true); return; }
+        if (!v.source || !v.target || !v.sp || !v.tp) { toast('출발 · 도착 객체와 연결할 속성을 모두 선택해 주세요.', true); return; }
         S.mg.sel = v.name;
         mgEdit('add_link', { name: v.name, label: v.label, source: v.source, target: v.target, on: [v.sp, v.tp], cardinality: v.cardinality, inverse: v.inverse, required: !!v.required }, `관계 ${v.label || v.name}을 추가했습니다.`);
         return;
@@ -2595,7 +2601,7 @@ ${controls}${body}`;
     const f = S.mg.form;
     const v = f.v;
     const say = { object: `객체 ${v.label || v.name}`, prop: `속성 ${v.label || v.name}`, link: `관계 ${v.label || v.name}` }[f.kind];
-    if (!window.confirm(`${say}을 제외합니다. 이 항목을 쓰는 질의, 결정, 검증 질문도 함께 빠지며, 빠진 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return;
+    if (!window.confirm(`${say}을 제외합니다. 이 항목을 사용하는 질의, 결정, 검증 질문도 함께 제외되며, 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return;
     S.mg.sel = '';
     if (f.kind === 'object') mgEdit('delete_object', { name: v.name }, `${say}을 제외했습니다.`);
     if (f.kind === 'prop') mgEdit('delete_property', { object: v.object, name: v.name }, `${say}을 제외했습니다.`);
@@ -2624,18 +2630,32 @@ ${controls}${body}`;
 
   // ---- events --------------------------------------------------------------------------------------------------
 
+  // what every screen holds of the pipeline on screen, for when another one takes its place
+  function clearViews() {
+    clearInterval(S.dr.timer);
+    Object.assign(S, { impact: null, pos: {}, sel: null, files: null, dpos: {}, conv: null, changes: null, agree: null, flset: null, ident: null, ed: null, change: null });
+    Object.assign(S.dr, { step: 0, view: 'read', sel: null, ed: NEW_EDITS(), rev: null, graph: null, rules: null, tables: {}, timer: 0 });
+    stale();
+    Object.assign(S.mg, { form: null, sel: '', q: '', obj: '', table: '', open: false, review: null });
+    S.q.name = null; S.q.text = ''; S.q.dirty = false; S.d.name = null; S.d.key = null;
+    S.mon.st = null;
+  }
+
+  async function pipelineCall(body) {
+    try {
+      await api('pipeline', body);
+      clearViews();
+      await load();
+    } catch (e) { fail(e); }
+  }
+
   const ACT = {
     reset: async () => {
-      if (!window.confirm(S.st.data.kept ? '변경 내용을 삭제하고 예시 스페이스로 초기화합니다. 리포지토리의 파일은 유지됩니다.' : '업로드한 데이터와 변경 내용을 모두 삭제하고 예시 스페이스로 초기화합니다.')) return;
+      if (!window.confirm(S.st.data.kept ? '변경 내용을 삭제하고 예시 스페이스로 초기화합니다. 레포지토리의 파일은 유지됩니다.' : '업로드한 데이터와 변경 내용을 모두 삭제하고 예시 스페이스로 초기화합니다.')) return;
       try {
         await api('reset', {});
-        clearInterval(S.dr.timer);
-        Object.assign(S, { impact: null, pos: {}, sel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
-        Object.assign(S.dr, { step: 0, view: 'read', sel: null, ed: NEW_EDITS(), rev: null, graph: null, rules: null, tables: {}, timer: 0 });
-        S.ed = null;
-        stale();
-        Object.assign(S.mg, { form: null, sel: '', q: '', obj: '', table: '', open: false, review: null });
-        S.q.name = null; S.q.text = ''; S.q.dirty = false; S.d.name = null; S.d.key = null;
+        S.cat = NEW_CAT();
+        clearViews();
         await load();
         toast('초기화했습니다.');
       } catch (e) { fail(e); }
@@ -2750,6 +2770,10 @@ ${controls}${body}`;
       v.play().catch(() => { /* the viewer starts it */ });
       if (t.classList.contains('btn')) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
+    mpipedel: () => {
+      const p = S.st.pipelines.find((x) => x.id === S.st.pipeline);
+      if (window.confirm(`${p.label} 파이프라인을 삭제합니다.`)) pipelineCall({ op: 'delete', id: p.id });
+    },
     mfocus: (t) => { S.mon.focus = t.dataset.k; document.querySelectorAll('.mseg button').forEach((b) => b.classList.toggle('on', b === t)); window.SpaceScene.focus(S.mon.focus); },
     mfault: async () => {
       const m = S.mon.st;
@@ -2786,13 +2810,13 @@ ${controls}${body}`;
     },
     reporename: async () => {
       const label = ($('#repolabel') || {}).value || '';
-      if (!label.trim()) { toast('이름이 없어 리포지토리 이름을 바꾸지 못했습니다. 새 이름을 입력해 주세요.', true); return; }
+      if (!label.trim()) { toast('이름이 없어 레포지토리 이름을 바꾸지 못했습니다. 새 이름을 입력해 주세요.', true); return; }
       S.pick = false;
       await catalogCall('catalog/repository', { op: 'rename', label });
     },
     repodelete: async () => {
       const r = S.st.repository;
-      if (!window.confirm(`${r.label} 리포지토리와 파일 ${count(r.files)}개를 삭제합니다.`)) return;
+      if (!window.confirm(`${r.label} 레포지토리와 파일 ${count(r.files)}개를 삭제합니다.`)) return;
       S.pick = false; S.cat.folder = ''; S.cat.ext = '';
       await catalogCall('catalog/repository', { op: 'delete' });
     },
@@ -3198,6 +3222,7 @@ ${controls}${body}`;
       }
       if (ev.key === 'Enter' && items[S.pal.i]) { ev.preventDefault(); const k = items[S.pal.i][0]; closeFloats(); location.hash = '#' + k; }
     });
+    $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('change', (ev) => { const t = ev.target; if (t.dataset && CHANGE[t.dataset.in]) CHANGE[t.dataset.in](t); });
     main.addEventListener('keydown', (ev) => {

@@ -407,7 +407,7 @@ from where it shows down to the module that brought it:
 질의 ← DB 대조 ← 식품 업종 확장 모듈   (Sku.expires_on, Sku.storage)
 ```
 
-To see that on the example library, choose 이상 재현: it really applies a module whose columns the database does not have,
+To see that on the example library, choose 장애 테스트: it really applies a module whose columns the database does not have,
 and 복구 takes it off again. A studio file names such modules itself:
 
 ```yaml
@@ -415,6 +415,9 @@ monitor:
   faults:
     - {label: 식품 업종 모듈 적용, attach: food}
 ```
+
+Each draft you apply becomes a pipeline of its own. The list at the top of the page switches between them, the one you
+started with included, and 초기화 is no longer the only way back. A visitor keeps up to five.
 
 ## The data catalog
 

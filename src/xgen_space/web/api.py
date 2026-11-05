@@ -59,6 +59,7 @@ DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request
 POLICY_MAX = 12000  # characters of policy text a draft reads
 JSON_PREVIEW = 40_000  # characters of the one JSON the page shows; the download has it all
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
+PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 EDIT_TEXT = [
     (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
@@ -66,25 +67,25 @@ EDIT_TEXT = [
      r"이름 '\2'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
     (r"^object type '(.+)' already exists$", r"객체 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
     (r"^give the key and the key property$", "키 속성을 정하지 않아 객체를 추가하지 못했습니다. 키와 키 속성을 입력해 주세요."),
-    (r"^object type '(.+)' is unknown$", r"객체 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^object type '(.+)' is unknown$", r"객체 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^key '(.+)' is not a property of (.+)$", r"'\1'은 \2의 속성이 아니어서 키로 정하지 못했습니다."),
     (r"^the key of (.+) is set where it is defined; change it there$",
      r"\1의 키는 표준 모듈에서 정해져 있어 여기서 바꾸지 못했습니다. 해당 모듈에서 바꿔 주세요."),
     (r"^(.+) already has '(.+)'$", r"\1에 속성 '\2'이 이미 있어 추가하지 못했습니다."),
-    (r"^(\w+)\.(\w+) is unknown$", r"속성 \1.\2을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^(\w+)\.(\w+) is unknown$", r"속성 \1.\2을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^the type of (.+) comes from its standard; it cannot be changed here$",
      r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 속성을 추가해 주세요."),
     (r"^'(.+)' is the key of (.+); delete the object instead$",
      r"'\1'은 \2의 키라서 지우지 못했습니다. 객체를 지워 주세요."),
     (r"^'(.+)' comes from (.+), which (.+) specialises; delete it on (.+)$",
-     r"'\1'은 상위 객체 \2에서 물려받은 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
+     r"'\1'은 상위 객체 \2에서 상속 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
     (r"^link '(.+)' already exists$", r"관계 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
-    (r"^link '(.+)' is unknown$", r"관계 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^link '(.+)' is unknown$", r"관계 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^the endpoints of (.+) come from its standard; add a new link instead$",
      r"\1의 양 끝 객체는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 관계를 추가해 주세요."),
     (r"^question id '(.*)' is empty or already used$",
      r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
-    (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로 고쳐 주세요."),
+    (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
@@ -185,6 +186,9 @@ class StudioSession:
         self._ws_sig: tuple = ()
         self._draft: dict | None = None  # the policy draft running or last finished, for the page to collect
         self._adopt(studio)
+        self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
+        self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
+                                       "rows": self._library_rows, "log": self.log}]
 
     def _adopt(self, studio: Studio) -> None:
         """Make a studio this session's: its change requests follow the session's approval and storage."""
@@ -280,6 +284,8 @@ class StudioSession:
             "origin": self.origin,
             "repository": self._repository_row(),
             "repositories": self.repositories.rows(),
+            "pipelines": [{"id": p["id"], "label": p["label"]} for p in self.pipelines],
+            "pipeline": self.pipeline,
             "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
                      "kept": self.repositories.persistent,
                      "files": sum(r["files"] for r in self.repositories.rows() if r["id"] == self.repo),
@@ -862,6 +868,49 @@ class StudioSession:
         self.catalog_remove([source])
         return self.files_state()
 
+    # ---- pipelines: each applied draft kept beside the ones before it -----------------------------------------
+
+    def _stash(self) -> None:
+        """Write what the current pipeline has come to back to its entry."""
+        cur = next(p for p in self.pipelines if p["id"] == self.pipeline)
+        cur.update(studio=self.studio, origin=self.origin, rows=self._library_rows, log=self.log)
+
+    def _make_room(self, label: str) -> None:
+        if len(self.pipelines) >= PIPELINES_MAX and not any(p["label"] == label for p in self.pipelines[1:]):
+            raise ValueError(f"파이프라인 수가 {PIPELINES_MAX}개 한도에 도달해 적용하지 못했습니다. "
+                             "파이프라인을 삭제한 뒤 다시 적용해 주세요.")
+
+    def _new_pipeline(self, label: str) -> None:
+        """What was just applied becomes a pipeline; applied again under its name, it takes that one's place."""
+        same = next((p for p in self.pipelines[1:] if p["label"] == label), None)
+        pid = same["id"] if same else f"p{1 + max(int(p['id'][1:]) for p in self.pipelines)}"
+        entry = {"id": pid, "label": label, "studio": self.studio, "origin": self.origin, "rows": self._library_rows,
+                 "log": self.log}
+        if same:
+            self.pipelines[self.pipelines.index(same)] = entry
+        else:
+            self.pipelines.append(entry)
+        self.pipeline = pid
+
+    def pipeline_use(self, pid: str) -> dict:
+        target = next((p for p in self.pipelines if p["id"] == pid), None)
+        if target is None:
+            raise LookupError(f"파이프라인 {pid}")
+        self._stash()
+        self._adopt(target["studio"])
+        self.origin, self._library_rows, self.log = target["origin"], target["rows"], target["log"]
+        self.pipeline, self.pending, self.workspace, self._ws_sig = pid, None, None, ()
+        self.event("pipeline", f"{target['label']}(으)로 전환")
+        return {"ok": True}
+
+    def pipeline_delete(self, pid: str) -> dict:
+        if pid == "p1":
+            raise ValueError("기본 파이프라인은 삭제할 수 없습니다.")
+        if pid == self.pipeline:
+            self.pipeline_use("p1")
+        self.pipelines = [p for p in self.pipelines if p["id"] != pid]
+        return {"ok": True}
+
     # ---- the control board: the pipeline measured, floor by floor ---------------------------------------------
 
     def _monitor_sig(self) -> tuple:
@@ -888,7 +937,7 @@ class StudioSession:
             w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took,
                                "stamp": datetime.now().isoformat(timespec="seconds")}
             gates = [g for s in flow["steps"] for g in s["gates"]]
-            self.event("measure", f"파이프라인 측정 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
+            self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
         st = self.studio
         comp = st.composition
         on = {m.name for m in comp.modules} if comp else set()
@@ -1303,10 +1352,13 @@ class StudioSession:
                 m.remove["questions"] = [*m.remove.get("questions", []), *wrong]
             m.body["questions"] = asked
             st = build()
+        self._make_room(d.label)
+        self._stash()
         self._adopt(st)
         self._library_rows = st.library.list()
         self.origin = {**d.origin, "label": d.label, "standard": [str(x) for x in standard]}
         self.pending, self.log = None, []
+        self._new_pipeline(d.label)
         removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
                                                               ("actions", "액션")) if m.remove.get(k)]
@@ -1341,6 +1393,7 @@ class StudioSession:
             raise ValueError(f"편집 내용을 확인할 수 없어 적용하지 못했습니다. {e}") from None
         if not d.objects:
             raise ValueError("선택된 객체가 없어 적용하지 못했습니다. 객체를 하나 이상 선택해 주세요.")
+        self._make_room(d.label)
         if d.origin.get("kind") == "files":  # a type the person chose is how the values are stored
             was = {(o.table, p.column): p.type for o in d0.objects for p in o.properties}
             original = {lo.table: t.name for t, lo in zip(tables, d0.loaded)}
@@ -1358,6 +1411,7 @@ class StudioSession:
                     raise ValueError(f"{i.get('table')}.{i.get('column')} 값 {i.get('value')!r} 을(를) "
                                      f"{i.get('type')} 타입으로 변환하지 못해 적용하지 못했습니다. 타입을 다시 선택해 "
                                      "주세요.") from None
+        self._stash()
         try:
             self._adopt(studio_from(d, b, library=self.studio.library, use_zen=self.studio.use_zen))
         except ModuleError as e:
@@ -1365,6 +1419,7 @@ class StudioSession:
         self._library_rows = self.studio.library.list()
         self.origin = {**d.origin, "label": d.label}
         self.pending, self.log = None, []
+        self._new_pipeline(d.label)
         self._note("draft", f"{d.label} 온톨로지를 적용했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
         return {"ok": True}
 
@@ -1509,7 +1564,7 @@ class StudioSession:
             failed = [g["label"] for g in (self._change(cr)["gates"] if cr else []) if not g["passed"]]
             why = ", ".join(failed) if failed else str(e)
             return {"ok": False, "error": f"흐름 통과 조건({why})을 충족하지 못해 승인하지 못했습니다. "
-                                          "정의를 고쳐 다시 요청해 주세요.",
+                                          "정의를 수정해 다시 요청해 주세요.",
                     "change": self._change(cr) if cr else None}
         proj = {}
         if cr.status == "approved":
@@ -1690,7 +1745,7 @@ class StudioSession:
 
         ws = self._ws()
         if not ws.dirty:
-            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 객체 · 속성 · 관계를 고친 뒤 다시 요청해 주세요.")
+            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 요청해 주세요.")
         text = yaml.safe_dump(ws.module.to_dict(), allow_unicode=True, sort_keys=False)
         res = self.propose_module(text, attach=ws.current is None)
         change = res["change"]

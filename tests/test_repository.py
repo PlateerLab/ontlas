@@ -78,7 +78,7 @@ def test_repositories_in_a_folder_outlive_the_server(tmp_path):
     r.put(second, "a/x.csv", b"1", facts={"kind": "data"})
     r.include(second, ["a"], False)
     again = Repositories(tmp_path)
-    assert [x["label"] for x in again.rows()] == ["기본 리포지토리", "둘째"]
+    assert [x["label"] for x in again.rows()] == ["기본 레포지토리", "둘째"]
     assert again.entry(second, "a/x.csv")["included"] is False and again.read(second, "a/x.csv") == b"1"
 
 
@@ -101,7 +101,7 @@ def test_a_repository_needs_a_name_of_its_own_and_one_must_remain(tmp_path):
     with pytest.raises(ValueError):
         r.create(" ")
     with pytest.raises(ValueError):
-        r.create("기본 리포지토리")
+        r.create("기본 레포지토리")
     with pytest.raises(ValueError):
         r.delete_repo("r1")
     second = r.create("둘째")

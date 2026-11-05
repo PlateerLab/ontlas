@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Pipelines to choose from: each applied draft is kept beside the ones before it, and the list at the top of the page
+  switches between them with their modules, data, changes and history. Up to five, and they end with the visitor.
+- Product wording across the page: 레포지토리, 드래그, 규모, 통합 JSON, 메뉴 검색, 알람, 장애, 연쇄 장애, 장애 테스트, 점검.
+  The board drops its English captions and slogans, and the demo's captions follow.
+
 ## 0.7.0
 
 - 파이프라인 관제, the page's new first screen: the pipeline as a building of five floors (원천 데이터, 변환, 온톨로지 구축,
