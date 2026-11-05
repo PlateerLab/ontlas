@@ -1270,7 +1270,8 @@ class StudioSession:
                     (x for x in _lineage(o, t.name) if pname in o.objects[x].properties), t.name)
                 properties.append({
                     "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr else "",
-                    "values": p.values, "labels": p.labels, "required": p.required, "mask": p.mask, "expr": p.expr,
+                    "values": p.values, "labels": p.labels, "columns": p.columns, "required": p.required,
+                    "mask": p.mask, "expr": p.expr,
                     "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,

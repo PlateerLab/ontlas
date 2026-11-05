@@ -354,6 +354,8 @@ def _prop_spec(a: dict) -> dict:
     for k in ("label", "description", "column", "unit", "expr", "mask", "cite"):
         if a.get(k):
             spec[k] = a[k]
+    if a.get("columns"):
+        spec["columns"] = [str(c) for c in a["columns"]]
     if a.get("values"):
         spec["values"] = [str(v) for v in a["values"]]
     if a.get("labels"):
