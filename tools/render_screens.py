@@ -3,7 +3,7 @@
     python tools/render_screens.py            # needs playwright with chromium installed
 
 Writes assets/screens/{library,ontology,query,decision,map}.png from `xspace preview`,
-assets/screens/{catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
+assets/screens/{monitor,catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
 at 2x.
 """
 from __future__ import annotations
@@ -45,6 +45,11 @@ def _serve(config: Path, samples: Path) -> str:
 
 
 def live_screens(page, base: str, out: Path) -> None:
+    page.goto(base + "/#monitor")
+    page.wait_for_selector(".spacesvg")
+    page.evaluate("document.fonts.ready")
+    page.wait_for_timeout(2500)
+    page.locator(".mcard").screenshot(path=str(out / "monitor.png"))
     page.goto(base + "/#catalog")
     page.locator(".cempty").wait_for()
     page.click("[data-act=fsample]")

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- 파이프라인 관제, the page's new first screen: the pipeline as a building of five floors (원천 데이터, 변환, 온톨로지 구축,
+  활용, 검증), drawn from what the space holds now. Numbers refresh every 2 seconds; the flow is measured again at once
+  when the definition or the files change and otherwise every 20 seconds, only while the board is open.
+- A stage that misses its pass conditions stops the data at its floor, and a failure that crosses floors is told as a
+  chain down to the module that brought it (`web/monitor.py`). Files that could not be read and changes or actions
+  waiting on a person show as warnings.
+- `monitor: {faults: [{label, attach}]}` in a studio file lists modules the board can apply to show a real failure, and
+  take off again.
+
 ## 0.6.0
 
 - The product is XGEN Space now: repository `xgen-space`, package `xgen_space`, command `xspace` (it was

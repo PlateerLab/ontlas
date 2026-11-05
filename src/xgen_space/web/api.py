@@ -7,6 +7,7 @@ import re
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -57,6 +58,7 @@ ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which 
 DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request waits on: at most 5 minutes in all
 POLICY_MAX = 12000  # characters of policy text a draft reads
 JSON_PREVIEW = 40_000  # characters of the one JSON the page shows; the download has it all
+MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 EDIT_TEXT = [
     (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
@@ -173,6 +175,8 @@ class StudioSession:
         self.definitions: dict = {}  # file path -> the table and code definitions read from it (definitions.py)
         self.sizes: dict[str, int] = {}
         self._held: dict[str, str] = {}  # file path -> the hash of what uploads and definitions hold for it
+        self.events: deque = deque(maxlen=30)  # what happened here, newest first, for the control board
+        self._watch: dict | None = None  # the last measurement of the pipeline
         self.pending = None  # (draft, the database it was drawn from, the tables loaded into it, the rules)
         self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
         self.self_approve = True  # one visitor is both sides of a change; a team studio turns this off
@@ -193,6 +197,10 @@ class StudioSession:
     def _note(self, kind: str, text: str, **detail) -> None:
         self.log.insert(0, {"kind": kind, "text": text, **plain(detail)})
         del self.log[30:]
+        self.event(kind, text)
+
+    def event(self, kind: str, text: str) -> None:
+        self.events.appendleft({"at": datetime.now().isoformat(timespec="seconds"), "kind": kind, "text": text})
 
     def _reproject(self) -> dict:
         graphs = [n for n, b in self.studio.backends.items() if b.capabilities.load]
@@ -854,6 +862,52 @@ class StudioSession:
         self.catalog_remove([source])
         return self.files_state()
 
+    # ---- the control board: the pipeline measured, floor by floor ---------------------------------------------
+
+    def _monitor_sig(self) -> tuple:
+        """What has to change for the board to measure again before its time."""
+        st = self.studio
+        comp = st.composition
+        return (id(st), tuple((m.name, m.version) for m in comp.modules) if comp else (), self.repo,
+                tuple(f["sha256"] for f in self.repositories.files(self.repo).values()),
+                id(self.log[0]) if self.log else 0, sum(c.status == "pending" for c in st.changes.requests.values()))
+
+    def monitor(self) -> dict:
+        """The board: measured when something changed or a while has passed, and read at every look."""
+        from xgen_space.web.monitor import board, failed
+
+        sig, now = self._monitor_sig(), time.time()
+        w = self._watch
+        fresh = w is None or w["sig"] != sig or now - w["at"] >= MONITOR_EVERY
+        if fresh:
+            started = time.perf_counter()
+            flow = self.flow()
+            bind = next(s for s in flow["steps"] if s["id"] == "bind")
+            findings = self.bindings()["findings"] if failed(bind) else []
+            took = round((time.perf_counter() - started) * 1000)
+            w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took,
+                               "stamp": datetime.now().isoformat(timespec="seconds")}
+            gates = [g for s in flow["steps"] for g in s["gates"]]
+            self.event("measure", f"파이프라인 측정 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
+        st = self.studio
+        comp = st.composition
+        on = {m.name for m in comp.modules} if comp else set()
+        faults = [{"label": str(f.get("label", "")), "module": str(f.get("attach", "")), "on": f.get("attach") in on}
+                  for f in (getattr(st, "settings", {}).get("monitor") or {}).get("faults") or []
+                  if any(r["name"] == f.get("attach") for r in self._library_rows)]
+
+        def owner(element: str) -> str:
+            return self._label(comp.owner(element)) if comp else ""
+
+        out = board(w["flow"], files=self.repositories.files(self.repo), onto=st.onto, owner_label=owner,
+                    modules=[], findings=w["findings"], faults=faults,
+                    changes=sum(c.status == "pending" for c in st.changes.requests.values()),
+                    actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
+                    dirty=bool(self.workspace and self.workspace.dirty))
+        return plain({**out, "now": datetime.now().isoformat(timespec="seconds"), "measured_at": w["stamp"],
+                      "measured": fresh, "took": w["took"], "events": list(self.events)[:12],
+                      "repository": self._repository_row()["label"], "notice": self.origin.get("notice", "")})
+
     # ---- the catalog: repositories, folders and files, each with what it turned out to be ---------------------
 
     def _repository_row(self) -> dict:
@@ -888,6 +942,7 @@ class StudioSession:
             self._keep(path, data, tables, defs)
         except ValueError as e:
             self._keep(path, data, [], None, str(e).removeprefix(name + ": "))
+        self.event("upload", f"파일 업로드 · {name}")
         return {"ok": True, "skipped": False}
 
     def catalog_folder(self, path: str) -> dict:

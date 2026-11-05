@@ -120,7 +120,7 @@ def load_studio(path: str | Path) -> Studio:
         from xgen_space.actions import HttpCaller
 
         studio.actions.caller = HttpCaller(list(calls), float((spec.get("actions") or {}).get("timeout", 10)))
-    studio.settings = {k: spec[k] for k in ("flow", "sync", "notice") if k in spec}
+    studio.settings = {k: spec[k] for k in ("flow", "sync", "notice", "monitor") if k in spec}
     for name in spec.get("resolve") or []:  # written into the source only when the studio file asks for it
         studio.resolve_identity(str(name))
     if spec.get("project"):

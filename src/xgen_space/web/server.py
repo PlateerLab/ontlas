@@ -29,7 +29,7 @@ def page() -> bytes:
     """index.html with the stylesheet and script inlined, so a cache in front never serves a stale pair."""
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     css = BASE_CSS + (STATIC / "app.css").read_text(encoding="utf-8")
-    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    js = (STATIC / "scene.js").read_text(encoding="utf-8") + (STATIC / "app.js").read_text(encoding="utf-8")
     return html.replace("/*CSS*/", css).replace("/*JS*/", js).encode("utf-8")
 
 
@@ -399,6 +399,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
+                if route == "monitor":
+                    return {**s.monitor(), "visitors": len(getattr(sessions, "items", {})) or 1}
                 if route == "manage":
                     return s.manage_state()
                 if route == "flow":
@@ -429,7 +431,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "attach":
                 return s.attach(a["name"])
             if route == "query":
-                return s.run_query(a["name"], a.get("params") or {}, role=role, principal=principal)
+                out = s.run_query(a["name"], a.get("params") or {}, role=role, principal=principal)
+                s.event("query", f"질의 실행 · {out.get('label') or a['name']}")
+                return out
             if route == "text":
                 return s.run_text(str(a.get("language", "sparql")), str(a.get("text", "")), role=role,
                                   principal=principal)
@@ -448,6 +452,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "policy/sample":
                 return s.policy_sample()
             if route == "decide":
+                s.event("decide", f"판정 · {a['name']} {a['key']}")
                 return s.decide(a["name"], str(a["key"]))
             if route == "request":
                 return s.request(a["action"], str(a["key"]), a.get("params") or {}, role)

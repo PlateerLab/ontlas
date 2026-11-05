@@ -14,6 +14,7 @@
     objects: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>',
     props: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
     links: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+    monitor: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/>',
     catalog: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
     db: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0zM12 17v4"/>',
     convert: '<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',
@@ -32,10 +33,10 @@
     catalog2: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
-  const NAV = [['guide', '사용 안내'], ['flow', '흐름'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
+  const NAV = [['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
-  const NAV_GROUP = [['', '시작', ['guide', 'flow']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
+  const NAV_GROUP = [['', '시작', ['monitor', 'guide', 'flow']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
     ['③', '온톨로지 구축', ['data', 'objects', 'props', 'links', 'library', 'onto']], ['④', '활용', ['query', 'decide']], ['⑤', '검증', ['check', 'bind']]];
   const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: '액션', query: '질의',
     question: '검증 질문', role: '역할', interface: '인터페이스', rule: '규칙', states: '상태 전이' };
@@ -58,6 +59,11 @@
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
   // the manual: one section per screen, in the order a first visit goes through them
   const GUIDE = [
+    ['monitor', '원천 데이터부터 검증까지 파이프라인 전체의 현재 상태를 층별로 확인합니다.', [
+      '층마다 현재 스페이스의 실제 값을 표시하고 2초마다 갱신합니다. 정의와 데이터가 바뀌면 바로, 그 밖에는 20초마다 다시 측정합니다.',
+      '값을 선택하면 해당 화면으로 이동합니다. 상단 탭에서 층을 고르면 그 층을 강조합니다.',
+      '통과 조건을 충족하지 못한 단계가 있으면 그 층부터 데이터 흐름이 멈춥니다. 층을 넘은 이상에서 원인 경로를 확인합니다.',
+      '[이상 재현]을 선택하면 예시 모듈을 실제로 적용해 파이프라인이 어떻게 멈추는지 확인합니다. [복구]로 되돌립니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 백엔드 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
@@ -181,6 +187,7 @@
     ind: { target: '', inputs: {} },
     mg: { st: null, busy: false, sel: '', form: null, q: '', obj: '', table: '', open: false, keep: false, qt: 0, review: null },
     cat: null, conv: null, pick: false, menu: null, pal: null, closed: {}, slim: false,
+    mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
   S.cat = NEW_CAT();
@@ -269,7 +276,7 @@
     const u = S.me && S.me.team && S.me.user;
     const who = u ? `<span class="chip b">${esc(u.name)} · ${esc(u.roles.map((r) => ROLE_WORD[r] || r).join(', '))}</span><button class="btn sm ghost" data-act="logout">로그아웃</button>` : '';
     const g = groupOf(S.tab);
-    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#flow">홈</a><i>›</i>${g ? `<span>${esc((g[0] ? g[0] + ' ' : '') + g[1])}</span><i>›</i>` : ''}<b>${esc(navLabel(S.tab))}</b></nav>
+    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#monitor">홈</a><i>›</i>${g ? `<span>${esc((g[0] ? g[0] + ' ' : '') + g[1])}</span><i>›</i>` : ''}<b>${esc(navLabel(S.tab))}</b></nav>
       <div class="grow"></div>
       ${originChip(st.origin)}
       <button class="pill" data-act="repopick" aria-label="리포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>
@@ -307,16 +314,17 @@
     if (!S.st) return;
     renderTop();
     renderSide();
-    const views = { guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
+    const views = { monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks };
     const main = $('#main');
-    main.innerHTML = (views[S.tab] || viewFlow)();
+    main.innerHTML = (views[S.tab] || viewMonitor)();
     paintLayer();
     after();
   }
 
   function after() {
     if (S.tab === 'guide') mountGuide();
+    if (S.tab === 'monitor') mountMonitor();
     if (S.tab === 'flow' && !S.fl) loadFlow();
     if (S.tab === 'flow' && !S.flset) loadFlowSettings();
     if (S.tab === 'library' && !S.changes) loadChanges();
@@ -2029,6 +2037,98 @@ ${controls}${body}`;
         <div class="card"><div class="ch">하나의 JSON<span class="chip sm">${fileSize(c.bytes)}</span></div><div class="cb">${c.json ? `<pre class="code cjson">${esc(c.json)}</pre>${c.cut ? '<div class="hint" style="margin-top:8px">앞부분만 표시합니다. 전체 내용은 [JSON 내려받기]로 저장합니다.</div>' : ''}` : '<div class="muted" style="font-size:12.5px">초안에 포함한 파일이 없습니다.</div>'}</div></div></div>`;
   }
 
+  // ---- control board: the pipeline as floors, every number from the space as it is now ---------------------------
+
+  const ST_WORD = { ok: '정상', warn: '주의', bad: '이상', off: '꺼짐' };
+  const hms = (v) => String(v || '').slice(11, 19);
+
+  function spark(list) {
+    if (list.length < 2) return '';
+    const top = Math.max(...list, 1);
+    const line = list.map((v, i) => `${(i / (list.length - 1) * 96).toFixed(1)},${(22 - v / top * 20).toFixed(1)}`).join(' ');
+    return `<svg class="spark" viewBox="0 0 96 24" aria-hidden="true"><polyline points="${line}"/></svg>`;
+  }
+
+  function monitorBrief(m) {
+    const cards = [...m.floors].reverse().map((f) => `<a class="mfloor st-${f.status}" href="#${f.tab}"><div class="mfh"><b>${esc(f.no)} ${esc(f.label)}</b><span>${ST_WORD[f.status]}</span></div>
+      <div class="mfn"><b>${f.alerts}</b> 경보</div><div class="mfk">${f.tags.slice(0, 3).map((t) => `<span>${esc(t.label)} <b>${esc(t.value)}</b></span>`).join('')}</div></a>`).join('');
+    const chain = m.chain ? `<div class="mchain"><div class="mchainh"><span class="chip sm bad">${m.chain.floors > 1 ? '층을 넘은 이상' : '이상'}</span><b>${m.chain.steps.map((x) => esc(x.label)).join(' ← ')}</b></div>
+      <ol>${m.chain.steps.map((x) => `<li><a href="#${esc(x.tab)}">${esc(x.label)}</a>${x.detail ? `<span class="muted">${esc(x.detail)}</span>` : ''}</li>`).join('')}</ol></div>`
+      : '<div class="mclear"><span class="ic y" style="width:22px;height:22px">✓</span>충족하지 못한 통과 조건이 없습니다.</div>';
+    const alerts = m.alerts.length ? m.alerts.map((a) => `<a class="malert" href="#${esc(a.tab)}"><i style="background:${a.level === 'bad' ? '#e5484d' : '#e2a03f'}"></i><b>${esc(a.title)}</b><span class="muted">${esc(a.detail)}</span></a>`).join('') : '<div class="muted" style="font-size:12.5px">활성 경보가 없습니다.</div>';
+    const events = m.events.length ? m.events.map((e) => `<div class="mevent"><span class="mono muted">${esc(hms(e.at))}</span><span>${esc(e.text)}</span></div>`).join('') : '<div class="muted" style="font-size:12.5px">기록된 활동이 없습니다.</div>';
+    return `<div class="card mbrief"><div class="meyebrow">PIPELINE OVERVIEW</div><h2>파이프라인 브리핑</h2>
+      <div class="mfloors">${cards}</div>${chain}
+      <div class="mcols"><div><div class="sec">활성 경보</div>${alerts}</div><div><div class="sec">최근 활동</div><div class="mevents">${events}</div></div></div></div>`;
+  }
+
+  function monitorStrip(m) {
+    const rtt = S.mon.rtt;
+    return `<span class="mdot st-${m.status}"></span><span>파이프라인 상태 <b>${ST_WORD[m.status]}</b></span>
+      <span>활성 경보 <b>${m.alerts.length}</b></span><span>통과 조건 <b>${m.gates.met} / ${m.gates.all}</b></span>
+      <span>최근 측정 <b>${esc(hms(m.measured_at))}</b> <span class="muted">${count(m.took)}ms</span></span><span>접속 세션 <b>${count(m.visitors)}</b></span>
+      <span class="mgrow"></span><span>응답 시간 <b>${rtt.length ? `${rtt[rtt.length - 1]}ms` : '-'}</b></span>${spark(rtt)}`;
+  }
+
+  const monitorTicker = (m) => (m.events[0] ? `<span class="mono">${esc(hms(m.events[0].at))}</span>${esc(m.events[0].text)}` : '');
+
+  function viewMonitor() {
+    const m = S.mon.st;
+    const now = new Date();
+    const head = `<div class="mhead"><div class="logo">X</div><div><div class="meyebrow">XGEN SPACE · ONTOLOGY PIPELINE</div><h1>파이프라인 관제</h1></div>
+      <div class="mclock"><i class="dot mlive"></i><b id="mclock">${now.toTimeString().slice(0, 8)}</b><span class="muted">${now.toISOString().slice(0, 10).replaceAll('-', '.')}</span></div></div>`;
+    if (!m) return head + '<div class="empty"><span class="spin"></span>파이프라인을 측정하는 중입니다.</div>';
+    const short = { source: '원천', convert: '변환', ontology: '구축', use: '활용', verify: '검증' };
+    const seg = [['', '전체'], ...m.floors.map((f) => [f.id, short[f.id] || f.label])].map(([k, l]) => `<button class="${S.mon.focus === k ? 'on' : ''}" data-act="mfocus" data-k="${k}"${k ? ` aria-label="${esc(m.floors.find((f) => f.id === k).label)}"` : ''}>${esc(l)}</button>`).join('');
+    const active = m.faults.find((f) => f.on);
+    const fault = m.faults.length ? `<select class="inline" data-in="mfault" aria-label="재현할 이상"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
+      <button class="btn sm ${active ? '' : 'mwarn'}" data-act="mfault"${S.mon.busy ? ' disabled' : ''}>${S.mon.busy ? '<span class="spin"></span>처리 중' : (active ? '복구' : '이상 재현')}</button>` : '';
+    return `${head}<div class="card mcard"><div class="mtop"><div><div class="meyebrow">LIVE PIPELINE</div><b class="mtitle">데이터가 온톨로지가 되는 과정</b></div>
+        <div class="seg mseg">${seg}</div><div class="mctl">${fault}</div></div>
+      <div class="mstage"><div class="mlink"><i class="dot mlive"></i>실시간 갱신 · 2초</div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}
+        <div id="mscene"></div>
+        <div class="mlegend"><span><i style="background:#22a06b"></i>정상</span><span><i style="background:#e2a03f"></i>주의</span><span><i style="background:#e5484d"></i>이상</span></div><div class="mtick" id="mtick">${monitorTicker(m)}</div></div>
+      <div class="mstrip" id="mstrip">${monitorStrip(m)}</div></div><div id="mbrief">${monitorBrief(m)}</div>`;
+  }
+
+  function mountMonitor() {
+    const m = S.mon.st;
+    if (m && $('#mscene')) {
+      window.SpaceScene.mount($('#mscene'), m);
+      S.mon.shape = m.shape;
+      window.SpaceScene.focus(S.mon.focus);
+    }
+    if (!S.mon.timer) monitorTick();
+  }
+
+  async function monitorTick() {
+    clearTimeout(S.mon.timer);
+    if (S.tab !== 'monitor') { S.mon.timer = 0; return; }
+    if (!document.hidden) {
+      const start = performance.now();
+      try {
+        const m = await api('monitor');
+        S.mon.rtt.push(Math.round(performance.now() - start));
+        S.mon.rtt = S.mon.rtt.slice(-40);
+        const first = !S.mon.st;
+        S.mon.st = m;
+        if (S.tab === 'monitor') {
+          if (first || m.shape !== S.mon.shape || !$('#mscene')) {
+            S.mon.timer = setTimeout(monitorTick, 2000);
+            render();
+            return;
+          }
+          window.SpaceScene.patch(m);
+          if (m.measured) window.SpaceScene.sweep();
+          $('#mstrip').innerHTML = monitorStrip(m);
+          $('#mtick').innerHTML = monitorTicker(m);
+          $('#mbrief').innerHTML = monitorBrief(m);
+        }
+      } catch (e) { fail(e); }
+    }
+    S.mon.timer = setTimeout(monitorTick, 2000);
+  }
+
   // ---- database -------------------------------------------------------------------------------------------------
 
   function viewDb() {
@@ -2650,6 +2750,23 @@ ${controls}${body}`;
       v.play().catch(() => { /* the viewer starts it */ });
       if (t.classList.contains('btn')) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
+    mfocus: (t) => { S.mon.focus = t.dataset.k; document.querySelectorAll('.mseg button').forEach((b) => b.classList.toggle('on', b === t)); window.SpaceScene.focus(S.mon.focus); },
+    mfault: async () => {
+      const m = S.mon.st;
+      const f = m.faults.find((x) => x.on) || m.faults[S.mon.fault];
+      if (!f) return;
+      S.mon.busy = true;
+      render();
+      try {
+        await api(f.on ? 'detach' : 'attach', { name: f.module });
+        stale();
+        S.st = await api('state');
+        S.mon.st = await api('monitor');
+      } catch (e) { fail(e); }
+      S.mon.busy = false;
+      render();
+      window.SpaceScene.sweep();
+    },
     fsample: () => catalogCall('files/sample', {}),
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
     slim: () => { S.slim = !S.slim; render(); },
@@ -3039,6 +3156,7 @@ ${controls}${body}`;
     },
     cinc: (t) => catalogCall('catalog/include', { paths: [t.dataset.path], on: t.checked }),
     cext: (t) => { S.cat.ext = t.value; render(); },
+    mfault: (t) => { S.mon.fault = Number(t.value); },
   };
 
   async function finishEdit() {
@@ -3105,7 +3223,7 @@ ${controls}${body}`;
     main.addEventListener('dragleave', (ev) => { const z = ev.target.closest('[data-drop]'); if (z) z.classList.remove('over'); });
     main.addEventListener('drop', (ev) => { const z = ev.target.closest('[data-drop]'); if (z) { ev.preventDefault(); z.classList.remove('over'); dropped(ev.dataTransfer); } });
     window.addEventListener('hashchange', () => {
-      S.tab = location.hash.slice(1) || 'flow';
+      S.tab = location.hash.slice(1) || 'monitor';
       S.cat.file = null;
       if (S.mg.keep) S.mg.keep = false;
       else if (S.mg.form && S.mg.form.kind !== 'question') { S.mg.form = null; S.mg.sel = ''; }
@@ -3113,7 +3231,8 @@ ${controls}${body}`;
     });
   }
 
-  S.tab = (location.hash.slice(1) && NAV.some(([k]) => k === location.hash.slice(1))) ? location.hash.slice(1) : 'flow';
+  S.tab = (location.hash.slice(1) && NAV.some(([k]) => k === location.hash.slice(1))) ? location.hash.slice(1) : 'monitor';
+  setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
   wire();
   load().catch(fail);
 })();

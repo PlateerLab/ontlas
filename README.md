@@ -126,7 +126,8 @@ The page follows the data from raw files to checked answers. `Ctrl K` jumps to a
 
 | Stage | Screen | Use it to |
 |---|---|---|
-| 시작 | 사용 안내 | Read what each screen does, beside the demo video when there is one |
+| 시작 | 파이프라인 관제 | See the whole pipeline as five floors, live, and where it stops when a stage fails |
+| | 사용 안내 | Read what each screen does, beside the demo video when there is one |
 | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
 | ① 원천 데이터 | 데이터 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
 | | DB 연결 | Connect a database and draft from it |
@@ -211,7 +212,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 | `nl` | A schema card and IR guide for a language model, and a loop that checks its answer and asks again with the issues |
 | `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xspace` command; the MCP server; the studio page as a file |
 | `repository` | Repositories of raw files: folders and files by path in an index, bytes by hash, kept in a folder or gone with the visitor |
-| `web` | The studio page served over HTTP with the standard library only: flow with its pass conditions, the data catalog, the one JSON, the draft and standard bindings, library with the module editor and change review, ontology graph, queries, decisions, approvals and rollback, checks, and the guide with its video; one studio per visitor, or one per team behind a sign-in |
+| `web` | The studio page served over HTTP with the standard library only: the pipeline board, flow with its pass conditions, the data catalog, the one JSON, the draft and standard bindings, library with the module editor and change review, ontology graph, queries, decisions, approvals and rollback, checks, and the guide with its video; one studio per visitor, or one per team behind a sign-in |
 
 ## Define once
 
@@ -384,6 +385,36 @@ takes like any other input. On the page, the same adapters read what reaches the
 A format with no adapter here goes through a plug-in: a Python file that calls `ingest.register([".ext"], fn)` and
 returns `Definitions`, loaded with `xspace ingest --adapter FILE` or `XSPACE_ADAPTERS`. A binary format nothing reads is
 refused with what to export it to.
+
+## The pipeline board
+
+파이프라인 관제 is the page's first screen. It draws the pipeline as a building: raw data at the bottom, then conversion,
+the ontology, its use, and verification at the top, with the data climbing one belt through the floors.
+
+<p align="center">
+  <img src="assets/screens/monitor.png" alt="Pipeline board: five floors from raw data to verification, each with its live numbers, and a status strip below" width="920">
+</p>
+
+Nothing on it is scripted. Every number comes from the space as it is now, so it works on any ontology, including a
+draft from your own files: tables and rows, files by kind, modules, objects and relations, query results compared across
+backends, decision agreement, question accuracy, pass conditions. Numbers refresh every 2 seconds. The flow is measured
+again as soon as the definition or the files change, and otherwise every 20 seconds while the board is open.
+
+A stage that misses its pass conditions stops the data at its floor, and a failure that crosses floors is told as a chain
+from where it shows down to the module that brought it:
+
+```text
+질의 ← DB 대조 ← 식품 업종 확장 모듈   (Sku.expires_on, Sku.storage)
+```
+
+To see that on the example library, choose 이상 재현: it really applies a module whose columns the database does not have,
+and 복구 takes it off again. A studio file names such modules itself:
+
+```yaml
+monitor:
+  faults:
+    - {label: 식품 업종 모듈 적용, attach: food}
+```
 
 ## The data catalog
 
