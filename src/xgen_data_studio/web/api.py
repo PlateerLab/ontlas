@@ -550,6 +550,8 @@ class StudioSession:
         table = st.onto.decisions[name]
         res = st.decide(name, key)
         outs = res.outputs if isinstance(res.outputs, dict) else {"result": res.outputs}
+        collected = table.hit_policy == "collect"  # every rule that applies: the list is the answer
+        picked = res.outputs if isinstance(res.outputs, list) else []
         zen = None
         if _has_zen():
             try:
@@ -575,8 +577,9 @@ class StudioSession:
             "name": name, "label": table.label or name, "target": table.target,
             "target_label": self._obj_label(table.target), "key": key, "hit_policy": table.hit_policy,
             "inputs": list(table.inputs), "outputs": list(table.outputs), "result": outs,
-            "yes": bool(outs.get(first)) if first else False, "reason": next(
-                (v for v in outs.values() if isinstance(v, str)), ""),
+            "yes": bool(picked) if collected else (bool(outs.get(first)) if first else False),
+            "reason": " · ".join(str(x.get("name") or x.get("code") or x) if isinstance(x, dict) else str(x) for x in picked)
+            if collected else next((v for v in outs.values() if isinstance(v, str)), ""),
             "matched": res.matched, "rules": rules, "values": res.inputs, "evidence": evidence,
             "messages": self._said(outs),
             "engine": res.engine, "zen": zen, "notes": res.notes,

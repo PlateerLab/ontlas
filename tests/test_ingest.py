@@ -1205,3 +1205,20 @@ def test_codes_hold_decision_tables_of_both_shapes():
     assert [x["name"] for x in st.decide("codes_ac01", "L2").outputs] == ["취소", "반품"]  # 폐기 is not in use
     assert st.decide("codes_rs01", "L1").outputs["ref2"] == "당사"
     assert st.decide("codes_rs01", "L1").matched == ["c200"]
+
+
+def test_an_uploaded_document_feeds_the_policy_draft_by_section_and_a_code_shows_its_message():
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")
+    from xgen_data_studio.config import load_studio
+    from xgen_data_studio.web.api import StudioSession
+
+    s = StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
+    s.upload("규정.md", "# 반품\n\n7일 이내 반품합니다.\n\n# 교환\n\n14일 이내 교환합니다.\n".encode())
+    got = s.document_text("규정")
+    assert got["ok"] and got["sections"] == ["반품", "교환"] and "14일" in got["text"]
+    part = s.document_text("규정", "교환")
+    assert "14일" in part["text"] and "7일" not in part["text"]
+    assert not s.document_text("없는 문서")["ok"]
+    s.studio.composition.messages = [{"code": "MSG-1", "text": "기간이 지났습니다."}]
+    assert s._said({"reason": "MSG-1", "ok": True}) == [{"code": "MSG-1", "text": "기간이 지났습니다."}]
