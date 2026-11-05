@@ -348,7 +348,8 @@ names, labels and types, and a glossary says which of the system's words mean wh
 A system that abbreviates its names still gets partial suggestions, and a person picks the rest: choosing another
 table matches its columns and relations again.
 
-A studio reads one source database today.
+A studio reads one source database today. A draft from definitions alone is checked against an empty database of
+the same shape, which says nothing about real rows: for that, get read-only access to a development database.
 
 ### Anything in, one JSON
 
