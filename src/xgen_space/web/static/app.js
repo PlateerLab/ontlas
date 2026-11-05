@@ -38,8 +38,8 @@
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   const NAV_GROUP = [['', '시작', ['monitor', 'guide', 'flow']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
     ['③', '온톨로지 구축', ['data', 'objects', 'props', 'links', 'library', 'onto']], ['④', '활용', ['query', 'decide']], ['⑤', '검증', ['check', 'bind']]];
-  const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: '액션', query: '질의',
-    question: '검증 질문', role: '역할', interface: '인터페이스', rule: '규칙', states: '상태 전이' };
+  const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
+    question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
   const STATUS = { pending: ['warn', '승인 대기'], rejected: ['bad', '반려'], executed: ['ok', '원천 반영'],
@@ -52,8 +52,8 @@
     properties: ['속성과 타입', '컬럼별 속성 타입과 허용값 지정'],
     links: ['관계', '키 컬럼 이름과 값 일치 기준 관계 추론'],
     queries: ['등록 질의', '객체 목록, 관계별 집계, 허용값별 집계 질의 생성'],
-    rules: ['규칙 · 역할 · 검증', '상태 전이, 상태 변경 액션, 역할, 검증 질문, 지난 처리 결과로 만든 판정 표'],
-    bindings: ['바인딩', '객체, 속성, 관계의 원천 테이블과 컬럼 연결'],
+    rules: ['규칙 · 역할 · 검증', '상태 전이, 상태 변경 Action, 역할, 검증 질문, 지난 처리 결과로 만든 판정 표'],
+    bindings: ['Binding', '객체, 속성, 관계의 원천 테이블과 컬럼 연결'],
   };
   const CARD = { many_to_one: 'N:1', one_to_many: '1:N', one_to_one: '1:1', many_to_many: 'N:M' };
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
@@ -67,12 +67,12 @@
       '[장애 테스트]를 선택하면 예시 모듈을 적용해 장애 상황을 확인합니다. [복구]를 선택하면 원래 상태로 돌아갑니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
-      '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 백엔드 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
+      '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
       '상단 정보에서 현재 데이터 출처를 확인합니다.',
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
     ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
       '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
-      '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다.',
+      '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다. 이미지, 영상, 압축 파일은 원본으로 보관합니다.',
       '초안 열의 선택을 해제하면 파일 또는 폴더를 초안과 변환 결과에서 제외합니다.',
       '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 삭제를 합니다.',
       '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
@@ -90,12 +90,12 @@
     ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 생성하고 스페이스에 적용합니다.', [
       '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
       '생성 설정에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의를 지정하고 초안에 넣을 테이블을 선택합니다.',
-      '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, 바인딩 순서로 초안이 생성됩니다.',
-      'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, Word, PowerPoint, 한글, PDF 문서를 함께 사용할 수 있습니다.',
+      '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, Binding 순서로 초안이 생성됩니다.',
+      'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOCX, PPTX, HWP, HWPX, PDF 문서를 함께 사용할 수 있습니다.',
       '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 묶습니다.',
-      '단계마다 키 컬럼, 속성 타입과 허용값, 이름, 카디널리티, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
+      '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
       '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
-      '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 매핑한 제안이 표시됩니다. 내용을 확인하고 수정한 뒤 [표준에 연결해 적용]을 선택합니다.',
+      '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 Mapping한 제안이 표시됩니다. 내용을 확인하고 수정한 뒤 [표준에 연결해 적용]을 선택합니다.',
       '[스페이스에 적용]을 선택하면 새 파이프라인으로 추가되고 모든 화면이 해당 데이터 기준으로 변경됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.']],
     ['objects', '객체의 라벨, 원천 테이블, 키, 상위 객체를 관리합니다.', [
       '[새 객체]에서 원천 테이블을 선택하면 키와 속성이 테이블 컬럼 기준으로 입력됩니다.',
@@ -107,36 +107,36 @@
       '객체를 선택하거나 검색어를 입력해 속성을 필터링합니다. 상위 객체의 속성은 상속으로 표시됩니다.',
       '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가합니다.',
       '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 객체에서 제외합니다.']],
-    ['links', '객체 사이의 관계와 연결 기준 컬럼, 카디널리티, 역관계를 관리합니다.', [
+    ['links', '객체 사이의 관계와 연결 기준 컬럼, Cardinality, 역관계를 관리합니다.', [
       '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 위에 표시됩니다. [관계 추가]로 바로 추가합니다.',
       '[새 관계]에서 출발 객체와 속성, 도착 객체와 속성을 선택하면 두 속성 값이 같은 행끼리 연결됩니다.',
-      '표준 모듈의 관계는 라벨, 카디널리티, 역관계, 필수 여부만 바꿀 수 있습니다.',
+      '표준 모듈의 관계는 라벨, Cardinality, 역관계, 필수 여부만 바꿀 수 있습니다.',
       '관계 그래프는 [온톨로지]에서 확인합니다.']],
-    ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, 바인딩, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
+    ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, Binding, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
       '적용 스위치를 끄면 함께 해제되는 모듈과 제거되는 항목을 먼저 표시합니다.',
       '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 올라갑니다. 해제하면 스페이스 설정으로 돌아갑니다.',
       '구축 규칙 모듈을 적용하면 초안 생성의 생성 설정 기본값이 모듈의 규칙으로 바뀝니다.',
       '고객사 차이 · ACME 모듈을 해제하면 판정 · 처리에서 VIP 반품 규칙 대신 표준 규칙이 적용됩니다.',
       '해제된 모듈을 다시 적용하면 필요한 모듈도 함께 적용됩니다.',
       '[편집]을 선택하면 모듈 정의 파일에서 객체, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
-      '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, 백엔드 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
+      '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
     ['onto', '객체 간 관계를 그래프로 확인합니다.', [
-      '노드를 선택하면 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 매핑이 표시됩니다.',
+      'Node를 선택하면 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping이 표시됩니다.',
       '식별 통합 객체를 선택하면 묶인 기록과 근거를 확인하고, [다시 묶어 교차표 저장]으로 다시 묶습니다.',
       '관계를 선택하면 연결된 객체로 이동합니다.',
       '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
-    ['query', '온톨로지 질의를 백엔드별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
+    ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
       '등록 질의를 선택하면 바로 실행됩니다.',
       '언어 탭에서 PostgreSQL, MySQL, Oracle, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
       '[쿼리 입력]에서 SPARQL, Cypher 쿼리를 입력해 실행할 수 있습니다.',
       '실행 역할을 지정하면 해당 역할의 조회 범위만 표시됩니다.']],
     ['decide', '결정표 판정 결과와 근거를 확인하고 처리 요청을 승인합니다.', [
       '검증 질문을 선택하면 해당 대상을 판정합니다.',
-      '처리를 요청하면 권한, 파라미터 값 범위, 상태 전이, 판정 조건을 검사합니다.',
+      '처리를 요청하면 권한, Parameter 값 범위, 상태 전이, 판정 조건을 검사합니다.',
       '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
-    ['check', '검증 질문 정답률, 근거 제시율, 백엔드 간 결과 일치 여부를 확인합니다.', [
+    ['check', '검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다.', [
       '[다시 실행]으로 현재 상태를 다시 검증합니다.',
       '근거 제시율은 답에 적용 규칙 또는 질의, 출처(규정 조항, 원천 컬럼), 판본(모듈 버전)이 모두 있는 질문의 비율입니다. 누락 항목은 근거 열에 표시됩니다.',
       '검증 질문 관리에서 정답이 정해진 질문을 추가하거나 제외하고, [목록 불러오기]로 YAML · JSON 목록을 한 번에 넣습니다. 변경 요청이 승인되면 정답률 계산에 들어갑니다.',
@@ -149,15 +149,15 @@
     ['업무 정의 공유', '객체, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
     ['저장소 간 같은 질의', '하나의 질의를 SQL, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin으로 변환해 실행하고 저장소별 결과를 비교합니다.'],
     ['규칙 판정과 근거', '결정표로 판정하고 적용 규칙, 출처 조항, 원천 컬럼, 모듈 버전을 함께 표시합니다.'],
-    ['처리 통제', '역할별 조회 범위와 가림을 적용합니다. 에이전트는 처리를 요청만 하고, 승인한 처리만 원천 DB에 반영합니다.'],
+    ['처리 통제', '역할별 조회 범위와 가림을 적용합니다. Agent는 처리를 요청만 하고, 승인한 처리만 원천 DB에 반영합니다.'],
     ['변경 검토', '모듈 변경을 사본 스페이스에서 검토하고, 흐름 통과 조건을 충족한 변경만 승인합니다.'],
     ['시스템 · 고객사별 적용', '표준 모듈은 그대로 두고 시스템 연결과 고객사 차이만 모듈로 추가합니다.']];
   const GUIDE_ADAPT = [
-    ['표준 모듈과 원천 테이블', '초안 생성 > 표준에 연결', '바인딩 모듈'],
-    ['SQL 스크립트, ERD 파일, 테이블 정의서', '데이터 카탈로그 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['표준 모듈과 원천 테이블', '초안 생성 > 표준에 연결', 'Binding 모듈'],
+    ['SQL 스크립트, ERD 파일, 테이블 정의서', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['코드 정의서', '데이터 카탈로그 > 초안 생성', '코드값 이름, 결정표'],
     ['용어집, 메시지 목록', '데이터 카탈로그 > 초안 생성', '용어 사전 모듈'],
-    ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
     ['정책서, 화면설계서', '온톨로지 라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
     ['객체, 속성, 관계 수정', '객체 관리, 속성 관리, 관계 관리', '관리 변경 모듈'],
@@ -167,9 +167,9 @@
   const FLOW = [
     ['source', '원천 데이터', '테이블과 행 수', 'catalog'],
     ['define', '온톨로지 정의', '적용 모듈과 객체, 관계, 속성', 'library'],
-    ['bind', 'DB 대조', '정의와 원천 DB의 스키마, 데이터 대조', 'bind'],
-    ['project', '그래프 저장소 반영', '원천 데이터의 노드, 간선 반영', 'onto'],
-    ['query', '질의', '백엔드별 쿼리 변환과 결과 일치', 'query'],
+    ['bind', 'DB 대조', '정의와 원천 DB의 Schema, 데이터 대조', 'bind'],
+    ['project', '그래프 저장소 반영', '원천 데이터의 Node, Edge 반영', 'onto'],
+    ['query', '질의', 'Backend별 쿼리 변환과 결과 일치', 'query'],
     ['decide', '판정 · 처리', '결정표 판정과 승인 처리', 'decide'],
     ['check', '검증', '검증 질문 정답률', 'check'],
   ];
@@ -212,6 +212,7 @@
     if (Array.isArray(v)) return v.map((x) => (x && typeof x === 'object' ? showObj(x) : show(x))).join(', ');
     return show(v);
   };
+  const cellWord = (v) => (v === 'null' ? '값 없음' : v);
   const plainText = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : String(v ?? ''));
   const element = (id) => {
     const [kind, ...rest] = String(id).split(':');
@@ -414,10 +415,10 @@
     const r = p.res;
     if (r && !r.ok) body = `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.error)}</div></div>`;
     else if (r) {
-      const when = (w) => Object.keys(w).length ? Object.entries(w).map(([k, v]) => `<span class="mono">${esc(k)} ${esc(v)}</span>`).join('<br>') : '<span class="muted">그 밖의 경우</span>';
+      const when = (w) => Object.keys(w).length ? Object.entries(w).map(([k, v]) => `<span class="mono">${esc(k)} ${esc(cellWord(v))}</span>`).join('<br>') : '<span class="muted">그 밖의 경우</span>';
       const rows = r.rules.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="font-size:12px">${when(x.when)}</td><td style="font-size:12px">${showObj(x.then)}</td><td>${x.cite ? `<span class="chip sm">${esc(x.cite)}</span>` : '<span class="chip sm bad">출처 없음</span>'}</td></tr>`).join('');
       const from = (x) => {  // where an input is read: along the path to a property, its days since, or a count
-        if (x.param) return `파라미터 ${x.param}`;
+        if (x.param) return `Parameter ${x.param}`;
         const end = x.count ? '개수' : (x.days_since ? `${x.days_since} 경과일` : x.property);
         return [...(x.path || x.count || []), end].filter(Boolean).join(' → ');
       };
@@ -525,7 +526,7 @@
     const m = c.measured || {};
     const facts = [];
     if (m.bind && m.bind.errors !== undefined) facts.push(`DB 대조 오류 ${m.bind.errors} · 경고 ${m.bind.warnings}`);
-    if (m.query && m.query.queries !== undefined) facts.push(`백엔드 결과 일치 ${m.query.agree} / ${m.query.queries}`);
+    if (m.query && m.query.queries !== undefined) facts.push(`Backend 결과 일치 ${m.query.agree} / ${m.query.queries}`);
     if (m.check && m.check.accuracy !== undefined) facts.push(`검증 질문 정답률 ${pct(m.check.accuracy)}${m.check.failed && m.check.failed.length ? ` (틀린 질문 ${esc(m.check.failed.join(', '))})` : ''}`);
     if (m.decide && m.decide.rate !== undefined) facts.push(m.decide.cases ? `판정 일치율 ${pct(m.decide.rate)} (${m.decide.agree} / ${m.decide.cases})` : '판정 일치율 측정 불가 · 판정표 없음');
     const issues = c.issues.length ? `<div class="banner no" style="margin:8px 0"><span class="ic x" style="width:24px;height:24px">!</span><div class="loglist">${c.issues.slice(0, 6).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div>` : '';
@@ -610,16 +611,16 @@
 
   function viewOnto() {
     const s = S.st.stats;
-    const stats = [[s.objects, '객체'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, '액션'], [s.queries, '등록 질의']]
+    const stats = [[s.objects, '객체'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, 'Action'], [s.queries, '등록 질의']]
       .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
     return `
-<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 매핑을 확인합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
   <div class="right"><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
 <div class="stats">${stats}</div>
 <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr)">
-  <div class="card"><div class="ch">스키마 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span><span><i class="box"></i>모듈</span><span>- - 하위 유형</span></div></div>
+  <div class="card"><div class="ch">Schema 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span><span><i class="box"></i>모듈</span><span>- - 하위 유형</span></div></div>
     <div class="cb" style="padding:0"><div class="graph-wrap"><canvas id="graph"></canvas><div class="tip">드래그로 이동 · 휠로 확대</div></div></div></div>
-  <div class="card"><div class="cb scroll" id="objdetail" style="max-height:640px">${S.obj ? objDetail(S.obj) : '<div class="empty">노드를 선택하면 정의가 표시됩니다.</div>'}</div></div>
+  <div class="card"><div class="cb scroll" id="objdetail" style="max-height:640px">${S.obj ? objDetail(S.obj) : '<div class="empty">Node를 선택하면 정의가 표시됩니다.</div>'}</div></div>
 </div>`;
   }
 
@@ -647,7 +648,7 @@
     const ident = o.identity ? identityPanel(o.name) : '';
     const parent = o.parent ? `<div class="sec">상위 개념</div><button class="chip n" data-act="select" data-obj="${esc(o.parent)}">${esc(o.parent_label)} · ${esc(o.parent)}</button>` : '';
     const children = o.children.length ? `<div class="sec">하위 유형</div><div class="chips">${o.children.map((c) => `<button class="chip" data-act="select" data-obj="${esc(c.name)}">${esc(c.label)}</button>`).join('')}</div>` : '';
-    const aligned = o.aligned.length ? `<div class="sec">표준 개념 매핑</div><div class="chips">${o.aligned.map((a) => `<span class="chip sm mono">${esc(a.split('//').pop())}</span>`).join('')}</div>` : '';
+    const aligned = o.aligned.length ? `<div class="sec">표준 개념 Mapping</div><div class="chips">${o.aligned.map((a) => `<span class="chip sm mono">${esc(a.split('//').pop())}</span>`).join('')}</div>` : '';
     const mod = o.module ? `<span class="chip">정의 모듈 ${esc(o.module_label)}</span>` : '';
     const touched = o.touched.length ? `<span class="chip">확장 모듈 ${esc(o.touched.join(', '))}</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:16px">${esc(o.label)}</b>
@@ -906,7 +907,7 @@
     } else if (q.mode === 'text') {
       left = `<div class="field"><label>언어</label><select data-in="lang">${TEXT_LANG.map(([k, l]) => `<option value="${k}"${q.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><textarea class="code" data-in="text" spellcheck="false">${esc(q.text)}</textarea></div>
-        <div class="hint" style="margin-bottom:12px">입력한 쿼리를 모든 백엔드 쿼리로 변환해 실행합니다.</div>`;
+        <div class="hint" style="margin-bottom:12px">입력한 쿼리를 모든 Backend 쿼리로 변환해 실행합니다.</div>`;
     } else {
       const ex = st.questions.filter((x) => x.query).slice(0, 4);
       left = `<div class="field"><label>질문</label><input type="text" data-in="question" value="${esc(q.question)}" placeholder="질문을 입력하세요"></div>
@@ -914,8 +915,8 @@
     }
     const run = `<button class="btn primary" style="width:100%" data-act="run"${q.busy ? ' disabled' : ''}>${q.busy ? '<span class="spin"></span>실행 중' : '실행'}</button>`;
     return `
-<div class="head"><div><h1>질의</h1><div class="sub">온톨로지 질의를 백엔드별 쿼리로 변환해 실행합니다</div></div>
-  <div class="right">${q.res && q.res.ok ? (q.res.agree ? '<span class="chip ok">✓ 백엔드 결과 일치</span>' : '<span class="chip warn">백엔드 결과 불일치</span>') : ''}</div></div>
+<div class="head"><div><h1>질의</h1><div class="sub">온톨로지 질의를 Backend별 쿼리로 변환해 실행합니다</div></div>
+  <div class="right">${q.res && q.res.ok ? (q.res.agree ? '<span class="chip ok">✓ Backend 결과 일치</span>' : '<span class="chip warn">Backend 결과 불일치</span>') : ''}</div></div>
 <div class="grid" style="grid-template-columns:320px minmax(0,1fr);align-items:start">
   <div class="card"><div class="ch">질의</div><div class="cb">${seg}${left}${roleFields(q)}${run}</div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${queryResult()}</div>
@@ -939,9 +940,9 @@
     return `
 <div class="grid" style="grid-template-columns:minmax(0,0.8fr) minmax(0,1.2fr);flex:none">
   <div class="card"><div class="ch">온톨로지 질의 IR${r.attempts ? `<div class="right"><span class="chip b">생성 시도 ${r.attempts}회</span></div>` : ''}</div><div class="cb"><pre class="code ir" style="max-height:340px;overflow:auto">${esc(r.ir)}</pre></div></div>
-  <div class="card"><div class="ch">백엔드 쿼리</div><div class="cb"><div class="tabs" style="margin-bottom:10px">${tabs}</div>
+  <div class="card"><div class="ch">Backend 쿼리</div><div class="cb"><div class="tabs" style="margin-bottom:10px">${tabs}</div>
     <pre class="code" style="max-height:300px;overflow:auto">${cur ? cur.html : ''}</pre>
-    <div class="muted" style="font-size:12px;margin-top:6px">파라미터 ${params}</div></div></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Parameter ${params}</div></div></div>
 </div>
 <div class="grid" style="grid-template-columns:repeat(${Math.max(r.results.length, 1)}, minmax(0,1fr));flex:none">${results}</div>`;
   }
@@ -1055,7 +1056,7 @@ ${controls}${body}`;
     const th = (n) => `<th>${esc(n).replace(/_/g, '_<wbr>')}</th>`;
     const head = '<th>규칙</th>' + r.inputs.map(th).join('') + r.outputs.map(th).join('');
     const rows = r.rules.map((x) => `<tr class="${x.hit ? 'hit' : ''}"><td class="mono" style="white-space:nowrap">${esc(x.id)}${x.cite ? `<div class="muted cite-note">${esc(x.cite)}</div>` : ''}</td>
-      ${r.inputs.map((i) => `<td class="mono" style="white-space:nowrap">${esc(x.when[i] ?? '-')}</td>`).join('')}
+      ${r.inputs.map((i) => `<td class="mono" style="white-space:nowrap">${esc(cellWord(x.when[i] ?? '-'))}</td>`).join('')}
       ${r.outputs.map((o) => `<td style="min-width:120px">${show(x.then[o])}</td>`).join('')}</tr>`).join('');
     const ev = r.evidence.map((e) => `<div class="ev"><div><b>${esc(e.input)}</b><div class="muted" style="font-size:12px">${e.object ? `${esc(e.object_label)} ${esc(e.key)}${e.property_label ? ' · ' + esc(e.property_label) : ''}` : esc(e.source)}</div></div>
       <div><span class="chip b">${show(e.value)}</span></div><div class="src mono muted" style="font-size:12px">${e.source && e.object ? '← ' + esc(e.source) : ''}</div></div>`).join('');
@@ -1094,7 +1095,7 @@ ${controls}${body}`;
       state = `<div class="sec" style="display:flex;align-items:center;gap:8px">요청 ${esc(p.id)} · ${esc(p.requested_by)}<span class="chip ${cls}" style="margin-left:auto">${label}</span></div>${checks}${diff ? `<div class="sec">변경 값</div>${diff}` : ''}${buttons}${done}`;
     }
     return `<div class="card"><div class="ch">${esc(a.label)} <span class="muted mono" style="font-weight:600">${esc(a.name)}</span></div><div class="cb">
-      <div class="muted" style="font-size:12.5px;margin-bottom:10px;line-height:1.55">요청 시 권한, 파라미터, 상태 전이, 판정 조건을 검사합니다. 승인한 요청만 원천 DB에 반영합니다.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px;line-height:1.55">요청 시 권한, Parameter, 상태 전이, 판정 조건을 검사합니다. 승인한 요청만 원천 DB에 반영합니다.</div>
       <div class="field"><label>요청 역할</label><select data-in="arole">${roles.map((x) => `<option value="${esc(x.name)}"${x.name === d.role ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>
       ${params}<button class="btn primary" style="width:100%" data-act="request" data-action="${esc(a.name)}">${esc(r.target_label)} ${esc(r.key)} ${esc(a.label)} 요청</button>
       ${state}</div></div>`;
@@ -1195,7 +1196,7 @@ ${controls}${body}`;
 
   function viewCheck() {
     const r = S.qa;
-    const head = `<div class="head"><div><h1>검증</h1><div class="sub">검증 질문 정답률, 근거 제시율, 백엔드 간 결과 일치 여부를 확인합니다</div></div>
+    const head = `<div class="head"><div><h1>검증</h1><div class="sub">검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다</div></div>
       <div class="right"><button class="btn primary" data-act="checks">다시 실행</button></div></div>`;
     if (!r || r.busy) return head + '<div class="empty"><span class="spin"></span>검증 중입니다.</div>';
     if (r.error) return head + `<div class="banner no"><div class="why">${esc(r.error)}</div></div>`;
@@ -1204,7 +1205,7 @@ ${controls}${body}`;
     const stats = `<div class="stats"><div class="stat"><b>${r.results.length ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
       <div class="stat"><b>${passed} / ${r.results.length}</b><span>정답 수</span></div>
       <div class="stat"><b>${r.results.length ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
-      ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>백엔드 결과 일치 질의</span></div>` : ''}</div>`;
+      ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>Backend 결과 일치 질의</span></div>` : ''}</div>`;
     const rows = r.results.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td style="font-size:12px">${showObj(x.expected)}</td>
       <td style="font-size:12px">${x.error ? `<span class="muted">${esc(x.error)}</span>` : (typeof x.got === 'number' ? `${show(x.got)}행` : showObj(x.got))}</td>
       <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span></td></tr>`).join('');
@@ -1214,7 +1215,7 @@ ${controls}${body}`;
     return `${head}${stats}
 <div class="grid" style="grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);align-items:start">
   <div class="card"><div class="ch">검증 질문</div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>번호</th><th>질문</th><th>정답</th><th>결과</th><th>근거</th><th></th></tr>${rows}</table>` : '<div class="empty" style="padding:14px">등록된 검증 질문이 없습니다.</div>'}</div></div>
-  <div class="card"><div class="ch">백엔드 결과 일치<div class="right muted" style="font-weight:600;font-size:12px">등록 질의 기준</div></div><div class="cb scroll" style="padding:0">${conf ? `<table class="tight"><tr><th>질의</th><th>행</th><th></th></tr>${conf}</table>` : '<div class="empty" style="padding:14px">비교할 백엔드가 하나뿐입니다.</div>'}</div></div>
+  <div class="card"><div class="ch">Backend 결과 일치<div class="right muted" style="font-weight:600;font-size:12px">등록 질의 기준</div></div><div class="cb scroll" style="padding:0">${conf ? `<table class="tight"><tr><th>질의</th><th>행</th><th></th></tr>${conf}</table>` : '<div class="empty" style="padding:14px">비교할 Backend가 하나뿐입니다.</div>'}</div></div>
 </div>${questionCard()}`;
   }
 
@@ -1265,10 +1266,10 @@ ${controls}${body}`;
     const ways = GUIDE_ADAPT.filter((x) => !x[3] || (S.st && S.st.ask));
     const intro = `<div class="card gsec"><div class="cb"><div class="fhead"><b>스페이스 용도</b></div>
         <table class="tight">${GUIDE_USE.map(([k, v]) => `<tr><td style="white-space:nowrap"><b>${esc(k)}</b></td><td style="font-size:12.5px">${esc(v)}</td></tr>`).join('')}</table></div></div>
-      <div class="card gsec"><div class="cb"><div class="fhead"><b>도메인 어댑팅</b></div>
+      <div class="card gsec"><div class="cb"><div class="fhead"><b>Domain Adapter</b></div>
         <div class="gwhat">표준 모듈은 그대로 두고 달라지는 내용만 모듈로 추가합니다. 모든 경로의 결과는 같은 모듈 파일이며, 같은 방식으로 검토 · 승인 · 적용 · 해제합니다.</div>
         <table class="tight"><tr><th>보유 자료</th><th>경로</th><th>결과</th></tr>${ways.map(([a, b, c]) => `<tr><td>${esc(a)}</td><td style="font-size:12.5px">${esc(b)}</td><td style="font-size:12.5px">${esc(c)}</td></tr>`).join('')}</table>
-        <div class="chips">${['공통 개념', '도메인', '업종 확장', '고객사 차이', '바인딩', '검증 기준', '구축 규칙'].map((x) => `<span class="chip sm">${x}</span>`).join('')}</div></div></div>`;
+        <div class="chips">${['공통 개념', '도메인', '업종 확장', '고객사 차이', 'Binding', '검증 기준', '구축 규칙'].map((x) => `<span class="chip sm">${x}</span>`).join('')}</div></div></div>`;
     if (!g.video) return `${head}<div class="guide-only">${intro}${sections}</div>`;
     const chapters = g.chapters.map((c, i) => `<button class="gch" data-act="seek" data-t="${c.t}" data-i="${i}"><span class="mono">${clock(c.t)}</span><span><b>${esc(c.chapter)} · ${esc(c.title)}</b><span class="muted">${esc((c.captions || [])[0] || '')}</span></span></button>`).join('');
     return `${head}<div class="guide">
@@ -1307,7 +1308,7 @@ ${controls}${body}`;
     const out = [item('데이터 출처', '예시 스페이스'), item('구성 파일', `<span class="mono">${esc(o.config || '')}</span>`)];
     const kind = { sqlite: 'SQLite', postgres: 'PostgreSQL', dbapi: 'DB-API', rdflib: 'RDF', sparql: 'SPARQL 엔드포인트', neo4j: 'Neo4j' };
     for (const [n, k] of Object.entries(o.backends || {})) out.push(item(esc(n), esc(kind[k] || k)));
-    if ((o.seeds || []).length) out.push(item('시드', esc(o.seeds.join(', '))));
+    if ((o.seeds || []).length) out.push(item('Seed', esc(o.seeds.join(', '))));
     if (o.notice) out.push(`<span class="chip warn">${esc(o.notice)}</span>`);
     return out.join('');
   }
@@ -1327,15 +1328,15 @@ ${controls}${body}`;
       lines = `테이블 ${show(c.tables || 0)} · 컬럼 ${show(c.columns || 0)} · 데이터 점검 ${show(c.data_checks || 0)}<div style="margin-top:4px">문제 <b>${step.findings}</b></div>`;
     } else if (id === 'project') {
       ok = step.nodes > 0;
-      lines = step.backends.length ? `${esc(step.backends.join(', '))} · 노드 ${show(step.nodes)} · 간선 ${show(step.edges)}` : '그래프 저장소 없음';
+      lines = step.backends.length ? `${esc(step.backends.join(', '))} · Node ${show(step.nodes)} · Edge ${show(step.edges)}` : '그래프 저장소 없음';
       if (step.sync && step.sync.at) lines += `<div class="muted" style="margin-top:4px;font-size:12px">마지막 다시 읽기 ${esc(step.sync.at.replace('T', ' '))} · ${step.sync.error ? '실패' : (step.sync.changed ? '변경분 반영' : '변경 없음')}</div>`;
     } else if (id === 'query') {
       const c = step.conformance;
       ok = !c || (!c.error && c.agree === c.queries);
-      lines = `등록 질의 ${step.queries} · 쿼리 언어 ${step.targets}개${c ? (c.error ? `<div class="muted" style="margin-top:4px">${esc(c.error)}</div>` : `<div style="margin-top:4px">백엔드 결과 일치 <b>${c.agree} / ${c.queries}</b></div>`) : ''}`;
+      lines = `등록 질의 ${step.queries} · 쿼리 언어 ${step.targets}개${c ? (c.error ? `<div class="muted" style="margin-top:4px">${esc(c.error)}</div>` : `<div style="margin-top:4px">Backend 결과 일치 <b>${c.agree} / ${c.queries}</b></div>`) : ''}`;
     } else if (id === 'decide') {
       ok = step.decisions > 0 ? true : null;
-      lines = step.decisions ? `결정 ${step.decisions} · 규칙 ${step.rules} · 액션 ${step.actions}` : (step.actions ? `액션 ${step.actions}` : '등록된 결정표 없음');
+      lines = step.decisions ? `결정 ${step.decisions} · 규칙 ${step.rules} · Action ${step.actions}` : (step.actions ? `Action ${step.actions}` : '등록된 결정표 없음');
       if (step.agreement && step.agreement.cases) lines += `<div style="margin-top:4px">판정 일치율 <b>${pct(step.agreement.rate)}</b> (${step.agreement.agree} / ${step.agreement.cases})</div>`;
     } else if (id === 'check') {
       ok = step.questions ? step.accuracy === 1 : null;
@@ -1602,7 +1603,7 @@ ${controls}${body}`;
         <input type="text" data-in="dalabel" value="${esc(a.label)}" placeholder="관계 이름">
         <button class="btn sm" data-act="dadd"${src && prop && tgt ? '' : ' disabled'}>추가</button></div>
         <div class="hint" style="margin-top:6px">선택한 속성 값을 대상 객체의 키와 연결합니다.</div>`;
-      const table = rows || added ? `<table class="tight"><tr><th></th><th>관계</th><th>카디널리티</th><th>근거</th></tr>${rows}${added}</table>` : '<div class="empty">추론된 관계가 없습니다.</div>';
+      const table = rows || added ? `<table class="tight"><tr><th></th><th>관계</th><th>Cardinality</th><th>근거</th></tr>${rows}${added}</table>` : '<div class="empty">추론된 관계가 없습니다.</div>';
       return table + form;
     }
     if (st.id === 'queries') {
@@ -1640,9 +1641,10 @@ ${controls}${body}`;
     let inputs = '';
     if (t) {
       const obj = t.slice(9).split('.')[0];
-      const mine = props.filter((x) => x.object === obj && x.element !== t && !x.key).map((x) => [x.element.slice(9).split('.').pop(), `${x.label}`]);
+      const fits = (x) => !['date', 'datetime'].includes(S.dr.ed.types[x.element.slice(9)] || x.type);
+      const mine = props.filter((x) => x.object === obj && x.element !== t && !x.key && fits(x)).map((x) => [x.element.slice(9).split('.').pop(), `${x.label}`]);
       const links = p.steps.find((x) => x.id === 'links').items.filter((l) => l.from === obj && !S.dr.ed.drop[l.element] && ['many_to_one', 'one_to_one'].includes(S.dr.ed.card[l.element.split(':')[1]] || l.cardinality));
-      const far = links.flatMap((l) => props.filter((x) => x.object === l.to && !x.key).map((x) => [`${l.element.split(':')[1]}.${x.element.slice(9).split('.').pop()}`, `${o.labelOf(l.to)} · ${x.label}`]));
+      const far = links.flatMap((l) => props.filter((x) => x.object === l.to && !x.key && fits(x)).map((x) => [`${l.element.split(':')[1]}.${x.element.slice(9).split('.').pop()}`, `${o.labelOf(l.to)} · ${x.label}`]));
       inputs = `<div class="label" style="margin:8px 0 4px">입력</div><div class="qpick">${[...mine, ...far].map(([v, l]) => `<label><input type="checkbox" data-in="dindin" data-v="${esc(v)}"${S.ind.inputs[v] ? ' checked' : ''}><span>${esc(l)}</span><span class="muted mono">${esc(v)}</span></label>`).join('')}</div>`;
     }
     const form = `<div class="sec">지난 처리 결과로 판정 표 만들기</div>
@@ -1650,7 +1652,7 @@ ${controls}${body}`;
       ${inputs}<button class="btn sm" data-act="dinduce" style="margin-top:8px"${t && Object.values(S.ind.inputs).some(Boolean) ? '' : ' disabled'}>판정 표 만들기</button>
       <div class="hint" style="margin-top:6px">결과 컬럼은 실제 처리 결과(허용값 또는 참 · 거짓)입니다. 규칙마다 지난 몇 건 중 몇 건이 맞는지 표시하고, 교차 검증으로 처음 보는 건의 정확도를 잽니다.</div>`;
     return `<div class="sec">상태 전이</div>${sm ? `<table class="tight"><tr><th>객체</th><th>전이</th><th>근거</th></tr>${sm}</table>` : '<div class="muted" style="font-size:12.5px">상태 컬럼이 없습니다. 생성 설정의 상태 컬럼 이름을 확인하세요.</div>'}
-      ${acts ? `<div class="sec">상태 변경 액션</div><div class="chips">${acts}</div>` : ''}
+      ${acts ? `<div class="sec">상태 변경 Action</div><div class="chips">${acts}</div>` : ''}
       <div class="sec">역할</div>${roles ? `<table class="tight">${roles}</table>` : '<div class="muted" style="font-size:12.5px">역할을 만들지 않았습니다.</div>'}
       <div class="sec">검증 질문 · 지금 데이터 기준</div><div class="loglist">${qs || '<div class="muted">없음</div>'}</div>
       ${decs ? `<div class="sec">판정 표</div><table class="tight">${decs}</table>` : ''}${form}`;
@@ -1690,7 +1692,7 @@ ${controls}${body}`;
         ${sg.unbound_objects.length ? `<div class="hint">연결할 테이블이 없는 표준 객체: ${esc(sg.unbound_objects.map((y) => y.label).join(', '))}. 이 객체를 사용하는 질의는 제외됩니다.</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="mapapply"${m.busy ? ' disabled' : ''}>표준에 연결해 적용</button></div>`;
     } else if (sg && !sg.ok) body = `<div class="banner no" style="margin-top:10px"><div class="why">${esc(sg.error)}</div></div>`;
-    return `<div class="card"><div class="ch">표준에 연결<div class="right muted" style="font-weight:600;font-size:12px">새 객체 대신 표준 정의에 바인딩</div></div><div class="cb">
+    return `<div class="card"><div class="ch">표준에 연결<div class="right muted" style="font-weight:600;font-size:12px">새 객체 대신 표준 정의에 Binding</div></div><div class="cb">
       <div class="chips">${picks}</div><button class="btn sm" data-act="mapsuggest" style="margin-top:10px"${m.picked.length && !m.busy ? '' : ' disabled'}>${m.busy ? '<span class="spin"></span>처리 중' : '연결 제안'}</button>
       <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키로 대응시킵니다. 제안을 확인하고 수정한 뒤 적용하세요.</div>${body}</div></div>`;
   }
@@ -1717,11 +1719,11 @@ ${controls}${body}`;
         <span class="ic ${state === 'done' ? 'y' : ''}">${state === 'done' ? '✓' : i + 1}</span><span><b>${STEP[st.id][0]}</b><span class="muted">${state === 'wait' ? '' : stepCount(st)}</span></span></button>`;
     }).join('') + `<button class="dstep ${done ? 'done' : 'wait'}${S.dr.view === 'yaml' ? ' on' : ''}" data-act="dview" data-view="yaml"${done ? '' : ' disabled'}><span class="ic">{ }</span><span><b>정의 파일</b><span class="muted">${done ? `모듈 ${p.modules.length}개` : ''}</span></span></button>`;
     const cur = currentStep();
-    const curTitle = cur.id === 'yaml' ? ['정의 파일', '정의 모듈, 바인딩 모듈'] : STEP[cur.id];
+    const curTitle = cur.id === 'yaml' ? ['정의 파일', '정의 모듈, Binding 모듈'] : STEP[cur.id];
     return `<div class="grid" style="grid-template-columns:240px minmax(0,1fr);align-items:start">
       <div class="card"><div class="ch">생성 단계</div><div class="cb dsteps">${steps}</div></div>
       <div class="card"><div class="ch">${esc(p.label)} 초안<div class="right legend"><span><i class="fill"></i>객체</span><span>→ 관계</span></div></div>
-        <div class="cb" style="padding:0"><div class="graph-wrap" style="height:360px"><canvas id="dgraph"></canvas><div class="tip">${done ? '노드를 선택하면 속성이 표시됩니다' : esc(STEP[p.steps[Math.min(S.dr.step, p.steps.length - 1)].id][1])}</div></div></div></div>
+        <div class="cb" style="padding:0"><div class="graph-wrap" style="height:360px"><canvas id="dgraph"></canvas><div class="tip">${done ? 'Node를 선택하면 속성이 표시됩니다' : esc(STEP[p.steps[Math.min(S.dr.step, p.steps.length - 1)].id][1])}</div></div></div></div>
     </div>
     <div class="card"><div class="ch">${curTitle[0]}<div class="right muted" style="font-weight:600;font-size:12px">${curTitle[1]}</div></div><div class="cb scroll" id="ddetail" style="max-height:520px">${stepDetail(p, cur)}</div></div>
     <div class="card"><div class="cb" id="dcheck">${checkBar()}</div></div>`;
@@ -1763,7 +1765,7 @@ ${controls}${body}`;
         ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}
         ${x.document_list.length ? `<div class="chips" style="margin-top:6px">${x.document_list.slice(0, 12).map((d) => `<span class="chip sm">${esc(d.name)} · ${docKind[d.kind] || '문서'} · 섹션 ${show(d.sections)}</span>`).join('')}</div>` : ''}</div>
         <button class="btn sm ghost" data-act="fout" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 초안에서 제외">제외</button></div>`).join('');
-    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 입력합니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
+    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 입력합니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 Schema(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
     const left = `<div class="card"><div class="ch">초안에 넣을 파일<span class="chip sm">${esc(S.st.repository.label)}</span></div><div class="cb">
       ${list}${defs}${defHint}
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
@@ -1783,6 +1785,7 @@ ${controls}${body}`;
   function kindChip(f) {
     if (f.error) return '<span class="chip sm bad">읽기 실패</span>';
     const k = (f.facts || {}).kind;
+    if (k === 'raw') return '<span class="chip sm">원본 보관</span>';
     if (k === 'data') return '<span class="chip sm b">테이블 데이터</span>';
     if (k === 'definition') return '<span class="chip sm ok">정의서</span>';
     if (k === 'document') return `<span class="chip sm">${DOC_WORD[f.facts.doc_kind] || '문서'}</span>`;
@@ -1800,7 +1803,7 @@ ${controls}${body}`;
   function routeOf(f) {
     const c = f.facts || {};
     if (f.error) return '-';
-    if (c.kind === 'data' || c.tables) return '도메인 · 바인딩 모듈';
+    if (c.kind === 'data' || c.tables) return '도메인 · Binding 모듈';
     if (c.codes) return '코드값 이름, 결정표';
     if (c.terms || c.messages) return '용어 사전 모듈';
     if (c.kind === 'document') return S.st.ask ? '정책서로 규칙 초안' : '문서 본문';
@@ -1825,6 +1828,7 @@ ${controls}${body}`;
     S.files = null; S.conv = null; S.cat.sel = {};
     S.st = await api('state');
     await loadCatalog();
+    if (S.tab !== 'catalog') render();  // the draft screen asks for its files again
   }
 
   async function catalogCall(path, body, done) {
@@ -1911,7 +1915,7 @@ ${controls}${body}`;
       return `<tr class="crow"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td><span class="chip sm folder">폴더</span></td><td class="muted">-</td><td>${x.files ? fileSize(x.bytes) : '<span class="muted">-</span>'}</td><td class="muted">-</td><td class="muted">${count(x.files)}개 파일</td><td class="muted">-</td><td>${inc}</td><td>${more}</td></tr>`;
     }
     return `<tr class="crow${x.included && !x.error ? '' : ' out'}"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td>${kindChip(x)}</td><td class="mono muted">${esc(x.ext || '-')}</td><td>${fileSize(x.bytes)}</td><td>${amount(x)}</td><td class="muted">${esc(dayOf(x.uploaded))}</td><td class="route">${esc(routeOf(x))}</td>
-      <td>${x.error ? '<span class="muted">-</span>' : `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">`}</td><td>${more}</td></tr>`;
+      <td>${x.error || (x.facts || {}).kind === 'raw' ? '<span class="muted">-</span>' : `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">`}</td><td>${more}</td></tr>`;
   }
 
   function viewCatalog() {
@@ -1987,7 +1991,7 @@ ${controls}${body}`;
     const table = (t) => `<div class="sec">${esc(t.sheet || t.name)} · ${count(t.rows)}행</div><div class="cwrap"><table class="tight"><tr>${t.columns.map((x) => `<th>${esc(x)}</th>`).join('')}</tr>${t.preview.map((r) => `<tr>${r.map((v) => `<td>${show(v)}</td>`).join('')}</tr>`).join('')}</table></div>`;
     const sections = f.sections.length ? `<div class="loglist">${f.sections.slice(0, 60).map((x) => `<div>${esc(x.title || x.document)} <span class="muted">${count(x.chars)}자</span></div>`).join('')}</div>` : '';
     const preview = f.tables.map(table).join('') + sections || '<div class="muted" style="font-size:12.5px">표시할 미리보기가 없습니다. JSON에서 내용을 확인합니다.</div>';
-    const body = f.error ? `<div class="banner no"><div class="why">${esc(f.error)}</div></div>`
+    const body = (f.facts || {}).kind === 'raw' ? '<div class="muted" style="font-size:12.5px">이미지, 영상, 압축 파일은 원본으로 보관합니다.</div>' : f.error ? `<div class="banner no"><div class="why">${esc(f.error)}</div></div>`
       : `<div class="seg"><button class="${c.view === 'preview' ? 'on' : ''}" data-act="cdview" data-v="preview">미리보기</button><button class="${c.view === 'json' ? 'on' : ''}" data-act="cdview" data-v="json">JSON</button></div>${c.view === 'json' ? `<pre class="code">${esc(f.json)}</pre>` : preview}`;
     return `<aside class="drawer" role="dialog" aria-label="${esc(f.name)}"><div class="dhead"><b>${esc(f.name)}</b><a class="btn sm" href="/api/catalog/download?path=${encodeURIComponent(f.path)}">내려받기</a><button class="iconbtn" data-act="cdclose" aria-label="닫기">${ui('close')}</button></div>
       <div class="dbody"><dl class="kv">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>${body}</div></aside>`;
@@ -2031,7 +2035,7 @@ ${controls}${body}`;
       .filter(([k]) => c.counts[k]).map(([k, l]) => `<div class="stat"><b>${count(c.counts[k])}</b><span>${l}</span></div>`).join('');
     const rows = c.rows.map((r) => {
       const f = { ...r, facts: r.facts };
-      return `<tr class="${r.included && !r.error ? '' : 'off'}"><td class="mono">${esc(r.path)}</td><td>${kindChip(f)}</td><td>${amount(f)}</td><td>${r.error ? esc(r.error) : (r.included ? '포함' : '제외')}</td></tr>`;
+      return `<tr class="${r.included && !r.error ? '' : 'off'}"><td class="mono">${esc(r.path)}</td><td>${kindChip(f)}</td><td>${amount(f)}</td><td>${r.error ? esc(r.error) : ((r.facts || {}).kind === 'raw' ? '원본 보관' : (r.included ? '포함' : '제외'))}</td></tr>`;
     }).join('');
     return `${head}${tiles ? `<div class="stats">${tiles}</div>` : ''}
       <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start">
@@ -2262,7 +2266,7 @@ ${controls}${body}`;
           <td class="mono" style="font-size:11.5px">${esc(c.type)}</td><td>${rd.length ? rd.map((p) => `<span class="chip sm">${esc(mgLabel(p.object))} · ${esc(p.label || p.name)}</span>`).join(' ') : '<span class="muted">-</span>'}</td></tr>`;
       }).join('')}</table>`;
     }
-    const graphs = m.sources.graphs.length ? `<div class="hint" style="margin-top:12px">그래프 저장소 ${esc(m.sources.graphs.map((g) => `${g.name} (${g.language.toUpperCase()})`).join(', '))}에는 원천 행이 노드와 간선으로 반영됩니다. 관계 그래프는 [온톨로지]에서 확인합니다.</div>` : '';
+    const graphs = m.sources.graphs.length ? `<div class="hint" style="margin-top:12px">그래프 저장소 ${esc(m.sources.graphs.map((g) => `${g.name} (${g.language.toUpperCase()})`).join(', '))}에는 원천 행이 Node와 Edge으로 반영됩니다. 관계 그래프는 [온톨로지]에서 확인합니다.</div>` : '';
     return `${head}${stats}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);align-items:start">
       <div class="card"><div class="ch">원천 테이블<div class="right muted" style="font-weight:600;font-size:12px">${esc(s.name)}</div></div><div class="cb scroll" style="padding:0;max-height:620px">
         <table class="tight"><tr><th>테이블</th><th>행</th><th>컬럼</th><th>키</th><th>참조</th><th>연결 객체</th></tr>${list}</table></div></div>
@@ -2432,7 +2436,7 @@ ${controls}${body}`;
   }
 
   function viewLinks() {
-    const title = '관계 관리', sub = '객체 사이의 관계와 연결 기준 컬럼, 카디널리티를 관리합니다';
+    const title = '관계 관리', sub = '객체 사이의 관계와 연결 기준 컬럼, Cardinality를 관리합니다';
     const wait = mgWait(title, sub);
     if (wait) return wait;
     const m = S.mg.st;
@@ -2454,14 +2458,14 @@ ${controls}${body}`;
     const head = mgHead(title, sub, `${objSel}<input type="text" data-in="mgq" value="${esc(S.mg.q)}" placeholder="관계 검색" style="width:160px"><button class="btn sm primary" data-act="mglinknew">새 관계</button>`);
     return `${head}${pendingBar()}${unlinked}${sugCard}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start">
       <div class="card"><div class="ch">관계 <span class="chip sm">${list.length}</span><div class="right muted" style="font-weight:600;font-size:12px">그래프는 [온톨로지]에서 확인</div></div><div class="cb scroll" style="padding:0;max-height:640px">
-        <table class="tight"><tr><th>관계</th><th>출발 → 도착</th><th>카디널리티</th><th>연결 기준</th><th>정의</th></tr>${rows}</table></div></div>
+        <table class="tight"><tr><th>관계</th><th>출발 → 도착</th><th>Cardinality</th><th>연결 기준</th><th>정의</th></tr>${rows}</table></div></div>
       ${linkForm()}</div>`;
   }
 
   function linkForm() {
     const f = S.mg.form && S.mg.form.kind === 'link' ? S.mg.form : null;
     const m = S.mg.st;
-    if (!f) return '<div class="card"><div class="ch">관계 정보</div><div class="cb"><div class="empty">관계를 선택하면 라벨, 카디널리티, 역관계를 수정할 수 있습니다. [새 관계]로 두 객체를 연결합니다.</div></div></div>';
+    if (!f) return '<div class="card"><div class="ch">관계 정보</div><div class="cb"><div class="empty">관계를 선택하면 라벨, Cardinality, 역관계를 수정할 수 있습니다. [새 관계]로 두 객체를 연결합니다.</div></div></div>';
     const v = f.v;
     const l = f.mode === 'edit' ? m.links.find((x) => x.name === v.name) : null;
     const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
@@ -2474,7 +2478,7 @@ ${controls}${body}`;
       <div class="rgrid two">${field('출발 객체', objSel('source'))}${field('출발 속성', propSel('sp', v.source))}</div>
       <div class="rgrid two">${field('도착 객체', objSel('target'))}${field('도착 속성', propSel('tp', v.target))}</div>
       ${ends ? '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">출발 속성 값과 도착 속성 값이 같은 행끼리 연결합니다.</div>' : '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">양 끝 객체와 연결 기준은 정의한 모듈에서만 바꿀 수 있습니다.</div>'}
-      <div class="rgrid two">${field('카디널리티', cards)}${field('역관계 이름', `<input type="text" data-in="mgf" data-f="inverse" value="${esc(v.inverse)}" placeholder="예: couponUsedBy">`)}</div>
+      <div class="rgrid two">${field('Cardinality', cards)}${field('역관계 이름', `<input type="text" data-in="mgf" data-f="inverse" value="${esc(v.inverse)}" placeholder="예: couponUsedBy">`)}</div>
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 관계</label>`;
     if (f.mode === 'new') {
       return `<div class="card"><div class="ch">새 관계<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">${body}
@@ -2503,7 +2507,7 @@ ${controls}${body}`;
       const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
       const pick = v.kind === 'decision'
         ? `${field('판정', `<select data-in="mgf" data-f="decision">${S.st.decisions.map((d) => opt(d.name, `${d.label} (${d.name})`, v.decision)).join('')}</select>`)}${field('대상 키', `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: I1001">`)}`
-        : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('JSON 파라미터', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
+        : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('JSON Parameter', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
       form = `<div class="review"><div class="rgrid">${field('번호', `<input type="text" data-in="mgf" data-f="id" value="${esc(v.id)}" placeholder="예: G1">`)}
           ${field('종류', `<select data-in="mgf" data-f="kind" data-re="1">${opt('query', '질의 결과 행 수', v.kind)}${opt('decision', '판정 결과', v.kind)}</select>`)}
           ${field(v.kind === 'decision' ? 'JSON 기대값' : '기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="${v.kind === 'decision' ? '예: {&quot;eligible&quot;: true}' : '예: 2'}">`)}</div>
@@ -2591,6 +2595,10 @@ ${controls}${body}`;
         if (v.kind === 'decision') expect = v.expect.trim() ? JSON.parse(v.expect) : {};
         else { expect = v.expect.trim() === '' ? {} : { rows: Number(v.expect) }; params = v.params.trim() ? JSON.parse(v.params) : {}; }
       } catch (_) { toast('JSON 형식이 아니어서 읽지 못했습니다. 예시처럼 입력해 주세요.', true); return; }
+      if (v.kind === 'decision' ? (typeof expect !== 'object' || expect === null || Array.isArray(expect)) : Number.isNaN(expect.rows)) {
+        toast(v.kind === 'decision' ? '기대값 형식이 올바르지 않아 저장하지 못했습니다. 예: {"eligible": true}' : '기대 행 수가 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.', true);
+        return;
+      }
       const args = v.kind === 'decision' ? { id: v.id, text: v.text, decision: v.decision, key: v.key, expect }
         : { id: v.id, text: v.text, query: v.query, params, expect };
       mgEdit('add_question', args, `검증 질문 ${v.id}을 추가했습니다.`);
@@ -2639,6 +2647,9 @@ ${controls}${body}`;
     Object.assign(S.mg, { form: null, sel: '', q: '', obj: '', table: '', open: false, review: null });
     S.q.name = null; S.q.text = ''; S.q.dirty = false; S.d.name = null; S.d.key = null;
     S.mon.st = null;
+    Object.assign(S.pol, { open: false, text: '', target: '', busy: false, res: null });
+    S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false };
+    S.ind = { target: '', inputs: {} };
   }
 
   async function pipelineCall(body) {

@@ -13,9 +13,11 @@ import importlib.util
 import io
 import os
 import re
+import struct
 import sys
 import xml.etree.ElementTree as ET
 import zipfile
+import zlib
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from html.parser import HTMLParser
@@ -459,6 +461,156 @@ def _hwpx(data: bytes, source: str) -> Definitions:
     out = _Outline()
     for name in sections:
         _hwp_walk(_xml(z.read(name)), out, headings)
+    return _document(out, source)
+
+
+class _Compound:
+    """The streams of an OLE compound file, read from memory. Every chain is followed a bounded number of steps, so a
+    malformed file ends in an error, not a loop."""
+
+    END = 0xFFFFFFFE
+
+    def __init__(self, data: bytes, source: str):
+        if data[:8] != b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" or len(data) < 512:
+            raise IngestError(f"{source}: not a compound file", "format")
+        self.data, self.source = data, source
+        self.size = 1 << struct.unpack_from("<H", data, 30)[0]
+        self.mini_size = 1 << struct.unpack_from("<H", data, 32)[0]
+        self.limit = len(data) // self.size + 2
+        directory, = struct.unpack_from("<I", data, 48)
+        self.cutoff, mini_fat, _, difat_next, difat_count = struct.unpack_from("<IIIII", data, 56)
+        places = [x for x in struct.unpack_from("<109I", data, 76) if x < self.END]
+        for _ in range(min(difat_count, self.limit)):  # the list of FAT sectors goes on in sectors of its own
+            if difat_next >= self.END:
+                break
+            words = struct.unpack_from(f"<{self.size // 4}I", self._sector(difat_next))
+            places += [x for x in words[:-1] if x < self.END]
+            difat_next = words[-1]
+        self.fat = [w for p in places for w in struct.unpack(f"<{self.size // 4}I", self._sector(p))]
+        chain = self._chain(mini_fat, self.fat)
+        self.mini_fat = [w for p in chain for w in struct.unpack(f"<{self.size // 4}I", self._sector(p))]
+        self.entries = self._entries(b"".join(self._sector(p) for p in self._chain(directory, self.fat)))
+        root = self.entries[0] if self.entries else None
+        if root is None:
+            raise IngestError(f"{source}: no directory", "format")
+        self.mini = b"".join(self._sector(p) for p in self._chain(root["start"], self.fat))
+        self.paths: dict[str, dict] = {}
+        self._walk(root["child"], "", set())
+
+    def _sector(self, n: int) -> bytes:
+        at = (n + 1) * self.size
+        if at + self.size > len(self.data) + self.size:
+            raise IngestError(f"{self.source}: a sector lies past the end", "format")
+        return self.data[at:at + self.size].ljust(self.size, b"\0")
+
+    def _chain(self, first: int, fat: list[int]) -> list[int]:
+        out, n = [], first
+        while n < self.END and n < len(fat):
+            out.append(n)
+            if len(out) > self.limit * (self.size // self.mini_size + 1):
+                raise IngestError(f"{self.source}: a sector chain does not end", "format")
+            n = fat[n]
+        return out
+
+    @staticmethod
+    def _entries(raw: bytes) -> list[dict]:
+        out = []
+        for at in range(0, len(raw) - 127, 128):
+            e = raw[at:at + 128]
+            length, = struct.unpack_from("<H", e, 64)
+            left, right, child = struct.unpack_from("<III", e, 68)
+            start, = struct.unpack_from("<I", e, 116)
+            size, = struct.unpack_from("<Q", e, 120)
+            out.append({"name": e[:max(length - 2, 0)].decode("utf-16-le", "ignore"), "type": e[66], "left": left,
+                        "right": right, "child": child, "start": start, "size": size})
+        return out
+
+    def _walk(self, n: int, prefix: str, seen: set[int]) -> None:
+        if n >= len(self.entries) or n in seen:
+            return
+        seen.add(n)
+        e = self.entries[n]
+        self._walk(e["left"], prefix, seen)
+        self._walk(e["right"], prefix, seen)
+        path = prefix + e["name"]
+        if e["type"] == 2:
+            self.paths[path] = e
+        elif e["type"] == 1:
+            self._walk(e["child"], path + "/", seen)
+
+    def read(self, path: str) -> bytes:
+        e = self.paths[path]
+        if e["size"] > UNPACKED_MAX:
+            raise IngestError(f"{self.source}: {path} is too large", "too_large")
+        if e["size"] < self.cutoff:
+            raw = b"".join(self.mini[p * self.mini_size:(p + 1) * self.mini_size] for p in self._chain(e["start"], self.mini_fat))
+        else:
+            raw = b"".join(self._sector(p) for p in self._chain(e["start"], self.fat))
+        return raw[:e["size"]]
+
+
+_HWP_WIDE = {1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}  # controls of eight units
+_HWP_PARA_TEXT = 67
+
+
+def _hwp_line(raw: bytes) -> str:
+    units = struct.unpack(f"<{len(raw) // 2}H", raw[:len(raw) // 2 * 2])
+    out, i = [], 0
+    while i < len(units):
+        u = units[i]
+        if u in _HWP_WIDE:
+            if u == 9:
+                out.append(ord(" "))
+            i += 8
+            continue
+        if u >= 32:
+            out.append(u)
+        elif u in (10, 30, 31):
+            out.append(ord(" "))
+        i += 1
+    return struct.pack(f"<{len(out)}H", *out).decode("utf-16-le", "ignore")
+
+
+def _hwp_lines(raw: bytes) -> Iterator[str]:
+    """The paragraphs of a section: records of a tag and a size, the text in its own tag, tables' cells in order."""
+    i = 0
+    while i + 4 <= len(raw):
+        head, = struct.unpack_from("<I", raw, i)
+        i += 4
+        size = head >> 20
+        if size == 0xFFF:
+            size, = struct.unpack_from("<I", raw, i)
+            i += 4
+        if head & 0x3FF == _HWP_PARA_TEXT:
+            yield _hwp_line(raw[i:i + size])
+        i += size
+
+
+def _hwp(data: bytes, source: str) -> Definitions:
+    """Text of a Hancom .hwp (5.x), standard library only; a file with a password or for viewing only says so."""
+    try:
+        z = _Compound(data, source)
+    except (IngestError, struct.error, IndexError):
+        raise _export(source) from None  # the older binary formats, and a file that only looks like one
+    if "FileHeader" not in z.paths or not z.read("FileHeader").startswith(b"HWP Document File"):
+        raise _export(source)
+    flags, = struct.unpack_from("<I", z.read("FileHeader"), 36)
+    sections = sorted((p for p in z.paths if re.fullmatch(r"BodyText/Section\d+", p)), key=lambda p: int(p[16:]))
+    if flags & 2 or flags & 4 or not sections:  # a password, or a distribution copy whose body is encrypted
+        raise _export(source)
+    out = _Outline()
+    for name in sections:
+        raw = z.read(name)
+        if flags & 1:
+            inflate = zlib.decompressobj(-15)
+            try:
+                raw = inflate.decompress(raw, UNPACKED_MAX)
+            except zlib.error:
+                raise IngestError(f"{source}: {name} cannot be unpacked", "format") from None
+            if inflate.unconsumed_tail:
+                raise IngestError(f"{source}: {name} unpacks past the limit", "too_large")
+        for line in _hwp_lines(raw):
+            out.numbered(line)
     return _document(out, source)
 
 
@@ -1458,6 +1610,7 @@ register(".mwb", _mwb)
 register(".docx", _docx)
 register(".pptx", _pptx)
 register(".hwpx", _hwpx)
+register(".hwp", _hwp)
 register([".html", ".htm"], _html)
 register([".md", ".markdown"], _md)
 register(".txt", _txt)

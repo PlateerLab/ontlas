@@ -369,7 +369,7 @@ takes like any other input. On the page, the same adapters read what reaches the
 | `.dbml`, `.pdm` (PowerDesigner), `.mwb` (MySQL Workbench) | The same, from the modelling tool's own file |
 | `.db`, `.sqlite` | The tables, keys and references of a SQLite file |
 | `.csv`, `.xlsx`: table, index, code, glossary and message sheets | By their headers, Korean or English, under a title and behind a cover sheet. Group rows and reference columns of a code definition are understood |
-| `.docx`, `.pptx`, `.hwpx`, `.pdf`, `.html`, `.md`, `.txt` | Text by section, for policy drafting (`.pdf` needs `[pdf]`) |
+| `.docx`, `.pptx`, `.hwp`, `.hwpx`, `.pdf`, `.html`, `.md`, `.txt` | Text by section, for policy drafting (`.pdf` needs `[pdf]`). A `.hwp` with a password or a viewing-only copy is refused |
 | `.json` | The same shape, written by hand or by another tool |
 
 ```json
@@ -430,7 +430,7 @@ Raw material comes first. 데이터 카탈로그 keeps files in repositories, by
 | You do | It does |
 |---|---|
 | Drop files or a whole folder | Uploads into the current folder and keeps the folder's structure. `.DS_Store`, `Thumbs.db` and Mac archive metadata stay out |
-| Upload something it cannot read | Keeps the file and says why on its row, so a repository can hold everything a project has |
+| Upload something it cannot read | Keeps the file and says why on its row. Images, video and archives are kept as they are, so a repository can hold everything a project has |
 | Look at a row | Kind, size, rows or sections, and where it goes: a table or a definition sheet to the domain and binding modules, a code sheet to value names and decision tables, a glossary to the term dictionary, a document to the policy draft |
 | Open a file | First rows or sections, its share of the JSON, and a download |
 | Clear a file's or folder's 초안 box | Leaves it out of 변환 결과 and of the next draft, and keeps it in the catalog |

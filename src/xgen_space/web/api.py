@@ -28,13 +28,13 @@ from xgen_space.roles import apply_role
 from xgen_space.studio import Studio
 
 KIND_ORDER = list(MODULE_KIND)
-CHECK_LABEL = {"role": "역할 권한", "parameters": "파라미터", "target": "대상 확인", "state": "상태 전이",
+CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이",
                "states": "허용 상태", "call": "외부 호출"}
 EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
                "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
                "rolled_back": "되돌림"}
 GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
-              ("query", "min_agree"): "백엔드 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
+              ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
               ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소"}
 STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
@@ -58,6 +58,8 @@ ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which 
 DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request waits on: at most 5 minutes in all
 POLICY_MAX = 12000  # characters of policy text a draft reads
 JSON_PREVIEW = 40_000  # characters of the one JSON the page shows; the download has it all
+RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg", ".ico", ".mp4", ".mov", ".avi",
+             ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".zip", ".7z", ".rar", ".tar", ".gz", ".exe", ".dll", ".bin"}
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
@@ -92,12 +94,57 @@ GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) ha
             (r"^no answer$", "답 없음")]
 
 
+ISSUE_TEXT = [
+    (r"^no version of '(.+?)' satisfies .*$", r"의존 모듈 '\1'을 찾지 못했습니다. requires 항목의 모듈 이름을 확인해 주세요."),
+    (r"^cannot read requirement '(.+?)'.*$", r"requires 값 '\1'을 읽지 못했습니다. name 또는 name>=1.0 형식으로 입력해 주세요."),
+    (r"^(\S+) requires '(.+?)', which is not attached$", r"\1에 필요한 '\2' 모듈이 적용되어 있지 않습니다. '\2' 모듈을 먼저 적용해 주세요."),
+    (r"^(\S+) requires '(.+?)', but (\S+) is attached$", r"\1에 필요한 '\2' 버전과 적용된 \3 버전이 맞지 않습니다. 버전을 확인해 주세요."),
+    (r"^modules require each other in a cycle: (.+)$", r"모듈 의존 관계가 순환합니다. \1. requires 항목을 확인해 주세요."),
+    (r"^module (\S*): kind must be one of .*$", r"모듈 \1의 kind 값이 올바르지 않습니다. core, domain, industry, customer, binding, quality, method 중에서 지정해 주세요."),
+    (r"^(\w+)\.(\w+): type '(.+?)' is not one of .*$", r"\1.\2의 타입 '\3'은 사용할 수 없습니다. string, integer, decimal, boolean, date, datetime, enum 중에서 지정해 주세요."),
+    (r"^(\w+)\.(\w+): expected .*$", r"\1.\2의 계산식을 해석하지 못했습니다. 식을 확인해 주세요."),
+    (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 객체 '\2'를 찾지 못했습니다. target 항목을 확인해 주세요."),
+    (r"^link (\S+): endpoints (\S+) -> (\S+) must be object types$", r"관계 \1의 객체 \2 또는 \3을 찾지 못했습니다. 출발 객체와 도착 객체를 확인해 주세요."),
+    (r"^(\S+) extends (?:object type|link|decision|role) '(.+?)', which no attached module defines$", r"확장 대상 '\2'를 정의한 모듈이 적용되어 있지 않습니다. 대상 이름과 requires 항목을 확인해 주세요."),
+    (r"^(\S+) changes the type of (\S+) from (\S+) to (\S+)$", r"\2의 타입은 변경할 수 없습니다. \3에서 \4로 바꾸려면 새 속성을 추가해 주세요."),
+    (r"^(\S+) binds (\S+), which is not a property of (\S+)$", r"\2는 \3의 속성이 아니어서 연결하지 못했습니다. 속성 이름을 확인해 주세요."),
+    (r"^(\S+) removes (.+), which is not there$", r"제거 대상 \2를 찾지 못했습니다. 이름을 확인해 주세요."),
+    (r"^(\S+) defines (\S+) '(.+?)', already defined by (\S+?);.*$", r"'\3'은 \4에 이미 정의되어 있습니다. 다른 이름을 사용하거나 확장으로 지정해 주세요."),
+    (r"^module '(.+?)' is not attached$", r"'\1' 모듈이 적용되어 있지 않습니다."),
+    # a query a person typed
+    (r"^unknown label '(.+?)'$", r"'\1' 객체를 찾지 못했습니다. 객체 이름을 확인해 주세요."),
+    (r"^give '(.+?)' a label on first use$", r"변수 \1에 객체 이름을 지정해 주세요. 예: (\1:Customer)"),
+    (r"^(.+) is outside the ontology namespace (.+)$", r"\1은 온톨로지 네임스페이스 \2에 없는 주소입니다."),
+    (r"^'return' lists at least one column$", "return 항목에 컬럼을 하나 이상 지정해 주세요."),
+    (r"^a query is an object$", "질의는 JSON 객체로 입력해 주세요."),
+    (r"^Expecting .* line \d+ column \d+ .*$", "JSON 형식이 올바르지 않습니다."),
+    (r"^Expected \{.*$", "SELECT, CONSTRUCT, DESCRIBE, ASK 중 하나로 시작해 주세요."),
+    # a decision table drawn from past cases
+    (r"^pick at least one input$", "입력을 하나 이상 선택해 주세요."),
+    (r"^(\d+) past cases with a result; at least (\d+) are needed$", r"결과가 있는 지난 처리 기록이 \1건입니다. \2건 이상 필요합니다."),
+    (r"^(\S+): inputs reach one relation away at most$", r"\1: 입력은 관계 한 단계까지만 지정할 수 있습니다."),
+    (r"^(\S+): '(.+?)' reaches many (\S+); pick a relation to one$", r"\1: 여러 \3로 이어지는 관계입니다. 하나로 이어지는 관계를 선택해 주세요."),
+    (r"^(\S+) is (\S+); inputs are allowed values, true/false or numbers$", r"\1은 \2 타입입니다. 입력에는 허용값, 참 · 거짓, 숫자만 사용할 수 있습니다."),
+    (r"^(\S+) is the result itself$", r"\1은 결과 컬럼이어서 입력으로 사용할 수 없습니다."),
+    (r"^(\S+) is (\S+); the result has to be an allowed-value or true/false property$", r"\1은 \2 타입입니다. 결과는 허용값 또는 참 · 거짓 속성이어야 합니다."),
+    (r"^'(.+?)' is not Type\.property$", r"결과 컬럼 '\1'을 찾지 못했습니다. 다시 선택해 주세요."),
+]
+
+
+def _issue_text(msg: str) -> str:
+    """A check's finding, as the page says it; one not listed here keeps its own words."""
+    for pattern, text in ISSUE_TEXT:
+        if re.match(pattern, msg):
+            return re.sub(pattern, text, msg)
+    return msg
+
+
 def _edit_text(msg: str) -> str:
     """A management edit's refusal, as the page says it; checks the definition raises keep their own words."""
     for pattern, text in EDIT_TEXT:
         if re.match(pattern, msg):
             return re.sub(pattern, text, msg)
-    return f"정의 검사를 통과하지 못해 적용하지 않았습니다. {msg}"
+    return f"정의 검사를 통과하지 못해 적용하지 않았습니다. {_issue_text(msg)}"
 
 
 def _gap_text(gap: str) -> str:
@@ -458,7 +505,7 @@ class StudioSession:
             else:
                 q = Query.from_dict(json.loads(text))
         except Exception as e:
-            return {"ok": False, "error": f"쿼리 문법을 해석하지 못했습니다. {e}"}
+            return {"ok": False, "error": f"쿼리 문법을 해석하지 못했습니다. {_issue_text(str(e).split(chr(10))[0])}"}
         return self.run_query(q, role=role, principal=principal)
 
     def ask(self, question: str, *, role: str = "", principal: dict | None = None) -> dict:
@@ -521,7 +568,7 @@ class StudioSession:
                     part = next((s for s in doc.get("sections") or [] if s.get("title") == section), None)
                     text = part["text"] if part else doc.get("text", "")
                     return {"ok": True, "name": name, "text": text[:POLICY_MAX], "cut": len(text) > POLICY_MAX,
-                            "sections": [s.get("title") for s in doc.get("sections") or []]}
+                            "sections": [s.get("title") for s in doc.get("sections") or [] if s.get("text", "").strip()]}
         return {"ok": False, "error": "업로드한 문서에 없어 불러오지 못했습니다. 데이터 카탈로그에서 문서를 업로드해 주세요."}
 
     def policy_start(self, text: str, target: str = "", name: str = "") -> dict:
@@ -680,7 +727,7 @@ class StudioSession:
                           not (a and a.call) or bool(a and a.undo))})
 
     def request(self, action: str, key: str, params: dict, role: str) -> dict:
-        actor = Actor(self.studio.onto.roles[role].label or role if role else "에이전트", "agent",
+        actor = Actor(self.studio.onto.roles[role].label or role if role else "Agent", "agent",
                       [role] if role else [])
         p = self.studio.actions.request(action, key, params, actor=actor)
         state = "승인 대기 중입니다." if p.status == "pending" else "검사를 통과하지 못해 반려되었습니다."
@@ -833,7 +880,8 @@ class StudioSession:
     def _hold(self) -> None:
         """Bring what the next draft reads in line with the files going into it: after a switch of repository, a file
         left out or taken back, or a server started on repositories it kept."""
-        wanted = {p: f for p, f in self.repositories.files(self.repo).items() if f["included"] and not f.get("error")}
+        wanted = {p: f for p, f in self.repositories.files(self.repo).items()
+                  if f["included"] and not f.get("error") and (f.get("facts") or {}).get("kind") != "raw"}
         stale = [p for p, sha in self._held.items() if p not in wanted or wanted[p]["sha256"] != sha]
         fresh = [p for p in wanted if p not in self._held or p in stale]
         for p in stale:
@@ -970,7 +1018,8 @@ class StudioSession:
         everything = self.repositories.files(self.repo)
         return plain({"repository": self._repository_row(), "repositories": self.repositories.rows(), "folder": folder,
                       "folders": folders, "files": [{**f, "ext": Path(f["name"]).suffix.lower().lstrip(".")} for f in files],
-                      "included": sum(1 for f in everything.values() if f["included"] and not f.get("error")),
+                      "included": sum(1 for f in everything.values() if f["included"] and not f.get("error")
+                                      and (f.get("facts") or {}).get("kind") != "raw"),
                       "unread": sum(1 for f in everything.values() if f.get("error")),
                       "limits": {"file_bytes": lim.file_bytes, "total_bytes": lim.total_bytes, "files": lim.files,
                                  "used_files": count, "used_bytes": total},
@@ -986,6 +1035,11 @@ class StudioSession:
             return {"ok": True, "skipped": True}
         self._room(path, len(data))
         name = path.rsplit("/", 1)[-1]
+        if Path(name).suffix.lower() in RAW_FILES:  # kept as it is: nothing to read into a draft
+            self.repositories.put(self.repo, path, data, facts={"kind": "raw"}, error="")
+            self._release(path)
+            self.event("upload", f"파일 업로드 · {name}")
+            return {"ok": True, "skipped": False}
         try:
             tables, defs = self._read(name, data)
             self._keep(path, data, tables, defs)
@@ -1046,7 +1100,7 @@ class StudioSession:
         f = self.repositories.entry(self.repo, path)
         name = path.rsplit("/", 1)[-1]
         out = {"path": path, "name": name, **f, "tables": [], "sections": [], "json": ""}
-        if f.get("error"):
+        if f.get("error") or (f.get("facts") or {}).get("kind") == "raw":
             return plain(out)
         tables, defs = self._read(name, self.repositories.read(self.repo, path))
         out["tables"] = [{"name": t.name, "sheet": t.source, "rows": len(t.rows), "columns": t.columns,
@@ -1092,7 +1146,10 @@ class StudioSession:
         """A folder or a file on the server, its structure kept, for installs that allow the server's disk."""
         if not self.data.allow_connect:
             raise PermissionError("공개 데모에서는 서버 경로 가져오기가 비활성화되어 있어 처리하지 못했습니다. 파일 업로드를 이용해 주세요.")
-        src, folder = Path(str(path).strip().strip('"')), clean_path(folder)
+        typed = str(path).strip().strip('"')
+        if not typed:
+            raise ValueError("경로가 없어 가져오지 못했습니다. 서버에 있는 파일 또는 폴더 경로를 입력해 주세요.")
+        src, folder = Path(typed), clean_path(folder)
         if not src.exists():
             raise ValueError("경로를 찾을 수 없어 가져오지 못했습니다. 서버에 있는 파일 또는 폴더 경로를 입력해 주세요.")
         found = [src] if src.is_file() else sorted(p for p in src.rglob("*") if p.is_file())
@@ -1169,9 +1226,14 @@ class StudioSession:
         u = urlparse(dsn)
         if u.scheme in ("postgres", "postgresql", "mysql", "oracle"):
             kind = u.scheme if u.scheme in ("mysql", "oracle") else "postgres"
-            b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
             word = {"mysql": "MySQL", "oracle": "Oracle", "postgres": "PostgreSQL"}[kind]
             where = f"{word} {u.hostname or 'localhost'}{u.path}"  # never the user or the password
+            try:
+                b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
+            except ImportError:
+                raise ValueError(f"{word} 드라이버가 설치되어 있지 않아 연결하지 못했습니다. 서버에 드라이버를 설치해 주세요.") from None
+            except Exception:  # what a driver says may carry the address and the password
+                raise ValueError(f"{where}에 연결하지 못했습니다. 주소, 계정, 네트워크를 확인해 주세요.") from None
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
@@ -1239,7 +1301,7 @@ class StudioSession:
             onto = compose(d.modules(), name=d.name).ontology
             out = induce(b, onto, str(target), [str(x) for x in inputs or []], label=label[:60])
         except (InduceError, ValueError) as e:
-            return {"ok": False, "error": f"판정 표를 만들지 못했습니다. {e}"}
+            return {"ok": False, "error": f"판정 표를 만들지 못했습니다. {_issue_text(str(e))}"}
         d0.decisions[out["name"]] = {**out["decision"], "report": out["report"]}
         self._note("draft", f"{out['decision']['label']}: 지난 {out['report']['cases']}건으로 규칙 "
                             f"{out['report']['rules']}개를 만들었습니다.")
@@ -1361,7 +1423,7 @@ class StudioSession:
         self._new_pipeline(d.label)
         removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
-                                                              ("actions", "액션")) if m.remove.get(k)]
+                                                              ("actions", "Action")) if m.remove.get(k)]
         self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
                             f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
                             f"테이블에 없는 속성 {removed}개 제외"
@@ -1462,8 +1524,10 @@ class StudioSession:
             raise ValueError("module 이름이 없어 읽지 못했습니다. 첫 줄에 module: 이름을 입력해 주세요.")
         try:
             return Module.from_dict(d)
-        except (ModuleError, KeyError, TypeError, ValueError, AttributeError) as e:
-            raise ValueError(f"모듈 형식이 올바르지 않아 읽지 못했습니다. {e}") from None
+        except KeyError as e:
+            raise ValueError(f"{e} 항목이 없어 모듈을 읽지 못했습니다. 항목을 추가해 주세요.") from None
+        except (ModuleError, TypeError, ValueError, AttributeError) as e:
+            raise ValueError(f"모듈 형식이 올바르지 않아 읽지 못했습니다. {_issue_text(str(e))}") from None
 
     def _module_issues(self, m: Module) -> list[str]:
         from xgen_space.library import OverlayLibrary
@@ -1477,12 +1541,14 @@ class StudioSession:
             try:
                 picked = OverlayLibrary(self.studio.library, [m]).resolve([*names, m.name])
             except ModuleError as e:
-                return [str(e)]
+                return [_issue_text(str(e))]
             mods = current + [x for x in picked if x.name not in names]
         try:
-            return list(compose(mods, **self.studio._compose_kw).issues)
+            return [_issue_text(str(x)) for x in compose(mods, **self.studio._compose_kw).issues]
         except ModuleError as e:
-            return [str(e)]
+            return [_issue_text(str(e))]
+        except KeyError as e:  # an object without its key, a link without its ends
+            return [f"{e} 항목이 없어 정의를 읽지 못했습니다. 항목을 추가해 주세요."]
 
     def check_module(self, text: str) -> dict:
         m = self._parse_module(text)
@@ -1720,8 +1786,8 @@ class StudioSession:
 
         try:
             items = yaml.safe_load(text)
-        except yaml.YAMLError as e:
-            raise ValueError(f"파일을 읽지 못했습니다. YAML 또는 JSON 목록인지 확인해 주세요. {e}") from None
+        except yaml.YAMLError:
+            raise ValueError("파일을 읽지 못했습니다. YAML 또는 JSON 목록인지 확인해 주세요.") from None
         if isinstance(items, dict):
             items = items.get("questions")
         if not isinstance(items, list) or not items:
@@ -1787,8 +1853,8 @@ class StudioSession:
 
         try:
             fs = FlowSettings.from_dict(settings)
-        except ValueError as e:
-            raise ValueError(f"흐름 설정을 확인할 수 없어 저장하지 못했습니다. {e}") from None
+        except ValueError:
+            raise ValueError("흐름 설정 값이 올바르지 않아 저장하지 못했습니다. 비율은 0에서 100 사이의 숫자로 입력해 주세요.") from None
         self.studio.settings["flow"] = fs.to_dict()
         self._note("flow", "흐름 단계와 통과 조건을 저장했습니다.")
         return {"ok": True, "settings": fs.to_dict()}

@@ -423,7 +423,7 @@ def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | N
     if gone_questions:
         remove["questions"] = gone_questions
     return Module(name=name, version="0.1.0", kind="binding", label=label or name,
-                  description="표준 정의를 업로드한 테이블에 연결합니다(바인딩 제안에서 확정).",
+                  description="표준 정의를 업로드한 테이블에 연결합니다(Binding 제안에서 확정).",
                   requires=[Requirement(x) for x in s.standard],
                   body={**{x: {} for x in SECTIONS}, "questions": [], "exclusive": []},
                   extend={"objects": bind_objects, "links": links}, remove=remove)

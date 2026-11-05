@@ -40,7 +40,7 @@ def open_backend(spec: dict, base: Path):
 
         from xgen_space.backends.sql import DbApiBackend
 
-        return DbApiBackend(psycopg.connect(spec["dsn"]), "postgres", paramstyle="format")
+        return DbApiBackend(psycopg.connect(spec["dsn"], connect_timeout=10), "postgres", paramstyle="format")
     if kind == "mysql":
         import pymysql
 
@@ -48,7 +48,8 @@ def open_backend(spec: dict, base: Path):
 
         u = urlparse(spec["dsn"])
         conn = pymysql.connect(host=u.hostname or "localhost", port=u.port or 3306, user=unquote(u.username or ""),
-                               password=unquote(u.password or ""), database=u.path.lstrip("/"), charset="utf8mb4")
+                               password=unquote(u.password or ""), database=u.path.lstrip("/"), charset="utf8mb4",
+                               connect_timeout=10)
         with conn.cursor() as cur:  # the studio's SQL quotes names the standard way
             cur.execute("SET SESSION sql_mode = CONCAT(@@sql_mode, ',ANSI_QUOTES')")
         return DbApiBackend(conn, "mysql", paramstyle="format")
@@ -60,7 +61,7 @@ def open_backend(spec: dict, base: Path):
         oracledb.defaults.fetch_lobs = False
         u = urlparse(spec["dsn"])
         conn = oracledb.connect(user=unquote(u.username or ""), password=unquote(u.password or ""),
-                                dsn=f"{u.hostname or 'localhost'}:{u.port or 1521}{u.path}")
+                                dsn=f"{u.hostname or 'localhost'}:{u.port or 1521}{u.path}", tcp_connect_timeout=10)
         return DbApiBackend(conn, "oracle", paramstyle="numeric")
     if kind == "dbapi":
         import importlib

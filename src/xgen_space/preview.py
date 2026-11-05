@@ -18,9 +18,9 @@ TARGETS = [("sql:postgres", "PostgreSQL"), ("sql:mysql", "MySQL"), ("sql:oracle"
 MODULE_COLOR = {"core": "#7a5af8", "domain": "#1a73e8", "industry": "#0f9d8a", "customer": "#d9822b",
                 "binding": "#8a96a5", "quality": "#c2367a", "method": "#5f7a1f", "dictionary": "#3f6fb5"}
 MODULE_KIND = {"core": "공통 개념", "domain": "도메인", "industry": "업종 확장", "customer": "고객사 차이",
-               "binding": "바인딩", "quality": "검증 기준", "method": "구축 규칙", "dictionary": "용어 사전"}
-KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의", "decision": "결정", "action": "액션",
-              "role": "역할", "agent": "에이전트", "link": "관계", "object": "객체", "table": "테이블", "file": "파일",
+               "binding": "Binding", "quality": "검증 기준", "method": "구축 규칙", "dictionary": "용어 사전"}
+KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의", "decision": "결정", "action": "Action",
+              "role": "역할", "agent": "Agent", "link": "관계", "object": "객체", "table": "테이블", "file": "파일",
               "collection": "컬렉션", "folder": "폴더", "database": "데이터베이스"}
 
 CSS = """
@@ -147,7 +147,7 @@ ICONS = {
     "library": '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="16" rx="1"/>'
                '<path d="M17 5.5l3.5-1 3 15-3.5 1z"/>',
 }
-NAV = [("space", "데이터 공간"), ("library", "온톨로지 라이브러리"), ("onto", "온톨로지"), ("query", "질의"), ("decide", "결정 · 액션"),
+NAV = [("space", "데이터 공간"), ("library", "온톨로지 라이브러리"), ("onto", "온톨로지"), ("query", "질의"), ("decide", "결정 · Action"),
        ("check", "검증"), ("map", "데이터 지도")]
 
 
@@ -296,7 +296,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
     o = studio.onto
     obj = o.obj(selected)
     stats = [(len(o.objects), "객체"), (len(o.links), "관계"), (sum(len(x.properties) for x in o.objects.values()),
-             "속성"), (len(o.decisions), "결정"), (len(o.actions), "액션"), (len(o.queries), "등록 질의")]
+             "속성"), (len(o.decisions), "결정"), (len(o.actions), "Action"), (len(o.queries), "등록 질의")]
     stat_html = "".join(f'<div class="stat"><b>{n}</b><span>{_e(lbl)}</span></div>' for n, lbl in stats)
     def owner_chip(p) -> str:
         kind = _module_kind(studio, f"property:{obj.name}.{p.name}")
@@ -322,7 +322,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
                       for a in obj.aligned)
     if aligned:
         aligned = ('<div style="margin-top:14px"><div class="muted" style="font-size:12px;font-weight:700;'
-                   f'margin-bottom:6px">표준 개념 매핑</div><div style="display:flex;gap:6px;flex-wrap:wrap">{aligned}</div></div>')
+                   f'margin-bottom:6px">표준 개념 Mapping</div><div style="display:flex;gap:6px;flex-wrap:wrap">{aligned}</div></div>')
     if obj.parent:
         aligned = (f'<div style="margin-top:14px"><div class="muted" style="font-size:12px;font-weight:700;'
                    f'margin-bottom:6px">상위 개념</div><span class="chip n">{_e(studio.onto.obj(obj.parent).label)} · '
@@ -339,12 +339,12 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
         f'<span class="chip">{_e(lk.label or lk.name)} · {_e(o.obj(lk.target if lk.source == selected else lk.source).label)}'
         f'</span>' for lk in links)
     body = f"""
-<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 매핑을 확인합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
   <div class="right"><span class="btn ghost">OWL 내보내기</span><span class="btn ghost">SHACL</span>
   <span class="btn ghost">R2RML</span><span class="btn primary">변경 제안</span></div></div>
 <div class="stats">{stat_html}</div>
 <div class="grid" style="grid-template-columns:1.55fr 1fr">
-  <div class="card"><div class="ch">스키마 그래프<div class="right legend">{legend}</div></div>
+  <div class="card"><div class="ch">Schema 그래프<div class="right legend">{legend}</div></div>
     <div class="cb" style="flex:1;padding:10px 12px">{_schema_svg(studio, selected)}</div></div>
   <div class="card"><div class="ch">{_e(obj.label)} <span class="muted mono" style="font-weight:600">{_e(obj.name)}</span>
     <div class="right"><span class="chip b">키 {_e(obj.key)}</span><span class="chip mono">{_e(obj.table)}</span></div></div>
@@ -513,20 +513,20 @@ def _screen_query(studio: Studio, name: str, active: str, counts) -> str:
                        f'{_e(b.capabilities.dialect)}</span><div class="right"><span class="chip">{len(norm)}행</span>'
                        f'</div></div><div class="cb" style="padding:0"><table><tr>{head}</tr>{body}</table></div></div>')
     ir = _ir_text(q.to_dict())
-    verdict = ('<span class="chip ok">✓ 백엔드 결과 일치</span>' if agree and len(results) > 1
-               else '<span class="chip warn">백엔드 결과 불일치</span>' if len(results) > 1 else "")
+    verdict = ('<span class="chip ok">✓ Backend 결과 일치</span>' if agree and len(results) > 1
+               else '<span class="chip warn">Backend 결과 불일치</span>' if len(results) > 1 else "")
     label = dict(TARGETS)[active]
     body = f"""
 <div class="head"><div><h1>{_e(rq.label or name)} <span class="muted mono" style="font-size:15px">{_e(name)}</span></h1>
-  <div class="sub">온톨로지 질의를 백엔드별 쿼리로 변환해 실행합니다</div></div>
+  <div class="sub">온톨로지 질의를 Backend별 쿼리로 변환해 실행합니다</div></div>
   <div class="right">{verdict}<span class="btn primary">실행</span></div></div>
 <div class="grid" style="grid-template-columns:380px 1fr;flex:none;height:520px">
   <div class="card"><div class="ch">온톨로지 질의 IR<div class="right"><span class="chip b">검사 통과</span></div></div>
     <div class="cb"><pre class="code ir" style="height:452px">{_e(ir)}</pre></div></div>
-  <div class="card"><div class="ch">백엔드 쿼리<div class="right tabs">{"".join(tabs)}</div></div>
+  <div class="card"><div class="ch">Backend 쿼리<div class="right tabs">{"".join(tabs)}</div></div>
     <div class="cb"><pre class="code" style="height:128px">{_highlight(code, active)}</pre>
-    <div class="muted" style="font-size:12px;margin:6px 0 10px">{_e(label)} · 파라미터 값 표시</div>
-    <table class="tight"><tr><th>언어</th><th>상태</th><th style="text-align:right">쿼리</th><th style="text-align:right">파라미터</th></tr>{"".join(langs)}</table></div></div>
+    <div class="muted" style="font-size:12px;margin:6px 0 10px">{_e(label)} · Parameter 값 표시</div>
+    <table class="tight"><tr><th>언어</th><th>상태</th><th style="text-align:right">쿼리</th><th style="text-align:right">Parameter</th></tr>{"".join(langs)}</table></div></div>
 </div>
 <div class="grid" style="grid-template-columns:repeat({max(len(results), 1)},1fr)">{"".join(results)}</div>"""
     return _frame("query", "query", studio, body, counts)
@@ -562,7 +562,7 @@ def _screen_decision(studio: Studio, name: str, key: str, counts) -> str:
                     next(iter(studio.onto.roles), ""))
         p = studio.actions.request(action.name, key, {k: "사이즈가 맞지 않음" for k in action.parameters},
                                    actor=Actor("agent:고객응대", "agent", [role]))
-        names = {"role": "역할 권한", "parameters": "파라미터", "target": "대상 확인", "state": "상태 전이"}
+        names = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이"}
         first_out = next(iter(table.outputs), "")
         detail = {"role": (studio.onto.roles[role].label or role) if role else "",
                   "parameters": ", ".join(action.parameters) or "없음",
@@ -582,7 +582,7 @@ def _screen_decision(studio: Studio, name: str, key: str, counts) -> str:
         action_html = f"""<div class="card" style="flex:1"><div class="ch">{_e(action.label or action.name)}
   <span class="muted mono" style="font-weight:600">{_e(action.name)}</span><div class="right">
   <span class="chip {status[0]}">{status[1]}</span></div></div><div class="cb">
-  <div class="muted" style="font-size:12.5px;margin-bottom:8px">에이전트 요청입니다. 승인한 요청만 원천 DB에 반영합니다.</div>
+  <div class="muted" style="font-size:12.5px;margin-bottom:8px">Agent 요청입니다. 승인한 요청만 원천 DB에 반영합니다.</div>
   {checks}<div style="display:flex;gap:8px;margin:12px 0 10px"><span class="btn primary" style="flex:1;text-align:center">승인</span>
   <span class="btn" style="flex:1;text-align:center">반려</span></div>
   <div class="muted" style="font-size:12px;font-weight:700;margin-bottom:2px">감사 로그</div><div class="log">{log}</div></div></div>"""
@@ -660,13 +660,13 @@ def _screen_map(studio: Studio, counts) -> str:
                      f'<td class="mono">{_e(a.label)}</td></tr>' for a in cat.unused()[:8])
     body = f"""
 <div class="head"><div><h1>데이터 지도</h1><div class="sub">AI가 사용하는 데이터 자산과 연결 관계 · 자산 {len(cat.assets)} · 연결 {len(cat.relations)}</div></div>
-  <div class="right"><span class="chip">에이전트 조회 범위</span><span class="chip b">영향 범위</span><span class="chip">미사용 데이터</span></div></div>
+  <div class="right"><span class="chip">Agent 조회 범위</span><span class="chip b">영향 범위</span><span class="chip">미사용 데이터</span></div></div>
 <div class="grid" style="grid-template-columns:1.7fr 1fr">
   <div class="card"><div class="ch">영향 범위 · <span class="mono" style="font-weight:600">{_e(cat.assets[start].label)}</span>
     <div class="right"><span class="chip warn">변경 시 영향 {len(impacted)}곳</span></div></div>
     <div class="cb" style="flex:1;padding:10px 14px">{svg}</div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
-    <div class="card"><div class="ch">고객응대 에이전트 조회 범위</div><div class="cb">
+    <div class="card"><div class="ch">고객응대 Agent 조회 범위</div><div class="cb">
       <div class="stats" style="grid-template-columns:repeat(3,1fr)">{see_html}</div></div></div>
     <div class="card" style="flex:1"><div class="ch">미사용 데이터</div><div class="cb" style="padding:0">
       <table><tr><th>종류</th><th>자산</th></tr>{unused}</table></div></div></div>

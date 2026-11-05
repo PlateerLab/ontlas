@@ -1222,3 +1222,80 @@ def test_an_uploaded_document_feeds_the_policy_draft_by_section_and_a_code_shows
     assert not s.document_text("없는 문서")["ok"]
     s.studio.composition.messages = [{"code": "MSG-1", "text": "기간이 지났습니다."}]
     assert s._said({"reason": "MSG-1", "ok": True}) == [{"code": "MSG-1", "text": "기간이 지났습니다."}]
+
+
+def _hwp_record(tag: int, payload: bytes) -> bytes:
+    import struct
+
+    return struct.pack("<I", tag | (len(payload) << 20)) + payload
+
+
+def _hwp_paragraph(text: str) -> bytes:
+    tab = (9).to_bytes(2, "little") * 8  # a control of eight units, as a tab is
+    return _hwp_record(67, tab + text.encode("utf-16-le") + (13).to_bytes(2, "little"))
+
+
+def _hwp_file(lines, *, flags=1, fat_loop=False) -> bytes:
+    """The smallest .hwp: a compound file with a header and one compressed section, all in the mini stream."""
+    import struct
+    import zlib
+
+    pack = zlib.compressobj(9, zlib.DEFLATED, -15)
+    body = b"".join(_hwp_paragraph(x) for x in lines)
+    section = pack.compress(body) + pack.flush() if flags & 1 else body
+    header = b"HWP Document File".ljust(32, b"\0") + b"\0\0\0\5" + struct.pack("<I", flags)
+    header = header.ljust(256, b"\0")
+    mini = header + section.ljust((len(section) + 63) // 64 * 64, b"\0")
+    blocks = len(mini) // 64
+    mini_fat = [i + 1 for i in range(blocks - 1)] + [0xFFFFFFFE]
+    mini_fat[3] = 0xFFFFFFFE  # the header takes four blocks, the section the rest
+    sectors = (len(mini) + 511) // 512
+
+    def entry(name, kind, *, left=0xFFFFFFFF, right=0xFFFFFFFF, child=0xFFFFFFFF, start=0, size=0):
+        raw = name.encode("utf-16-le") + b"\0\0"
+        return (raw.ljust(64, b"\0") + struct.pack("<HBB", len(raw), kind, 1) + struct.pack("<III", left, right, child)
+                + b"\0" * 36 + struct.pack("<IQ", start, size))
+
+    directory = (entry("Root Entry", 5, child=1, start=3, size=len(mini)) + entry("FileHeader", 2, right=2, start=0, size=256)
+                 + entry("BodyText", 1, child=3) + entry("Section0", 2, start=4, size=len(section)))
+    fat = [0xFFFFFFFD, 0xFFFFFFFE, 0xFFFFFFFE] + [3 + i + 1 for i in range(sectors - 1)] + [0xFFFFFFFE]
+    if fat_loop:
+        fat[3] = 3
+    head = bytearray(512)
+    head[:8] = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+    struct.pack_into("<HH", head, 30, 9, 6)
+    struct.pack_into("<I", head, 44, 1)
+    struct.pack_into("<I", head, 48, 1)
+    struct.pack_into("<IIII", head, 56, 4096, 2, 1, 0xFFFFFFFE)
+    struct.pack_into("<I", head, 72, 0)
+    struct.pack_into("<109I", head, 76, 0, *([0xFFFFFFFF] * 108))
+    pad = lambda b: b.ljust((len(b) + 511) // 512 * 512, b"\xff")  # noqa: E731
+    return (bytes(head) + pad(struct.pack(f"<{len(fat)}I", *fat)) + pad(directory)
+            + pad(struct.pack(f"<{len(mini_fat)}I", *mini_fat)) + mini.ljust(sectors * 512, b"\0"))
+
+
+def test_a_hwp_file_gives_its_text_by_section():
+    d = ingest(_hwp_file(["1. 반품 기간", "배송 완료 후 7일 이내 반품할 수 있습니다.", "2. 교환", "교환은 1회만 가능합니다."]), "규정.hwp")
+    doc = d.documents[0]
+    assert doc["name"] == "규정" and [s["title"] for s in doc["sections"]] == ["1. 반품 기간", "2. 교환"]
+    assert "교환은 1회만 가능합니다." in doc["text"]
+
+
+def test_a_hwp_file_stored_without_compression_reads_too():
+    assert "본문" in ingest(_hwp_file(["본문입니다."], flags=0), "a.hwp").documents[0]["text"]
+
+
+@pytest.mark.parametrize("flags", [1 | 2, 1 | 4])
+def test_a_hwp_file_with_a_password_or_for_viewing_is_refused_with_what_to_do(flags):
+    with pytest.raises(IngestError) as e:
+        ingest(_hwp_file(["내용"], flags=flags), "a.hwp")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "HWPX"
+
+
+def test_a_malformed_hwp_ends_in_an_answer():
+    with pytest.raises(IngestError):
+        ingest(_hwp_file(["내용"], fat_loop=True), "a.hwp")
+    with pytest.raises(IngestError):
+        ingest(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\xff" * 600, "a.hwp")
+    with pytest.raises(IngestError):
+        ingest(_hwp_file(["내용"])[:700], "a.hwp")

@@ -2,7 +2,7 @@ module: finance
 version: 1.0.0
 kind: domain
 label: 금융 온톨로지 (여신 예시)
-description: 차주, 계좌, 대출과 연체 심사 판정을 정의합니다. 클래스는 FIBO 개념에 매핑되어 있으며, 원천 테이블 연결은 바인딩 모듈에서 관리합니다.
+description: 차주, 계좌, 대출과 연체 심사 판정을 정의합니다. 클래스는 FIBO 개념에 Mapping되어 있으며, 원천 테이블 연결은 Binding 모듈에서 관리합니다.
 requires: [core]
 
 objects:

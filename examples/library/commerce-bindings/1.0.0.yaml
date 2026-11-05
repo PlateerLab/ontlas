@@ -1,7 +1,7 @@
 module: commerce-bindings
 version: 1.0.0
 kind: binding
-label: 이커머스 원천 바인딩
+label: 이커머스 원천 Binding
 description: 이커머스 표준 온톨로지를 예시 커머스 DB의 테이블과 컬럼에 연결합니다. 고객사별로 이 모듈만 교체합니다.
 requires: [commerce]
 

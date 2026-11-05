@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0
+
+- `.hwp` (Hancom 5.x) is read with the standard library: text by section, tables' cells included. A file with a password
+  or a viewing-only copy is refused with what to export it to.
+- Images, video and archives in the catalog are kept as raw files instead of showing as failed reads.
+- Terms of art are written in English on the page: Domain Adapter, Binding, Cardinality, Backend, Interface, Action,
+  Parameter, Node, Edge, Mapping, Agent, Schema.
+- The draft screen no longer breaks after a file is left out of it, and a switch of pipeline clears the policy, mapping
+  and decision forms it left behind.
+- A decision table is no longer offered date columns as inputs, which it cannot use. A module with a field missing, a
+  wrong type or an unknown target, a typed query and a table drawn from past cases now answer in the product's words.
+- A database that does not answer gives up after 10 seconds and says so, without repeating the address's password.
+- 경로 입력 with nothing typed is refused; it used to bring in the folder the server runs in.
+- A question's expected answer is checked before it is saved. A heading with no text is not offered as a policy section.
+
 ## 0.8.0
 
 - Pipelines to choose from: each applied draft is kept beside the ones before it, and the list at the top of the page

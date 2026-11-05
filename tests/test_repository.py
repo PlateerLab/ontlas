@@ -113,11 +113,11 @@ def test_a_row_says_what_each_file_turned_out_to_be(session):
     session.catalog_upload("원천/회원.csv", CSV)
     session.catalog_upload("원천/정책/규정.md", "# 반품\n\n7일 이내 반품합니다.\n".encode())
     session.catalog_upload("정의/shop.sql", b"CREATE TABLE t (id INT PRIMARY KEY, name VARCHAR(10));")
-    session.catalog_upload("사진.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    session.catalog_upload("옛문서.doc", b"\xd0\xcf\x11\xe0" + b"\0" * 600)
     top = session.catalog_state()
     assert [f["name"] for f in top["folders"]] == ["원천", "정의"] and top["included"] == 3 and top["unread"] == 1
-    png = top["files"][0]
-    assert png["ext"] == "png" and png["error"] and not png["error"].startswith("사진.png")
+    doc = top["files"][0]
+    assert doc["ext"] == "doc" and doc["error"] and not doc["error"].startswith("옛문서.doc")
     rows = session.catalog_state("원천")["files"]
     assert rows[0]["facts"] == {"kind": "data", "tables": 1, "rows": 2, "columns": 2}
     assert session.catalog_state("원천/정책")["files"][0]["facts"]["kind"] == "document"
@@ -221,6 +221,8 @@ def test_a_server_folder_comes_in_only_where_the_install_allows_it(session, tmp_
     assert "자료/하위/회원.csv" in session.repositories.files(session.repo)
     with pytest.raises(ValueError):
         session.catalog_import(str(tmp_path / "없음"))
+    with pytest.raises(ValueError):
+        session.catalog_import("  ")  # never the folder the server happens to run in
 
 
 def test_visitors_share_a_kept_folder_and_each_reads_it(tmp_path):
@@ -235,3 +237,15 @@ def test_visitors_share_a_kept_folder_and_each_reads_it(tmp_path):
     second = StudioSession(load_studio(EXAMPLE), data=DataOptions(), repositories=Repositories(tmp_path))
     assert [f["source"] for f in second.files_state()["files"]] == ["회원.csv"]
     assert second.state()["data"]["files"] == 1
+
+
+def test_images_and_video_are_kept_as_they_are(session):
+    session.catalog_upload("자료/사진.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    session.catalog_upload("자료/회원.csv", CSV)
+    rows = {f["name"]: f for f in session.catalog_state("자료")["files"]}
+    assert rows["사진.png"]["facts"] == {"kind": "raw"} and rows["사진.png"]["error"] == ""
+    st = session.catalog_state()
+    assert st["included"] == 1 and st["unread"] == 0
+    assert [f["source"] for f in session.files_state()["files"]] == ["자료/회원.csv"]
+    assert session.catalog_file("자료/사진.png")["json"] == ""
+    assert session.catalog_download("자료/사진.png")[1].startswith(b"\x89PNG")

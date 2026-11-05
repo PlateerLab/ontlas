@@ -75,7 +75,7 @@ def test_request_approve_and_the_decision_follows(session):
     assert d["yes"] and d["evidence"][0]["source"] == "order_items.delivered_at"
     p = session.request("requestReturn", "I1001", {"reason": "사이즈"}, "customer_agent")["proposal"]
     assert p["status"] == "pending" and all(c["passed"] for c in p["checks"])
-    assert next(c for c in p["checks"] if c["name"] == "role")["detail"] == "고객 응대 에이전트"
+    assert next(c for c in p["checks"] if c["name"] == "role")["detail"] == "고객 응대 Agent"
     done = session.approve(p["id"], True)
     assert done["proposal"]["status"] == "executed" and "graph" in done["projection"]
     assert next(c for c in done["proposal"]["checks"] if c["name"].startswith("decision:"))["detail"].startswith(

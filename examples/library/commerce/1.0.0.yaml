@@ -2,7 +2,7 @@ module: commerce
 version: 1.0.0
 kind: domain
 label: 이커머스 표준 온톨로지
-description: 고객, 주문, 주문상품, 단품, 상품, 카테고리, 클레임과 반품 판정을 정의합니다. 원천 테이블 연결은 바인딩 모듈에서 관리합니다.
+description: 고객, 주문, 주문상품, 단품, 상품, 카테고리, 클레임과 반품 판정을 정의합니다. 원천 테이블 연결은 Binding 모듈에서 관리합니다.
 requires: [core]
 
 objects:
@@ -164,7 +164,7 @@ actions:
 
 roles:
   customer_agent:
-    label: 고객 응대 에이전트
+    label: 고객 응대 Agent
     read: [Order, OrderItem, Sku, Product, Category, Claim]
     row_filters:
       Order: {eq: [$self.customer_id, {principal: customer_id}]}

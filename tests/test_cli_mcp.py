@@ -63,7 +63,7 @@ def test_preview_page(graph_studio):
     html = render(graph_studio, query="revenueByCategory", decision="returnEligibility", key="I1001")
     for sid in ("ontology", "query", "decision", "map"):
         assert f'id="{sid}"' in html
-    assert "백엔드 결과 일치" in html and "order_items.delivered_at" in html
+    assert "Backend 결과 일치" in html and "order_items.delivered_at" in html
 
 
 def test_mcp_server_lists_and_calls_tools(studio):

@@ -152,3 +152,43 @@ def test_pipelines_keep_to_their_limit_and_the_first_stays(session):
     session.pipeline_delete(current)  # the one on screen: back to the first
     st = session.state()
     assert st["pipeline"] == "p1" and len(st["pipelines"]) == PIPELINES_MAX - 1
+
+
+@pytest.mark.parametrize("text,word", [
+    ("module: t\nversion: 1.0.0\nkind: domain\nrequires: [nothing]\n", "의존 모듈"),
+    ("module: t\nversion: 1.0.0\nkind: domain\nobjects: {A: {key: id, properties: {id: {type: nope}}}}\n", "타입"),
+    ("module: t\nversion: 1.0.0\nkind: domain\ndecisions: {d: {target: Zed, rules: []}}\n", "대상 객체"),
+])
+def test_a_module_check_speaks_the_product_language(session, text, word):
+    issues = session.check_module(text)["issues"]
+    assert word in issues[0] and not any("satisfies" in x or "is not one of" in x or "is unknown" in x for x in issues)
+
+
+@pytest.mark.parametrize("text", ["module: t\nversion: 1.0.0\nkind: domain\nobjects: {A: {table: t, properties: {x: {type: string}}}}\n",
+                                  "module: t\nversion: 1.0.0\nkind: domain\nlinks: {l: {source: A, target: B}}\n"])
+def test_a_module_with_a_field_missing_says_which(session, text):
+    try:
+        out = session.check_module(text)["issues"][0]
+    except ValueError as e:
+        out = str(e)
+    assert "항목이 없어" in out
+
+
+def test_a_database_that_does_not_answer_is_told_plainly(session, monkeypatch):
+    import xgen_space.config as config
+    from xgen_space.web import DataOptions
+
+    session.data = DataOptions(allow_connect=True)
+
+    def down(spec, base):
+        raise OSError("connection to server at 10.0.0.1 failed for user admin password secret")
+
+    monkeypatch.setattr(config, "open_backend", down)
+    with pytest.raises(ValueError) as e:
+        session.connect("postgresql://admin:secret@10.0.0.1/shop")
+    assert "연결하지 못했습니다" in str(e.value) and "secret" not in str(e.value) and "admin" not in str(e.value)
+
+
+def test_a_typed_query_error_says_what_to_fix(session):
+    assert "객체를 찾지 못했습니다" in session.run_text("cypher", "MATCH (n:Nope) RETURN n")["error"]
+    assert "JSON 형식" in session.run_text("ir", "{bad")["error"]

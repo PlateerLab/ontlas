@@ -173,7 +173,7 @@ actions:
 
 roles:
   customer_agent:
-    label: 고객 응대 에이전트
+    label: 고객 응대 Agent
     read: [Order, OrderItem, Sku, Product, Category, Claim]
     row_filters:
       Order: {eq: [$self.customer_id, {principal: customer_id}]}

@@ -917,7 +917,7 @@ class Draft:
         domain = Module(name=self.name, version="0.1.0", kind="domain", label=self.label, body=body,
                         description=where, namespace=f"https://example.org/{self.name}#")
         binding = Module(name=f"{self.name}-bindings", version="0.1.0", kind="binding",
-                         label=f"{self.label} · binding" if self.lang == "en" else f"{self.label} 바인딩",
+                         label=f"{self.label} · binding" if self.lang == "en" else f"{self.label} Binding",
                          description=where, requires=[Requirement(self.name)],
                          body={**{s: {} for s in SECTIONS}, "questions": [], "exclusive": []},
                          extend={"objects": bind_objects, "links": bind_links})
