@@ -493,7 +493,7 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
                     module.remove.setdefault(section, []).append(ident)
                     taken.append(f"{SINGULAR.get(section, 'question')}:{ident}")
                     progress = True
-            elif head in comp.ontology.objects and f"object:{head}" not in own and ": series needs " in issue:
+            elif head in comp.ontology.objects and f"object:{head}" not in own and ": series " in issue:
                 patch = module.extend.setdefault("objects", {}).setdefault(head, {})
                 if patch.get("series") != {}:
                     patch["series"] = {}

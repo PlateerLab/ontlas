@@ -462,7 +462,7 @@
     if (m.bind && m.bind.errors !== undefined) facts.push(`DB 대조 오류 ${m.bind.errors} · 경고 ${m.bind.warnings}`);
     if (m.query && m.query.queries !== undefined) facts.push(`백엔드 결과 일치 ${m.query.agree} / ${m.query.queries}`);
     if (m.check && m.check.accuracy !== undefined) facts.push(`검증 질문 정답률 ${pct(m.check.accuracy)}${m.check.failed && m.check.failed.length ? ` (틀린 질문 ${esc(m.check.failed.join(', '))})` : ''}`);
-    if (m.decide && m.decide.rate !== undefined) facts.push(`판정 일치율 ${pct(m.decide.rate)} (${m.decide.agree} / ${m.decide.cases})`);
+    if (m.decide && m.decide.rate !== undefined) facts.push(m.decide.cases ? `판정 일치율 ${pct(m.decide.rate)} (${m.decide.agree} / ${m.decide.cases})` : '판정 일치율 측정 불가 · 판정표 없음');
     const issues = c.issues.length ? `<div class="banner no" style="margin:8px 0"><span class="ic x" style="width:24px;height:24px">!</span><div class="loglist">${c.issues.slice(0, 6).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div>` : '';
     const act = c.status === 'pending' ? `<div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="capprove" data-id="${esc(c.id)}"${c.passed ? '' : ' disabled'}>승인</button><button class="btn" data-act="creject" data-id="${esc(c.id)}">반려</button></div>
       ${S.st.self_approve ? '' : '<div class="hint" style="margin-top:6px">요청한 사람과 다른 승인자가 승인합니다.</div>'}` : '';
@@ -1629,10 +1629,11 @@ ${controls}${body}`;
       const tables = sg.tables.map((x) => x.table);
       const rows = sg.objects.map((x) => {
         const table = m.edits.objects[x.object] === undefined ? x.table : m.edits.objects[x.object];
-        const colsOf = (sg.tables.find((y) => y.table === table) || { columns: [] }).columns;
+        const here = sg.tables.find((y) => y.table === table) || { columns: [], names: {} };
+        const colsOf = here.columns;
         const cols = x.columns.map((c) => {
           const cur = m.edits.columns[`${x.object}.${c.property}`] === undefined ? c.column : m.edits.columns[`${x.object}.${c.property}`];
-          return `<div class="mrow"><span>${esc(c.label)} <span class="muted mono">${esc(c.property)}</span></span><select class="inline" data-in="mcol" data-ref="${esc(x.object + '.' + c.property)}"><option value="">없음</option>${colsOf.map((n) => `<option value="${esc(n)}"${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select><span class="muted" style="font-size:11.5px">${esc(c.why)}</span></div>`;
+          return `<div class="mrow"><span>${esc(c.label)} <span class="muted mono">${esc(c.property)}</span></span><select class="inline" data-in="mcol" data-ref="${esc(x.object + '.' + c.property)}"><option value="">없음</option>${colsOf.map((n) => `<option value="${esc(n)}"${n === cur ? ' selected' : ''}>${esc(here.names[n] || n)}</option>`).join('')}</select><span class="muted" style="font-size:11.5px">${esc(c.why)}</span></div>`;
         }).join('');
         return `<tr class="${table ? '' : 'off'}"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.object)}</div></td>
           <td><select class="inline" data-in="mobj" data-obj="${esc(x.object)}"><option value="">제외</option>${tables.map((n) => `<option value="${esc(n)}"${n === table ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select><div class="muted" style="font-size:11.5px;margin-top:3px">점수 ${pct(x.score)} · ${esc(x.why)}</div></td>

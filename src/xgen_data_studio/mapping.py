@@ -204,7 +204,7 @@ def _match_columns(onto, type_name: str, planned,
         matches.append(ColumnMatch(obj.key, k.column, 0.4, "표준 키를 테이블의 키에 연결", list(k.columns)))
         used_p.add(obj.key)
     missing = [p for p in props if p not in used_p and not _inherited_key(onto, type_name, p)]
-    extra = [c.column for c in planned.properties if c.column not in {m.column for m in matches}]
+    extra = [", ".join(c.columns) or c.column for c in planned.properties if c.column not in {m.column for m in matches}]
     coverage = sum(m.score for m in matches) / max(len(props), 1)
     return matches, missing, extra, coverage
 
@@ -300,14 +300,15 @@ def _links(draft, onto, matches: list[ObjectMatch]) -> dict[str, dict]:
                 break
             if not dl.on:
                 continue
-            fk = next(p.column for p in src.properties if p.name == dl.on[0])
+            own = next(p for p in src.properties if p.name == dl.on[0])
+            fk, shown = own.column, ", ".join(own.columns) or own.column
             if a == lk.source and b == lk.target and fk in col_of[lk.source]:
                 out[lk.name] = {"on": {col_of[lk.source][fk]: onto.objects[lk.target].key},
-                                "why": f"{src.table}.{fk} → {dst.table} 키"}
+                                "why": f"{src.table}.{shown} → {dst.table} 키"}
                 break
             if a == lk.target and b == lk.source and fk in col_of[lk.target]:
                 out[lk.name] = {"on": {onto.objects[lk.source].key: col_of[lk.target][fk]},
-                                "why": f"{src.table}.{fk} → {dst.table} 키"}
+                                "why": f"{src.table}.{shown} → {dst.table} 키"}
                 break
     return out
 
@@ -352,7 +353,7 @@ def binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | No
     matched column by column again."""
     if draft is not None and (edits or {}).get("objects"):
         s = retarget(s, draft, onto, {k: v for k, v in edits["objects"].items() if v}, terms)
-    m = _binding(s, onto, name=name, label=label, edits=edits)
+    m = _binding(s, onto, name=name, label=label, edits=edits, draft=draft)
     if base is None:
         return m
     from xgen_data_studio.modules import settle
@@ -361,7 +362,7 @@ def binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | No
     return m
 
 
-def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | None = None) -> Module:
+def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | None = None, draft=None) -> Module:
     edits = edits or {}
     objects_edit, columns_edit = edits.get("objects") or {}, edits.get("columns") or {}
     bind_objects, removed_props, kept = {}, [], set()
@@ -377,8 +378,10 @@ def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | N
             if t == m.object:
                 if col is None:
                     cols.pop(p, None)
-                else:
-                    cols[p] = col
+                else:  # the page names a key of several columns by its stand-in
+                    planned = next((o for o in (draft.objects if draft else []) if o.table == table), None)
+                    wide = next((x for x in (planned.properties if planned else []) if x.column == col and x.columns), None)
+                    cols[p] = list(wide.columns) if wide else col
         bind_objects[m.object] = {"table": table, "columns": dict(cols)}
         for p in m.missing:
             if p not in cols:
@@ -405,6 +408,10 @@ def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | N
                     if any(t in onto.objects and not bound(t) for t in (q.query.get("match") or {}).values())]
     gone_questions = [q.id for q in onto.questions if q.query in gone_queries]
     remove: dict[str, Any] = {}
+    unjoined = [k for k, lk in onto.links.items() if k not in links and not lk.bound and lk.source in kept
+                and lk.target in kept]  # both ends are here and no table joins them
+    if unjoined:
+        remove["links"] = unjoined
     if removed_props:
         by_type: dict[str, list[str]] = {}
         for ref in removed_props:

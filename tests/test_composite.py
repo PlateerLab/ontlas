@@ -233,3 +233,21 @@ def test_a_table_chosen_by_hand_is_matched_column_by_column_again():
     assert "ORDER_STAT_CD" not in {c.column for c in order.columns}  # no column of the table it left stays
     m = binding(s, onto, name="x", base=base, draft=d, edits={"objects": {"Customer": "TB_MEMBER"}})
     assert m.extend["objects"]["Customer"]["table"] == "TB_MEMBER"
+
+
+def test_a_relation_no_table_joins_goes_with_what_needs_it():
+    pytest.importorskip("yaml")
+    from xgen_data_studio.mapping import binding, suggest
+    from xgen_data_studio.modules import compose
+
+    base, onto = _standard()
+    defs = Definitions.from_dict({"tables": [
+        {"name": "TB_MEMBER", "label": "회원", "columns": [{"name": "MEMBER_NO", "label": "고객 번호", "pk": True}]},
+        {"name": "TB_PRODUCT", "label": "상품기본", "columns": [{"name": "PRODUCT_NO", "label": "상품 번호", "pk": True}]}]})
+    d = draft(schema_backend(defs), name="x", lang="ko", definitions=defs)
+    s = suggest(d, onto, ["commerce"], [{"term": "고객", "synonyms": ["회원"]}])
+    assert {"Customer", "Product"} <= {m.object for m in s.objects}
+    m = binding(s, onto, name="x-standard", base=base)
+    assert "wishes" in m.remove["links"]  # both ends are bound and no table joins them
+    comp = compose([*base, m], namespace="https://example.org/s#", name="s")
+    assert comp.issues == [] and "wishes" not in comp.ontology.links

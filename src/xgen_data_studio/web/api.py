@@ -963,7 +963,8 @@ class StudioSession:
                                                               or c.property)} for c in m.columns],
                          "missing": [{"property": p, "label": find_prop(onto, m.object, p).label or p}
                                      for p in m.missing]})
-        tables = [{"table": o.table, "columns": [p.column for p in o.properties]} for o in d.objects]
+        tables = [{"table": o.table, "columns": [p.column for p in o.properties],
+                   "names": {p.column: ", ".join(p.columns) for p in o.properties if p.columns}} for o in d.objects]
         return plain({"ok": True, "objects": objs, "links": s.links, "unmatched_tables": s.unmatched_tables,
                       "unbound_objects": [{"name": t, "label": onto.objects[t].label or t} for t in s.unbound_objects],
                       "tables": tables, "standard": [str(x) for x in standard]})
