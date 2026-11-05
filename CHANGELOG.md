@@ -124,6 +124,11 @@
   tables, a standard's key takes all the columns of a composite key, and a table chosen by hand is matched again
   (`retarget`). `settle()` also clears a title, an interface or a series the tables cannot fill.
 - Policy drafting reads any document: `xds policy-draft` takes the file, and the page offers uploaded documents by section.
+- A policy draft runs apart from the page request (`policy/draft` starts it, `policy/draft/result` collects it) with
+  a budget of its own, 12,000 tokens and 200 seconds a call: a model that reasons first used over 4,000 tokens on a
+  six-line policy and left the answer empty. The visitor's other requests no longer wait behind it, an answer cut off
+  by the token budget is told apart (`AnswerCutOff`) and the page says so in plain words. Rules may cite headings
+  numbered `2. 반품 제한`; a bare number cites a heading, not a digit somewhere in the text.
 - The README says what the studio is for and how a domain is adapted; the page's guide opens with the same. The
   overlay module is labelled "관리 변경", and a draft's default names are no longer possessive.
 - The README says what sets the studio apart and how to use it, step by step and screen by screen, and installs from

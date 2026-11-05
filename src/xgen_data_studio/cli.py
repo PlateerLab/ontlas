@@ -598,13 +598,13 @@ def main(argv: list[str] | None = None) -> int:
         import yaml
 
         from xgen_data_studio.nl import openai_chat
-        from xgen_data_studio.policy import PolicyDrafter
+        from xgen_data_studio.policy import CALL_SECONDS, CALL_TOKENS, PolicyDrafter
 
         if studio.composition is None:
             print("policy-draft needs a studio made of modules", file=sys.stderr)
             return 2
         llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
-                          extra=json.loads(a.llm_extra) if a.llm_extra else None)
+                          extra=json.loads(a.llm_extra) if a.llm_extra else None).roomier(CALL_TOKENS, CALL_SECONDS)
         d = PolicyDrafter(list(studio.composition.modules), llm, max_repairs=a.repairs,
                           compose_kw=studio._compose_kw).draft(_policy_text(a.policy), target=a.target, name=a.name)
         for i in d.issues:

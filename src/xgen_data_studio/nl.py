@@ -253,9 +253,14 @@ def answer(studio, question: str, llm: Callable[[str, str], str], *, backend: st
             "columns": res.columns, "rows": [list(r) for r in res.rows], "text": res.compiled.text}
 
 
+class AnswerCutOff(RuntimeError):
+    """The model spent its token budget reasoning and stopped before it wrote an answer."""
+
+
 def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = None,
                 timeout: float = 90) -> Callable[[str, str], str]:
-    """An llm(system, user) callable over any OpenAI-compatible chat completions endpoint (vLLM, Ollama, ...)."""
+    """An llm(system, user) callable over any OpenAI-compatible chat completions endpoint (vLLM, Ollama, ...).
+    `roomier(tokens, seconds)` on it gives the same model a larger budget, for work no page request is waiting on."""
     import urllib.request
 
     endpoint = url.rstrip("/") + ("" if url.rstrip("/").endswith("/chat/completions") else "/chat/completions")
@@ -268,8 +273,17 @@ def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = Non
         req = urllib.request.Request(endpoint, data=json.dumps(body).encode("utf-8"), headers=headers)
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8"))
-        return data["choices"][0]["message"].get("content") or ""
+        choice = data["choices"][0]
+        text = choice["message"].get("content") or ""
+        if not text and choice.get("finish_reason") == "length":
+            raise AnswerCutOff("the token budget ran out before the answer")
+        return text
 
+    def roomier(tokens: int, seconds: float) -> Callable[[str, str], str]:
+        wider = {**(extra or {}), "max_tokens": max(tokens, int((extra or {}).get("max_tokens") or 0))}
+        return openai_chat(url, model, key=key, extra=wider, timeout=max(seconds, timeout))
+
+    call.roomier = roomier
     return call
 
 

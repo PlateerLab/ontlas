@@ -32,7 +32,11 @@ A path follows links from the target, one object at each step; count counts the 
 Tests: "<= 7", "> 0", "== 3", "\\"VIP\\"" (text in double quotes), "in [\\"A\\", \\"B\\"]", "not in [...]", "true",
 "false", "null" (no value), "not null", "-" (any value).
 The first rule that matches decides: put the exceptions first and end with a rule whose "when" is {} for the rest.
-Give every rule the clause it comes from, numbered as in the policy (for example "제3조 ②"). Do not invent clauses."""
+Give every rule the clause it comes from, in the policy's own numbering: "제3조 ②" when it has articles, "2. 반품 제한"
+when it numbers its headings, the heading itself when it has no numbers. Do not invent clauses."""
+
+CALL_TOKENS = 12000  # a model that reasons first spends over 4,000 tokens before it answers even a short policy
+CALL_SECONDS = 200.0  # one drafting call, at the 70 tokens a second such a model writes
 
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
@@ -42,6 +46,8 @@ def cites(cite: str, text: str) -> bool:
     c, t = re.sub(r"\s+", "", cite or ""), re.sub(r"\s+", "", text or "")
     if not c:
         return False
+    if re.fullmatch(r"\d+(\.\d+)*\.?", c):  # a bare number names a heading: the 1 of 14일 is not clause 1
+        return bool(re.search(rf"(?m)^\s*{re.escape(c.rstrip('.'))}[.)\s]", text or ""))
     if c in t:
         return True
     numbers = re.findall(r"(\d+(?:\.\d+)*)조", c)

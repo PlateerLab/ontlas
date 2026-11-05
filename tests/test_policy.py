@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -101,3 +103,77 @@ def test_policy_drafts_need_an_editor_in_a_team_studio():
     from xgen_data_studio.web.team import NEEDS
 
     assert NEEDS["policy/draft"] == "editor"
+
+
+def test_a_bare_number_cites_a_numbered_heading_and_not_a_digit_in_the_text():
+    text = "1. 반품 기간\n배송 후 14일 이내입니다.\n2) 반품 제한\n속옷은 안 됩니다."
+    assert cites("1", text) and cites("2.", text) and cites("2) 반품 제한", text) and cites("1. 반품 기간", text)
+    assert not cites("4", text) and not cites("3", text) and not cites("제1조", text)
+
+
+def test_an_answer_cut_off_by_the_token_budget_is_told_apart_and_a_draft_gets_a_larger_budget(monkeypatch):
+    import io
+    import urllib.request
+
+    from xgen_data_studio.nl import AnswerCutOff, openai_chat
+
+    seen = []
+
+    def fake(req, timeout):
+        body = json.loads(req.data)
+        seen.append((body["max_tokens"], timeout))
+        room = body["max_tokens"] > 4000
+        choice = {"message": {"content": "{}" if room else None}, "finish_reason": "stop" if room else "length"}
+        return io.BytesIO(json.dumps({"choices": [choice]}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    chat = openai_chat("http://model/v1", "m", extra={"max_tokens": 4000})
+    with pytest.raises(AnswerCutOff):
+        chat("s", "u")
+    assert chat.roomier(12000, 200.0)("s", "u") == "{}"
+    assert seen == [(4000, 90), (12000, 200.0)]
+
+
+def _wait_for(s, job):
+    for _ in range(500):
+        r = s.policy_result(job)
+        if not r.get("running"):
+            return r
+        time.sleep(0.01)
+    raise AssertionError("the draft did not finish")
+
+
+def test_a_draft_runs_apart_from_the_page_request_and_the_page_collects_it():
+    pytest.importorskip("rdflib")
+    s = _build()
+    gate = threading.Event()
+
+    def slow(system, user):
+        gate.wait(5)
+        return json.dumps(_table(), ensure_ascii=False)
+
+    s.llm = slow
+    job = s.policy_start(POLICY, target="OrderItem")["job"]
+    assert s.policy_result(job) == {"ok": True, "running": True}
+    assert s.policy_start(POLICY, target="OrderItem")["job"] == job  # one at a time for a visitor
+    gate.set()
+    r = _wait_for(s, job)
+    assert r["ok"] and r["decision"] == "exchangeEligibility" and not r["issues"]
+    assert not s.policy_result("another")["ok"]
+    assert s.policy_start(POLICY)["job"] != job  # a finished draft leaves room for the next
+
+
+def test_a_draft_that_cannot_finish_ends_the_wait_with_a_reason_in_plain_words():
+    pytest.importorskip("rdflib")
+    from xgen_data_studio.nl import AnswerCutOff
+
+    s = _build()
+
+    def cut(system, user):
+        raise AnswerCutOff("the token budget ran out before the answer")
+
+    s.llm = cut
+    r = _wait_for(s, s.policy_start(POLICY, target="OrderItem")["job"])
+    assert not r["ok"] and "답변을 끝내지 못했습니다" in r["error"] and "AnswerCutOff" not in r["error"]
+    r = _wait_for(s, s.policy_start("  ")["job"])
+    assert not r["ok"] and "정책서 내용이 없어" in r["error"]

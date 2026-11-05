@@ -371,7 +371,7 @@
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
         <label class="field" style="margin:0;min-width:220px"><span>대상 객체</span><select data-in="ptarget">${targets}</select></label>
         ${S.st.data.policy_sample ? '<button class="btn" data-act="psample">예시 정책서 불러오기</button>' : ''}
-        <button class="btn primary" data-act="pdraft"${p.busy || !p.text.trim() ? ' disabled' : ''}>${p.busy ? '<span class="spin"></span>초안 생성 중 · 최대 1분 30초' : '초안 생성'}</button></div>${body}</div></div>`;
+        <button class="btn primary" data-act="pdraft"${p.busy || !p.text.trim() ? ' disabled' : ''}>${p.busy ? '<span class="spin"></span>초안 생성 중 · 최대 5분' : '초안 생성'}</button></div>${body}</div></div>`;
   }
 
   async function loadDocument(name, section) {
@@ -2396,7 +2396,12 @@ ${controls}${body}`;
     pdraft: async () => {
       S.pol.busy = true; S.pol.res = null; render();
       try {
-        const r = await api('policy/draft', { text: S.pol.text, target: S.pol.target });
+        let r = await api('policy/draft', { text: S.pol.text, target: S.pol.target });
+        const { job } = r;
+        while (job && (r.job || r.running)) { // the model works on the server; the page collects the draft
+          await new Promise((done) => setTimeout(done, 2000));
+          r = await api('policy/draft/result', { job });
+        }
         S.pol.res = r;
         if (r.ok) {
           S.ed = { name: '', label: r.label, applied: false, isNew: true, text: r.yaml, check: null, busy: false };

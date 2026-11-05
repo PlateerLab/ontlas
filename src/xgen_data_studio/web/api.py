@@ -6,6 +6,7 @@ import json
 import re
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -52,6 +53,7 @@ INGEST_ERROR = {
 }
 MODULE_TEXT_MAX = 48 * 1024
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
+DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request waits on: at most 5 minutes in all
 POLICY_MAX = 12000  # characters of policy text a draft reads
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 EDIT_TEXT = [
@@ -170,6 +172,7 @@ class StudioSession:
         self.store = None  # a library folder approved changes are written to (xds serve --library-write)
         self.workspace = None  # the management screens' pending edits (manage.Workspace), until filed
         self._ws_sig: tuple = ()
+        self._draft: dict | None = None  # the policy draft running or last finished, for the page to collect
         self._adopt(studio)
 
     def _adopt(self, studio: Studio) -> None:
@@ -443,28 +446,36 @@ class StudioSession:
         gen = IRGenerator(self.studio.onto, llm, role=role or None, terms=self._terms(),
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
-            answered = [a for a in gen.attempts if a.raw]  # what the model last said, not the attempt time stopped
-            issues = (answered or gen.attempts)[-1].issues if gen.attempts else []
-            late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(gen.attempts) else ""
-            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. " + " / ".join(issues[:3]) + late
+            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. " + self._failed(gen.attempts, tries)
                                           + " 질문을 바꿔 다시 입력해 주세요."}
         out = self.run_query(gen.registered or gen.query, gen.params, role=role, principal=principal)
         out["attempts"] = len(gen.attempts)
         return out
 
-    def _budgeted(self) -> tuple[Callable[[str, str], str], list]:
+    def _budgeted(self, model: Callable[[str, str], str] | None = None, within: float | None = None
+                  ) -> tuple[Callable[[str, str], str], list]:
         """The model for one page request, and the calls it has made. A proxy in front of the page may give up on
         a request (Cloudflare at 100 s) and a model that reasons first takes 20 to 40 s: another attempt starts only
         early enough to end in time."""
-        started, tries = time.monotonic(), []
+        started, tries, model = time.monotonic(), [], model or self.llm
+        within = ASK_RETRY_WITHIN if within is None else within
 
         def llm(system: str, user: str) -> str:
-            if tries and time.monotonic() - started > ASK_RETRY_WITHIN:
+            if tries and time.monotonic() - started > within:
                 raise TimeoutError("no time left for another attempt")
             tries.append(1)
-            return self.llm(system, user)
+            return model(system, user)
 
         return llm, tries
+
+    @staticmethod
+    def _failed(attempts: list, tries: list) -> str:
+        """Why the model's attempts came to nothing: what it last said wrong, or that it never finished an answer."""
+        answered = [a for a in attempts if a.raw]  # what the model last said, not the attempt time stopped
+        if not answered:
+            return "언어 모델이 답변을 끝내지 못했습니다."
+        late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(attempts) else ""
+        return " / ".join(answered[-1].issues[:3]) + late
 
     def _policy_files(self) -> list[Path]:
         d = self.data.policies
@@ -489,6 +500,30 @@ class StudioSession:
                             "sections": [s.get("title") for s in doc.get("sections") or []]}
         return {"ok": False, "error": "업로드한 문서에 없어 불러오지 못했습니다. 데이터 연결에서 문서를 업로드해 주세요."}
 
+    def policy_start(self, text: str, target: str = "", name: str = "") -> dict:
+        """Start a draft and return at once: the model takes a minute or more, longer than a proxy in front of the
+        page waits, and the visitor's other requests must not stand behind it. The page collects it by policy_result."""
+        if self._draft and self._draft["out"] is None:
+            return {"ok": True, "job": self._draft["id"]}
+        job: dict = {"id": uuid.uuid4().hex, "out": None}
+        self._draft = job
+
+        def run() -> None:
+            try:
+                job["out"] = self.policy_draft(text, target, name)
+            except ValueError as e:
+                job["out"] = {"ok": False, "error": str(e)}
+            except Exception:  # a thread has no caller to report to: the page must still end its wait
+                job["out"] = {"ok": False, "error": "정책서 규칙 초안을 만들지 못했습니다. 다시 시도해 주세요."}
+
+        threading.Thread(target=run, name="policy-draft", daemon=True).start()
+        return {"ok": True, "job": job["id"]}
+
+    def policy_result(self, job: str) -> dict:
+        if not self._draft or self._draft["id"] != job:
+            return {"ok": False, "error": "진행 중인 규칙 초안을 찾지 못했습니다. 초안을 다시 생성해 주세요."}
+        return self._draft["out"] or {"ok": True, "running": True}
+
     def policy_draft(self, text: str, target: str = "", name: str = "") -> dict:
         """A decision table drafted from policy text by the model and checked by the engine, as module text for
         the editor; a person files it as a change request (see policy.py)."""
@@ -504,17 +539,16 @@ class StudioSession:
             raise ValueError(f"대상 객체 {target} 이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요.")
         import yaml
 
-        from xgen_data_studio.policy import PolicyDrafter
+        from xgen_data_studio.policy import CALL_SECONDS, CALL_TOKENS, PolicyDrafter
 
-        llm, tries = self._budgeted()
+        roomier = getattr(self.llm, "roomier", None)
+        llm, tries = self._budgeted(roomier(CALL_TOKENS, CALL_SECONDS) if roomier else self.llm, DRAFT_RETRY_WITHIN)
         d = PolicyDrafter(list(comp.modules), llm, compose_kw=self.studio._compose_kw).draft(
             text, target=target, name=str(name or ""))
-        late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(d.attempts) else ""
+        late = len(tries) < len(d.attempts)
         if d.module is None:
-            answered = [a for a in d.attempts if a.raw]
-            issues = (answered or d.attempts)[-1].issues if d.attempts else []
-            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. " + " / ".join(issues[:3]) + late
-                                          + " 정책서 내용이나 대상을 바꿔 다시 시도해 주세요."}
+            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. " + self._failed(d.attempts, tries)
+                                          + " 정책서 내용을 줄이거나 대상을 바꿔 다시 시도해 주세요."}
         (dname, table), = d.module.body["decisions"].items()
         return plain({
             "ok": True, "module": d.module.name, "label": d.module.label, "decision": dname, "target": table["target"],
@@ -523,7 +557,7 @@ class StudioSession:
             "inputs": [{"name": k, **v} for k, v in (table.get("inputs") or {}).items()],
             "rules": [{"id": r.get("id"), "when": r.get("when") or {}, "then": r.get("then") or {},
                        "cite": r.get("cite", "")} for r in table.get("rules") or []],
-            "issues": d.issues, "attempts": len(d.attempts), "late": bool(late)})
+            "issues": d.issues, "attempts": len(d.attempts), "late": late})
 
     # ---- decisions and actions -------------------------------------------------------------------------------
 

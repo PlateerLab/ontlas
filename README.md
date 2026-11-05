@@ -668,7 +668,8 @@ decision table format and the policy's clauses, and takes back one decision tabl
 every rule cites a clause the text numbers; whatever is wrong goes back to the model. The draft is a module of its
 own, and a person files it as a change request, so it is tried on a copy and approved before it decides anything.
 On the page, `xds serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
-command is `xds policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`.
+command is `xds policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
+minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
 [`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
 
 ## Agents over MCP
