@@ -244,11 +244,13 @@ def schema_backend(defs: Definitions, tables: list[str] | None = None, *, conn=N
             parts.append(f"PRIMARY KEY ({', '.join(qi(c) for c in t.primary_key)})")
         for r in t.references:
             target = names.get(str(r["table"]).lower())
-            if target is None or len(r["columns"]) != 1:
-                continue  # a reference to a table left out, or over several columns, is not drafted
-            ref = (r.get("ref_columns") or target.primary_key or [""])[0]
-            if len(target.primary_key) == 1 and ref.lower() == target.primary_key[0].lower():
-                parts.append(f"FOREIGN KEY ({qi(r['columns'][0])}) REFERENCES {qi(target.name)} ({qi(ref)})")
+            if target is None or not target.primary_key:
+                continue  # a reference to a table left out is not drafted
+            refs = list(r.get("ref_columns") or target.primary_key)
+            if len(refs) == len(r["columns"]) and sorted(x.lower() for x in refs) == sorted(
+                    x.lower() for x in target.primary_key):
+                parts.append(f"FOREIGN KEY ({', '.join(qi(c) for c in r['columns'])}) REFERENCES {qi(target.name)} "
+                             f"({', '.join(qi(c) for c in refs)})")
         ddl.append(f"CREATE TABLE {qi(t.name)} ({', '.join(parts)})")
     b = SqliteBackend(conn=conn) if conn is not None else SqliteBackend()
     b.script(";\n".join(ddl) + (";" if ddl else ""))

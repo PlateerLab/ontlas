@@ -34,6 +34,15 @@ jobs:
     # the same studio on real servers: tests/test_live.py runs each part whose address is set
     runs-on: ubuntu-latest
     services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: xds-ci-only
+          MYSQL_DATABASE: xds
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pxds-ci-only" --health-interval 5s --health-timeout 5s
+          --health-retries 20
       postgres:
         image: postgres:16-alpine
         env: {POSTGRES_PASSWORD: xds-ci-only, POSTGRES_DB: xds}
@@ -53,6 +62,7 @@ jobs:
         ports: ["3030:3030"]
     env:
       XDS_LIVE_PG: postgresql://postgres:xds-ci-only@localhost:5432/xds
+      XDS_LIVE_MYSQL: mysql://root:xds-ci-only@127.0.0.1:3306/xds
       XDS_LIVE_NEO4J: bolt://localhost:7687
       XDS_LIVE_NEO4J_AUTH: neo4j:xds-ci-only-pass
       XDS_LIVE_GREMLIN: ws://localhost:8182/gremlin

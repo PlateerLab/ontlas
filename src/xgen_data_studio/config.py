@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from xgen_data_studio.model import Ontology
 from xgen_data_studio.studio import Studio
@@ -40,6 +41,27 @@ def open_backend(spec: dict, base: Path):
         from xgen_data_studio.backends.sql import DbApiBackend
 
         return DbApiBackend(psycopg.connect(spec["dsn"]), "postgres", paramstyle="format")
+    if kind == "mysql":
+        import pymysql
+
+        from xgen_data_studio.backends.sql import DbApiBackend
+
+        u = urlparse(spec["dsn"])
+        conn = pymysql.connect(host=u.hostname or "localhost", port=u.port or 3306, user=unquote(u.username or ""),
+                               password=unquote(u.password or ""), database=u.path.lstrip("/"), charset="utf8mb4")
+        with conn.cursor() as cur:  # the studio's SQL quotes names the standard way
+            cur.execute("SET SESSION sql_mode = CONCAT(@@sql_mode, ',ANSI_QUOTES')")
+        return DbApiBackend(conn, "mysql", paramstyle="format")
+    if kind == "oracle":
+        import oracledb
+
+        from xgen_data_studio.backends.sql import DbApiBackend
+
+        oracledb.defaults.fetch_lobs = False
+        u = urlparse(spec["dsn"])
+        conn = oracledb.connect(user=unquote(u.username or ""), password=unquote(u.password or ""),
+                                dsn=f"{u.hostname or 'localhost'}:{u.port or 1521}{u.path}")
+        return DbApiBackend(conn, "oracle", paramstyle="numeric")
     if kind == "dbapi":
         import importlib
 

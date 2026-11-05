@@ -44,6 +44,8 @@ def validate_ontology(o: Ontology) -> list[str]:
                 add(f"{t.name}.{p.name}: a computed property has no column; give expr or column, not both")
             if p.expr and p.name == t.key:
                 add(f"{t.name}: the key '{p.name}' cannot be computed")
+            if p.columns and (p.column or p.expr or len(p.columns) < 2):
+                add(f"{t.name}.{p.name}: columns takes two or more columns, in place of column or expr")
             seen = prop_types.get(p.name)
             if seen and seen[0] != p.type and {seen[0], p.type} != {"string", "enum"}:
                 add(f"property '{p.name}' is {seen[0]} on {seen[1]} but {p.type} on {t.name}; one name, one type")

@@ -16,9 +16,9 @@ TARGETS = [("sql:postgres", "PostgreSQL"), ("sql:mysql", "MySQL"), ("sql:oracle"
            ("cypher", "Cypher 25"), ("gql", "GQL"), ("sparql", "SPARQL 1.1"), ("sqlpgq", "SQL/PGQ"),
            ("gremlin", "Gremlin")]
 MODULE_COLOR = {"core": "#7a5af8", "domain": "#1a73e8", "industry": "#0f9d8a", "customer": "#d9822b",
-                "binding": "#8a96a5", "quality": "#c2367a", "method": "#5f7a1f"}
+                "binding": "#8a96a5", "quality": "#c2367a", "method": "#5f7a1f", "dictionary": "#3f6fb5"}
 MODULE_KIND = {"core": "공통 개념", "domain": "도메인", "industry": "업종 확장", "customer": "고객사 차이",
-               "binding": "바인딩", "quality": "검증 기준", "method": "구축 규칙"}
+               "binding": "바인딩", "quality": "검증 기준", "method": "구축 규칙", "dictionary": "용어 사전"}
 KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의", "decision": "결정", "action": "액션",
               "role": "역할", "agent": "에이전트", "link": "관계", "object": "객체", "table": "테이블", "file": "파일",
               "collection": "컬렉션", "folder": "폴더", "database": "데이터베이스"}

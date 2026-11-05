@@ -44,6 +44,8 @@ owl = ["owlrl>=7", "rdflib>=7"]
 # Decision tables on the GoRules ZEN engine.
 zen = ["zen-engine>=2"]
 postgres = ["psycopg[binary]>=3"]
+mysql = ["pymysql>=1.1", "sqlglot>=25"]
+oracle = ["oracledb>=2", "sqlglot>=25"]
 neo4j = ["neo4j>=5"]
 gremlin = ["gremlinpython>=3.7"]
 mcp = ["mcp>=1.2"]
@@ -51,7 +53,7 @@ mcp = ["mcp>=1.2"]
 xlsx = ["openpyxl>=3.1"]
 all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1"]
 # The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
-live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7"]
+live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.scripts]

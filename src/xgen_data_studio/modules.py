@@ -12,7 +12,7 @@ from xgen_data_studio.model import Ontology
 
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
 # data (the draft rules). Both plug in and out like the rest.
-KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method")
+KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
 SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
             "actions": "action", "roles": "role", "queries": "query", "identities": "identity"}
@@ -65,6 +65,8 @@ class Module:
     remove: dict[str, Any] = field(default_factory=dict)
     flow: dict[str, Any] = field(default_factory=dict)  # {gates: {stage: {condition: value}}}, held to the stricter
     draft_rules: dict[str, Any] = field(default_factory=dict)  # what a draft decides by (draft.DraftRules)
+    terms: list[dict] = field(default_factory=list)  # {term, synonyms, avoid, definition, ...}: a system's words
+    messages: list[dict] = field(default_factory=list)  # {code, text, kind, screen}: what a system says
 
     @property
     def key(self) -> str:
@@ -81,7 +83,8 @@ class Module:
                    label=d.get("label", ""), description=d.get("description", ""), namespace=d.get("namespace", ""),
                    requires=[Requirement.parse(r) for r in d.get("requires", [])], body=body,
                    extend=copy.deepcopy(d.get("extend") or {}), remove=copy.deepcopy(d.get("remove") or {}),
-                   flow=copy.deepcopy(d.get("flow") or {}), draft_rules=copy.deepcopy(d.get("draft_rules") or {}))
+                   flow=copy.deepcopy(d.get("flow") or {}), draft_rules=copy.deepcopy(d.get("draft_rules") or {}),
+                   terms=copy.deepcopy(d.get("terms") or []), messages=copy.deepcopy(d.get("messages") or []))
 
     def to_dict(self) -> dict:
         out: dict[str, Any] = {"module": self.name, "version": self.version, "kind": self.kind}
@@ -97,7 +100,7 @@ class Module:
             out["extend"] = copy.deepcopy(self.extend)
         if self.remove:
             out["remove"] = copy.deepcopy(self.remove)
-        for k in ("flow", "draft_rules"):
+        for k in ("flow", "draft_rules", "terms", "messages"):
             if getattr(self, k):
                 out[k] = copy.deepcopy(getattr(self, k))
         return out
@@ -145,6 +148,8 @@ class Module:
         c["extends"] = sum(len(v or {}) for v in self.extend.values())
         c["gates"] = sum(len(v or {}) for v in (self.flow.get("gates") or {}).values())
         c["draft_rules"] = len(self.draft_rules)
+        c["terms"] = len(self.terms)
+        c["messages"] = len(self.messages)
         return c
 
 
@@ -160,6 +165,8 @@ class Composition:
     gate_by: dict[str, str] = field(default_factory=dict)  # "stage.condition" -> the module that set it
     draft_rules: dict[str, Any] = field(default_factory=dict)  # the modules' draft rules, later modules last
     rules_by: list[str] = field(default_factory=list)  # the modules that gave draft rules
+    terms: list[dict] = field(default_factory=list)  # the dictionary modules' words
+    messages: list[dict] = field(default_factory=list)  # the dictionary modules' messages
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -281,7 +288,12 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
                 raise ModuleError(f"{m.key} binds {name}.{p}, which is not a property of {name}")
             base = copy.deepcopy(_as_prop(inherited))
         base = _as_prop(base)
-        base["column"] = col
+        if isinstance(col, list):  # a key read from several columns of this system
+            base.pop("column", None)
+            base["columns"] = list(col)
+        else:
+            base.pop("columns", None)
+            base["column"] = col
         props[p] = base
         touched.setdefault(f"property:{name}.{p}", []).append(m.name)
     if patch.get("transitions_add"):
@@ -439,7 +451,8 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         origin.pop(e, None)
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
-    return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by)
+    return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
+                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages])
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:

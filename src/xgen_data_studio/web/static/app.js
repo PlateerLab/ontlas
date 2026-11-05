@@ -291,7 +291,7 @@
 
   // ---- library -------------------------------------------------------------------------------------------------
 
-  const counts = (c) => [['objects', '객체'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['extends', '확장'], ['removes', '제거']]
+  const counts = (c) => [['objects', '객체'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
     .filter(([k]) => c[k]).map(([k, l]) => `${l} ${c[k]}`).join(' · ') || '-';
 
   function viewLibrary() {
@@ -1697,9 +1697,9 @@ ${controls}${body}`;
         ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}</div>
         <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('');
     const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다. 복합 키 테이블은 아직 객체로 만들지 않습니다.'}</div>` : '';
-    const connect = f.connect ? `<div class="sec">데이터베이스 연결</div><div style="display:flex;gap:8px"><input type="text" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://… 또는 SQLite 파일 경로" style="flex:1">
+    const connect = f.connect ? `<div class="sec">데이터베이스 연결</div><div style="display:flex;gap:8px"><input type="text" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://, mysql://, oracle:// 주소 또는 SQLite 파일 경로" style="flex:1">
         <button class="btn" data-act="connect"${S.dr.busy ? ' disabled' : ''}>연결</button></div><div class="hint" style="margin-top:6px">데이터는 원본 DB에 그대로 유지됩니다.</div>`
-      : '<div class="hint" style="margin-top:12px">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, SQLite를 연결할 수 있습니다.</div>';
+      : '<div class="hint" style="margin-top:12px">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, MySQL, Oracle, SQLite를 연결할 수 있습니다.</div>';
     const samples = f.samples.length ? `<button class="btn" data-act="fsample"${S.dr.busy ? ' disabled' : ''}>샘플 데이터 불러오기</button>` : '';
     const left = `<div class="card"><div class="ch">데이터 가져오기</div><div class="cb">
       <label class="drop" data-drop="1"><input type="file" id="fileinput" multiple accept=".csv,.tsv,.txt,.xlsx,.json" hidden>

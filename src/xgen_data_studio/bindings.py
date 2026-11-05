@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from xgen_data_studio.check import column_of
+from xgen_data_studio.check import columns_of
 from xgen_data_studio.compile.sql import qi
-from xgen_data_studio.model import Ontology
+from xgen_data_studio.model import KEY_SEP, Ontology
 
 _TYPES = {
     "integer": ("INT",),
@@ -67,14 +67,15 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
             prop = o.properties.get(p)
             if prop is not None and prop.expr:
                 continue
-            col = column_of(onto, o.name, p)
-            checked["columns"] += 1
-            if col.lower() not in have:
-                out.append(Finding("error", "column", f"property:{o.name}.{p}",
-                                   f"column '{o.table}.{col}' does not exist"))
-            elif prop is not None and not _fits(prop.type, have[col.lower()]):
-                out.append(Finding("warning", "type", f"property:{o.name}.{p}",
-                                   f"{prop.type} is read from {o.table}.{col} declared {have[col.lower()] or '?'}"))
+            parts = columns_of(onto, o.name, p)
+            for col in parts:
+                checked["columns"] += 1
+                if col.lower() not in have:
+                    out.append(Finding("error", "column", f"property:{o.name}.{p}",
+                                       f"column '{o.table}.{col}' does not exist"))
+                elif prop is not None and len(parts) == 1 and not _fits(prop.type, have[col.lower()]):
+                    out.append(Finding("warning", "type", f"property:{o.name}.{p}",
+                                       f"{prop.type} is read from {o.table}.{col} declared {have[col.lower()] or '?'}"))
     for lk in onto.links.values():
         if lk.via:
             have = table(lk.via.table)
@@ -95,17 +96,20 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int]) -
     for o in onto.objects.values():
         if not o.table:
             continue
-        t, key = qi(o.table), qi(o.key_prop.col)
-        dup = backend.fetch(f"SELECT {key}, COUNT(*) FROM {t} GROUP BY {key} HAVING COUNT(*) > 1 LIMIT {limit}")
+        t, key = qi(o.table), ", ".join(qi(c) for c in o.key_prop.cols)
+        first = f"FETCH FIRST {limit} ROWS ONLY" if backend.capabilities.dialect == "oracle" else f"LIMIT {limit}"
+        dup = backend.fetch(f"SELECT {key}, COUNT(*) FROM {t} GROUP BY {key} HAVING COUNT(*) > 1 {first}")
         checked["data_checks"] += 1
         if dup:
-            out.append(Finding("error", "key", f"object:{o.name}", f"key {o.key} repeats: {[r[0] for r in dup]}"))
+            shown = [KEY_SEP.join(str(v) for v in r[:-1]) for r in dup]
+            out.append(Finding("error", "key", f"object:{o.name}", f"key {o.key} repeats: {shown}"))
         for p in o.properties.values():
             if p.expr:
                 continue
-            c = qi(p.col)
+            c = qi(p.cols[0])
             if p.required or p.name == o.key:
-                n = backend.fetch(f"SELECT COUNT(*) FROM {t} WHERE {c} IS NULL")[0][0]
+                empty = " OR ".join(f"{qi(x)} IS NULL" for x in p.cols)
+                n = backend.fetch(f"SELECT COUNT(*) FROM {t} WHERE {empty}")[0][0]
                 checked["data_checks"] += 1
                 if n:
                     out.append(Finding("error", "required", f"property:{o.name}.{p.name}", f"{n} rows have no value"))
@@ -120,11 +124,12 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int]) -
         src, dst = onto.objects[lk.source], onto.objects[lk.target]
         if not (lk.on and src.table and dst.table):
             continue
-        sp, tp = column_of(onto, src.name, lk.on[0]), column_of(onto, dst.name, lk.on[1])
-        if lk.on[1] != dst.key:
+        sp, tp = columns_of(onto, src.name, lk.on[0]), columns_of(onto, dst.name, lk.on[1])
+        if lk.on[1] != dst.key or len(sp) != len(tp):
             continue
-        n = backend.fetch(f"SELECT COUNT(*) FROM {qi(src.table)} s LEFT JOIN {qi(dst.table)} d ON s.{qi(sp)} = d.{qi(tp)} "
-                          f"WHERE s.{qi(sp)} IS NOT NULL AND d.{qi(tp)} IS NULL")[0][0]
+        join = " AND ".join(f"s.{qi(a)} = d.{qi(b)}" for a, b in zip(sp, tp))
+        n = backend.fetch(f"SELECT COUNT(*) FROM {qi(src.table)} s LEFT JOIN {qi(dst.table)} d ON {join} "
+                          f"WHERE s.{qi(sp[0])} IS NOT NULL AND d.{qi(tp[0])} IS NULL")[0][0]
         checked["data_checks"] += 1
         if n:
             out.append(Finding("warning", "orphan", f"link:{lk.name}",

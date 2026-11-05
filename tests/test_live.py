@@ -4,6 +4,8 @@
     XDS_LIVE_FUSEKI=http://host:3030/ds               (+ XDS_LIVE_FUSEKI_AUTH=user:pw; the dataset is cleared)
     XDS_LIVE_NEO4J=bolt://host:7687                   (+ XDS_LIVE_NEO4J_AUTH=user:pw; the database is cleared)
     XDS_LIVE_GREMLIN=ws://host:8182/gremlin           (the graph is cleared)
+    XDS_LIVE_MYSQL=mysql://user:pw@host:port/db       (tables xds_ord, xds_line, xds_ship are dropped and made again)
+    XDS_LIVE_ORACLE=oracle://user:pw@host:port/service (the same tables)
 """
 import os
 from datetime import datetime
@@ -200,3 +202,55 @@ def test_gremlin_server_answers_like_sqlite():
         assert extra.passed and all(r.outcomes["gremlin"].rows is not None for r in extra.queries), extra.summary()
     finally:
         g.close()
+
+
+@pytest.mark.parametrize(("kind", "var", "driver"), [("postgres", "XDS_LIVE_PG", "psycopg"),
+                                                     ("mysql", "XDS_LIVE_MYSQL", "pymysql"),
+                                                     ("oracle", "XDS_LIVE_ORACLE", "oracledb")])
+def test_a_studio_is_drafted_from_the_catalog_and_runs(kind, var, driver):
+    dsn = _need(var)
+    pytest.importorskip(driver)
+    pytest.importorskip("sqlglot")
+    from pathlib import Path
+
+    from xgen_data_studio.actions import SqlWriteback
+    from xgen_data_studio.bindings import check_bindings
+    from xgen_data_studio.config import open_backend
+    from xgen_data_studio.draft import _catalog, draft, studio_from
+    from xgen_data_studio.ir import Column, Edge, Query, Ref
+
+    b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
+    for t in ("xds_ship", "xds_line", "xds_ord"):
+        try:
+            b.run(f"DROP TABLE {t}")
+        except Exception:  # not there yet
+            pass
+    text, big = {"oracle": ("VARCHAR2(20)", "CLOB"), "postgres": ("VARCHAR(20)", "JSON")}.get(kind, ("VARCHAR(20)", "TEXT"))
+    for stmt in [
+        f"CREATE TABLE xds_ord (ord_no {text} PRIMARY KEY, memo {big}, status {text})",
+        f"CREATE TABLE xds_line (ord_no {text} NOT NULL, line_seq INTEGER NOT NULL, proc_seq INTEGER NOT NULL, "
+        "qty INTEGER, PRIMARY KEY (ord_no, line_seq, proc_seq), FOREIGN KEY (ord_no) REFERENCES xds_ord (ord_no))",
+        f"CREATE TABLE xds_ship (ship_no {text} PRIMARY KEY, ord_no {text}, line_seq INTEGER, proc_seq INTEGER, "
+        "FOREIGN KEY (ord_no, line_seq, proc_seq) REFERENCES xds_line (ord_no, line_seq, proc_seq))",
+        "INSERT INTO xds_ord VALUES ('O1', '{}', 'NEW')", "INSERT INTO xds_ord VALUES ('O2', '{}', 'NEW')",
+        "INSERT INTO xds_line VALUES ('O1', 1, 0, 2)", "INSERT INTO xds_line VALUES ('O1', 1, 1, 3)",
+        "INSERT INTO xds_ship VALUES ('S1', 'O1', 1, 1)",
+    ]:
+        b.run(stmt)
+    d = draft(b, name="live", lang="ko", tables=[t[0] for t in _catalog(b) if t[0].lower().startswith("xds_")])
+    assert d.skipped == []
+    st = studio_from(d, b, graph=False)
+    objs = {o.table.lower(): o for o in st.onto.objects.values()}
+    line, ship = objs["xds_line"], objs["xds_ship"]
+    assert [c.lower() for c in line.key_prop.cols] == ["ord_no", "line_seq", "proc_seq"]
+    assert check_bindings(st.onto, b).ok
+    assert st.fetch(line.name, "O1|1|1")[line.key] == "O1|1|1"
+    link = next(lk for lk in st.onto.links.values() if lk.source == ship.name and lk.target == line.name)
+    q = Query(nodes={"s": ship.name, "l": line.name}, edges=[Edge("s", link.name, "l")],
+              columns=[Column(Ref("s", ship.key), "ship"), Column(Ref("l", line.key), "line")])
+    assert [tuple(r) for r in st.run(q).rows] == [("S1", "O1|1|1")]
+    qty = next(p.name for p in line.properties.values() if p.col.lower() == "qty")
+    assert SqlWriteback(b).apply(st.onto, line.name, "O1|1|1", {qty: 9}) == 1
+    assert st.questions().accuracy == 1.0
+    for t in ("xds_ship", "xds_line", "xds_ord"):
+        b.run(f"DROP TABLE {t}")

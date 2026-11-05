@@ -434,7 +434,7 @@ class StudioSession:
         from xgen_data_studio.nl import IRGenerator, probe
 
         llm, tries = self._budgeted()
-        gen = IRGenerator(self.studio.onto, llm, role=role or None,
+        gen = IRGenerator(self.studio.onto, llm, role=role or None, terms=self._terms(),
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
             answered = [a for a in gen.attempts if a.raw]  # what the model last said, not the attempt time stopped
@@ -522,6 +522,12 @@ class StudioSession:
         out = [{"key": str(r[0]), "fields": {p: plain(v) for p, v in zip(show[1:], r[1:])}} for r in rows]
         return sorted(out, key=lambda x: x["key"])
 
+    def _said(self, outs: dict) -> list[dict]:
+        """A decision that answers with a message code shows the message a dictionary module holds for it."""
+        comp = self.studio.composition
+        by_code = {m.get("code"): m for m in (comp.messages if comp else [])}
+        return [by_code[v] for v in outs.values() if isinstance(v, str) and v in by_code]
+
     def decide(self, name: str, key: str) -> dict:
         st = self.studio
         table = st.onto.decisions[name]
@@ -555,6 +561,7 @@ class StudioSession:
             "yes": bool(outs.get(first)) if first else False, "reason": next(
                 (v for v in outs.values() if isinstance(v, str)), ""),
             "matched": res.matched, "rules": rules, "values": res.inputs, "evidence": evidence,
+            "messages": self._said(outs),
             "engine": res.engine, "zen": zen, "notes": res.notes,
             "touched": [self._label(m) for m in touched], "actions": actions,
         })
@@ -799,14 +806,16 @@ class StudioSession:
 
         dsn = dsn.strip()
         u = urlparse(dsn)
-        if u.scheme in ("postgres", "postgresql"):
-            b = open_backend({"kind": "postgres", "dsn": dsn}, Path("."))
-            where = f"PostgreSQL {u.hostname or 'localhost'}{u.path}"  # never the user or the password
+        if u.scheme in ("postgres", "postgresql", "mysql", "oracle"):
+            kind = u.scheme if u.scheme in ("mysql", "oracle") else "postgres"
+            b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
+            word = {"mysql": "MySQL", "oracle": "Oracle", "postgres": "PostgreSQL"}[kind]
+            where = f"{word} {u.hostname or 'localhost'}{u.path}"  # never the user or the password
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
-                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. "
-                                 "postgresql:// 주소 또는 SQLite 파일 경로를 입력해 주세요.")
+                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle:// "
+                                 "주소 또는 SQLite 파일 경로를 입력해 주세요.")
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"
         r = self._rules(rules)
@@ -902,6 +911,11 @@ class StudioSession:
             raise ValueError(f"표준 모듈을 구성하지 못했습니다. {e}") from None
         return mods, onto
 
+    def _terms(self) -> list[dict]:
+        """The words a system uses: from the uploaded glossaries and the attached dictionary modules."""
+        comp, defs = self.studio.composition, self._defs()
+        return list(comp.terms if comp else []) + list(getattr(defs, "terms", None) or [])
+
     def suggest_mapping(self, standard: list, edits: dict | None = None) -> dict:
         from xgen_data_studio.mapping import suggest
 
@@ -909,7 +923,7 @@ class StudioSession:
             raise ValueError("생성된 초안이 없어 연결을 제안하지 못했습니다. 초안을 먼저 생성해 주세요.")
         _, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
-        s = suggest(d, onto, [str(x) for x in standard])
+        s = suggest(d, onto, [str(x) for x in standard], self._terms())
         objs = []
         for m in s.objects:
             o = onto.objects[m.object]
@@ -932,7 +946,7 @@ class StudioSession:
             raise ValueError("생성된 초안이 없어 표준에 연결하지 못했습니다. 초안을 먼저 생성해 주세요.")
         mods, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
-        s = suggest(d, onto, [str(x) for x in standard])
+        s = suggest(d, onto, [str(x) for x in standard], self._terms())
         m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, base=mods)
         comp = compose([*mods, m], **self.studio._compose_kw)
         if comp.issues:

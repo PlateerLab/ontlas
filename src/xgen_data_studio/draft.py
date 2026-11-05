@@ -52,6 +52,9 @@ class ReadError(ValueError):
         self.info = info
 
 
+WIDE_KEY = "+key"  # stands for the columns of a composite key where a single column name is expected
+
+
 @dataclass
 class DraftRules:
     """What the draft decides by. The defaults are the ones above; a person can change any of them."""
@@ -295,7 +298,7 @@ def declared_type(sql_type: str) -> str:
         return "integer"
     if "BOOL" in u:
         return "boolean"
-    if any(k in u for k in ("NUMERIC", "DECIMAL", "REAL", "FLOA", "DOUB", "MONEY")):
+    if any(k in u for k in ("NUMERIC", "NUMBER", "DECIMAL", "REAL", "FLOA", "DOUB", "MONEY")):
         return "decimal"
     if "TIMESTAMP" in u or "DATETIME" in u:
         return "datetime"
@@ -385,6 +388,7 @@ class TableProfile:
     columns: list[ColumnProfile]
     primary_key: list[str]
     foreign_keys: list[tuple[str, str, str]]
+    wide_keys: list[tuple[list[str], str, list[str]]] = field(default_factory=list)  # references over several columns
 
     def col(self, name: str) -> ColumnProfile:
         return next(c for c in self.columns if c.name == name)
@@ -404,8 +408,10 @@ def _catalog(backend) -> list[tuple[str, list[tuple[str, str]], list[str], list[
             out.append((t, [(r[1], r[2] or "") for r in info], pk, [(r[3], r[2], r[4] or "") for r in fk
                                                                     if r[0] in single]))
         return out
+    if dialect in ("mysql", "oracle"):
+        return _catalog_of(backend, dialect)
     if dialect != "postgres":
-        raise ValueError(f"drafting reads the catalog of SQLite or PostgreSQL, not {dialect}")
+        raise ValueError(f"drafting reads the catalog of SQLite, PostgreSQL, MySQL or Oracle, not {dialect}")
     names = [r[0] for r in backend.fetch(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() "
         "AND table_type = 'BASE TABLE' ORDER BY table_name")]
@@ -427,6 +433,101 @@ def _catalog(backend) -> list[tuple[str, list[tuple[str, str]], list[str], list[
     return out
 
 
+def _catalog_of(backend, dialect: str) -> list:
+    """Tables, columns, primary keys and single-column foreign keys from MySQL's or Oracle's own catalog."""
+    out = []
+    for t in _table_names(backend, dialect):
+        if dialect == "mysql":
+            cols = backend.fetch("SELECT column_name, column_type FROM information_schema.columns WHERE table_schema = "
+                                 "DATABASE() AND table_name = ? ORDER BY ordinal_position", (t,))
+            pk = [r[0] for r in backend.fetch(
+                "SELECT column_name FROM information_schema.key_column_usage WHERE table_schema = DATABASE() "
+                "AND table_name = ? AND constraint_name = 'PRIMARY' ORDER BY ordinal_position", (t,))]
+        else:
+            cols = backend.fetch("SELECT column_name, data_type FROM user_tab_columns WHERE table_name = ? "
+                                 "ORDER BY column_id", (t,))
+            pk = [r[0] for r in backend.fetch(
+                "SELECT cc.column_name FROM user_constraints c JOIN user_cons_columns cc ON cc.constraint_name = "
+                "c.constraint_name WHERE c.table_name = ? AND c.constraint_type = 'P' ORDER BY cc.position", (t,))]
+        groups = _foreign_keys(backend, dialect, t)
+        single = [(p[0][1], p[0][2], p[0][3]) for p in groups.values() if len(p) == 1]
+        out.append((t, [(str(c), str(d)) for c, d in cols], pk, single))
+    return out
+
+
+def _table_names(backend, dialect: str) -> list[str]:
+    if dialect == "mysql":
+        return [r[0] for r in backend.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = "
+                                            "DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name")]
+    return [r[0] for r in backend.fetch("SELECT table_name FROM user_tables ORDER BY table_name")]
+
+
+def _foreign_keys(backend, dialect: str, table: str) -> dict[Any, list[tuple]]:
+    """constraint -> (position, column, referenced table, referenced column), for MySQL and Oracle."""
+    if dialect == "mysql":
+        rows = backend.fetch(
+            "SELECT constraint_name, ordinal_position, column_name, referenced_table_name, referenced_column_name "
+            "FROM information_schema.key_column_usage WHERE table_schema = DATABASE() AND table_name = ? "
+            "AND referenced_table_name IS NOT NULL", (table,))
+    else:
+        rows = backend.fetch(
+            "SELECT c.constraint_name, a.position, a.column_name, b.table_name, b.column_name FROM user_constraints c "
+            "JOIN user_cons_columns a ON a.constraint_name = c.constraint_name "
+            "JOIN user_cons_columns b ON b.constraint_name = c.r_constraint_name AND b.position = a.position "
+            "WHERE c.constraint_type = 'R' AND c.table_name = ?", (table,))
+    groups: dict[Any, list[tuple]] = {}
+    for r in rows:
+        groups.setdefault(r[0], []).append((r[1], r[2], r[3], r[4]))
+    return {k: sorted(v, key=lambda x: x[0]) for k, v in groups.items()}
+
+
+def _opaque(declared: str) -> bool:
+    return any(x in declared.upper() for x in ("LOB", "JSON", "XML"))  # no order, so never a list of allowed values
+
+
+def _as_text(dialect: str, col: str, declared: str) -> str:
+    """A column as text, for counting distinct values of any type (json has no equality, a CLOB no DISTINCT)."""
+    q, u = qi(col), declared.upper()
+    if dialect == "sqlite":
+        return q
+    if dialect == "mysql":
+        return f"CAST({q} AS CHAR)"
+    if dialect == "oracle":
+        if "BLOB" in u or "RAW" in u or u == "LONG":
+            return "NULL"
+        return f"DBMS_LOB.SUBSTR({q}, 400, 1)" if "LOB" in u else f"TO_CHAR({q})"
+    return f"CAST({q} AS TEXT)"
+
+
+def _wide_keys(backend, table: str) -> list[tuple[list[str], str, list[str]]]:
+    """The foreign keys of a table that span several columns: (columns, referenced table, referenced columns)."""
+    dialect = backend.capabilities.dialect
+    groups: dict[Any, list[tuple]] = {}
+    if dialect in ("mysql", "oracle"):
+        return [([p[1] for p in parts], parts[0][2], [p[3] for p in parts])
+                for parts in _foreign_keys(backend, dialect, table).values() if len(parts) > 1]
+    if dialect == "sqlite":
+        for r in backend.fetch(f"PRAGMA foreign_key_list({qi(table)})"):  # id, seq, table, from, to, ...
+            groups.setdefault(r[0], []).append((r[1], r[3], r[2], r[4] or ""))
+    elif dialect == "postgres":
+        rows = backend.fetch(
+            "SELECT c.conname, k.ord, a.attname, f.relname, b.attname FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace "
+            "JOIN pg_class f ON f.oid = c.confrelid "
+            "CROSS JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(att, fatt, ord) "
+            "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.att "
+            "JOIN pg_attribute b ON b.attrelid = c.confrelid AND b.attnum = k.fatt "
+            "WHERE c.contype = 'f' AND t.relname = ? AND n.nspname = current_schema()", (table,))
+        for r in rows:
+            groups.setdefault(r[0], []).append((r[1], r[2], r[3], r[4]))
+    out = []
+    for parts in groups.values():
+        if len(parts) > 1:
+            parts = sorted(parts, key=lambda x: x[0])
+            out.append(([p[1] for p in parts], parts[0][2], [p[3] for p in parts]))
+    return out
+
+
 def profile(backend, tables: list[str] | None = None, rules: DraftRules | None = None) -> list[TableProfile]:
     """Row counts, empty and distinct values per column, and the values of columns that look like categories."""
     rules = rules or DraftRules()
@@ -437,8 +538,13 @@ def profile(backend, tables: list[str] | None = None, rules: DraftRules | None =
             continue
         t = qi(name)
         parts = ["COUNT(*)"]
-        for c, _ in cols:
-            parts += [f"COUNT({qi(c)})", f"COUNT(DISTINCT {qi(c)})", f"MAX(LENGTH(CAST({qi(c)} AS TEXT)))"]
+        dialect = backend.capabilities.dialect
+        length = "CHAR_LENGTH" if dialect == "mysql" else "LENGTH"
+        for c, declared in cols:
+            text = _as_text(dialect, c, declared)
+            size = f"CAST({qi(c)} AS TEXT)" if dialect == "sqlite" else text
+            present = f"COUNT(CASE WHEN {qi(c)} IS NOT NULL THEN 1 END)" if dialect == "oracle" else f"COUNT({qi(c)})"
+            parts += [present, f"COUNT(DISTINCT {text})", f"MAX({length}({size}))"]
         stats = backend.fetch(f"SELECT {', '.join(parts)} FROM {t}")[0]
         rows = int(stats[0])
         profs = []
@@ -452,11 +558,11 @@ def profile(backend, tables: list[str] | None = None, rules: DraftRules | None =
                     ty = guess
             p = ColumnProfile(c, declared, ty, rows - nonnull, distinct, max_len)
             if ty == "string" and 0 < distinct <= rules.enum_max and max_len <= rules.text_max \
-                    and distinct * rules.enum_repeat <= nonnull:
+                    and distinct * rules.enum_repeat <= nonnull and not _opaque(declared):
                 p.values = [r[0] for r in backend.fetch(
                     f"SELECT DISTINCT {qi(c)} FROM {t} WHERE {qi(c)} IS NOT NULL ORDER BY {qi(c)}")]
             profs.append(p)
-        out.append(TableProfile(name, rows, profs, pk, fks))
+        out.append(TableProfile(name, rows, profs, pk, fks, _wide_keys(backend, name)))
     return out
 
 
@@ -540,6 +646,7 @@ class PlannedProperty:
     distinct: int = 0
     declared: str = ""
     labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (from a code definition)
+    columns: list[str] = field(default_factory=list)  # read from several columns: a composite key or reference
 
 
 @dataclass
@@ -601,6 +708,8 @@ class Draft:
     states: list[PlannedStates] = field(default_factory=list)
     answers: dict[str, int] = field(default_factory=dict)  # generated query -> rows it gives now
     decisions: dict[str, dict] = field(default_factory=dict)  # drawn from past outcomes (induce.py), then edited
+    terms: list[dict] = field(default_factory=list)  # from a glossary: a dictionary module goes with the draft
+    messages: list[dict] = field(default_factory=list)
 
     def revise(self, *, drop: list[str] = (), labels: dict[str, str] | None = None, keys: dict[str, str] | None = None,
                types: dict[str, str] | None = None, values: dict[str, list[str]] | None = None,
@@ -681,7 +790,8 @@ class Draft:
         decisions = {k: v for k, v in self.decisions.items() if f"decision:{k}" not in drop
                      and v.get("target") in by_name}
         return Draft(self.name, self.label, objs, links, self.tables, self.skipped, self.loaded, self.origin,
-                     self.lang, self.rules, no_queries, states, dict(self.answers), decisions)
+                     self.lang, self.rules, no_queries, states, dict(self.answers), decisions, self.terms,
+                     self.messages)
 
     # ---- rules, actions, roles, questions ----
 
@@ -789,7 +899,7 @@ class Draft:
                 objects[o.name]["states"] = {"property": sm.property, "states": list(sm.states),
                                              **({"initial": sm.initial} if sm.initial else {}),
                                              "transitions": [{"from": a, "to": b} for a, b, _ in sm.transitions]}
-            cols = {p.name: p.column for p in o.properties if p.name != p.column}
+            cols = {p.name: list(p.columns) or p.column for p in o.properties if p.columns or p.name != p.column}
             bind_objects[o.name] = {"table": o.table, **({"columns": cols} if cols else {})}
         links, bind_links = {}, {}
         for lk in self.links:
@@ -809,7 +919,13 @@ class Draft:
                          description=where, requires=[Requirement(self.name)],
                          body={**{s: {} for s in SECTIONS}, "questions": [], "exclusive": []},
                          extend={"objects": bind_objects, "links": bind_links})
-        return [domain, binding]
+        if not (self.terms or self.messages):
+            return [domain, binding]
+        words = Module(name=f"{self.name}-dictionary", version="0.1.0", kind="dictionary", description=where,
+                       label=f"{self.label} · dictionary" if self.lang == "en" else f"{self.label} 용어 사전",
+                       body={**{s: {} for s in SECTIONS}, "questions": [], "exclusive": []},
+                       terms=list(self.terms), messages=list(self.messages))
+        return [domain, binding, words]
 
     def steps(self) -> list[dict]:
         """What was read and decided, in the order it was decided, with the reason for each."""
@@ -824,7 +940,8 @@ class Draft:
         for o in self.objects:
             for p in o.properties:
                 props.append({"element": f"property:{o.name}.{p.name}", "object": o.name, "label": p.label,
-                              "column": p.column, "type": p.type, "values": p.values, "nulls": p.nulls,
+                              "column": ", ".join(p.columns) or p.column, "type": p.type, "values": p.values,
+                              "nulls": p.nulls,
                               "distinct": p.distinct, "rows": o.rows, "key": p.name == o.key, "declared": p.declared,
                               "title": p.name == o.title})
         links = [{"element": f"link:{lk.name}", "label": lk.label, "from": lk.source, "to": lk.target,
@@ -877,9 +994,13 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
 
     # keys: a declared primary key, else a column of present, distinct values (the most key-like name first)
     keys: dict[str, tuple[str, str]] = {}
+    wide: dict[str, list[str]] = {}  # a primary key of several columns: one key property reads them all
     for t in profs:
         if len(t.primary_key) == 1:
             keys[t.name] = (t.primary_key[0], "primary_key")
+            continue
+        if t.primary_key:
+            keys[t.name], wide[t.name] = (WIDE_KEY, "primary_key"), list(t.primary_key)
             continue
         unique = [c for c in t.columns if t.rows and not c.nulls and c.distinct == t.rows and c.name != row_keys.get(
             t.name)]
@@ -898,7 +1019,7 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     refs: dict[str, list[tuple[str, str, str, int]]] = {t.name: [] for t in profs}
     for t in profs:
         for col, rt, rc in t.foreign_keys:
-            if rt in keys and (not rc or rc == keys[rt][0]):
+            if rt in keys and rt not in wide and (not rc or rc == keys[rt][0]):
                 refs[t.name].append((col, rt, "foreign_key", t.rows - t.col(col).nulls))
         declared = {r[0] for r in refs[t.name]}
         for c in t.columns if rules.infer_links else ():
@@ -906,7 +1027,7 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
                     or not (t.rows - c.nulls):
                 continue
             for other in profs:
-                if other.name not in keys:
+                if other.name not in keys or other.name in wide:
                     continue
                 k = keys[other.name][0]
                 if other.col(k).type != c.type or not _names_target(c.name, t, other, k, rules):
@@ -919,10 +1040,10 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
                     break
 
     # a table of two relation columns and nothing else is a many-to-many relation, not an object
-    joins = {t.name for t in profs if rules.link_tables and not t.primary_key and len(refs[t.name]) == 2 and
-             {c.name for c in t.columns} - {row_keys.get(t.name, "")} == {r[0] for r in refs[t.name]}}
-    skipped = [{"table": t.name, "why": "composite_key" if len(t.primary_key) > 1 else "no_key"}
-               for t in profs if t.name not in keys and t.name not in joins]
+    joins = {t.name for t in profs if rules.link_tables and len(refs[t.name]) == 2 and
+             {c.name for c in t.columns} - {row_keys.get(t.name, "")} == {r[0] for r in refs[t.name]} and
+             (not t.primary_key or set(t.primary_key) == {r[0] for r in refs[t.name]})}
+    skipped = [{"table": t.name, "why": "no_key"} for t in profs if t.name not in keys and t.name not in joins]
 
     objects: dict[str, PlannedObject] = {}
     seen_types: dict[str, str] = {}
@@ -950,6 +1071,12 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
             seen_types.setdefault(pname, ptype)
             props.append(PlannedProperty(pname, c.name, ptype, c.name, [str(v) for v in c.values] if ptype == "enum"
                                          else [], c.nulls, c.distinct, c.declared))
+        if t.name in wide:
+            kname, n = f"{_snake(bare, 'row')}_key", 2
+            while kname in used:
+                kname, n = f"{_snake(bare, 'row')}_key{n}", n + 1
+            used.add(kname)
+            props.append(PlannedProperty(kname, WIDE_KEY, "string", kname, distinct=t.rows, columns=wide[t.name]))
         o = PlannedObject(oname, t.name, t.name, "", keys[t.name][1], t.rows, props)
         o.key = o.prop_of(keys[t.name][0]).name
         o.title = next((p.name for p in props if p.type == "string" and p.name != o.key and p.column not in fk_cols
@@ -960,6 +1087,10 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
 
     if definitions is not None:
         _annotate(objects, definitions)
+    for o in objects.values():
+        for p in o.properties:
+            if p.columns:
+                p.label = f"{o.label} {'키' if lang == 'ko' else 'key'}"
     names = set(taken) | {p.name for o in objects.values() for p in o.properties}
     links: list[PlannedLink] = []
 
@@ -990,8 +1121,27 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
             links.append(PlannedLink(link_name(stem if stem != col else f"{col}_ref", dst.name),
                                      src.name, dst.name, dst.label, why, "one_to_one" if one else "many_to_one",
                                      on=(src.prop_of(col).name, dst.key), column=col, values=nvals))
+        for cols, rt, rcols in t.wide_keys:
+            if rt not in objects or rt not in wide or sorted(x.lower() for x in rcols) != sorted(
+                    x.lower() for x in wide[rt]):
+                continue
+            dst, by = objects[rt], {b.lower(): a for a, b in zip(cols, rcols)}
+            ordered = [by[x.lower()] for x in wide[rt]]  # in the order of the key it points at
+            if ordered == wide.get(t.name):
+                links.append(PlannedLink(link_name(dst.name, dst.name), src.name, dst.name, dst.label, "foreign_key",
+                                         "one_to_one", on=(src.key, dst.key), column=", ".join(ordered), values=t.rows))
+                continue
+            ref, n = f"{_snake(dst.name, 'ref')}_ref", 2
+            while any(p.name == ref for p in src.properties):
+                ref, n = f"{_snake(dst.name, 'ref')}_ref{n}", n + 1
+            src.properties.append(PlannedProperty(ref, WIDE_KEY + ref, "string", dst.label, distinct=t.rows,
+                                                  columns=ordered))
+            links.append(PlannedLink(link_name(dst.name, dst.name), src.name, dst.name, dst.label, "foreign_key",
+                                     on=(ref, dst.key), column=", ".join(ordered), values=t.rows))
     origin = origin or {}
-    d = Draft(name, label or name, list(objects.values()), links, profs, skipped, loaded, origin, lang, rules)
+    d = Draft(name, label or name, list(objects.values()), links, profs, skipped, loaded, origin, lang, rules,
+              terms=list(getattr(definitions, "terms", None) or []),
+              messages=list(getattr(definitions, "messages", None) or []))
     if rules.states:
         d.states = _states(backend, d, refs, rules)
     if rules.questions:

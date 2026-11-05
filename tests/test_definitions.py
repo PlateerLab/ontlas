@@ -62,13 +62,16 @@ def test_a_studio_is_drafted_from_the_schema_alone():
     d = _defs()
     dr = draft(schema_backend(d), name="shop", lang="ko", definitions=d)
     objs = {o.name: o for o in dr.objects}
-    assert set(objs) == {"Member", "Order"}  # the tb_ prefix is left out of the names
-    assert dr.skipped == [{"table": "TB_ORDER_ITEM", "why": "composite_key"}]
+    assert set(objs) == {"Member", "Order", "OrderItem"}  # the tb_ prefix is left out of the names
+    assert dr.skipped == []
+    assert next(p for p in objs["OrderItem"].properties if p.name == objs["OrderItem"].key).columns == [
+        "ORDER_NO", "ITEM_SEQ"]
     assert objs["Order"].label == "주문" and objs["Member"].key == "member_no"
     stat = objs["Order"].prop_of("ORDER_STAT_CD")
     assert stat.type == "enum" and stat.values[:2] == ["10", "20"] and stat.labels["90"] == "주문취소"
     assert objs["Member"].prop_of("GRADE_CD").label == "회원등급"  # the group's mark is left out of the name
-    assert [(lk.source, lk.target, lk.on) for lk in dr.links] == [("Order", "Member", ("member_no", "member_no"))]
+    assert sorted((lk.source, lk.target, lk.on) for lk in dr.links) == [
+        ("Order", "Member", ("member_no", "member_no")), ("OrderItem", "Order", ("order_no", "order_no"))]
     assert [s.property for s in dr.states] == ["order_stat_cd"]
     comp = compose(dr.modules(), name="shop")
     assert comp.issues == []
@@ -116,7 +119,7 @@ def test_the_page_drafts_from_uploaded_definitions():
     with pytest.raises(ValueError, match="tables 또는 codes"):
         s.upload("x.json", b'{"other": 1}')
     st = s.make_draft("쇼핑몰")
-    assert st["pending"]["origin"]["kind"] == "definitions" and st["pending"]["counts"]["objects"] == 2
+    assert st["pending"]["origin"]["kind"] == "definitions" and st["pending"]["counts"]["objects"] == 3
     s.apply_draft()
     onto = s.studio.onto
     assert onto.objects["Order"].label == "주문" and onto.objects["Order"].properties["order_stat_cd"].labels

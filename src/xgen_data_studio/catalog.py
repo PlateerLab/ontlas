@@ -170,10 +170,11 @@ def from_ontology(onto: Ontology, *, database: str = "source", catalog: Catalog 
                     cat.relate(pid, "uses", f"property:{t}.{n}")
                 continue
             if o.table:
-                cid = f"column:{o.table}.{p.col}"
-                cat.add(cid, "column", f"{o.table}.{p.col}")
-                cat.relate(f"table:{o.table}", "contains", cid)
-                cat.relate(pid, "mapsTo", cid)
+                for c in p.cols:
+                    cid = f"column:{o.table}.{c}"
+                    cat.add(cid, "column", f"{o.table}.{c}")
+                    cat.relate(f"table:{o.table}", "contains", cid)
+                    cat.relate(pid, "mapsTo", cid)
     for lk in onto.links.values():
         lid = f"link:{lk.name}"
         cat.add(lid, "link", lk.label or lk.name)

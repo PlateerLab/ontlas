@@ -4,12 +4,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from xgen_data_studio import expr as ex
-from xgen_data_studio.check import aliases_of, column_of, concrete_subtypes, find_prop, stored_props
+from xgen_data_studio.check import aliases_of, columns_of, concrete_subtypes, find_prop, stored_props
 from xgen_data_studio.compile.base import Compiled, CompileError, Compiler, Params
 from xgen_data_studio.ir import Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref
+from xgen_data_studio.model import KEY_SEP
 
 NATIVE = ("postgres", "sqlite")
 _OP = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
+
+
+def joined(prefix: str, cols: list[str]) -> str:
+    """A column, or the text of several columns joined: a key read from more than one."""
+    if len(cols) == 1:
+        return f"{prefix}{qi(cols[0])}"
+    return "(" + f" || '{KEY_SEP}' || ".join(f"CAST({prefix}{qi(c)} AS VARCHAR(4000))" for c in cols) + ")"
 
 
 def qi(name: str) -> str:
@@ -56,7 +64,7 @@ class SqlCompiler(Compiler):
         names = stored_props(self.onto, obj.name)
         parts = []
         for s in subs:
-            cols = ", ".join(f"{qi(column_of(self.onto, s, n))} AS {qi(n)}" for n in names)
+            cols = ", ".join(f"{joined('', columns_of(self.onto, s, n))} AS {qi(n)}" for n in names)
             parts.append(f"SELECT {cols}, '{s}' AS {qi('__type')} FROM {qi(self.onto.objects[s].table)}")
         return "(" + " UNION ALL ".join(parts) + ")"
 
@@ -67,7 +75,7 @@ class SqlCompiler(Compiler):
             return self._computed(ref.alias, p.expr)
         if not self.onto.objects[t].table:
             return f"t_{ref.alias}.{qi(ref.prop)}"
-        return f"t_{ref.alias}.{qi(column_of(self.onto, t, ref.prop))}"
+        return joined(f"t_{ref.alias}.", columns_of(self.onto, t, ref.prop))
 
     def _computed(self, alias: str, text: str) -> str:
         r = ex.SqlRenderer(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
@@ -105,7 +113,7 @@ class SqlCompiler(Compiler):
 
     def _key(self, alias: str) -> str:
         obj = self.onto.obj(self._types[alias])
-        return f"t_{alias}.{qi(obj.key if not obj.table else obj.key_prop.col)}"
+        return joined(f"t_{alias}.", obj.key_prop.cols if obj.table else [obj.key])
 
     def _closure(self, lk, e: Edge) -> str:
         self._n += 1
@@ -117,9 +125,9 @@ class SqlCompiler(Compiler):
                     f"FROM {qi(lk.via.table)}")
         elif lk.on:
             sp, tp = src.prop(lk.on[0]), src.prop(lk.on[1])
-            key = qi(src.key_prop.col)
-            base = (f"SELECT a.{key} AS s, b.{key} AS t FROM {qi(src.table)} a "
-                    f"JOIN {qi(src.table)} b ON a.{qi(sp.col)} = b.{qi(tp.col)}")
+            key = src.key_prop.cols
+            base = (f"SELECT {joined('a.', key)} AS s, {joined('b.', key)} AS t FROM {qi(src.table)} a "
+                    f"JOIN {qi(src.table)} b ON {joined('a.', sp.cols)} = {joined('b.', tp.cols)}")
         else:
             raise CompileError(f"link {lk.name} has no source binding (on/via)")
         self._ctes.append(f"{r}(s, t, d) AS (SELECT s, t, 1 FROM ({base}) b0 UNION ALL "
@@ -150,6 +158,11 @@ class SqlCompiler(Compiler):
         raise CompileError(f"link {lk.name} has no source binding (on/via)")
 
     def _on_cond(self, lk, ls: str, lt: str) -> str:
+        st, tt = self._types[ls], self._types[lt]
+        if self.onto.objects[st].table and self.onto.objects[tt].table:
+            a, b = columns_of(self.onto, st, lk.on[0]), columns_of(self.onto, tt, lk.on[1])
+            if len(a) > 1 and len(a) == len(b):  # column by column, so the database can use its keys
+                return " AND ".join(f"t_{ls}.{qi(x)} = t_{lt}.{qi(y)}" for x, y in zip(a, b))
         return f"{self._col(Ref(ls, lk.on[0]))} = {self._col(Ref(lt, lk.on[1]))}"
 
     def _pattern(self, edges: list[Edge], known: set[str]) -> tuple[list[tuple[_Step, bool]], list[str]]:

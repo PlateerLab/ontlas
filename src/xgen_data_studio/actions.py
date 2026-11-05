@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from xgen_data_studio.compile.sql import qi
+from xgen_data_studio.model import KEY_SEP
 from xgen_data_studio.values import accepts, coerce, normalize
 
 
@@ -74,10 +75,14 @@ class SqlWriteback:
 
     def apply(self, onto, type_name: str, key: str, changes: dict[str, Any]) -> int:
         obj = onto.obj(type_name)
+        cols = obj.key_prop.cols
+        parts = str(key).split(KEY_SEP, len(cols) - 1) if len(cols) > 1 else [key]
+        if len(parts) != len(cols):
+            raise ValueError(f"key {key!r} of {type_name} has {len(parts)} parts, not {len(cols)}")
         sets = ", ".join(f"{qi(obj.prop(p).col)} = ?" for p in changes)
-        args = tuple(coerce(v, obj.prop(p).type) for p, v in changes.items()) + (key,)
-        sql = f"UPDATE {qi(obj.table)} SET {sets} WHERE {qi(obj.key_prop.col)} = ?"
-        return self.backend.run(sql, args)
+        args = tuple(coerce(v, obj.prop(p).type) for p, v in changes.items()) + tuple(parts)
+        where = " AND ".join(f"{qi(c)} = ?" for c in cols)
+        return self.backend.run(f"UPDATE {qi(obj.table)} SET {sets} WHERE {where}", args)
 
 
 def parameter_spec(spec: Any) -> dict[str, Any]:

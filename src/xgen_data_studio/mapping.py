@@ -16,6 +16,8 @@ from xgen_data_studio.check import _find_prop, all_props, is_a
 from xgen_data_studio.modules import SECTIONS, Module, Requirement
 
 OBJECT_MIN = 0.35
+MASTER = re.compile(r"(기본|마스터)\s|_(BASE|MST|MASTER)$", re.I)  # the table of the thing itself, not of its details
+MASTER_BONUS = 0.15
 COLUMN_MIN = 0.5
 _COMPAT = [{"string", "enum"}, {"integer", "decimal"}, {"date", "datetime"}, {"boolean"}]
 
@@ -51,6 +53,11 @@ def similarity(a: list[str], b: list[str]) -> tuple[float, str]:
             nx, ny = re.sub(r"[^0-9a-z가-힣]", "", x.lower()), re.sub(r"[^0-9a-z가-힣]", "", y.lower())
             if nx and nx == ny:
                 return 1.0, f"'{x}' = '{y}'"
+            short, long_ = sorted((nx, ny), key=len)
+            if len(short) >= 2 and re.search(r"[가-힣]", short) and short in long_:  # 주문 in 주문기본, 카테고리 in 표준카테고리
+                c = 0.7 + 0.25 * len(short) / len(long_)
+                if c > best:
+                    best, why = c, f"'{x}' ~ '{y}' ('{short}' 포함)"
             tx, ty = _tokens(x), _tokens(y)
             if tx and ty:
                 j = len(tx & ty) / len(tx | ty)
@@ -74,6 +81,7 @@ class ColumnMatch:
     column: str
     score: float
     why: str
+    columns: list[str] = field(default_factory=list)  # a key or reference read from several columns
 
 
 @dataclass
@@ -104,19 +112,35 @@ def _candidates(onto) -> list[str]:
     return [o.name for o in onto.objects.values() if o.name not in parents and o.name not in onto.identities]
 
 
-def _names_of(onto, type_name: str) -> list[str]:
+def aliases(terms: list[dict] | None) -> dict[str, list[str]]:
+    """Each name of a glossary entry, with the entry's other names: the words a system uses for what a standard names."""
+    out: dict[str, list[str]] = {}
+    for t in terms or []:
+        names = [str(x) for x in [t.get("term"), *(t.get("synonyms") or [])] if x]
+        for n in names:
+            key = re.sub(r"\s", "", n).lower()
+            out.setdefault(key, []).extend(x for x in names if x != n)
+    return out
+
+
+def _widen(names: list[str], words: dict[str, list[str]]) -> list[str]:
+    return names + [x for n in names for x in words.get(re.sub(r"\s", "", n or "").lower(), [])]
+
+
+def _names_of(onto, type_name: str, words: dict | None = None) -> list[str]:
     o = onto.objects[type_name]
-    return [o.name, o.label, *_aligned_names(o.aligned)]
+    return _widen([o.name, o.label, *_aligned_names(o.aligned)], words or {})
 
 
-def _prop_names(onto, type_name: str, prop: str) -> list[str]:
+def _prop_names(onto, type_name: str, prop: str, words: dict | None = None) -> list[str]:
     p = _find_prop(onto, type_name, prop)
-    return [prop, p.label, *_aligned_names(p.aligned)] if p else [prop]
+    return _widen([prop, p.label, *_aligned_names(p.aligned)] if p else [prop], words or {})
 
 
-def _column_score(onto, type_name: str, prop: str, col, planned, key: str, table_key: str) -> tuple[float, str]:
+def _column_score(onto, type_name: str, prop: str, col, planned, key: str, table_key: str,
+                  words: dict | None = None) -> tuple[float, str]:
     p = _find_prop(onto, type_name, prop)
-    name, why = similarity(_prop_names(onto, type_name, prop), [col.column, col.name, col.label])
+    name, why = similarity(_prop_names(onto, type_name, prop, words), [col.column, col.name, col.label])
     score, notes = 0.6 * name, [why] if why else []
     ptype = p.type if p else "string"
     if ptype == col.type or any(ptype in g and col.type in g for g in _COMPAT):
@@ -134,13 +158,14 @@ def _column_score(onto, type_name: str, prop: str, col, planned, key: str, table
     return min(score, 1.0), ", ".join(notes)
 
 
-def _match_columns(onto, type_name: str, planned) -> tuple[list[ColumnMatch], list[str], list[str], float]:
+def _match_columns(onto, type_name: str, planned,
+                   words: dict | None = None) -> tuple[list[ColumnMatch], list[str], list[str], float]:
     obj = onto.objects[type_name]
     props = [p for p in all_props(onto, type_name) if not _find_prop(onto, type_name, p).expr]
     pairs = []
     for prop in props:
         for col in planned.properties:
-            s, why = _column_score(onto, type_name, prop, col, planned, obj.key, planned.key)
+            s, why = _column_score(onto, type_name, prop, col, planned, obj.key, planned.key, words)
             pairs.append((s, prop, col, why))
     pairs.sort(key=lambda x: -x[0])
     used_p, used_c, matches = set(), set(), []
@@ -149,7 +174,7 @@ def _match_columns(onto, type_name: str, planned) -> tuple[list[ColumnMatch], li
             continue
         used_p.add(prop)
         used_c.add(col.name)
-        matches.append(ColumnMatch(prop, col.column, round(s, 3), why))
+        matches.append(ColumnMatch(prop, col.column, round(s, 3), why, list(col.columns)))
     # an inherited property still without a column, of a type exactly one column has, takes it (an agreement's date
     # is the order's date). The type's own properties match by name or stay missing; an ancestor's key is the own key.
     for prop in props:
@@ -164,8 +189,8 @@ def _match_columns(onto, type_name: str, planned) -> tuple[list[ColumnMatch], li
                                        f"{p.type} 컬럼이 {same[0].column} 하나뿐"))
     key_bound = any(m.property == obj.key for m in matches)
     if not key_bound:
-        matches.append(ColumnMatch(obj.key, next(c.column for c in planned.properties if c.name == planned.key),
-                                   0.4, "표준 키를 테이블의 키에 연결"))
+        k = next(c for c in planned.properties if c.name == planned.key)
+        matches.append(ColumnMatch(obj.key, k.column, 0.4, "표준 키를 테이블의 키에 연결", list(k.columns)))
         used_p.add(obj.key)
     missing = [p for p in props if p not in used_p and not _inherited_key(onto, type_name, p)]
     extra = [c.column for c in planned.properties if c.column not in {m.column for m in matches}]
@@ -182,14 +207,16 @@ def _inherited_key(onto, type_name: str, prop: str) -> bool:
     return False
 
 
-def suggest(draft, onto, standard: list[str]) -> Suggestion:
-    """Match the draft's tables onto the standard's object types, one to one, best first."""
+def suggest(draft, onto, standard: list[str], terms: list[dict] | None = None) -> Suggestion:
+    """Match the draft's tables onto the standard's object types, one to one, best first. `terms` (a glossary) says
+    which words of the system mean what a standard names."""
     scored = []
+    words = aliases(terms)
     for t in _candidates(onto):
         for po in draft.objects:
-            name, why = similarity(_names_of(onto, t), [po.table, po.label, po.name])
-            cols, missing, extra, cover = _match_columns(onto, t, po)
-            score = 0.4 * name + 0.6 * cover
+            name, why = similarity(_names_of(onto, t, words), [po.table, po.label, po.name])
+            cols, missing, extra, cover = _match_columns(onto, t, po, words)
+            score = 0.4 * name + 0.6 * cover + (MASTER_BONUS if MASTER.search(f"{po.label} {po.table}") else 0)
             scored.append((score, t, po, why, cols, missing, extra))
     scored.sort(key=lambda x: -x[0])
     taken_t, taken_o, matches = set(), set(), []
@@ -298,7 +325,7 @@ def _binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | N
         if table is None:
             continue
         kept.add(m.object)
-        cols = {c.property: c.column for c in m.columns}
+        cols = {c.property: list(c.columns) or c.column for c in m.columns}
         for ref, col in columns_edit.items():
             t, _, p = ref.partition(".")
             if t == m.object:

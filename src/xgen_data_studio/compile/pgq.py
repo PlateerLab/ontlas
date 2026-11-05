@@ -11,6 +11,10 @@ from xgen_data_studio.model import Ontology
 _OP = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
 
 
+def _cols(p) -> str:
+    return ", ".join(qi(c) for c in p.cols)
+
+
 def graph_ddl(onto: Ontology, graph: str = "") -> str:
     """CREATE PROPERTY GRAPH over the source tables: object types are vertices, bound links are edges."""
     graph = graph or onto.name.replace("-", "_")
@@ -18,8 +22,8 @@ def graph_ddl(onto: Ontology, graph: str = "") -> str:
     for o in onto.objects.values():
         if not o.table:
             continue
-        props = ", ".join(f"{qi(p.col)} AS {qi(p.name)}" for p in o.properties.values() if not p.expr)
-        verts.append(f"  {qi(o.table)} AS {qi(o.name)} KEY ({qi(o.key_prop.col)}) LABEL {qi(o.name)} "
+        props = ", ".join(f"{qi(p.col)} AS {qi(p.name)}" for p in o.properties.values() if not p.expr and not p.columns)
+        verts.append(f"  {qi(o.table)} AS {qi(o.name)} KEY ({_cols(o.key_prop)}) LABEL {qi(o.name)} "
                      f"PROPERTIES ({props})")
     edges = []
     for lk in onto.links.values():
@@ -28,22 +32,22 @@ def graph_ddl(onto: Ontology, graph: str = "") -> str:
             continue
         if lk.via:
             edges.append(f"  {qi(lk.via.table)} AS {qi(lk.name)} "
-                         f"SOURCE KEY ({qi(lk.via.source_column)}) REFERENCES {qi(src.name)} ({qi(src.key_prop.col)}) "
+                         f"SOURCE KEY ({qi(lk.via.source_column)}) REFERENCES {qi(src.name)} ({_cols(src.key_prop)}) "
                          f"DESTINATION KEY ({qi(lk.via.target_column)}) REFERENCES {qi(dst.name)} "
-                         f"({qi(dst.key_prop.col)}) LABEL {qi(lk.name)} NO PROPERTIES")
+                         f"({_cols(dst.key_prop)}) LABEL {qi(lk.name)} NO PROPERTIES")
         elif lk.on:
             sp, tp = src.prop(lk.on[0]), dst.prop(lk.on[1])
             if tp.name == dst.key:
-                table, key = src, src.key_prop.col
-                s_key, s_ref, d_key, d_ref = key, src.key_prop.col, sp.col, dst.key_prop.col
+                table, key = src, _cols(src.key_prop)
+                s_key, s_ref, d_key, d_ref = key, key, _cols(sp), _cols(dst.key_prop)
             elif sp.name == src.key:
-                table, key = dst, dst.key_prop.col
-                s_key, s_ref, d_key, d_ref = tp.col, src.key_prop.col, key, dst.key_prop.col
+                table, key = dst, _cols(dst.key_prop)
+                s_key, s_ref, d_key, d_ref = _cols(tp), _cols(src.key_prop), key, key
             else:
                 continue
-            edges.append(f"  {qi(table.table)} AS {qi(lk.name)} KEY ({qi(key)}) "
-                         f"SOURCE KEY ({qi(s_key)}) REFERENCES {qi(src.name)} ({qi(s_ref)}) "
-                         f"DESTINATION KEY ({qi(d_key)}) REFERENCES {qi(dst.name)} ({qi(d_ref)}) "
+            edges.append(f"  {qi(table.table)} AS {qi(lk.name)} KEY ({key}) "
+                         f"SOURCE KEY ({s_key}) REFERENCES {qi(src.name)} ({s_ref}) "
+                         f"DESTINATION KEY ({d_key}) REFERENCES {qi(dst.name)} ({d_ref}) "
                          f"LABEL {qi(lk.name)} NO PROPERTIES")
     out = f"CREATE PROPERTY GRAPH {qi(graph)}\n VERTEX TABLES (\n" + ",\n".join(verts) + "\n )"
     if edges:
@@ -129,6 +133,8 @@ class PgqCompiler(Compiler):
         p = find_prop(self.onto, self._types[ref.alias], ref.prop)
         if p.expr:
             return self._computed(ref.alias, p.expr)
+        if p.columns:
+            raise CompileError(f"SQL/PGQ reads one column per property; {ref.prop} is read from {len(p.columns)}")
         return f"{ref.alias}.{qi(ref.prop)}"
 
     def _computed(self, alias: str, text: str) -> str:

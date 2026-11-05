@@ -288,19 +288,28 @@ def _all_props(onto: Ontology, type_name: str) -> set[str]:
     return out
 
 
-def column_of(onto: Ontology, type_name: str, name: str) -> str:
-    """The source column a bound type reads for a property; an ancestor's key is the type's own key."""
+def _read_by(onto: Ontology, type_name: str, name: str):
+    """The property whose columns a bound type reads for a name; an ancestor's key is the type's own key."""
     obj = onto.objects[type_name]
     if name in obj.properties:
-        return obj.properties[name].col
+        return obj.properties[name]
     t, seen = obj.parent, {type_name}
     while t and t in onto.objects and t not in seen:
         seen.add(t)
         anc = onto.objects[t]
         if name in anc.properties:
-            return obj.key_prop.col if name == anc.key else anc.properties[name].col
+            return obj.key_prop if name == anc.key else anc.properties[name]
         t = anc.parent
     raise CheckError([f"{type_name} has no property '{name}'"])
+
+
+def column_of(onto: Ontology, type_name: str, name: str) -> str:
+    """The source column to show for a property; SQL is written from `columns_of`."""
+    return _read_by(onto, type_name, name).col
+
+
+def columns_of(onto: Ontology, type_name: str, name: str) -> list[str]:
+    return _read_by(onto, type_name, name).cols
 
 
 def concrete_subtypes(onto: Ontology, type_name: str) -> list[str]:

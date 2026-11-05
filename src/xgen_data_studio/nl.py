@@ -26,7 +26,10 @@ Every edge must start from an alias already matched. Dates are ISO text ("2026-1
 If a registered query answers the question, answer {"query": "<name>", "params": {...}} instead."""
 
 
-def schema_card(onto: Ontology, role: str | None = None) -> str:
+TERMS_MAX = 200  # glossary lines a schema card carries
+
+
+def schema_card(onto: Ontology, role: str | None = None, terms: list[dict] | None = None) -> str:
     r = onto.roles.get(role) if role else None
     lines = ["Object types:"]
     for o in onto.objects.values():
@@ -57,6 +60,9 @@ def schema_card(onto: Ontology, role: str | None = None) -> str:
         if lk.label:
             s += f" [{lk.label}]"
         lines.append(s)
+    words = [f"- {t['term']}: {', '.join(t['synonyms'])}" for t in (terms or []) if t.get("synonyms")][:TERMS_MAX]
+    if words:
+        lines += ["Words that mean the same here:", *words]
     if onto.queries:
         lines.append("Registered queries:")
         for q in onto.queries.values():
@@ -138,8 +144,9 @@ class Generated:
 
 class IRGenerator:
     def __init__(self, onto: Ontology, llm: Callable[[str, str], str], *, role: str | None = None,
-                 max_repairs: int = 2, runner: Callable[[Generated], tuple[int, dict]] | None = None):
-        self.onto, self.llm, self.role, self.max_repairs = onto, llm, role, max_repairs
+                 max_repairs: int = 2, runner: Callable[[Generated], tuple[int, dict]] | None = None,
+                 terms: list[dict] | None = None):
+        self.onto, self.llm, self.role, self.max_repairs, self.terms = onto, llm, role, max_repairs, terms
         self.runner = runner  # runs a checked answer: (rows, {"Type.prop": sample values}) for an empty result
 
     def _issues(self, data: Any) -> tuple[list[str], Query | None, str, dict]:
@@ -168,7 +175,7 @@ class IRGenerator:
         return res.issues, q, "", dict(data.get("params") or {})
 
     def generate(self, question: str) -> Generated:
-        base = f"{schema_card(self.onto, self.role)}\n\n{IR_GUIDE}\n\nQuestion: {question}"
+        base = f"{schema_card(self.onto, self.role, self.terms)}\n\n{IR_GUIDE}\n\nQuestion: {question}"
         prompt, out = base, Generated()
         for _ in range(self.max_repairs + 1):
             try:

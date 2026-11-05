@@ -103,10 +103,12 @@ def _draft(a) -> int:
 
         from xgen_data_studio.config import open_backend
 
-        backend = open_backend({"kind": "postgres", "dsn": a.dsn}, Path("."))
-        source = {"kind": "postgres", "dsn": "${XDS_DSN}", "source": True}  # the password stays out of the file
         u = urlparse(a.dsn)
-        origin = {"kind": "database", "detail": f"PostgreSQL {u.hostname or 'localhost'}{u.path}"}
+        kind = {"mysql": "mysql", "oracle": "oracle"}.get(u.scheme, "postgres")
+        backend = open_backend({"kind": kind, "dsn": a.dsn}, Path("."))
+        source = {"kind": kind, "dsn": "${XDS_DSN}", "source": True}  # the password stays out of the file
+        word = {"mysql": "MySQL", "oracle": "Oracle"}.get(kind, "PostgreSQL")
+        origin = {"kind": "database", "detail": f"{word} {u.hostname or 'localhost'}{u.path}"}
     else:
         raise SystemExit("give files, --sqlite, --dsn or --definitions")
     d = draft(backend, name=a.name, label=a.label, loaded=loaded, origin=origin, lang=a.lang, rules=rules,
@@ -303,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("draft", help="draft modules from files or a database: objects, keys, types, relations")
     s.add_argument("files", nargs="*", help=".csv, .tsv or .xlsx files, one table each (a workbook, one per sheet)")
     s.add_argument("--sqlite", default="", help="a SQLite database file, opened read-only")
-    s.add_argument("--dsn", default="", help="a PostgreSQL database, postgresql://...")
+    s.add_argument("--dsn", default="", help="a database: postgresql://..., mysql://... or oracle://user:pw@host/service")
     s.add_argument("--name", default="my-data")
     s.add_argument("--label", default="")
     s.add_argument("--lang", default="en", choices=["en", "ko"], help="language of the generated query labels")
