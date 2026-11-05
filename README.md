@@ -53,7 +53,8 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 |---|---|---|
 | One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `xds conformance examples/library/studio.yaml` |
 | Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `xds modules examples/library/studio.yaml --impact fashion` |
-| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice | `xds draft examples/files/*.csv -o my-studio` |
+| Anything goes in, one JSON comes out | SQL scripts, ERD files, definition sheets, glossaries, message lists, Word, PowerPoint, Hangul and PDF documents all roll up into one JSON, and the same path makes modules from it | `xds ingest examples/definitions/*.csv -o bundle.json` |
+| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice. Composite keys and references stay whole | `xds draft examples/files/*.csv -o my-studio` |
 | Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xds decide examples/library/studio.yaml returnEligibility I1001` |
 | Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xds agreement examples/library/studio.yaml` |
 | Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xds review examples/library/studio.yaml acme-1.1.0.yaml` |
@@ -85,12 +86,13 @@ Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the lib
 ```bash
 xds draft examples/files/*.csv --name books --label "도서 대출" --lang ko -o my-studio    # from files
 xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
-xds draft --dsn "$XDS_DSN" --name shop -o my-studio                                     # from PostgreSQL
+xds draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
+xds draft --dsn "$XDS_DSN" --name shop -o my-studio                                     # from a database
 xds serve my-studio/studio.yaml
 ```
 
-A database needs `pip install -e ".[postgres]"`. A draft reads every table in full to profile it, so point it at a
-copy or a replica with a read-only account, not at a busy production database.
+A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`). A draft reads every table in full to
+profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
 **3. Check it.**
 
@@ -282,6 +284,7 @@ Domain knowledge comes and goes, so it is packaged. A library keeps each package
 | `binding` | `commerce-bindings` | The tables and columns of one database. Swap it, and the same definition reads another system |
 | `quality` | `return-quality` | How a definition is checked: validation questions and the flow's pass conditions. Attached, it raises the studio's conditions where it asks more; detached, they go back |
 | `method` | `build-rules` | How a draft is built from data: the draft rules (allowed-value limits, key, state and person hints) the data tab starts from |
+| `dictionary` | a drafted `shop-dictionary` | A system's words and messages: a glossary finds the standard's names and reaches the language model's schema card, and a decision that answers with a message code shows the message |
 
 ```yaml
 module: acme-overlay
@@ -329,21 +332,51 @@ the rest.
 | You have | Path | It becomes |
 |---|---|---|
 | A standard that fits, and the system's tables | `mapping.suggest`, the page's "표준에 연결" | A `binding` module |
-| Table and code definitions (a data dictionary, an export from a modelling tool) | `xds draft --definitions` | A definition and its `binding`, with no rows needed |
+| Table and code definitions, a SQL script, an ERD file | `xds draft --definitions` | A definition and its `binding`, with no rows needed |
+| A code definition whose codes refer to other codes | The same draft | Decision tables: what each code implies, or what each state allows |
+| A glossary, a message list | The same draft | A `dictionary` module |
 | Data files or a database | `xds draft` | A definition and its `binding` |
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
-| Policy text | `xds policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
+| Policy text, in any document format | `xds policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
 | An OWL or RDFS ontology | `xds import-owl` | A starting definition |
 | Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
 | Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
 
 A definition drafted from one system describes that system. To carry a domain across systems, bind the tables to a
 standard instead: its queries, decisions and questions carry over, less what the tables do not hold. Matching goes by
-names, labels and types, so a system that abbreviates its names or words things differently gets few suggestions, and
-a person picks the rest.
+names, labels and types, and a glossary says which of the system's words mean what the standard names (회원 is 고객).
+A system that abbreviates its names still gets partial suggestions, and a person picks the rest: choosing another
+table matches its columns and relations again.
 
-Two limits decide what can be adapted today: an object has one key property, so a table keyed by several columns
-together is left out, and a studio reads one source database.
+A studio reads one source database today.
+
+### Anything in, one JSON
+
+`xds ingest` reads each file through an adapter and rolls everything into one JSON, which `xds draft --definitions`
+and the page's data tab take like any other input.
+
+| Input | Read as |
+|---|---|
+| `.sql`, `.ddl` (PostgreSQL, MySQL, Oracle, SQL Server, SQLite) | Tables, keys, references, comments as names, `ENUM` and `CHECK ... IN` as allowed values |
+| `.dbml`, `.pdm` (PowerDesigner), `.mwb` (MySQL Workbench) | The same, from the modelling tool's own file |
+| `.db`, `.sqlite` | The tables, keys and references of a SQLite file |
+| `.csv`, `.xlsx`: table, index, code, glossary and message sheets | By their headers, Korean or English, under a title and behind a cover sheet. Group rows and reference columns of a code definition are understood |
+| `.docx`, `.pptx`, `.hwpx`, `.pdf`, `.html`, `.md`, `.txt` | Text by section, for policy drafting (`.pdf` needs `[pdf]`) |
+| `.json` | The same shape, written by hand or by another tool |
+
+```json
+{"tables": [{"name": "TB_ORDER", "label": "주문", "primary_key": ["ORDER_NO"],
+             "columns": [{"name": "ORDER_NO", "label": "주문번호", "type": "varchar"}, {"name": "STAT_CD", "code": "OD01"}],
+             "references": [{"columns": ["MEMBER_NO"], "table": "TB_MEMBER", "ref_columns": ["MEMBER_NO"]}]}],
+ "codes": {"OD01": {"label": "주문상태", "values": [{"code": "10", "name": "주문접수"}]}},
+ "terms": [{"term": "고객", "synonyms": ["회원"]}],
+ "messages": [{"code": "MSG-RT-001", "text": "반품 가능 기간이 지났습니다."}],
+ "documents": [{"name": "교환정책서", "kind": "policy", "text": "...", "sections": [{"title": "1. 반품 기간", "text": "..."}]}]}
+```
+
+A format with no adapter here goes through a plug-in: a Python file that calls `ingest.register([".ext"], fn)` and
+returns `Definitions`, loaded with `xds ingest --adapter FILE` or `XDS_ADAPTERS`. A binary format nothing reads is
+refused with what to export it to.
 
 ## Start from your own data
 
@@ -393,8 +426,13 @@ allowed values with their names: a table definition sheet (a row per column: tab
 code group, referenced table) and a code definition sheet (a row per code: group, code, name, in use), as CSV or
 Excel with the usual Korean or English headers, or as JSON (`definitions.Definitions`). A column whose name says
 its group, `주문상태(OD01)`, needs no group column. With definitions alone the draft reads the schema: an empty
-database with the declared keys and references, so objects, keys, relations, allowed values and state machines
-come before any row does. A table keyed by several columns together is left out for now and said so.
+database with the declared keys and references, so objects, keys, relations, allowed values and state lists
+come before any row does.
+
+A table keyed by several columns gets one key property that reads them all (`columns: [ORDER_NO, ITEM_SEQ]`). It is
+one value to everything above the columns (`O1|2` to a decision, a request or a graph node), and SQL joins it column
+by column. A standard's key can read several columns the same way, in a binding:
+`columns: {item_id: [ORDER_NO, ITEM_SEQ]}`.
 
 ```bash
 xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
@@ -452,9 +490,9 @@ parameters, so a model or a person can pick one by name.
 | Gremlin 3.8 | Gremlin Server, JanusGraph, Neptune | refused | `where()` | `repeat().emit()` | TextP.containing | `GremlinBackend`, loads a projection with one list binding per script |
 
 A backend declares its `Capabilities`; a query that needs something a backend lacks is refused before it runs,
-with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, Fuseki, Neo4j and Gremlin Server when
-their addresses are set (`XDS_LIVE_PG`, `XDS_LIVE_FUSEKI`, `XDS_LIVE_NEO4J`, `XDS_LIVE_GREMLIN`), and the CI runs it
-against service containers. Values stay in the source: a graph backend gets a projection only when you ask for one, and
+with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, MySQL, Oracle, Fuseki, Neo4j and Gremlin Server when
+their addresses are set (`XDS_LIVE_PG`, `XDS_LIVE_MYSQL`, `XDS_LIVE_ORACLE`, `XDS_LIVE_FUSEKI`, `XDS_LIVE_NEO4J`,
+`XDS_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
 after that only the change set (`DELETE DATA` / `INSERT DATA`, or `MERGE` / `DELETE`).
 
 The same IRIs are used by the SPARQL compiler, the projection and the R2RML export, so an R2RML-aware engine
@@ -651,6 +689,8 @@ From a checkout (the package is not on PyPI yet):
 pip install -e .                 # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
 pip install -e ".[all]"          # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP, openpyxl
 pip install -e ".[postgres]"     # + psycopg      ("[neo4j]" for the Neo4j driver)
+pip install -e ".[mysql]"        # + PyMySQL, sqlglot      ("[oracle]" for oracledb)
+pip install -e ".[pdf]"          # + pypdf, for reading PDF documents
 pip install -e ".[xlsx]"         # + openpyxl, for drafting from Excel workbooks
 pip install -e ".[gremlin]"      # + gremlinpython, for Gremlin Server
 ```
@@ -680,6 +720,8 @@ xds serve examples/library/studio.yaml --samples examples/files  # + example fil
 xds serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
 xds serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
 xds draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
+xds ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
+xds draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
 xds gates examples/library/studio.yaml                         # the flow's pass conditions, measured
 xds agreement examples/library/studio.yaml                     # past decisions decided again
 xds review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
@@ -756,7 +798,6 @@ tools/                      # render_screens.py (the README images), architectur
 - optional edges in Gremlin; TinkerPop 4 once it is released
 - sign-in through an organisation's identity provider for team studios
 - decision tables drawn from outcomes with dates as inputs (days between two columns)
-- objects keyed by several columns together, and relations joined on several columns
 - several source databases in one studio
 
 ## Repository model

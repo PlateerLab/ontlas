@@ -86,10 +86,17 @@ def _by_state(g, coded: dict, used: list[dict], objects: list, links: list, hold
     wanted = set(coded.values())
     if not wanted:
         return {}
-    home = max(objects, key=lambda o: len(wanted & set(holds[o.name])), default=None)
+    by_name = {o.name: o for o in objects}
+
+    def reach(o) -> tuple[int, int]:
+        """What the object reads, itself or one relation away, then how central it is: a copy of a status in a report
+        table holds as much as the table where the status lives, but little points at it."""
+        far = {g for lk in links if lk.source == o.name and lk.on and lk.target in by_name for g in holds[lk.target]}
+        return len(wanted & (set(holds[o.name]) | far)), sum(o.name in (lk.source, lk.target) for lk in links)
+
+    home = max(objects, key=reach, default=None)
     if home is None or not wanted & set(holds[home.name]):
         return {}
-    by_name = {o.name: o for o in objects}
     inputs: dict[str, dict] = {}
     read: dict[str, str] = {}  # code group -> the input that reads it
     for grp in sorted(wanted):

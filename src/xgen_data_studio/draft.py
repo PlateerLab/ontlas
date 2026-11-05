@@ -71,6 +71,7 @@ class DraftRules:
     generic_keys: list[str] = field(default_factory=lambda: list(GENERIC_KEYS))
     queries: list[str] = field(default_factory=lambda: list(QUERY_KINDS))
     states: bool = True  # a status column becomes a state machine; a history table gives its transitions
+    code_tables: bool = True  # a code group whose references name other groups becomes a decision table
     roles: bool = True  # a viewer, an operator and, for a person-like table, a role scoped to one person's rows
     questions: bool = True  # each generated query with the answer it gives now, to check later changes against
     state_hints: list[str] = field(default_factory=lambda: list(STATE_HINTS))
@@ -85,7 +86,7 @@ class DraftRules:
                 setattr(r, k, max(0, int(d[k])))
         if "enum_repeat" in d:
             r.enum_repeat = max(1.0, float(d["enum_repeat"]))
-        for k in ("infer_links", "link_tables", "row_keys", "states", "roles", "questions"):
+        for k in ("infer_links", "link_tables", "row_keys", "states", "roles", "questions", "code_tables"):
             if k in d:
                 setattr(r, k, bool(d[k]))
         for k in ("title_hints", "parent_hints", "key_suffixes", "generic_keys", "state_hints", "person_hints",
@@ -136,12 +137,13 @@ def _header(cells: list[Any]) -> list[str]:
     return out
 
 
-def _table(name: str, source: str, raw: list[list[Any]], max_rows: int) -> Table:
+def _table(name: str, source: str, raw: list[list[Any]], max_rows: int, header=None) -> Table:
     raw = [r for r in raw if any(c not in (None, "") for c in r)]
     if not raw:
         raise ReadError(f"{source}: no rows", "empty")
-    cols = _header(raw[0])
-    body = raw[1:]
+    first = header(raw) if header else 0  # definition sheets carry a title above their header
+    cols = _header(raw[first])
+    body = raw[first + 1:]
     truncated = bool(max_rows) and len(body) > max_rows
     if truncated:
         body = body[:max_rows]
@@ -178,7 +180,7 @@ def read_csv(data: bytes, source: str, *, max_rows: int = 0) -> Table:
     return _table(Path(source).stem, source, raw, max_rows)
 
 
-def read_xlsx(data: bytes, source: str, *, max_rows: int = 0) -> list[Table]:
+def read_xlsx(data: bytes, source: str, *, max_rows: int = 0, header=None) -> list[Table]:
     """Every sheet with rows; a workbook of one sheet is named after the file, otherwise after the sheets."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -203,7 +205,7 @@ def read_xlsx(data: bytes, source: str, *, max_rows: int = 0) -> list[Table]:
                     break
             try:
                 t = _table(Path(source).stem if len(sheets) == 1 else ws.title, f"{source} · {ws.title}", raw,
-                           max_rows)
+                           max_rows, header)
             except ReadError:
                 continue
             out.append(t)
@@ -214,12 +216,12 @@ def read_xlsx(data: bytes, source: str, *, max_rows: int = 0) -> list[Table]:
     return out
 
 
-def read_file(data: bytes, source: str, *, max_rows: int = 0) -> list[Table]:
+def read_file(data: bytes, source: str, *, max_rows: int = 0, header=None) -> list[Table]:
     ext = Path(source).suffix.lower()
     if ext in (".csv", ".tsv", ".txt"):
         return [read_csv(data, source, max_rows=max_rows)]
     if ext in (".xlsx", ".xlsm"):
-        return read_xlsx(data, source, max_rows=max_rows)
+        return read_xlsx(data, source, max_rows=max_rows, header=header)
     raise ReadError(f"{source}: give a .csv, .tsv or .xlsx file", "format")
 
 
@@ -1142,6 +1144,10 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     d = Draft(name, label or name, list(objects.values()), links, profs, skipped, loaded, origin, lang, rules,
               terms=list(getattr(definitions, "terms", None) or []),
               messages=list(getattr(definitions, "messages", None) or []))
+    if definitions is not None and rules.code_tables:
+        from xgen_data_studio.codetables import code_tables
+
+        d.decisions.update(code_tables(d.objects, d.links, definitions))
     if rules.states:
         d.states = _states(backend, d, refs, rules)
     if rules.questions:

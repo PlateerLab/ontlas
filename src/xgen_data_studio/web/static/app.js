@@ -53,7 +53,8 @@
       '파일을 끌어 놓거나 [샘플 데이터 불러오기]를 선택합니다. 업로드한 파일은 세션 종료 시 삭제됩니다.',
       '생성 설정에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의를 지정하고 초안에 넣을 테이블을 선택합니다.',
       '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, 바인딩 순서로 초안이 생성됩니다.',
-      '테이블 정의서 · 코드 정의서(CSV, Excel, JSON)를 함께 올리면 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 이름과 허용값을 채웁니다. 정의서만 올리면 행 없이 키, 참조, 코드값으로 초안을 만듭니다.',
+      'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, Word, PowerPoint, 한글, PDF 문서를 함께 업로드할 수 있습니다. 형식이 달라도 하나의 JSON으로 모아 같은 방식으로 모듈을 만듭니다.',
+      '데이터 파일 없이 정의서만 업로드하면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 묶습니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, 카디널리티, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
       '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 골라 판정 표를 만듭니다.',
       '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 대응시킨 제안이 표시됩니다. 확인하고 고친 뒤 [표준에 연결해 적용]을 선택합니다.',
@@ -115,10 +116,12 @@
     ['시스템 · 고객사별 적용', '표준 모듈은 그대로 두고 시스템 연결과 고객사 차이만 모듈로 추가합니다.']];
   const GUIDE_ADAPT = [
     ['표준 모듈과 원천 테이블', '데이터 연결 > 표준에 연결', '바인딩 모듈'],
-    ['테이블 정의서, 코드 정의서', '데이터 연결 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['SQL 스크립트, ERD 파일, 테이블 정의서', '데이터 연결 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['코드 정의서', '데이터 연결 > 초안 생성', '코드값 이름, 결정표'],
+    ['용어집, 메시지 목록', '데이터 연결 > 초안 생성', '용어 사전 모듈'],
     ['CSV, Excel 파일, DB', '데이터 연결 > 초안 생성', '도메인 · 바인딩 모듈'],
     ['지난 처리 기록', '데이터 연결 > 규칙 · 역할 · 검증', '결정표'],
-    ['정책서', '온톨로지 라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
+    ['정책서, 화면설계서', '온톨로지 라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
     ['객체, 속성, 관계 수정', '객체 관리, 속성 관리, 관계 관리', '관리 변경 모듈'],
     ['모듈 정의 파일', '온톨로지 라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
@@ -340,6 +343,7 @@
     const p = S.pol;
     if (!p.open) return '';
     const nodes = S.st.graph.nodes.filter((n) => n.table);
+    const docs = ((S.files || {}).definitions || []).flatMap((x) => x.document_list || []);
     const targets = `<option value="">자동</option>${nodes.map((n) => `<option value="${esc(n.id)}"${n.id === p.target ? ' selected' : ''}>${esc(n.label)} · ${esc(n.id)}</option>`).join('')}`;
     let body = '';
     const r = p.res;
@@ -361,11 +365,25 @@
     }
     return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right"><button class="btn sm ghost" data-act="pclose">닫기</button></div></div><div class="cb">
       <div class="hint" style="margin-bottom:8px">정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고, 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 사람이 확인하고 승인해야 반영됩니다.</div>
+      ${docs.length ? `<div class="rgrid two" style="margin-bottom:8px"><label class="field" style="margin:0"><span>업로드한 문서</span><select data-in="pdoc"><option value="">선택</option>${docs.map((d) => `<option value="${esc(d.name)}"${d.name === p.doc ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
+        ${(p.sections || []).length ? `<label class="field" style="margin:0"><span>절</span><select data-in="psec"><option value="">전체</option>${p.sections.map((x) => `<option value="${esc(x)}"${x === p.section ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}</div>` : ''}
       <textarea class="code" data-in="ptext" spellcheck="false" style="min-height:180px" placeholder="제1조 (목적) ...">${esc(p.text)}</textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
         <label class="field" style="margin:0;min-width:220px"><span>대상 객체</span><select data-in="ptarget">${targets}</select></label>
         ${S.st.data.policy_sample ? '<button class="btn" data-act="psample">예시 정책서 불러오기</button>' : ''}
         <button class="btn primary" data-act="pdraft"${p.busy || !p.text.trim() ? ' disabled' : ''}>${p.busy ? '<span class="spin"></span>초안 생성 중 · 최대 1분 30초' : '초안 생성'}</button></div>${body}</div></div>`;
+  }
+
+  async function loadDocument(name, section) {
+    S.pol.doc = name; S.pol.section = section; S.pol.res = null;
+    if (!name) { render(); return; }
+    try {
+      const r = await api('policy/document', { name, section });
+      if (!r.ok) throw new Error(r.error);
+      S.pol.text = r.text; S.pol.sections = r.sections;
+      if (r.cut) toast('문서가 길어 앞부분만 불러왔습니다. 절을 선택하면 해당 절만 불러옵니다.');
+    } catch (e) { fail(e); }
+    render();
   }
 
   function moduleTemplate() {
@@ -1495,7 +1513,7 @@ ${controls}${body}`;
           <td class="muted" style="font-size:12px">${e.keys[id] && e.keys[id] !== x.key ? '직접 지정' : why(o, 'object', x)}</td></tr>`;
       }).join('');
       const left = (k, text) => { const xs = st.skipped.filter((x) => x.why === k); return xs.length ? `<div class="hint" style="margin-top:10px">${text}: ${xs.map((x) => esc(x.table)).join(', ')}</div>` : ''; };
-      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블') + left('composite_key', '복합 키를 지원하지 않아 객체로 만들지 못한 테이블');
+      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블');
       return `<table class="tight"><tr><th></th><th>이름</th><th>테이블</th><th>키</th><th>근거</th></tr>${rows}</table>${skipped}`;
     }
     if (st.id === 'properties') {
@@ -1700,7 +1718,7 @@ ${controls}${body}`;
         ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}
         ${x.document_list.length ? `<div class="chips" style="margin-top:6px">${x.document_list.slice(0, 12).map((d) => `<span class="chip sm">${esc(d.name)} · ${docKind[d.kind] || '문서'} · 섹션 ${show(d.sections)}</span>`).join('')}</div>` : ''}</div>
         <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('');
-    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다. 복합 키 테이블은 아직 객체로 만들지 않습니다.'}</div>` : '';
+    const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
     const connect = f.connect ? `<div class="sec">데이터베이스 연결</div><div style="display:flex;gap:8px"><input type="text" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://, mysql://, oracle:// 주소 또는 SQLite 파일 경로" style="flex:1">
         <button class="btn" data-act="connect"${S.dr.busy ? ' disabled' : ''}>연결</button></div><div class="hint" style="margin-top:6px">데이터는 원본 DB에 그대로 유지됩니다.</div>`
       : '<div class="hint" style="margin-top:12px">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, MySQL, Oracle, SQLite를 연결할 수 있습니다.</div>';
@@ -2553,6 +2571,8 @@ ${controls}${body}`;
 
   const CHANGE = {
     ptarget: (t) => { S.pol.target = t.value; },
+    pdoc: (t) => loadDocument(t.value, ''),
+    psec: (t) => loadDocument(S.pol.doc, t.value),
     mgpobj: (t) => { S.mg.obj = t.value; S.mg.form = null; S.mg.sel = ''; render(); },
     mgf: (t) => {
       const f = S.mg.form;

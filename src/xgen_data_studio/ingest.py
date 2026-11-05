@@ -23,7 +23,15 @@ from pathlib import Path
 from typing import NamedTuple
 from xml.parsers import expat
 
-from xgen_data_studio.definitions import CodeGroup, ColumnDef, Definitions, TableDef, from_sheets, read_definitions
+from xgen_data_studio.definitions import (
+    CodeGroup,
+    ColumnDef,
+    Definitions,
+    TableDef,
+    from_sheets,
+    header_row,
+    read_definitions,
+)
 from xgen_data_studio.draft import XLSX_UNPACKED_MAX, ReadError, read_file
 
 UNPACKED_MAX = XLSX_UNPACKED_MAX
@@ -113,6 +121,8 @@ def _sniff(data: bytes, source: str) -> Adapter:
         return fn
     if data[:5] == b"%PDF-":
         return _pdf
+    if data[:16] == b"SQLite format 3\0":
+        return _sqlite
     if b"\0" in data[:4096] and data[:2] not in (b"\xff\xfe", b"\xfe\xff"):
         raise _export(source)
     text = _text(data, source)
@@ -584,12 +594,43 @@ def _sheets(data: bytes, source: str) -> Definitions:
     if Path(source).suffix.lower() not in (*SHEETS, ".txt"):  # found by its content, under some other name
         name = source + (".xlsx" if data[:2] == b"PK" else ".csv")
     try:
-        sheets = read_file(data, name)
+        sheets = read_file(data, name, header=header_row)
     except ReadError as e:
         raise IngestError(str(e), READ_REASON.get(e.reason, "format")) from None
     out = from_sheets(sheets, source)
-    if out is None:
+    if out is None and Path(name).suffix.lower() == ".csv":
         raise IngestError(f"{source}: no table, code, term or message sheet found", "format")
+    if out is None:  # a project document of some other kind still comes in, as text a person or a model can read
+        text = "\n".join(" | ".join(str(c) for c in [*s.columns] if c) + "\n" + "\n".join(
+            " | ".join(str(c) for c in r if c) for r in s.rows) for s in sheets)
+        return Definitions(sources=[source], documents=[{"name": Path(source).stem, "kind": "other", "text": text,
+                                                         "sections": []}])
+    return out
+
+
+def _sqlite(data: bytes, source: str) -> Definitions:
+    """The tables, keys and references of a SQLite file, opened read-only from a temporary copy."""
+    import sqlite3
+    import tempfile
+
+    from xgen_data_studio.backends.sql import SqliteBackend
+    from xgen_data_studio.draft import _catalog, _wide_keys
+
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "upload.db"
+        path.write_bytes(data)
+        conn = sqlite3.connect(f"{path.as_uri()}?mode=ro&immutable=1", uri=True)
+        try:
+            conn.execute("PRAGMA trusted_schema = OFF")  # a file's triggers and views run nothing here
+            b = SqliteBackend(conn=conn)
+            out = Definitions(sources=[source])
+            for name, cols, pk, fks in _catalog(b):
+                refs = [{"columns": [c], "table": t, "ref_columns": [r] if r else []} for c, t, r in fks]
+                refs += [{"columns": c, "table": t, "ref_columns": r} for c, t, r in _wide_keys(b, name)]
+                out.tables[name] = TableDef(name, columns=[ColumnDef(c, type=ty, pk=c in pk) for c, ty in cols],
+                                            primary_key=list(pk), references=refs)
+        finally:
+            conn.close()
     return out
 
 
@@ -1423,3 +1464,4 @@ register(".txt", _txt)
 register(".pdf", _pdf)
 register(SHEETS, _sheets)
 register(".json", _json)
+register([".db", ".sqlite", ".sqlite3"], _sqlite)

@@ -1114,3 +1114,94 @@ def test_the_page_says_when_a_reader_is_not_installed(session, monkeypatch):
     monkeypatch.setitem(sys.modules, "pypdf", None)
     with pytest.raises(ValueError, match="문서 읽기 모듈이 설치되지 않아 파일을 처리하지 못했습니다"):
         session.upload("a.pdf", b"%PDF-1.4")
+
+
+def test_a_sqlite_file_gives_its_tables_keys_and_references(tmp_path):
+    import sqlite3
+
+    f = tmp_path / "x.db"
+    c = sqlite3.connect(f)
+    c.executescript("CREATE TABLE a (x TEXT, y INT, PRIMARY KEY (x, y)); CREATE TABLE b (id TEXT PRIMARY KEY, x TEXT, "
+                    "y INT, FOREIGN KEY (x, y) REFERENCES a (x, y));")
+    c.close()
+    d = ingest(f.read_bytes(), "x.db")
+    assert d.table("a").primary_key == ["x", "y"]
+    assert d.table("b").references == [{"columns": ["x", "y"], "table": "a", "ref_columns": ["x", "y"]}]
+    assert ingest(f.read_bytes(), "no-extension").counts()["tables"] == 2
+
+
+def _book(path, sheets):
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for name, rows in sheets.items():
+        ws = wb.create_sheet(name)
+        for r in rows:
+            ws.append(r)
+    wb.save(path)
+    return path.read_bytes()
+
+
+def test_a_project_workbook_has_a_cover_a_title_and_group_rows(tmp_path):
+    data = _book(tmp_path / "codes.xlsx", {
+        "표지": [[None], ["코드정의서"], ["Ver 1.0"]],
+        "코드정의서": [["코드정의서"], [None], [None],
+                  ["대분류코드", "중분류코드", "코드명", "코드설명", "사용여부", "정렬순서", "참조1", "참조2"],
+                  ["주문(OD)"],
+                  ["OD01", "*", "주문상태코드", None, None, None, None, None],
+                  ["OD01", "10", "접수", None, "Y", 1, None, None],
+                  ["OD01", "90", "취소", None, "N", 2, None, None],
+                  ["AC01", "*", "가능업무코드", None, None, None, "OD01(주문상태코드)", "최대 일수"],
+                  ["AC01", "11", "주문취소", None, "Y", 1, "10,20", "7"]],
+        "다국어": [["대분류코드", "중분류코드", "언어코드", "코드명"], ["OD01", "10", "en", "Received"]],
+    })
+    d = ingest(data, "codes.xlsx")
+    assert set(d.codes) == {"OD01", "AC01"} and d.codes["OD01"].label == "주문상태코드"
+    assert [v["code"] for v in d.codes["OD01"].values] == ["10", "90"] and d.codes["OD01"].values[1]["use"] is False
+    assert d.codes["AC01"].refs == {"ref1": "OD01(주문상태코드)", "ref2": "최대 일수"}
+    assert d.codes["AC01"].values[0]["refs"] == {"ref1": "10,20", "ref2": "7"}
+    back = Definitions.from_dict(d.to_dict())
+    assert back.codes["AC01"].refs == d.codes["AC01"].refs and back.codes["AC01"].values[0]["refs"]["ref1"] == "10,20"
+
+
+def test_an_index_sheet_gives_the_keys_and_merges_with_the_model(tmp_path):
+    data = _book(tmp_path / "idx.xlsx", {"인덱스정의서": [
+        [None], ["인덱스명", "테이블(물리)", "테이블(논리)", "컬럼", "유니크여부", "프라이머리여부"],
+        ["pk_ord_line", "ord_line", "주문상세", "{ord_no,line_seq}", "Y", "Y"],
+        ["ix_ord_line", "ord_line", "주문상세", "{status}", "N", "N"]]})
+    idx = ingest(data, "idx.xlsx")
+    assert idx.table("ORD_LINE").primary_key == ["ord_no", "line_seq"]
+    model = Definitions.from_dict({"tables": [{"name": "ORD_LINE", "label": "주문상세", "columns": [{"name": "ORD_NO"}]}]})
+    both = model.merge(idx)
+    assert list(both.tables) == ["ORD_LINE"] and both.table("ord_line").primary_key == ["ord_no", "line_seq"]
+    assert [c.name for c in both.table("ord_line").columns] == ["ORD_NO"]
+
+
+def test_codes_hold_decision_tables_of_both_shapes():
+    from xgen_data_studio.definitions import schema_backend
+    from xgen_data_studio.draft import draft, studio_from
+
+    pytest.importorskip("yaml")
+    defs = Definitions.from_dict({
+        "tables": [{"name": "LINE", "columns": [{"name": "LINE_NO", "pk": True}, {"name": "STAT_CD", "code": "OD01"},
+                                                {"name": "KIND_CD", "code": "OD02"}, {"name": "REASON_CD", "code": "RS01"}]}],
+        "codes": {
+            "OD01": {"label": "상태", "values": [{"code": "10", "name": "접수"}, {"code": "20", "name": "완료"}]},
+            "OD02": {"label": "구분", "values": [{"code": "1", "name": "일반"}]},
+            "AC01": {"label": "가능 업무", "refs": {"ref1": "OD01(상태)", "ref2": "OD02(구분)"}, "values": [
+                {"code": "11", "name": "취소", "refs": {"ref1": "10", "ref2": "1"}},
+                {"code": "12", "name": "반품", "refs": {"ref1": "10,20", "ref2": "1"}},
+                {"code": "13", "name": "폐기", "use": "N", "refs": {"ref1": "10"}}]},
+            "RS01": {"label": "사유", "refs": {"ref1": "OD02(구분)", "ref2": "귀책"}, "values": [
+                {"code": "100", "name": "단순변심", "refs": {"ref2": "고객"}},
+                {"code": "200", "name": "상품불량", "refs": {"ref2": "당사"}}]}}})
+    b = schema_backend(defs)
+    d = draft(b, name="t", lang="ko", definitions=defs)
+    assert {"codes_ac01", "codes_rs01"} <= set(d.decisions)
+    assert d.decisions["codes_ac01"]["hit_policy"] == "collect" and d.decisions["codes_rs01"]["hit_policy"] == "first"
+    st = studio_from(d, b, graph=False)
+    b.script("INSERT INTO LINE VALUES ('L1', '20', '1', '200'); INSERT INTO LINE VALUES ('L2', '10', '1', '100');")
+    assert [x["name"] for x in st.decide("codes_ac01", "L1").outputs] == ["반품"]
+    assert [x["name"] for x in st.decide("codes_ac01", "L2").outputs] == ["취소", "반품"]  # 폐기 is not in use
+    assert st.decide("codes_rs01", "L1").outputs["ref2"] == "당사"
+    assert st.decide("codes_rs01", "L1").matched == ["c200"]

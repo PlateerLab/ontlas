@@ -57,6 +57,14 @@ def _ingested(files: list[str], adapters: list[str]):
     return out
 
 
+def _policy_text(path: str) -> str:
+    """Policy text from any document the adapters read."""
+    from xgen_data_studio.ingest import ingest
+
+    defs = ingest(Path(path).read_bytes(), Path(path).name)
+    return "\n\n".join(d.get("text", "") for d in defs.documents) or Path(path).read_text(encoding="utf-8")
+
+
 def _ingest(a) -> int:
     """Write the canonical JSON of the files given and print what it holds."""
     defs = _ingested([x for f in a.files for x in (sorted(glob.glob(f)) or [f])], a.adapter)
@@ -598,8 +606,7 @@ def main(argv: list[str] | None = None) -> int:
         llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
                           extra=json.loads(a.llm_extra) if a.llm_extra else None)
         d = PolicyDrafter(list(studio.composition.modules), llm, max_repairs=a.repairs,
-                          compose_kw=studio._compose_kw).draft(Path(a.policy).read_text(encoding="utf-8"),
-                                                               target=a.target, name=a.name)
+                          compose_kw=studio._compose_kw).draft(_policy_text(a.policy), target=a.target, name=a.name)
         for i in d.issues:
             print(f"issue: {i}", file=sys.stderr)
         if d.module is None:

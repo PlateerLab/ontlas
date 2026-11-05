@@ -106,6 +106,24 @@
   --definitions FILE [--tables PATTERNS]`; the data tab takes definition files beside data files (or alone).
   `DraftRules.table_prefixes` (default `tb_`, `tbl_`) are left out of object names. Example
   `examples/definitions`.
+- `ingest`: anything rolls up into one JSON (`xds ingest`, the data tab). SQL scripts in five dialects, `.dbml`, `.pdm`,
+  `.mwb`, SQLite files; table, index, code, glossary and message sheets behind a cover sheet and under a title, with
+  a code definition's group rows and reference columns; Word, PowerPoint, Hangul, PDF, HTML, Markdown and text documents by
+  section. Zip formats are capped when unpacked and XML entities are refused. Other formats plug in with
+  `ingest.register` (`--adapter`, `XDS_ADAPTERS`).
+- Composite keys: a property reads several columns (`columns: [a, b]`). A key stays one property above the columns;
+  SQL joins column by column, writes and the database check read each one, SQL/PGQ and R2RML name them all. Drafts keep
+  composite primary keys and references, and a binding can read a standard's key from several columns.
+- MySQL and Oracle: drafted from their catalogs (`[mysql]`, `[oracle]`) and checked on live servers. Profiling casts
+  through each dialect, so json and CLOB columns no longer stop a draft.
+- `codetables`: a code group whose references name other code groups becomes a decision table: a stored code decides
+  what it implies, and otherwise each state collects the codes it allows.
+- `dictionary` modules hold a system's terms and messages. A glossary finds the standard's names in `mapping.suggest`
+  and reaches the schema card; a decision answering with a message code shows the message.
+- `mapping`: a name inside a longer one counts as near, a table named as the thing itself goes ahead of its detail
+  tables, a standard's key takes all the columns of a composite key, and a table chosen by hand is matched again
+  (`retarget`). `settle()` also clears a title, an interface or a series the tables cannot fill.
+- Policy drafting reads any document: `xds policy-draft` takes the file, and the page offers uploaded documents by section.
 - The README says what the studio is for and how a domain is adapted; the page's guide opens with the same. The
   overlay module is labelled "관리 변경", and a draft's default names are no longer possessive.
 - The README says what sets the studio apart and how to use it, step by step and screen by screen, and installs from

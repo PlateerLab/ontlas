@@ -41,7 +41,7 @@ TABLE_HEADERS = {
 CODE_HEADERS = {
     "group": ["코드그룹", "그룹코드", "코드그룹id", "공통코드그룹", "대분류코드", "group", "codegroup", "code_group"],
     "group_label": ["코드그룹명", "그룹코드명", "대분류코드명", "공통코드그룹명", "groupname", "group_name", "group_label"],
-    "code": ["코드", "코드값", "상세코드", "소분류코드", "code", "value", "codevalue"],
+    "code": ["코드", "코드값", "상세코드", "중분류코드", "소분류코드", "code", "value", "codevalue"],
     "name": ["코드명", "코드값명", "상세코드명", "소분류코드명", "name", "label", "codename"],
     "use": ["사용여부", "사용", "use", "use_yn", "useyn", "active"],
 }
@@ -65,6 +65,15 @@ MESSAGE_HEADERS = {
 }
 SECTIONS = ("tables", "codes", "terms", "messages", "documents")  # the keys of the canonical JSON
 DOCUMENT_KINDS = ("policy", "screen", "other")
+INDEX_HEADERS = {
+    "table": ["테이블물리", "테이블명", "테이블id", "물리테이블명", "table", "tablename", "table_name"],
+    "table_label": ["테이블논리", "테이블한글명", "논리테이블명", "tablelabel", "table_label"],
+    "columns": ["컬럼", "컬럼명", "구성컬럼", "columns", "column", "indexcolumns"],
+    "primary": ["프라이머리여부", "pk여부", "기본키여부", "primary", "isprimary", "primary_key"],
+}
+HEADER_SCAN = 12  # rows searched for a definition sheet's header
+GROUP_ROW = ("*", "**", "-")  # the code cell of a row that names a group instead of a value
+_REF = re.compile(r"(?:참조값?|ref|reference)(\d+)")
 _GROUP_IN_LABEL = re.compile(r"\(([A-Za-z]{1,6}\d{1,6})\)")  # a label that names its code group: 주문상태(OD01)
 
 
@@ -98,7 +107,8 @@ class TableDef:
 class CodeGroup:
     name: str
     label: str = ""
-    values: list[dict] = field(default_factory=list)  # {code, name, use}
+    values: list[dict] = field(default_factory=list)  # {code, name, use, refs: {ref1: "10,20"}}
+    refs: dict[str, str] = field(default_factory=dict)  # what each reference column means: {ref1: "주문상태 OD01"}
 
     def used(self) -> list[dict]:
         return [v for v in self.values if v.get("use", True)]
@@ -129,7 +139,14 @@ class Definitions:
         out = Definitions(dict(self.tables), dict(self.codes), [*self.sources, *other.sources],
                           _later(self.terms, other.terms, "term"), _later(self.messages, other.messages, "code"),
                           _later(self.documents, other.documents, "name"))
-        out.tables.update(other.tables)
+        for t in other.tables.values():
+            same = out.table(t.name)
+            if same is None:
+                out.tables[t.name] = t
+            else:  # the same table told by two files (a model and an index sheet): each says what the other lacks
+                out.tables[same.name] = TableDef(
+                    same.name, same.label or t.label, same.description or t.description, same.columns or t.columns,
+                    same.primary_key or t.primary_key, same.references or t.references)
         out.codes.update(other.codes)
         return out
 
@@ -142,8 +159,8 @@ class Definitions:
 
     def to_dict(self) -> dict:
         return {"tables": [_clean(asdict(t)) for t in self.tables.values()],
-                "codes": {k: {**({"label": g.label} if g.label else {}), "values": g.values}
-                          for k, g in self.codes.items()},
+                "codes": {k: {**({"label": g.label} if g.label else {}), **({"refs": g.refs} if g.refs else {}),
+                              "values": g.values} for k, g in self.codes.items()},
                 "terms": self.terms, "messages": self.messages, "documents": self.documents}
 
     @classmethod
@@ -180,9 +197,11 @@ class Definitions:
         codes: dict[str, CodeGroup] = {}
         for k, g in (d.get("codes") or {}).items():
             vals = [{"code": str(v.get("code")), "name": str(v.get("name") or ""),
-                     "use": str(v.get("use", True)).lower() not in ("n", "false", "0", "no")}
+                     "use": str(v.get("use", True)).lower() not in ("n", "false", "0", "no"),
+                     **({"refs": dict(v["refs"])} if v.get("refs") else {})}
                     for v in (g.get("values") or []) if v.get("code") not in (None, "")]
-            codes[str(k)] = CodeGroup(str(k), str(g.get("label") or g.get("name") or ""), vals)
+            codes[str(k)] = CodeGroup(str(k), str(g.get("label") or g.get("name") or ""), vals,
+                                      dict(g.get("refs") or g.get("ref_labels") or {}))
         terms = [x for x in map(_term, d.get("terms") or []) if x["term"]]
         messages = [x for x in map(_message, d.get("messages") or []) if x["code"]]
         documents = [x for x in map(_document, d.get("documents") or []) if x["name"]]
@@ -206,30 +225,75 @@ def read_definitions(data: bytes, source: str) -> Definitions | None:
     return from_sheets(sheets, source)
 
 
+def header_row(raw: list[list]) -> int:
+    """Where a definition sheet's header is: projects put a title and a revision note above it. 0 for any other sheet."""
+    for i, row in enumerate(raw[:HEADER_SCAN]):
+        cells = [str(c) if c is not None else "" for c in row]
+        if _kind_of(cells):
+            return i
+    return 0
+
+
+def _kind_of(headers: list[str]) -> str:
+    cols = _match(headers, TABLE_HEADERS)
+    if "table" in cols and "column" in cols:
+        return "table"
+    cols = _match(headers, INDEX_HEADERS)
+    if "table" in cols and "columns" in cols and "primary" in cols:
+        return "index"
+    cols = _match(headers, CODE_HEADERS)
+    if "group" in cols and "code" in cols and "name" in cols:
+        return "code"
+    return ""
+
+
+def _code_rows(out: Definitions, sh, cols: dict[str, int]) -> None:
+    refs = {f"ref{m.group(1)}": i for i, h in enumerate(sh.columns)
+            if (m := _REF.fullmatch(re.sub(r"[\s()_\-./]", "", str(h or "")).lower()))}
+    for row in sh.rows:
+        g, code = _cell(row, cols, "group"), _cell(row, cols, "code")
+        if not g or not code:
+            continue  # a section title between the groups
+        grp = out.codes.setdefault(g, CodeGroup(g, _cell(row, cols, "group_label")))
+        said = {k: str(row[i]).strip() for k, i in refs.items() if i < len(row) and str(row[i] or "").strip()}
+        if code in GROUP_ROW:  # the group's own row: its name, and what each reference column means here
+            grp.label, grp.refs = _cell(row, cols, "name") or grp.label, said
+            continue
+        if not grp.label:
+            grp.label = _cell(row, cols, "group_label")
+        use = _cell(row, cols, "use").lower()
+        grp.values.append({"code": code, "name": _cell(row, cols, "name"),
+                           "use": use not in ("n", "no", "false", "0", "미사용"), **({"refs": said} if said else {})})
+
+
+def _index_rows(out: Definitions, sh, cols: dict[str, int]) -> None:
+    """An index definition says which columns key each table."""
+    for row in sh.rows:
+        name, flag = _cell(row, cols, "table"), _cell(row, cols, "primary").lower()
+        if name and flag in TRUE:
+            t = out.tables.setdefault(name, TableDef(name, _cell(row, cols, "table_label")))
+            t.primary_key = [c.strip() for c in re.split(r"[,\s]+", _cell(row, cols, "columns").strip("{}() ")) if c.strip()]
+
+
 def from_sheets(sheets, source: str = "") -> Definitions | None:
-    """Table, code, glossary and message sheets among tables read from files (draft.Table); None when there are
+    """Table, index, code, glossary and message sheets among tables read from files (draft.Table); None when there are
     none."""
     out = Definitions(sources=[source] if source else [])
     found = False
     for sh in sheets:
-        cols = _match(sh.columns, TABLE_HEADERS)
-        if "table" in cols and "column" in cols:
+        kind = _kind_of([str(c or "") for c in sh.columns])
+        if kind == "table":
             found = True
-            _table_rows(out, sh, cols)
+            _table_rows(out, sh, _match(sh.columns, TABLE_HEADERS))
             continue
-        cols = _match(sh.columns, CODE_HEADERS)
-        if "group" in cols and "code" in cols and "name" in cols:
+        if kind == "index":
             found = True
-            for row in sh.rows:
-                g, code = _cell(row, cols, "group"), _cell(row, cols, "code")
-                if not g or not code:
-                    continue
-                grp = out.codes.setdefault(g, CodeGroup(g, _cell(row, cols, "group_label")))
-                if not grp.label:
-                    grp.label = _cell(row, cols, "group_label")
-                use = _cell(row, cols, "use").lower()
-                grp.values.append({"code": code, "name": _cell(row, cols, "name"),
-                                   "use": use not in ("n", "no", "false", "0", "미사용")})
+            _index_rows(out, sh, _match(sh.columns, INDEX_HEADERS))
+            continue
+        if kind == "code":
+            if not _match(sh.columns, {"language": ["언어코드", "언어", "language", "lang", "locale"]}):  # translations
+                found = True
+                _code_rows(out, sh, _match(sh.columns, CODE_HEADERS))
             continue
         cols = _match(sh.columns, TERM_HEADERS)
         if "term" in cols and len(cols) > 1 and _listed(sh, cols, "term"):
@@ -298,10 +362,12 @@ def schema_backend(defs: Definitions, tables: list[str] | None = None, *, conn=N
             target = names.get(str(r["table"]).lower())
             if target is None or not target.primary_key:
                 continue  # a reference to a table left out is not drafted
-            refs = list(r.get("ref_columns") or target.primary_key)
-            if len(refs) == len(r["columns"]) and sorted(x.lower() for x in refs) == sorted(
+            refs, own = list(r.get("ref_columns") or target.primary_key), list(r["columns"])
+            if len({c.lower() for c in own}) < len(own) and all(t.column(c) for c in refs):
+                own = refs  # a model that merged the columns of a reference: the names it points at are the columns
+            if len(refs) == len(own) and sorted(x.lower() for x in refs) == sorted(
                     x.lower() for x in target.primary_key):
-                parts.append(f"FOREIGN KEY ({', '.join(qi(c) for c in r['columns'])}) REFERENCES {qi(target.name)} "
+                parts.append(f"FOREIGN KEY ({', '.join(qi(c) for c in own)}) REFERENCES {qi(target.name)} "
                              f"({', '.join(qi(c) for c in refs)})")
         ddl.append(f"CREATE TABLE {qi(t.name)} ({', '.join(parts)})")
     b = SqliteBackend(conn=conn) if conn is not None else SqliteBackend()

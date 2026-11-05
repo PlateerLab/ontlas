@@ -431,6 +431,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if not ask_limit.allow():
                     return {"ok": False, "error": "분당 모델 호출 한도를 초과해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."}
                 return s.policy_draft(str(a.get("text", "")), str(a.get("target", "")), str(a.get("name", "")))
+            if route == "policy/document":
+                return s.document_text(str(a.get("name", "")), str(a.get("section", "")))
             if route == "policy/sample":
                 return s.policy_sample()
             if route == "decide":

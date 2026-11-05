@@ -478,6 +478,17 @@ class StudioSession:
             return {"ok": False, "error": "예시 정책서가 설정되지 않아 불러오지 못했습니다."}
         return {"ok": True, "name": found[0].name, "text": found[0].read_text(encoding="utf-8")[:POLICY_MAX]}
 
+    def document_text(self, name: str, section: str = "") -> dict:
+        """The text of an uploaded document, or of one of its sections, for the policy draft."""
+        for d in self.definitions.values():
+            for doc in getattr(d, "documents", None) or []:
+                if doc.get("name") == name:
+                    part = next((s for s in doc.get("sections") or [] if s.get("title") == section), None)
+                    text = part["text"] if part else doc.get("text", "")
+                    return {"ok": True, "name": name, "text": text[:POLICY_MAX], "cut": len(text) > POLICY_MAX,
+                            "sections": [s.get("title") for s in doc.get("sections") or []]}
+        return {"ok": False, "error": "업로드한 문서에 없어 불러오지 못했습니다. 데이터 연결에서 문서를 업로드해 주세요."}
+
     def policy_draft(self, text: str, target: str = "", name: str = "") -> dict:
         """A decision table drafted from policy text by the model and checked by the engine, as module text for
         the editor; a person files it as a change request (see policy.py)."""
@@ -703,7 +714,7 @@ class StudioSession:
         if sum(others.values()) + len(data) > lim.total_bytes:
             raise ValueError(f"전체 업로드 용량이 {_size(lim.total_bytes)} 한도를 초과해 업로드하지 못했습니다. "
                              "파일을 삭제한 뒤 다시 업로드해 주세요.")
-        from xgen_data_studio.definitions import from_sheets
+        from xgen_data_studio.definitions import from_sheets, header_row
         from xgen_data_studio.ingest import EXPORT_ANY, IngestError, ingest, is_sheet
 
         if not is_sheet(data, source):  # everything but rows rolls up into the one definitions object
@@ -721,7 +732,7 @@ class StudioSession:
             self.pending = None
             return self.files_state()
         try:
-            tables = read_file(data, source, max_rows=lim.rows)
+            tables = read_file(data, source, max_rows=lim.rows, header=header_row)
         except ReadError as e:
             raise ValueError(f"{source}: " + READ_ERROR.get(
                 e.reason, "파일을 테이블로 읽지 못했습니다. 파일 형식을 확인해 주세요.")) from None
@@ -731,7 +742,7 @@ class StudioSession:
                                 source: from_sheets(sheets, source)}
         else:
             self.definitions.pop(source, None)
-        tables = [t for t in tables if t not in sheets]
+        tables = [] if sheets else tables  # a definition workbook's cover and revision sheets are not data
         if not tables:
             self.uploads.pop(source, None)
             self.sizes = {**others, source: len(data)}
@@ -969,6 +980,7 @@ class StudioSession:
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
         m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, draft=d,
                     terms=self._terms(), base=mods)
+        m.terms, m.messages = list(d.terms), list(d.messages)  # the system's words go with its binding
         comp = compose([*mods, m], **self.studio._compose_kw)
         if comp.issues:
             raise ValueError("정의 검사에서 오류가 발견되어 연결하지 못했습니다. " + "; ".join(comp.issues[:5]))
