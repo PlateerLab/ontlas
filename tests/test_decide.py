@@ -1,8 +1,8 @@
 import pytest
 
-from xgen_data_studio.decide.cells import CellError, IsNull, Range, evaluate, parse_test, to_zen
-from xgen_data_studio.decide.table import DecisionError, evaluate_table
-from xgen_data_studio.model import DecisionRule, DecisionTable
+from xgen_space.decide.cells import CellError, IsNull, Range, evaluate, parse_test, to_zen
+from xgen_space.decide.table import DecisionError, evaluate_table
+from xgen_space.model import DecisionRule, DecisionTable
 
 
 @pytest.mark.parametrize("cell, value, hit", [
@@ -50,7 +50,7 @@ def test_decision_with_evidence(studio):
 
 def test_zen_agrees_with_native(studio):
     pytest.importorskip("zen")
-    from xgen_data_studio.decide.zen import evaluate_zen, to_jdm
+    from xgen_space.decide.zen import evaluate_zen, to_jdm
 
     table = studio.onto.decisions["returnEligibility"]
     assert to_jdm(table)["nodes"][1]["content"]["hitPolicy"] == "first"

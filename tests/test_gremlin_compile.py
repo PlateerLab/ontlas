@@ -1,8 +1,8 @@
 import pytest
 
-from xgen_data_studio.backends.base import Capabilities
-from xgen_data_studio.backends.graph import CallableBackend
-from xgen_data_studio.compile.base import CompileError, compiler_for
+from xgen_space.backends.base import Capabilities
+from xgen_space.backends.graph import CallableBackend
+from xgen_space.compile.base import CompileError, compiler_for
 
 
 def test_gremlin_text_carries_names_and_every_value_as_a_binding(studio):

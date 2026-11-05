@@ -1,5 +1,5 @@
 # Questions in plain language with the answer a person wrote as IR, for measuring a language model end to end:
-# xds nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
+# xspace nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
 # A generated query passes when its rows hold the gold rows: every gold column is one of its columns, row for row.
 - id: N01
   text: VIP 등급 고객의 이름을 알려 주세요

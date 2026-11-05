@@ -1,9 +1,9 @@
 import pytest
 
-from xgen_data_studio.backends.sql import SqliteBackend
-from xgen_data_studio.draft import draft, load_sqlite, read_csv, studio_from
-from xgen_data_studio.library import Library
-from xgen_data_studio.modules import compose
+from xgen_space.backends.sql import SqliteBackend
+from xgen_space.draft import draft, load_sqlite, read_csv, studio_from
+from xgen_space.library import Library
+from xgen_space.modules import compose
 
 from .conftest import EXAMPLE
 from .test_draft import _files
@@ -39,7 +39,7 @@ def test_roles_and_questions_come_with_the_draft_and_hold():
     assert rows and all(r[1] == "M003" for r in rows)
     rep = st.questions()
     assert len(rep.results) == len(d.questions()) == 12 and rep.accuracy == 1.0
-    from xgen_data_studio.actions import Actor
+    from xgen_space.actions import Actor
 
     op = Actor("op", "human", ["my-data-operator"])
     p = st.actions.request("setDaechulBannap", "L0002", {}, actor=op)
@@ -56,8 +56,8 @@ def test_roles_and_questions_come_with_the_draft_and_hold():
 def test_a_decision_table_is_drawn_from_past_outcomes_with_its_accuracy():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.config import load_studio
-    from xgen_data_studio.induce import InduceError, induce
+    from xgen_space.config import load_studio
+    from xgen_space.induce import InduceError, induce
 
     st = load_studio(LIB / "studio.yaml")
     out = induce(st.backend(), st.onto, "ReturnCase.approved",
@@ -80,7 +80,7 @@ def test_a_decision_table_is_drawn_from_past_outcomes_with_its_accuracy():
 
 def test_tables_are_matched_onto_the_standard_the_way_a_person_bound_them():
     pytest.importorskip("yaml")
-    from xgen_data_studio.mapping import binding, suggest
+    from xgen_space.mapping import binding, suggest
 
     b = SqliteBackend()
     b.script((EXAMPLE / "seed.sql").read_text(encoding="utf-8"))
@@ -104,8 +104,8 @@ def test_tables_are_matched_onto_the_standard_the_way_a_person_bound_them():
 def test_korean_headers_bind_a_subset_of_the_standard():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.mapping import binding, suggest
-    from xgen_data_studio.studio import Studio
+    from xgen_space.mapping import binding, suggest
+    from xgen_space.studio import Studio
 
     files = [read_csv("고객 번호,이름,등급\nK1,한별,VIP\nK2,누리,BASIC\nK3,가람,VIP\n".encode(), "고객.csv"),
              read_csv(("주문 번호,고객 번호,주문 일시,주문 상태\nR1,K1,2026-10-01 10:00,PAID\nR2,K1,2026-10-02 11:00,"
@@ -123,7 +123,7 @@ def test_korean_headers_bind_a_subset_of_the_standard():
     assert "myOrders" in mod.remove["queries"] and "revenueByCategory" in mod.remove["queries"]
     st = Studio.from_modules(std + [mod], namespace="https://example.org/studio#")
     st.add_backend("source", b, source=True)
-    from xgen_data_studio.backends.rdf import RdflibBackend
+    from xgen_space.backends.rdf import RdflibBackend
 
     st.add_backend("graph", RdflibBackend())
     st.project()
@@ -210,7 +210,7 @@ def test_tables_without_the_state_and_delivery_columns_still_bind_and_drop_what_
 
 
 def test_a_module_removes_a_state_machine_only_where_there_is_one():
-    from xgen_data_studio.modules import Module, ModuleError
+    from xgen_space.modules import Module, ModuleError
 
     mods = Library(LIB).resolve(["commerce"])
     ns = "https://example.org/studio#"

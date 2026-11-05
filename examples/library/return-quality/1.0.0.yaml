@@ -2,7 +2,7 @@ module: return-quality
 version: 1.0.0
 kind: quality
 label: 검증 기준 · 반품
-description: 반품 판정의 검증 질문과 흐름 통과 조건입니다. 적용하면 정답률 · 근거 제시율 · 판정 일치율 기준이 이 모듈의 값으로 올라가고, 해제하면 스튜디오 설정으로 돌아갑니다.
+description: 반품 판정의 검증 질문과 흐름 통과 조건입니다. 적용하면 정답률 · 근거 제시율 · 판정 일치율 기준이 이 모듈의 값으로 올라가고, 해제하면 스페이스 설정으로 돌아갑니다.
 requires: [commerce]
 
 flow:

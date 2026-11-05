@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from xgen_data_studio.web.team import Users, check_password, hash_password
+from xgen_space.web.team import Users, check_password, hash_password
 
 from .conftest import EXAMPLE
 
@@ -22,11 +22,11 @@ def test_passwords_are_salted_and_checked_in_constant_form():
 def team(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.config import load_studio
-    from xgen_data_studio.library import Library
-    from xgen_data_studio.web.api import StudioSession
-    from xgen_data_studio.web.server import RateLimit, make_handler
-    from xgen_data_studio.web.team import Logins, TeamSessions
+    from xgen_space.config import load_studio
+    from xgen_space.library import Library
+    from xgen_space.web.api import StudioSession
+    from xgen_space.web.server import RateLimit, make_handler
+    from xgen_space.web.team import Logins, TeamSessions
 
     root = tmp_path / "examples"
     shutil.copytree(EXAMPLE, root / "commerce")
@@ -56,7 +56,7 @@ def _call(base, path, body=None, cookie="", header=True):
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json"}
     if header and data is not None:
-        headers["X-XDS-Request"] = "1"
+        headers["X-XSPACE-Request"] = "1"
     if cookie:
         headers["Cookie"] = cookie
     req = urllib.request.Request(base + path, data=data, headers=headers, method="POST" if data is not None else "GET")

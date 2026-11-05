@@ -2,8 +2,9 @@
 
     python tools/render_screens.py            # needs playwright with chromium installed
 
-Writes assets/screens/{library,ontology,query,decision,map}.png from `xds preview`, assets/screens/draft.png from
-`xds serve` with the example files drafted, and assets/architecture.png, all at 2x.
+Writes assets/screens/{library,ontology,query,decision,map}.png from `xspace preview`,
+assets/screens/{catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
+at 2x.
 """
 from __future__ import annotations
 
@@ -20,10 +21,10 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from xgen_data_studio.config import load_studio  # noqa: E402
-from xgen_data_studio.preview import render  # noqa: E402
-from xgen_data_studio.web import DataOptions, StudioSession  # noqa: E402
-from xgen_data_studio.web.server import serve  # noqa: E402
+from xgen_space.config import load_studio  # noqa: E402
+from xgen_space.preview import render  # noqa: E402
+from xgen_space.web import DataOptions, StudioSession  # noqa: E402
+from xgen_space.web.server import serve  # noqa: E402
 
 
 def _serve(config: Path, samples: Path) -> str:
@@ -43,18 +44,28 @@ def _serve(config: Path, samples: Path) -> str:
     raise SystemExit(f"the studio page did not start on {base}")
 
 
-def draft_screen(page, base: str, path: Path) -> None:
+def live_screens(page, base: str, out: Path) -> None:
+    page.goto(base + "/#catalog")
+    page.locator(".cempty").wait_for()
+    page.click("[data-act=fsample]")
+    page.get_by_text("회원.csv").first.wait_for()
+    page.evaluate("document.fonts.ready")
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(out / "catalog.png"))
+    page.goto(base + "/#objects")
+    page.wait_for_selector("[data-act=mgnew], tr[data-name]")
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(out / "manage.png"))
     page.goto(base + "/#data")
     page.get_by_text("생성 설정").first.wait_for()
-    page.click("[data-act=fsample]")
-    page.get_by_text("회원.csv").wait_for()
+    page.get_by_text("회원.csv").first.wait_for()
     page.click("[data-act=draft]")
     page.wait_for_function("() => { const b = document.querySelector('[data-act=dapply]'); return b && !b.disabled; }",
                            timeout=30000)
     page.click("[data-view=links]")
     page.evaluate("document.fonts.ready")
     page.wait_for_timeout(400)
-    page.locator("#draft").screenshot(path=str(path))
+    page.locator("#draft").screenshot(path=str(out / "draft.png"))
 
 
 def main() -> None:
@@ -72,8 +83,9 @@ def main() -> None:
             page.evaluate("document.fonts.ready")
             for sid in ("library", "ontology", "query", "decision", "map"):
                 page.locator(f"#{sid}").screenshot(path=str(out / "screens" / f"{sid}.png"))
-            draft_screen(page, _serve(ROOT / "examples" / "library" / "studio.yaml", ROOT / "examples" / "files"),
-                         out / "screens" / "draft.png")
+            page.set_viewport_size({"width": 1500, "height": 900})
+            live_screens(page, _serve(ROOT / "examples" / "library" / "studio.yaml", ROOT / "examples" / "files"),
+                         out / "screens")
             arch = ROOT / "tools" / "architecture.html"
             page.set_viewport_size({"width": 1600, "height": 900})
             page.goto(arch.as_uri(), wait_until="networkidle")

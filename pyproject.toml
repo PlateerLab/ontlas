@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "xgen-data-studio"
-version = "0.5.0"
+name = "xgen-space"
+version = "0.6.0"
 description = "One domain ontology definition, executed on whatever database, graph store or reasoner a deployment has: a query IR compiled to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin, with computed properties, decisions, actions, roles, reviewed definition changes, an asset graph and conformance tests."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,8 +27,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/PlateerLab/xgen-data-studio"
-Changelog = "https://github.com/PlateerLab/xgen-data-studio/blob/main/CHANGELOG.md"
+Repository = "https://github.com/PlateerLab/xgen-space"
+Changelog = "https://github.com/PlateerLab/xgen-space/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Ontology and studio files in YAML (JSON needs nothing).
@@ -59,10 +59,10 @@ live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.scripts]
-xds = "xgen_data_studio.cli:main"
+xspace = "xgen_space.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/xgen_data_studio"]
+packages = ["src/xgen_space"]
 
 [tool.ruff]
 line-length = 120

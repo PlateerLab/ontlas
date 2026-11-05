@@ -1,13 +1,13 @@
 """A key read from several columns: one property to everything above the columns, the columns where SQL is written."""
 import pytest
 
-from xgen_data_studio import Ontology
-from xgen_data_studio.backends.sql import SqliteBackend
-from xgen_data_studio.bindings import check_bindings
-from xgen_data_studio.compile.pgq import graph_ddl
-from xgen_data_studio.definitions import Definitions, schema_backend
-from xgen_data_studio.draft import draft
-from xgen_data_studio.studio import Studio
+from xgen_space import Ontology
+from xgen_space.backends.sql import SqliteBackend
+from xgen_space.bindings import check_bindings
+from xgen_space.compile.pgq import graph_ddl
+from xgen_space.definitions import Definitions, schema_backend
+from xgen_space.draft import draft
+from xgen_space.studio import Studio
 
 from .conftest import EXAMPLE
 
@@ -64,7 +64,7 @@ def test_a_relation_on_several_columns_joins_column_by_column(studio):
 
 def test_the_graph_holds_the_same_key_and_answers_the_same():
     pytest.importorskip("rdflib")
-    from xgen_data_studio.backends.rdf import RdflibBackend
+    from xgen_space.backends.rdf import RdflibBackend
 
     st = Studio(Ontology.from_dict(DEFINITION).check())
     st.add_backend("source", SqliteBackend()).script(SEED)
@@ -75,7 +75,7 @@ def test_the_graph_holds_the_same_key_and_answers_the_same():
 
 
 def test_the_database_check_reads_each_column():
-    from xgen_data_studio.bindings import check_bindings as check
+    from xgen_space.bindings import check_bindings as check
 
     onto = Ontology.from_dict(DEFINITION).check()
     b = SqliteBackend()
@@ -96,7 +96,7 @@ def test_the_database_check_reads_each_column():
 
 
 def test_a_write_finds_its_row_by_each_key_column(studio):
-    from xgen_data_studio.actions import SqlWriteback
+    from xgen_space.actions import SqlWriteback
 
     w = SqlWriteback(studio.backends["source"])
     assert w.apply(studio.onto, "Line", "O1|1|1", {"status": "NEW"}) == 1
@@ -107,7 +107,7 @@ def test_a_write_finds_its_row_by_each_key_column(studio):
 
 
 def test_exports_name_every_column():
-    from xgen_data_studio.exchange.r2rml import to_r2rml
+    from xgen_space.exchange.r2rml import to_r2rml
 
     onto = Ontology.from_dict(DEFINITION).check()
     ddl = graph_ddl(onto)
@@ -146,7 +146,7 @@ def _defs() -> Definitions:
 
 def test_a_draft_keeps_composite_keys_and_their_references():
     pytest.importorskip("yaml")
-    from xgen_data_studio.modules import compose
+    from xgen_space.modules import compose
 
     d = _defs()
     dr = draft(schema_backend(d), name="shop", lang="ko", definitions=d)
@@ -170,7 +170,7 @@ def test_a_draft_keeps_composite_keys_and_their_references():
 
 def test_a_drafted_composite_table_runs_end_to_end():
     pytest.importorskip("yaml")
-    from xgen_data_studio.draft import studio_from
+    from xgen_space.draft import studio_from
 
     d = _defs()
     b = schema_backend(d)
@@ -184,15 +184,15 @@ def test_a_drafted_composite_table_runs_end_to_end():
 
 
 def _standard():
-    from xgen_data_studio.library import Library
-    from xgen_data_studio.modules import compose
+    from xgen_space.library import Library
+    from xgen_space.modules import compose
 
     base = Library(EXAMPLE.parent / "library").resolve(["core", "commerce"])
     return base, compose(base, namespace="https://example.org/s#", name="s").ontology
 
 
 def _shop():
-    from xgen_data_studio.definitions import read_definitions
+    from xgen_space.definitions import read_definitions
 
     out = None
     for f in ("테이블정의서.csv", "코드정의서.csv"):
@@ -203,8 +203,8 @@ def _shop():
 
 def test_a_glossary_finds_a_systems_words_and_a_standards_key_reads_all_its_columns():
     pytest.importorskip("yaml")
-    from xgen_data_studio.mapping import binding, suggest
-    from xgen_data_studio.modules import compose
+    from xgen_space.mapping import binding, suggest
+    from xgen_space.modules import compose
 
     base, onto = _standard()
     d = _shop()
@@ -221,7 +221,7 @@ def test_a_glossary_finds_a_systems_words_and_a_standards_key_reads_all_its_colu
 
 def test_a_table_chosen_by_hand_is_matched_column_by_column_again():
     pytest.importorskip("yaml")
-    from xgen_data_studio.mapping import binding, retarget, suggest
+    from xgen_space.mapping import binding, retarget, suggest
 
     base, onto = _standard()
     d = _shop()
@@ -237,8 +237,8 @@ def test_a_table_chosen_by_hand_is_matched_column_by_column_again():
 
 def test_a_relation_no_table_joins_goes_with_what_needs_it():
     pytest.importorskip("yaml")
-    from xgen_data_studio.mapping import binding, suggest
-    from xgen_data_studio.modules import compose
+    from xgen_space.mapping import binding, suggest
+    from xgen_space.modules import compose
 
     base, onto = _standard()
     defs = Definitions.from_dict({"tables": [

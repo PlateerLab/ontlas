@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from xgen_data_studio import Ontology
-from xgen_data_studio.backends.sql import SqliteBackend
-from xgen_data_studio.studio import Studio
+from xgen_space import Ontology
+from xgen_space.backends.sql import SqliteBackend
+from xgen_space.studio import Studio
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "commerce"
 NOW = datetime(2026, 10, 30, 12, 0)
@@ -33,7 +33,7 @@ def studio(onto, source) -> Studio:
 @pytest.fixture
 def graph_studio(studio) -> Studio:
     pytest.importorskip("rdflib")
-    from xgen_data_studio.backends.rdf import RdflibBackend
+    from xgen_space.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     studio.project()

@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from xgen_data_studio.definitions import Definitions, from_sheets, read_definitions, schema_backend
-from xgen_data_studio.draft import Table, draft
+from xgen_space.definitions import Definitions, from_sheets, read_definitions, schema_backend
+from xgen_space.draft import Table, draft
 
 from .conftest import EXAMPLE
 
@@ -57,7 +57,7 @@ def test_json_definitions_take_the_usual_synonyms():
 
 def test_a_studio_is_drafted_from_the_schema_alone():
     pytest.importorskip("yaml")
-    from xgen_data_studio.modules import compose
+    from xgen_space.modules import compose
 
     d = _defs()
     dr = draft(schema_backend(d), name="shop", lang="ko", definitions=d)
@@ -79,8 +79,8 @@ def test_a_studio_is_drafted_from_the_schema_alone():
 
 
 def test_value_labels_are_part_of_the_definition():
-    from xgen_data_studio import Ontology
-    from xgen_data_studio.validate import validate_ontology
+    from xgen_space import Ontology
+    from xgen_space.validate import validate_ontology
 
     o = Ontology.from_dict({"name": "t", "namespace": "https://example.org/t#", "objects": {"Order": {
         "key": "id", "properties": {"id": "string", "status": {"type": "enum", "values": {"10": "접수", "20": "완료"}},
@@ -93,7 +93,7 @@ def test_value_labels_are_part_of_the_definition():
 
 def test_an_extension_adds_names_to_the_names_already_given():
     pytest.importorskip("yaml")
-    from xgen_data_studio.modules import Module, compose
+    from xgen_space.modules import Module, compose
 
     base = Module.from_dict({"module": "a", "version": "1.0.0", "kind": "domain", "objects": {"Order": {
         "key": "id", "properties": {"id": "string", "status": {"type": "enum", "values": {"10": "접수"}}}}}})
@@ -107,8 +107,8 @@ def test_an_extension_adds_names_to_the_names_already_given():
 def test_the_page_drafts_from_uploaded_definitions():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.config import load_studio
-    from xgen_data_studio.web.api import StudioSession
+    from xgen_space.config import load_studio
+    from xgen_space.web.api import StudioSession
 
     s = StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
     for f in ("테이블정의서.csv", "코드정의서.csv"):

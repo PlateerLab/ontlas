@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_data_studio.library import Library
-from xgen_data_studio.modules import Module, ModuleError, compose
+from xgen_space.library import Library
+from xgen_space.modules import Module, ModuleError, compose
 
 from .conftest import EXAMPLE
 from .test_web import _build

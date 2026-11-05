@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_data_studio.exchange.owl import to_owl
-from xgen_data_studio.exchange.r2rml import to_r2rml
+from xgen_space.exchange.owl import to_owl
+from xgen_space.exchange.r2rml import to_r2rml
 
 
 def test_owl_export_parses_and_reports(onto):
@@ -31,7 +31,7 @@ def test_r2rml_matches_the_projection_iris(onto):
 
 def test_owl_import_round_trip(onto):
     pytest.importorskip("rdflib")
-    from xgen_data_studio.exchange.importer import from_owl
+    from xgen_space.exchange.importer import from_owl
 
     back, rep = from_owl(to_owl(onto)[0])
     assert set(onto.objects) <= set(back.objects)
@@ -45,7 +45,7 @@ def test_owl_import_round_trip(onto):
 
 def test_import_reports_what_it_cannot_map():
     pytest.importorskip("rdflib")
-    from xgen_data_studio.exchange.importer import from_owl
+    from xgen_space.exchange.importer import from_owl
 
     ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     @prefix ex: <https://example.org/v#> .

@@ -1,4 +1,4 @@
-xgen-data-studio Source-Available License
+xgen-space Source-Available License
 =========================================
 
 Copyright (c) 2026 Jinsoo Kim (GitHub: jinsoo96, wlstn010203@gmail.com).
@@ -13,9 +13,9 @@ Python Package Index, does NOT grant anyone permission to use it.
 1. Ownership
 ------------
 The Software, including all source code, documentation, benchmark artifacts,
-evaluation data authored for this project, and the name "xgen-data-studio", is the sole property of the
+evaluation data authored for this project, and the name "xgen-space", is the sole property of the
 copyright holder named above (the "Owner"). The repository
-PlateerLab/xgen-data-studio is the origin of this Software; every mirror or
+PlateerLab/xgen-space is the origin of this Software; every mirror or
 redistribution is derived from that origin and remains subject to this
 license.
 
@@ -30,7 +30,7 @@ may:
      evaluation and for the purpose of reviewing or citing the work;
   c. quote short excerpts of the source or documentation for commentary,
      review, teaching or academic citation, with attribution to the Owner
-     and a link to https://github.com/PlateerLab/xgen-data-studio.
+     and a link to https://github.com/PlateerLab/xgen-space.
 
 
 3. What you may NOT do without prior written permission
@@ -49,7 +49,7 @@ Except as expressly allowed in Section 2, you may NOT, in whole or in part:
      assistant that produces derivative code;
   f. remove, obscure or alter this license, the copyright notice, or any
      attribution to the Owner;
-  g. use the name "xgen-data-studio", or the Owner's name, to endorse or promote products derived from or
+  g. use the name "xgen-space", or the Owner's name, to endorse or promote products derived from or
      related to the Software.
 
 "Written permission" means an explicit, dated grant from the Owner
@@ -67,7 +67,7 @@ members for as long as they are members.
 Within that scope they may use, copy, modify, merge, build, package, deploy
 and distribute the Software, and create derivative works of it, as part of
 the products and services of Plateer Co., Ltd. This includes committing to
-the origin repository, publishing the "xgen-data-studio" package, and shipping
+the origin repository, publishing the "xgen-space" package, and shipping
 the Software inside Plateer deployments, on-premises or otherwise.
 
 This grant does not make the Software open source and does not extend to
@@ -79,7 +79,7 @@ this grant.
 
 5. Package distributions
 ------------------------
-The Python package "xgen-data-studio" is published from the origin
+The Python package "xgen-space" is published from the origin
 repository. Installing the package with a package manager is a technical act
 and does not by itself constitute permission under Section 3; permission
 comes from Section 4 for PlateerLab members and from a written grant by the
@@ -126,5 +126,5 @@ of Seoul, Republic of Korea.
 ------------------------
 To request permission for any use not allowed by Section 2, contact the
 Owner at wlstn010203@gmail.com or open an issue at
-https://github.com/PlateerLab/xgen-data-studio/issues describing the intended
+https://github.com/PlateerLab/xgen-space/issues describing the intended
 use.

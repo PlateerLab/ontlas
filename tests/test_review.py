@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from xgen_data_studio.modules import Module
-from xgen_data_studio.review import ChangeError, FlowSettings
+from xgen_space.modules import Module
+from xgen_space.review import ChangeError, FlowSettings
 
 from .conftest import EXAMPLE
 
@@ -14,8 +14,8 @@ STUDIO = EXAMPLE.parent / "library" / "studio.yaml"
 def st():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.config import load_studio
-    from xgen_data_studio.library import OverlayLibrary
+    from xgen_space.config import load_studio
+    from xgen_space.library import OverlayLibrary
 
     s = load_studio(STUDIO)
     s.library = OverlayLibrary(s.library, [])  # approvals are kept in memory, the example folder is never written

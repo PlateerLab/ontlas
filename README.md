@@ -1,8 +1,8 @@
-# xgen-data-studio
+# XGEN Space
 
-**One domain ontology, executed wherever the data already lives.** Describe the business once (object
-types, properties, links, states, decisions, actions, roles) and bind it to the source tables, or draft both from
-the tables and files you already have. A question
+**Bring in files or a database, and get one domain ontology, executed wherever the data already lives.** Keep raw files
+in repositories, turn every format into one JSON, and draft an ontology from it. Or describe the business once (object
+types, properties, links, states, decisions, actions, roles) and bind it to the source tables yourself. A question
 then becomes *one* ontology query, and the studio compiles it for the store a deployment actually has:
 SQL in any dialect, Cypher, ISO GQL, SPARQL, SQL/PGQ or Gremlin. Computed properties (a line total, an order total
 over its items, the latest price of a series) are part of the definition and compile into each of those languages.
@@ -10,10 +10,10 @@ SPARQL and Cypher written by people or agents are read back into the same query,
 too. **Zero hard dependencies, zero infra to try it.**
 
 ```python
-from xgen_data_studio import Ontology
-from xgen_data_studio.studio import Studio
-from xgen_data_studio.backends.sql import SqliteBackend
-from xgen_data_studio.backends.rdf import RdflibBackend
+from xgen_space import Ontology
+from xgen_space.studio import Studio
+from xgen_space.backends.sql import SqliteBackend
+from xgen_space.backends.rdf import RdflibBackend
 
 studio = Studio(Ontology.load("examples/commerce/ontology.yaml").check())
 studio.add_backend("source", SqliteBackend()).script(open("examples/commerce/seed.sql", encoding="utf-8").read())
@@ -51,15 +51,15 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 
 | Feature | How it works | Try it |
 |---|---|---|
-| One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `xds conformance examples/library/studio.yaml` |
-| Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `xds modules examples/library/studio.yaml --impact fashion` |
-| Anything goes in, one JSON comes out | SQL scripts, ERD files, definition sheets, glossaries, message lists, Word, PowerPoint, Hangul and PDF documents all roll up into one JSON, and the same path makes modules from it | `xds ingest examples/definitions/*.csv -o bundle.json` |
-| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice. Composite keys and references stay whole | `xds draft examples/files/*.csv -o my-studio` |
-| Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xds decide examples/library/studio.yaml returnEligibility I1001` |
-| Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xds agreement examples/library/studio.yaml` |
-| Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xds review examples/library/studio.yaml acme-1.1.0.yaml` |
+| One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `xspace conformance examples/library/studio.yaml` |
+| Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `xspace modules examples/library/studio.yaml --impact fashion` |
+| Anything goes in, one JSON comes out | SQL scripts, ERD files, definition sheets, glossaries, message lists, Word, PowerPoint, Hangul and PDF documents all roll up into one JSON, and the same path makes modules from it | `xspace ingest examples/definitions/*.csv -o bundle.json` |
+| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice. Composite keys and references stay whole | `xspace draft examples/files/*.csv -o my-studio` |
+| Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xspace decide examples/library/studio.yaml returnEligibility I1001` |
+| Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xspace agreement examples/library/studio.yaml` |
+| Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xspace review examples/library/studio.yaml acme-1.1.0.yaml` |
 | Edits that say what they take | Removing a property or a relation on the management screens takes out the queries, decisions and questions that need it, and lists them before anything is filed | The page's 객체 관리, 속성 관리, 관계 관리 |
-| Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xds mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
+| Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
 | Nothing to run first | The core has no required dependencies. SQLite and an in-process RDF graph are enough to try everything, and values stay in the source unless you ask for a projection | `python examples/commerce/demo.py` |
 
 ## How to use it
@@ -67,8 +67,8 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 The package is not on PyPI yet, so install it from a checkout.
 
 ```bash
-git clone https://github.com/PlateerLab/xgen-data-studio.git
-cd xgen-data-studio
+git clone https://github.com/PlateerLab/xgen-space.git
+cd xgen-space
 pip install -e ".[all]"
 ```
 
@@ -76,19 +76,20 @@ pip install -e ".[all]"
 differences and fictional data.
 
 ```bash
-xds serve examples/library/studio.yaml --samples examples/files --policies examples/policies
+xspace serve examples/library/studio.yaml --samples examples/files --policies examples/policies
 ```
 
 Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written.
 
-**2. Bring your own data.** On the page, use 데이터 연결. From the command line:
+**2. Bring your own data.** On the page, open 데이터 카탈로그, drop files or whole folders, check 변환 결과, then make
+the draft on 초안 생성 (see [The data catalog](#the-data-catalog)). From the command line:
 
 ```bash
-xds draft examples/files/*.csv --name books --label "도서 대출" --lang ko -o my-studio    # from files
-xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
-xds draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
-xds draft --dsn "$XDS_DSN" --name shop -o my-studio                                     # from a database
-xds serve my-studio/studio.yaml
+xspace draft examples/files/*.csv --name books --label "도서 대출" --lang ko -o my-studio    # from files
+xspace draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
+xspace draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
+xspace draft --dsn "$XSPACE_DSN" --name shop -o my-studio                                     # from a database
+xspace serve my-studio/studio.yaml
 ```
 
 A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`). A draft reads every table in full to
@@ -97,62 +98,66 @@ profile it, so point it at a copy or a replica with a read-only account, not at 
 **3. Check it.**
 
 ```bash
-xds bindings my-studio/studio.yaml       # the definition against the database
-xds questions my-studio/studio.yaml      # validation questions: right, and grounded
-xds conformance my-studio/studio.yaml    # every registered query on every backend
-xds gates my-studio/studio.yaml          # the flow's pass conditions, measured
+xspace bindings my-studio/studio.yaml       # the definition against the database
+xspace questions my-studio/studio.yaml      # validation questions: right, and grounded
+xspace conformance my-studio/studio.yaml    # every registered query on every backend
+xspace gates my-studio/studio.yaml          # the flow's pass conditions, measured
 ```
 
 **4. Use it.**
 
 ```bash
-xds run examples/library/studio.yaml revenueByCategory
-xds translate examples/commerce/ontology.yaml revenueByCategory --to cypher
-xds decide examples/library/studio.yaml returnEligibility I1001
+xspace run examples/library/studio.yaml revenueByCategory
+xspace translate examples/commerce/ontology.yaml revenueByCategory --to cypher
+xspace decide examples/library/studio.yaml returnEligibility I1001
 ```
 
 **5. Adapt it.** Copy `examples/library/acme-overlay/1.0.0.yaml` to `acme-1.1.0.yaml`, set `version: 1.1.0`, change a
 rule, and review it on a copy of the studio. See [Adapt a domain](#adapt-a-domain) for the other ways in.
 
 ```bash
-xds review examples/library/studio.yaml acme-1.1.0.yaml
+xspace review examples/library/studio.yaml acme-1.1.0.yaml
 ```
 
-**6. Share it.** `xds serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
-`xds mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
+**6. Share it.** `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
+`xspace mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
 
-The page, screen by screen:
+The page follows the data from raw files to checked answers. `Ctrl K` jumps to any screen:
 
-| Group | Screen | Use it to |
+| Stage | Screen | Use it to |
 |---|---|---|
 | 시작 | 사용 안내 | Read what each screen does, beside the demo video when there is one |
 | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| 데이터 관리 | 데이터 소스 | See the source's tables, keys and references, and what reads each |
-| | 데이터 연결 | Upload files or definitions, connect a database, draft, bind to a standard |
+| ① 원천 데이터 | 데이터 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
+| | DB 연결 | Connect a database and draft from it |
+| ② 변환 | 변환 결과 | See what each file came to, and the one JSON they roll up into |
+| | 데이터 소스 | See the source's tables, keys and references, and what reads each |
+| ③ 온톨로지 구축 | 초안 생성 | Draft from the files in the catalog, step by step, and bind to a standard |
 | | 객체 관리 | Change an object's table, key and parent, or add one from a table |
 | | 속성 관리 | Change a property's type, column, allowed values and their names, required flag and mask |
 | | 관계 관리 | Change relations and their join columns, and add the ones foreign keys suggest |
-| 온톨로지 | 온톨로지 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
+| | 온톨로지 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
 | | 온톨로지 | See objects and relations as a graph |
-| 활용 · 검증 | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
+| ④ 활용 | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
-| | 검증 | Run the questions with known answers, and add, remove or import them |
+| ⑤ 검증 | 검증 | Run the questions with known answers, and add, remove or import them |
 | | DB 대조 | Check the definition against the database |
 
 ## What it looks like
 
-The screens below are the studio page that `xds preview` writes for the example library in `examples/library`
+The screens below are the studio page that `xspace preview` writes for the example library in `examples/library`
 (common concepts, commerce, finance, a fashion extension, one customer's differences, and the bindings to two
 databases). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the
 decision with its evidence and the reach of a column change are what the library computed for that example.
 
-`xds serve` turns the same screens into a working page: plug modules in and out, edit any module as its file,
+`xspace serve` turns the same screens into a working page: plug modules in and out, edit any module as its file,
 run a query in eight languages or write one in SPARQL or Cypher yourself, decide, file an agent's request and
 approve it, run the questions and the database check. Management screens list the source's tables and the
 objects, properties and relations over them, and change any of them without editing a standard (see
 [Manage objects, properties and relations](#manage-objects-properties-and-relations)). A flow tab shows every stage (source, definition, database
-check, projection, queries, decisions, questions) with what it holds now, a data tab drafts a studio from uploaded
-files (see [Start from your own data](#start-from-your-own-data)), and a guide tab explains each screen, beside a
+check, projection, queries, decisions, questions) with what it holds now, the catalog keeps raw files by repository
+and folder (see [The data catalog](#the-data-catalog)), 초안 생성 drafts a studio from them (see
+[Start from your own data](#start-from-your-own-data)), and a guide tab explains each screen, beside a
 demo video when `--video` gives one. Every visitor gets a studio of their own, built from the
 same studio file, so nothing one person does reaches another; with `--users`, a team signs in and shares one studio
 (see [A team studio](#a-team-studio)).
@@ -204,8 +209,9 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 | `exchange` | OWL and R2RML export with a report of what each format cannot hold; OWL/RDFS import as a starting definition |
 | `catalog` | The data space as a graph: databases, tables, columns, files, collections, ontology objects, queries, decisions, actions, roles, agents |
 | `nl` | A schema card and IR guide for a language model, and a loop that checks its answer and asks again with the issues |
-| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xds` command; the MCP server; the studio page as a file |
-| `web` | The studio page served over HTTP with the standard library only: flow with its pass conditions, file upload, the draft and standard bindings, library with the module editor and change review, ontology graph, queries, decisions, approvals and rollback, checks, and the guide with its video; one studio per visitor, or one per team behind a sign-in |
+| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xspace` command; the MCP server; the studio page as a file |
+| `repository` | Repositories of raw files: folders and files by path in an index, bytes by hash, kept in a folder or gone with the visitor |
+| `web` | The studio page served over HTTP with the standard library only: flow with its pass conditions, the data catalog, the one JSON, the draft and standard bindings, library with the module editor and change review, ontology graph, queries, decisions, approvals and rollback, checks, and the guide with its video; one studio per visitor, or one per team behind a sign-in |
 
 ## Define once
 
@@ -303,7 +309,7 @@ remove: {queries: [wishlistCount]}
 ```
 
 ```python
-from xgen_data_studio.library import Library
+from xgen_space.library import Library
 lib = Library("examples/library")
 studio = Studio.from_library(lib, ["commerce-bindings", "fashion", "acme-overlay", "finance-bindings"])  # + requirements
 db = studio.add_backend("source", SqliteBackend())
@@ -332,13 +338,13 @@ the rest.
 | You have | Path | It becomes |
 |---|---|---|
 | A standard that fits, and the system's tables | `mapping.suggest`, the page's "표준에 연결" | A `binding` module |
-| Table and code definitions, a SQL script, an ERD file | `xds draft --definitions` | A definition and its `binding`, with no rows needed |
+| Table and code definitions, a SQL script, an ERD file | `xspace draft --definitions` | A definition and its `binding`, with no rows needed |
 | A code definition whose codes refer to other codes | The same draft | Decision tables: what each code implies, or what each state allows |
 | A glossary, a message list | The same draft | A `dictionary` module |
-| Data files or a database | `xds draft` | A definition and its `binding` |
+| Data files or a database | `xspace draft` | A definition and its `binding` |
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
-| Policy text, in any document format | `xds policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
-| An OWL or RDFS ontology | `xds import-owl` | A starting definition |
+| Policy text, in any document format | `xspace policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
+| An OWL or RDFS ontology | `xspace import-owl` | A starting definition |
 | Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
 | Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
 
@@ -353,8 +359,8 @@ the same shape, which says nothing about real rows: for that, get read-only acce
 
 ### Anything in, one JSON
 
-`xds ingest` reads each file through an adapter and rolls everything into one JSON, which `xds draft --definitions`
-and the page's data tab take like any other input.
+`xspace ingest` reads each file through an adapter and rolls everything into one JSON, which `xspace draft --definitions`
+takes like any other input. On the page, the same adapters read what reaches the catalog, and 변환 결과 shows the JSON.
 
 | Input | Read as |
 |---|---|
@@ -376,12 +382,40 @@ and the page's data tab take like any other input.
 ```
 
 A format with no adapter here goes through a plug-in: a Python file that calls `ingest.register([".ext"], fn)` and
-returns `Definitions`, loaded with `xds ingest --adapter FILE` or `XDS_ADAPTERS`. A binary format nothing reads is
+returns `Definitions`, loaded with `xspace ingest --adapter FILE` or `XSPACE_ADAPTERS`. A binary format nothing reads is
 refused with what to export it to.
+
+## The data catalog
+
+Raw material comes first. 데이터 카탈로그 keeps files in repositories, by folder, and says what each one turned out to be.
+
+<p align="center">
+  <img src="assets/screens/catalog.png" alt="Data catalog screen: the upload area, the folder toolbar and a table of files with their kind, format, size, amount, upload date, where each goes and whether it is in the draft" width="920">
+</p>
+
+| You do | It does |
+|---|---|
+| Drop files or a whole folder | Uploads into the current folder and keeps the folder's structure. `.DS_Store`, `Thumbs.db` and Mac archive metadata stay out |
+| Upload something it cannot read | Keeps the file and says why on its row, so a repository can hold everything a project has |
+| Look at a row | Kind, size, rows or sections, and where it goes: a table or a definition sheet to the domain and binding modules, a code sheet to value names and decision tables, a glossary to the term dictionary, a document to the policy draft |
+| Open a file | First rows or sections, its share of the JSON, and a download |
+| Clear a file's or folder's 초안 box | Leaves it out of 변환 결과 and of the next draft, and keeps it in the catalog |
+| Switch repository | The draft reads that repository's files from then on |
+
+A path in a repository is a name in an index, never a path on disk: the bytes are stored under their SHA-256, so nothing
+a visitor types reaches the file system, and two copies of a file cost one.
+
+Without `--repositories` the files go with the visitor's session, which suits a public demo. With it they stay in that
+folder across restarts, one set for all visitors. `--file-kb`, `--max-files` and `--total-mb` set the limits, and
+`--allow-connect` adds 경로 입력, which brings in a file or folder from the server's own disk.
+
+```bash
+xspace serve studio.yaml --repositories ./repositories --file-kb 51200 --max-files 2000 --total-mb 4096 --allow-connect
+```
 
 ## Start from your own data
 
-A definition does not have to be written first. `xds draft` reads files or a database and drafts the two
+A definition does not have to be written first. `xspace draft` reads files or a database and drafts the two
 modules a library expects, a definition and its bindings, keeping the reason for every choice:
 
 | | How it is decided |
@@ -397,11 +431,11 @@ modules a library expects, a definition and its bindings, keeping the reason for
 | Questions | Each generated query with the rows it gives now, to check later changes against |
 
 ```bash
-xds draft members.csv books.csv loans.csv -o lib-demo     # lib-demo/library/, data.sqlite, studio.yaml
-xds draft --sqlite shop.db --name shop                     # opened read-only; prints the two modules
-xds draft --dsn "$XDS_DSN" -o shop                         # the studio file reads ${XDS_DSN}, not the password
-xds draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o lib-demo
-xds serve lib-demo/studio.yaml
+xspace draft members.csv books.csv loans.csv -o lib-demo     # lib-demo/library/, data.sqlite, studio.yaml
+xspace draft --sqlite shop.db --name shop                     # opened read-only; prints the two modules
+xspace draft --dsn "$XSPACE_DSN" -o shop                         # the studio file reads ${XSPACE_DSN}, not the password
+xspace draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o lib-demo
+xspace serve lib-demo/studio.yaml
 ```
 
 Nothing in the draft is fixed. The rules above are `DraftRules` (how many distinct values still make a category,
@@ -413,8 +447,8 @@ fit is reported with its table, column and value.
 
 On the example commerce database (primary keys declared, foreign keys not) the draft finds the eight relations of
 the hand-written commerce ontology, the wishlist table as a many-to-many link included, and every generated query
-returns the same rows from SQLite and from the RDF projection. On the page, the data tab does the same for
-uploaded CSV and Excel files (and, with `--allow-connect`, a database address): the draft builds step by step with
+returns the same rows from SQLite and from the RDF projection. On the page, 초안 생성 does the same for the files in
+the catalog (and, with `--allow-connect`, 'DB 연결' for a database address): the draft builds step by step with
 the reason for each object, key, type and relation, a person sets the rules and edits each step (every edit is
 checked again on the spot, and errors hold the draft back), and the draft is plugged into that visitor's studio.
 Any module, the example ones and a plugged-in draft alike, opens on the library tab as its file: edit its objects,
@@ -436,8 +470,8 @@ by column. A standard's key can read several columns the same way, in a binding:
 `columns: {item_id: [ORDER_NO, ITEM_SEQ]}`.
 
 ```bash
-xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
-xds draft --sqlite shop.db --definitions 코드정의서.xlsx                                       # names and codes for data
+xspace draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
+xspace draft --sqlite shop.db --definitions 코드정의서.xlsx                                       # names and codes for data
 ```
 
 An allowed value carries its name in the definition itself: `values: {"10": 주문접수, "20": 결제완료}`, or `values`
@@ -492,8 +526,8 @@ parameters, so a model or a person can pick one by name.
 
 A backend declares its `Capabilities`; a query that needs something a backend lacks is refused before it runs,
 with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, MySQL, Oracle, Fuseki, Neo4j and Gremlin Server when
-their addresses are set (`XDS_LIVE_PG`, `XDS_LIVE_MYSQL`, `XDS_LIVE_ORACLE`, `XDS_LIVE_FUSEKI`, `XDS_LIVE_NEO4J`,
-`XDS_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
+their addresses are set (`XSPACE_LIVE_PG`, `XSPACE_LIVE_MYSQL`, `XSPACE_LIVE_ORACLE`, `XSPACE_LIVE_FUSEKI`, `XSPACE_LIVE_NEO4J`,
+`XSPACE_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
 after that only the change set (`DELETE DATA` / `INSERT DATA`, or `MERGE` / `DELETE`).
 
 The same IRIs are used by the SPARQL compiler, the projection and the R2RML export, so an R2RML-aware engine
@@ -507,7 +541,7 @@ r.outputs    # {'eligible': True, 'reason': '배송 완료 후 반품기간 7일
 r.matched    # ['in-window']
 r.evidence   # days_since_delivery = 4 <- order_items.delivered_at, category_returnable = True <- categories.returnable
 
-from xgen_data_studio.actions import Actor
+from xgen_space.actions import Actor
 p = studio.actions.request("requestReturn", "I1001", {"reason": "size"}, actor=Actor("bot", "agent", ["customer_agent"]))
 p.status     # 'pending': role, parameters, state transition and decision all checked
 studio.actions.approve(p.id, approver=Actor("kim", "human", ["operator"]))   # only a person approves
@@ -578,7 +612,7 @@ A change is a new version of one module: `studio.changes.propose(module, by="kim
 studio (the same source, a fresh graph) and records what it adds, removes and changes, the database check, the
 conformance run, the questions and the agreement; `approve(id, by="lee")` refuses a change that does not pass the
 flow or that its own author approves, then saves the version to the library and swaps it in. On the page, saving a
-module files a change request and shows its review; `xds review studio.yaml module.yaml` prints the same review.
+module files a change request and shows its review; `xspace review studio.yaml module.yaml` prints the same review.
 
 ## Manage objects, properties and relations
 
@@ -598,7 +632,7 @@ type and key and a property a type inherits stay where they are defined. Each ed
 elsewhere and says what that was:
 
 ```python
-from xgen_data_studio.manage import Workspace
+from xgen_space.manage import Workspace
 
 ws = Workspace(studio.composition.modules)
 ws.apply("update_property", {"object": "Customer", "name": "grade", "label": "회원 등급"})
@@ -617,8 +651,8 @@ review (the conditions it failed and what the database check found), and the edi
 ## A team studio
 
 ```bash
-xds users add users.yaml kim --name 김하람 --roles editor,approver    # the password from XDS_PASSWORD, or asked
-xds serve studio.yaml --users users.yaml --library-write --sync 60
+xspace users add users.yaml kim --name 김하람 --roles editor,approver    # the password from XSPACE_PASSWORD, or asked
+xspace serve studio.yaml --users users.yaml --library-write --sync 60
 ```
 
 With `--users`, people sign in (PBKDF2 hashes, a session cookie that is HttpOnly and SameSite=Strict, writes only
@@ -640,7 +674,7 @@ change set.
 ## The data map
 
 ```python
-from xgen_data_studio.catalog import from_ontology
+from xgen_space.catalog import from_ontology
 cat = from_ontology(studio.onto)                  # tables, columns, objects, properties, queries, decisions, roles
 cat.add_file("policies/returns.pdf", folder="policies", collection="commerce-policies")
 cat.add_agent("support", roles=["customer_agent"], uses=["collection:commerce-policies"])
@@ -655,9 +689,9 @@ cat.unused()                                      # what no agent or workflow us
 takes back either an IR object or a registered query name with parameters. The answer is checked against the
 ontology; if it fails, the model is asked again with the list of issues. The model never writes backend
 query text. `llm` is any `(system, prompt) -> str`; `nl.openai_chat(url, model)` makes one for any
-OpenAI-compatible endpoint, and `xds serve --llm-url ... --llm-model ...` adds a question box to the page. An answer
+OpenAI-compatible endpoint, and `xspace serve --llm-url ... --llm-model ...` adds a question box to the page. An answer
 that checks but finds no rows goes back once with sample values of the properties it compared (only what the role
-may read in clear). `xds nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
+may read in clear). `xspace nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
 own questions by execution: the gold query's rows must be in the answer's;
 [`examples/commerce/nl_questions.yaml`](examples/commerce/nl_questions.yaml) has sixteen.
 
@@ -668,15 +702,15 @@ decision table format and the policy's clauses, and takes back one decision tabl
 (inputs it can read from the target or along a path, tests it can evaluate, outputs the rules set) and checks that
 every rule cites a clause the text numbers; whatever is wrong goes back to the model. The draft is a module of its
 own, and a person files it as a change request, so it is tried on a copy and approved before it decides anything.
-On the page, `xds serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
-command is `xds policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
+On the page, `xspace serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
+command is `xspace policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
 minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
 [`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
 
 ## Agents over MCP
 
 ```bash
-xds mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
+xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
 ```
 
 Tools: `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
@@ -706,39 +740,40 @@ python examples/commerce/demo.py
 ## Command line
 
 ```bash
-xds validate examples/commerce/ontology.yaml
-xds translate examples/commerce/ontology.yaml lowStock --to sql:snowflake --param threshold=5
-xds translate examples/commerce/ontology.yaml "MATCH (o:Order) RETURN o.status, count(o) AS n" --from cypher --to sparql
-xds export examples/commerce/ontology.yaml --format owl         # shacl · r2rml · pgq · jdm · json · yaml · report
-xds import-owl vocabulary.ttl -o ontology.yaml
-xds run examples/commerce/studio.yaml myOrders --role customer_agent --principal customer_id=C001
-xds sparql examples/commerce/studio.yaml query.rq --backend source
-xds decide examples/commerce/studio.yaml returnEligibility I1001
-xds questions examples/commerce/studio.yaml                    # validation questions and accuracy
-xds conformance examples/commerce/studio.yaml                  # every registered query on every backend
-xds preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
-xds serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
-xds serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
-xds serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
-xds serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
-xds draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
-xds ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
-xds draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
-xds gates examples/library/studio.yaml                         # the flow's pass conditions, measured
-xds agreement examples/library/studio.yaml                     # past decisions decided again
-xds review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
-xds identity examples/library/studio.yaml Person --write       # join the records, write the crosswalk
-xds sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
-xds nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
-xds policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
-xds users add users.yaml kim --roles editor                    # a person of a team studio (xds serve --users)
-xds library list examples/library                              # every package, its kind, versions and requirements
-xds library create my-lib energy --kind domain --label "에너지 설비" --requires core
-xds library import-owl my-lib fibo-loans.ttl fibo-loans --requires core
-xds library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
-xds library compose examples/library commerce-bindings finance-bindings -o ontology.yaml
-xds modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
-xds bindings examples/library/studio.yaml                      # the definition against the database
+xspace validate examples/commerce/ontology.yaml
+xspace translate examples/commerce/ontology.yaml lowStock --to sql:snowflake --param threshold=5
+xspace translate examples/commerce/ontology.yaml "MATCH (o:Order) RETURN o.status, count(o) AS n" --from cypher --to sparql
+xspace export examples/commerce/ontology.yaml --format owl         # shacl · r2rml · pgq · jdm · json · yaml · report
+xspace import-owl vocabulary.ttl -o ontology.yaml
+xspace run examples/commerce/studio.yaml myOrders --role customer_agent --principal customer_id=C001
+xspace sparql examples/commerce/studio.yaml query.rq --backend source
+xspace decide examples/commerce/studio.yaml returnEligibility I1001
+xspace questions examples/commerce/studio.yaml                    # validation questions and accuracy
+xspace conformance examples/commerce/studio.yaml                  # every registered query on every backend
+xspace preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
+xspace serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
+xspace serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
+xspace serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
+xspace serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
+xspace serve examples/library/studio.yaml --repositories ./repositories --max-files 2000 --total-mb 4096  # files kept across restarts
+xspace draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
+xspace ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
+xspace draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
+xspace gates examples/library/studio.yaml                         # the flow's pass conditions, measured
+xspace agreement examples/library/studio.yaml                     # past decisions decided again
+xspace review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
+xspace identity examples/library/studio.yaml Person --write       # join the records, write the crosswalk
+xspace sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
+xspace nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
+xspace policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
+xspace users add users.yaml kim --roles editor                    # a person of a team studio (xspace serve --users)
+xspace library list examples/library                              # every package, its kind, versions and requirements
+xspace library create my-lib energy --kind domain --label "에너지 설비" --requires core
+xspace library import-owl my-lib fibo-loans.ttl fibo-loans --requires core
+xspace library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
+xspace library compose examples/library commerce-bindings finance-bindings -o ontology.yaml
+xspace modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
+xspace bindings examples/library/studio.yaml                      # the definition against the database
 ```
 
 A studio file names the ontology, the backends and what to project at start:
@@ -771,7 +806,7 @@ project: [graph]
 - **`dependencies = []`.** Everything optional is an extra; with all of them blocked the core test suite still passes.
 
 ```
-src/xgen_data_studio/
+src/xgen_space/
   model.py validate.py      # the definition and its checks
   modules.py library.py     # packages, composition, attach / detach; the library of versioned packages
   bindings.py               # the definition against the actual database
@@ -786,8 +821,8 @@ src/xgen_data_studio/
   decide/ actions.py roles.py
   reason/                   # rules · shacl · owl_rl
   exchange/                 # owl · r2rml · importer
-  catalog.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
-  web/                      # xds serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
+  catalog.py repository.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
+  web/                      # xspace serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus finance, fashion, food and a customer overlay
 examples/files/             # a fictional library's CSV files, for drafting from data
@@ -804,7 +839,7 @@ tools/                      # render_screens.py (the README images), architectur
 
 ## Repository model
 
-[`PlateerLab/xgen-data-studio`](https://github.com/PlateerLab/xgen-data-studio) is the source of truth.
+[`PlateerLab/xgen-space`](https://github.com/PlateerLab/xgen-space) is the source of truth.
 Members of the PlateerLab organization commit there directly; CI runs the full suite on Python 3.10–3.12 and the
 core suite with no optional dependencies.
 

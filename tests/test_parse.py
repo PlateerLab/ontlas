@@ -1,14 +1,14 @@
 import pytest
 
-from xgen_data_studio.compile.base import compiler_for
-from xgen_data_studio.ir import Query
-from xgen_data_studio.parse.cypher import parse_cypher
-from xgen_data_studio.parse.sparql import ParseError
+from xgen_space.compile.base import compiler_for
+from xgen_space.ir import Query
+from xgen_space.parse.cypher import parse_cypher
+from xgen_space.parse.sparql import ParseError
 
 
 def test_compiled_queries_read_back(studio):
     pytest.importorskip("rdflib")
-    from xgen_data_studio.parse.sparql import parse_sparql
+    from xgen_space.parse.sparql import parse_sparql
 
     onto = studio.onto
     for name, (q, params) in studio.registered().items():
@@ -22,8 +22,8 @@ def test_compiled_queries_read_back(studio):
 
 
 def _computed(onto, q) -> bool:
-    from xgen_data_studio.check import aliases_of, column_refs, find_prop
-    from xgen_data_studio.ir import filter_refs
+    from xgen_space.check import aliases_of, column_refs, find_prop
+    from xgen_space.ir import filter_refs
 
     types = aliases_of(q)
     return any(find_prop(onto, types[r.alias], r.prop).expr for r in [*column_refs(q), *filter_refs(q.where)])
@@ -51,7 +51,7 @@ def test_cypher_params_and_lists(studio):
 
 def test_hand_written_sparql_runs_on_sql(studio):
     pytest.importorskip("rdflib")
-    from xgen_data_studio.parse.sparql import parse_sparql
+    from xgen_space.parse.sparql import parse_sparql
 
     q = parse_sparql("""PREFIX ex: <https://example.org/commerce#>
         SELECT ?name (COUNT(?p) AS ?wished)
@@ -70,7 +70,7 @@ def test_reader_errors(onto):
     with pytest.raises(ParseError):
         parse_cypher("MATCH (o:Order) RETURN o.status ORDER BY elsewhere", onto)
     pytest.importorskip("rdflib")
-    from xgen_data_studio.parse.sparql import parse_sparql
+    from xgen_space.parse.sparql import parse_sparql
 
     with pytest.raises(ParseError):
         parse_sparql("SELECT ?x WHERE { ?x a <https://other.org/X> }", onto)

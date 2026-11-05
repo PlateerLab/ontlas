@@ -15,8 +15,8 @@ ALL = {"core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "fina
 
 
 def _build():
-    from xgen_data_studio.config import load_studio
-    from xgen_data_studio.web.api import StudioSession
+    from xgen_space.config import load_studio
+    from xgen_space.web.api import StudioSession
 
     return StudioSession(load_studio(CFG))
 
@@ -95,7 +95,7 @@ def test_checks_and_owl_export(session):
 def test_http_keeps_each_visitor_apart():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.web.server import RateLimit, Sessions, make_handler
+    from xgen_space.web.server import RateLimit, Sessions, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Sessions(_build, spare=0), ask_limit=RateLimit(5),
                                                                quiet=True))
@@ -114,9 +114,9 @@ def test_http_keeps_each_visitor_apart():
 
     try:
         code, html, set_cookie = call("/")
-        assert code == 200 and "XGEN 데이터 스튜디오" in html and "/*JS*/" not in html and "/*CSS*/" not in html
+        assert code == 200 and "XGEN Space" in html and "/*JS*/" not in html and "/*CSS*/" not in html
         first = set_cookie.split(";", 1)[0]
-        assert first.startswith("xds_session=")
+        assert first.startswith("xspace_session=")
         code, body, _ = call("/api/detach", {"name": "acme-overlay"}, first)
         assert code == 200 and json.loads(body)["ok"]
         on = {r["name"] for r in json.loads(call("/api/state", cookie=first)[1])["library"] if r["on"]}
@@ -132,7 +132,7 @@ def test_http_keeps_each_visitor_apart():
 
 
 def test_a_visitor_brings_files_reviews_the_draft_and_plugs_it_in(session):
-    from xgen_data_studio.web.api import DataOptions
+    from xgen_space.web.api import DataOptions
 
     session.data = DataOptions(samples=EXAMPLE.parent / "files")
     assert len(session.use_samples()["files"]) == 6
@@ -159,7 +159,7 @@ def test_a_visitor_brings_files_reviews_the_draft_and_plugs_it_in(session):
 def test_http_takes_a_file_as_the_body_and_keeps_to_the_limit():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.web.server import RateLimit, Sessions, make_handler
+    from xgen_space.web.server import RateLimit, Sessions, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Sessions(_build, spare=0), ask_limit=RateLimit(5),
                                                                quiet=True, upload_max=64))
@@ -176,12 +176,19 @@ def test_http_takes_a_file_as_the_body_and_keeps_to_the_limit():
             return e.code, json.loads(e.read().decode("utf-8")), ""
 
     try:
-        code, body, cookie = post("/api/upload?name=" + urllib.parse.quote("회원.csv"),
+        code, body, cookie = post("/api/upload?path=" + urllib.parse.quote("회원/회원.csv"),
                                   "회원번호,이름\nM1,가\nM2,나\n".encode("utf-8"))
         cookie = cookie.split(";", 1)[0]
-        assert code == 200 and body["files"][0]["tables"][0]["rows"] == 2
-        assert post("/api/upload?name=big.csv", b"x" * 65, cookie)[0] == 400
-        assert post("/api/upload?name=x.pdf", b"%PDF", cookie)[0] == 400
+        assert code == 200 and body == {"ok": True, "skipped": False}
+        assert post("/api/upload?path=big.csv", b"x" * 65, cookie)[0] == 400
+        assert post("/api/upload?path=" + urllib.parse.quote("../up.csv"), b"a\n1\n", cookie)[0] == 400
+        assert post("/api/upload?path=x.pdf", b"%PDF", cookie)[0] == 200  # raw material, kept with the reason
+        with urllib.request.urlopen(urllib.request.Request(base + "/api/catalog?folder=", headers={"Cookie": cookie})) as r:
+            top = json.loads(r.read().decode("utf-8"))
+        assert [f["name"] for f in top["folders"]] == ["회원"] and top["files"][0]["error"] and top["unread"] == 1
+        url = base + "/api/catalog/download?path=" + urllib.parse.quote("회원/회원.csv")
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"Cookie": cookie})) as r:
+            assert r.read().startswith("회원번호".encode()) and "UTF-8''" in r.headers["Content-Disposition"]
         code, body, _ = post("/api/draft", b"{}", cookie)
         assert code == 200 and body["pending"]["steps"][1]["items"][0]["key"] == "hoewonbeonho"
         assert post("/api/connect", json.dumps({"dsn": "sqlite:///x.db"}).encode(), cookie)[0] == 403
@@ -193,7 +200,7 @@ def test_http_takes_a_file_as_the_body_and_keeps_to_the_limit():
 def test_the_guide_offers_one_video_in_byte_ranges(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_data_studio.web.server import RateLimit, Sessions, guide, make_handler
+    from xgen_space.web.server import RateLimit, Sessions, guide, make_handler
 
     assert guide(None) == {"video": "", "chapters": []}
     video = tmp_path / "demo.mp4"
@@ -229,7 +236,7 @@ def test_the_guide_offers_one_video_in_byte_ranges(tmp_path):
 
 
 def test_a_visitor_sets_the_rules_edits_each_step_and_any_module(session):
-    from xgen_data_studio.web.api import DataOptions
+    from xgen_space.web.api import DataOptions
 
     session.data = DataOptions(samples=EXAMPLE.parent / "files")
     session.use_samples()

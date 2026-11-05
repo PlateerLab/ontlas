@@ -3,9 +3,9 @@ from datetime import datetime
 
 import pytest
 
-from xgen_data_studio.library import Library
-from xgen_data_studio.modules import Module, ModuleError, Requirement, compose, removal_impact
-from xgen_data_studio.studio import Studio
+from xgen_space.library import Library
+from xgen_space.modules import Module, ModuleError, Requirement, compose, removal_impact
+from xgen_space.studio import Studio
 
 from .conftest import EXAMPLE
 
@@ -21,7 +21,7 @@ def lib() -> Library:
 
 @pytest.fixture
 def composed(lib) -> Studio:
-    from xgen_data_studio.backends.sql import SqliteBackend
+    from xgen_space.backends.sql import SqliteBackend
 
     st = Studio.from_library(lib, ALL, now=lambda: NOW)
     src = SqliteBackend()
@@ -59,7 +59,7 @@ def test_concept_queries_span_domains(composed):
 
 def test_composed_studio_conforms_and_answers(composed):
     pytest.importorskip("rdflib")
-    from xgen_data_studio.backends.rdf import RdflibBackend
+    from xgen_space.backends.rdf import RdflibBackend
 
     composed.add_backend("graph", RdflibBackend())
     composed.project()
@@ -103,7 +103,7 @@ def test_attach_pulls_in_requirements(lib, composed):
 
 def test_definitions_without_bindings_do_not_run(lib):
     st = Studio.from_library(lib, ["finance"])
-    from xgen_data_studio.compile.base import CompileError
+    from xgen_space.compile.base import CompileError
 
     with pytest.raises(CompileError):
         st.translate("overdueLoans", "sql:sqlite")
@@ -164,7 +164,7 @@ def test_library_versions_diff_delete(tmp_path):
 
 def test_import_standard_as_module(tmp_path, lib):
     pytest.importorskip("rdflib")
-    from xgen_data_studio.exchange.owl import to_owl
+    from xgen_space.exchange.owl import to_owl
 
     onto = Studio.from_library(lib, ["finance"]).onto
     ttl, _ = to_owl(onto)
@@ -190,7 +190,7 @@ def test_bindings_check_against_the_database(composed):
 
 
 def test_library_screen(composed):
-    from xgen_data_studio.preview import render
+    from xgen_space.preview import render
 
     html = render(composed, query="revenueByCategory", decision="returnEligibility", key="I1001")
     assert 'id="library"' in html and "식품 업종 확장" in html and "해제 영향" in html

@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_data_studio.check import CheckError, check, check_or_raise
-from xgen_data_studio.ir import IRError, Query
+from xgen_space.check import CheckError, check, check_or_raise
+from xgen_space.ir import IRError, Query
 
 
 def _issues(onto, d):

@@ -1,8 +1,8 @@
 import pytest
 
-from xgen_data_studio.projection import Projection, project
-from xgen_data_studio.rdf import Iris
-from xgen_data_studio.reason.rules import run_rules, with_derived
+from xgen_space.projection import Projection, project
+from xgen_space.rdf import Iris
+from xgen_space.reason.rules import run_rules, with_derived
 
 
 def test_rules_derive_inverse_and_transitive(onto, source):
@@ -26,7 +26,7 @@ def test_rule_findings(onto, source):
 
 def test_shacl(onto, source):
     pytest.importorskip("pyshacl")
-    from xgen_data_studio.reason.shacl import to_shacl, validate
+    from xgen_space.reason.shacl import to_shacl, validate
 
     assert "sh:in (\"ORDERED\"" in to_shacl(onto)
     proj = project(onto, source)
@@ -41,7 +41,7 @@ def test_shacl(onto, source):
 
 def test_owl_rl_agrees_with_native_rules(onto, source):
     pytest.importorskip("owlrl")
-    from xgen_data_studio.reason.owl_rl import materialize
+    from xgen_space.reason.owl_rl import materialize
 
     proj = project(onto, source)
     ir = Iris(onto)
@@ -52,7 +52,7 @@ def test_owl_rl_agrees_with_native_rules(onto, source):
 
 
 def test_derived_edges_are_queryable(graph_studio):
-    from xgen_data_studio.projection import load
+    from xgen_space.projection import load
 
     onto = graph_studio.onto
     proj = with_derived(graph_studio.projection, run_rules(onto, graph_studio.projection))

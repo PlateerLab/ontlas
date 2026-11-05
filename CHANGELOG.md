@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0
+
+- The product is XGEN Space now: repository `xgen-space`, package `xgen_space`, command `xspace` (it was
+  `xgen-data-studio`, `xgen_data_studio` and `xds`), environment variables `XSPACE_*`, request header
+  `X-XSPACE-Request`. Earlier entries below keep the old names.
+- 데이터 카탈로그: repositories of raw files, by folder (`repository.py`). Files and whole folders are uploaded by drag
+  and drop or a picker with their structure kept; each row says the file's kind, format, size, rows or sections, upload
+  date and where it goes. A file that cannot be read is kept with the reason. Rename, delete, download, sort, filter by
+  extension, select several. A path is a name in an index and the bytes are stored by hash, so nothing a visitor types
+  reaches the file system.
+- `xspace serve --repositories DIR` keeps repositories across restarts for all visitors; without it they end with the
+  visitor. `--max-files` and `--total-mb` set the limits (30 files by default, up from 8). `--allow-connect` also brings
+  in a file or folder from the server's disk.
+- What goes into a draft follows the catalog: a file or folder left out stays in the repository, and switching
+  repository switches what the draft reads. `/api/upload` takes `path` instead of `name` and keeps an unreadable file
+  instead of refusing it.
+- 변환 결과: what each file came to and the one JSON they roll up into, with a download. A data file brings its columns
+  and types, not its rows.
+- The page: stages in a side menu that folds (① 원천 데이터, ② 변환, ③ 온톨로지 구축, ④ 활용, ⑤ 검증), a breadcrumb bar,
+  a repository picker, `Ctrl K` to any screen. DB 연결 is a screen of its own; 데이터 연결 became 초안 생성. A neutral
+  palette in the page and the static preview.
+- A download's file name is sent as `filename*`, so a Korean name no longer breaks the header.
+
 ## 0.5.0
 
 - Computed properties (`expr`): arithmetic, comparisons, `coalesce if abs round floor ceil lower upper length concat
