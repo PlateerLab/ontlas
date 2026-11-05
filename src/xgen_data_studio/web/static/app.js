@@ -45,9 +45,9 @@
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 백엔드 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
       '상단 정보에서 현재 데이터 출처를 확인합니다.',
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
-    ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 각 테이블을 읽는 객체를 확인합니다.', [
-      '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 그 컬럼을 읽는 속성이 표시됩니다.',
-      '읽는 객체가 없는 테이블은 [객체로 추가]를 선택해 객체 관리에서 바로 객체로 만듭니다.',
+    ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 객체를 확인합니다.', [
+      '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
+      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 객체 관리에서 바로 객체로 만듭니다.',
       '파일 업로드나 DB 연결은 [데이터 연결]에서 합니다.']],
     ['data', 'CSV, Excel 파일을 업로드해 온톨로지 초안을 생성하고 스튜디오에 적용합니다.', [
       '파일을 끌어 놓거나 [샘플 데이터 불러오기]를 선택합니다. 업로드한 파일은 세션 종료 시 삭제됩니다.',
@@ -60,7 +60,7 @@
       '[스튜디오에 적용]을 선택하면 모든 화면이 업로드 데이터 기준으로 바뀝니다. [초기화]를 선택하면 예시 스튜디오로 돌아갑니다.']],
     ['objects', '객체의 라벨, 원천 테이블, 키, 상위 객체를 관리합니다.', [
       '[새 객체]에서 원천 테이블을 고르면 키와 속성을 테이블 컬럼에서 채웁니다.',
-      '표준 모듈의 객체를 바꾸면 표준 모듈은 그대로 두고 \'내 변경\' 모듈에 확장으로 기록합니다. 키는 정의한 모듈에서만 바꿀 수 있습니다.',
+      '표준 모듈의 객체를 바꾸면 표준 모듈은 그대로 두고 \'관리 변경\' 모듈에 확장으로 기록합니다. 키는 정의한 모듈에서만 바꿀 수 있습니다.',
       '[객체 제외]를 선택하면 그 객체를 쓰는 관계, 질의, 결정, 검증 질문이 함께 빠지고, 빠진 항목은 대기 중인 변경에 표시됩니다.',
       '관계가 없는 객체는 화면 위에 표시됩니다. [관계 관리]에서 관계를 추가하세요.',
       '대기 중인 변경에서 [변경 요청]을 선택하면 사본 스튜디오에서 흐름 통과 조건을 검토하고, 승인 후 모든 화면에 반영됩니다. [변경 취소]로 되돌립니다.']],
@@ -106,6 +106,21 @@
       '모듈 적용 상태를 바꾼 뒤 [다시 대조]를 선택합니다.',
       '식품 업종 모듈을 적용하면 원천 DB에 없는 컬럼이 오류로 표시됩니다.']],
   ];
+  const GUIDE_USE = [
+    ['업무 정의 공유', '객체, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
+    ['저장소 간 같은 질의', '하나의 질의를 SQL, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin으로 변환해 실행하고 저장소별 결과를 비교합니다.'],
+    ['규칙 판정과 근거', '결정표로 판정하고 적용 규칙, 출처 조항, 원천 컬럼, 모듈 버전을 함께 표시합니다.'],
+    ['처리 통제', '역할별 조회 범위와 가림을 적용합니다. 에이전트는 처리를 요청만 하고, 승인한 처리만 원천 DB에 반영합니다.'],
+    ['변경 검토', '모듈 변경을 사본 스튜디오에서 검토하고, 흐름 통과 조건을 충족한 변경만 승인합니다.'],
+    ['시스템 · 고객사별 적용', '표준 모듈은 그대로 두고 시스템 연결과 고객사 차이만 모듈로 추가합니다.']];
+  const GUIDE_ADAPT = [
+    ['표준 모듈과 원천 테이블', '데이터 연결 > 표준에 연결', '바인딩 모듈'],
+    ['테이블 정의서, 코드 정의서', '데이터 연결 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['CSV, Excel 파일, DB', '데이터 연결 > 초안 생성', '도메인 · 바인딩 모듈'],
+    ['지난 처리 기록', '데이터 연결 > 규칙 · 역할 · 검증', '결정표'],
+    ['정책서', '온톨로지 라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
+    ['객체, 속성, 관계 수정', '객체 관리, 속성 관리, 관계 관리', '관리 변경 모듈'],
+    ['모듈 정의 파일', '온톨로지 라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
   const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
   const FLOW = [
@@ -1164,12 +1179,19 @@ ${controls}${body}`;
         <ol class="gsteps">${steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
         <div class="chips"><a class="btn sm" href="#${tab}">${navLabel(tab)} 열기</a>${ch && g.video ? `<button class="btn sm ghost" data-act="seek" data-t="${ch.t}">영상 ${clock(ch.t)}</button>` : ''}</div></div></div>`;
     }).join('');
-    if (!g.video) return `${head}<div class="guide-only">${sections}</div>`;
+    const ways = GUIDE_ADAPT.filter((x) => !x[3] || (S.st && S.st.ask));
+    const intro = `<div class="card gsec"><div class="cb"><div class="fhead"><b>스튜디오 용도</b></div>
+        <table class="tight">${GUIDE_USE.map(([k, v]) => `<tr><td style="white-space:nowrap"><b>${esc(k)}</b></td><td style="font-size:12.5px">${esc(v)}</td></tr>`).join('')}</table></div></div>
+      <div class="card gsec"><div class="cb"><div class="fhead"><b>도메인 어댑팅</b></div>
+        <div class="gwhat">표준 모듈은 그대로 두고 달라지는 내용만 모듈로 추가합니다. 모든 경로의 결과는 같은 모듈 파일이며, 같은 방식으로 검토 · 승인 · 적용 · 해제합니다.</div>
+        <table class="tight"><tr><th>보유 자료</th><th>경로</th><th>결과</th></tr>${ways.map(([a, b, c]) => `<tr><td>${esc(a)}</td><td style="font-size:12.5px">${esc(b)}</td><td style="font-size:12.5px">${esc(c)}</td></tr>`).join('')}</table>
+        <div class="chips">${['공통 개념', '도메인', '업종 확장', '고객사 차이', '바인딩', '검증 기준', '구축 규칙'].map((x) => `<span class="chip sm">${x}</span>`).join('')}</div></div></div>`;
+    if (!g.video) return `${head}<div class="guide-only">${intro}${sections}</div>`;
     const chapters = g.chapters.map((c, i) => `<button class="gch" data-act="seek" data-t="${c.t}" data-i="${i}"><span class="mono">${clock(c.t)}</span><span><b>${esc(c.chapter)} · ${esc(c.title)}</b><span class="muted">${esc((c.captions || [])[0] || '')}</span></span></button>`).join('');
     return `${head}<div class="guide">
       <div class="gside"><div class="card"><div class="cb" style="padding:0"><video id="gvideo" controls preload="metadata" playsinline src="${esc(g.video)}"></video></div>
         <div class="cb scroll gchs">${chapters}</div></div></div>
-      <div class="gmain">${sections}</div></div>`;
+      <div class="gmain">${intro}${sections}</div></div>`;
   }
 
   function mountGuide() {
@@ -1473,7 +1495,7 @@ ${controls}${body}`;
           <td class="muted" style="font-size:12px">${e.keys[id] && e.keys[id] !== x.key ? '직접 지정' : why(o, 'object', x)}</td></tr>`;
       }).join('');
       const left = (k, text) => { const xs = st.skipped.filter((x) => x.why === k); return xs.length ? `<div class="hint" style="margin-top:10px">${text}: ${xs.map((x) => esc(x.table)).join(', ')}</div>` : ''; };
-      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블') + left('composite_key', '여러 컬럼이 함께 키인 테이블(복합 키, 아직 객체로 만들지 않음)');
+      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블') + left('composite_key', '복합 키를 지원하지 않아 객체로 만들지 못한 테이블');
       return `<table class="tight"><tr><th></th><th>이름</th><th>테이블</th><th>키</th><th>근거</th></tr>${rows}</table>${skipped}`;
     }
     if (st.id === 'properties') {
@@ -1691,7 +1713,7 @@ ${controls}${body}`;
   }
 
   // ---- management: data sources, objects, properties, relations, questions ---------------------------------------
-  // Every edit lands in one overlay module ("내 변경") over the standard modules, and reaches the other screens only
+  // Every edit lands in one overlay module ("관리 변경") over the standard modules, and reaches the other screens only
   // once it is filed as a change request and approved.
 
   const MG_TABS = ['sources', 'objects', 'props', 'links'];
@@ -1758,7 +1780,7 @@ ${controls}${body}`;
     if (!w.dirty) return '';
     const d = w.diff;
     const edits = w.edits.map((e) => `<div><b>${esc(OP_WORD[e.op] || e.op)}</b> ${element(e.target)}${e.took_out.length
-      ? `<div class="chips" style="margin-top:5px"><span class="muted" style="font-size:11.5px">함께 빠짐</span>${e.took_out.map(element).join('')}</div>` : ''}</div>`).join('');
+      ? `<div class="chips" style="margin-top:5px"><span class="muted" style="font-size:11.5px">함께 제외</span>${e.took_out.map(element).join('')}</div>` : ''}</div>`).join('');
     const issues = w.issues.length ? `<div class="banner no" style="margin-top:10px"><div class="loglist">${w.issues.slice(0, 6).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div>` : '';
     const body = S.mg.open ? `<div class="cb" style="border-top:1px solid var(--line)">
         ${edits ? `<div class="loglist">${edits}</div>` : '<div class="muted" style="font-size:12.5px">이전 세션에서 이어진 변경입니다. 정의 파일에서 확인하세요.</div>'}${issues}
@@ -1777,7 +1799,7 @@ ${controls}${body}`;
   // ---- data sources
 
   function viewSources() {
-    const title = '데이터 소스', sub = '연결된 원천 테이블과 각 테이블을 읽는 객체를 확인합니다';
+    const title = '데이터 소스', sub = '연결된 원천 테이블과 테이블별 연결 객체를 확인합니다';
     const wait = mgWait(title, sub);
     if (wait) return wait;
     const m = S.mg.st, s = m.sources.source;
@@ -1786,8 +1808,8 @@ ${controls}${body}`;
     const tables = s.tables;
     const rows = tables.reduce((a, t) => a + (t.rows || 0), 0);
     const stats = `<div class="stats"><div class="stat"><b>${esc(s.dialect || s.name)}</b><span>원천 · ${esc(s.name)}</span></div>
-      <div class="stat"><b>${tables.length}</b><span>테이블</span></div><div class="stat"><b>${tables.length - s.unbound.length}</b><span>객체 · 관계가 읽는 테이블</span></div>
-      <div class="stat"><b>${s.unbound.length}</b><span>아무도 읽지 않는 테이블</span></div><div class="stat"><b>${show(rows)}</b><span>행 합계</span></div>
+      <div class="stat"><b>${tables.length}</b><span>테이블</span></div><div class="stat"><b>${tables.length - s.unbound.length}</b><span>사용 테이블</span></div>
+      <div class="stat"><b>${s.unbound.length}</b><span>미사용 테이블</span></div><div class="stat"><b>${show(rows)}</b><span>행 합계</span></div>
       <div class="stat"><b>${m.sources.graphs.length}</b><span>그래프 저장소${m.sources.graphs.length ? ' · ' + esc(m.sources.graphs.map((g) => g.language.toUpperCase()).join(', ')) : ''}</span></div></div>`;
     const list = tables.map((t) => `<tr class="${S.mg.table === t.table ? 'sel' : ''}" data-act="mgtable" data-t="${esc(t.table)}" style="cursor:pointer">
         <td class="mono">${esc(t.table)}</td><td class="num">${show(t.rows)}</td><td class="num">${t.columns.length}</td>
@@ -1796,10 +1818,10 @@ ${controls}${body}`;
         <td>${t.objects.length || t.links.length ? `<div class="chips">${t.objects.map((o) => `<a class="chip sm b" href="#objects" data-act="mgobjgo" data-name="${esc(o)}">${esc(mgLabel(o))}</a>`).join('')}${t.links.map((l) => `<a class="chip sm" href="#links" data-act="mglinkgo" data-name="${esc(l)}">관계 · ${esc(linkLabel(l))}</a>`).join('')}</div>`
           : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}">객체로 추가</button>`}</td></tr>`).join('');
     const sel = S.mg.table && mgTable(S.mg.table);
-    let detail = '<div class="empty">테이블을 선택하면 컬럼과 각 컬럼을 읽는 속성이 표시됩니다.</div>';
+    let detail = '<div class="empty">테이블을 선택하면 컬럼과 연결 속성이 표시됩니다.</div>';
     if (sel) {
       const readers = (c) => m.properties.filter((p) => p.column && p.column.toLowerCase() === c.toLowerCase() && (mgObj(p.object) || {}).table === sel.table);
-      detail = `<table class="tight"><tr><th>컬럼</th><th>타입</th><th>읽는 속성</th></tr>${sel.columns.map((c) => {
+      detail = `<table class="tight"><tr><th>컬럼</th><th>타입</th><th>연결 속성</th></tr>${sel.columns.map((c) => {
         const fk = sel.fks.find((f) => f.column === c.name);
         const rd = readers(c.name);
         return `<tr><td class="mono">${esc(c.name)}${sel.key.includes(c.name) ? ' <span class="chip sm b">키</span>' : ''}${fk ? `<div class="muted" style="font-size:11px">→ ${esc(fk.table)}.${esc(fk.ref)}</div>` : ''}</td>
@@ -1809,14 +1831,14 @@ ${controls}${body}`;
     const graphs = m.sources.graphs.length ? `<div class="hint" style="margin-top:12px">그래프 저장소 ${esc(m.sources.graphs.map((g) => `${g.name} (${g.language.toUpperCase()})`).join(', '))}에는 원천 행이 노드와 간선으로 반영됩니다. 관계 그래프는 [온톨로지]에서 확인합니다.</div>` : '';
     return `${head}${stats}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);align-items:start">
       <div class="card"><div class="ch">원천 테이블<div class="right muted" style="font-weight:600;font-size:12px">${esc(s.name)}</div></div><div class="cb scroll" style="padding:0;max-height:620px">
-        <table class="tight"><tr><th>테이블</th><th>행</th><th>컬럼</th><th>키</th><th>참조</th><th>읽는 객체</th></tr>${list}</table></div></div>
+        <table class="tight"><tr><th>테이블</th><th>행</th><th>컬럼</th><th>키</th><th>참조</th><th>연결 객체</th></tr>${list}</table></div></div>
       <div class="card"><div class="ch">${sel ? `<span class="mono">${esc(sel.table)}</span> 컬럼` : '컬럼'}</div><div class="cb scroll" style="max-height:620px${sel ? ';padding:0' : ''}">${detail}</div></div></div>${graphs}`;
   }
 
   // ---- objects
 
   function viewObjects() {
-    const title = '객체 관리', sub = '원천 테이블을 읽는 객체와 키, 상위 객체를 관리합니다';
+    const title = '객체 관리', sub = '객체의 원천 테이블, 키, 상위 객체를 관리합니다';
     const wait = mgWait(title, sub);
     if (wait) return wait;
     const m = S.mg.st;
@@ -1851,7 +1873,7 @@ ${controls}${body}`;
         : `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: coupon_id">`;
       return `<div class="card"><div class="ch">새 객체<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
         ${field('원천 테이블', tableSel, '테이블을 고르면 키와 속성을 컬럼에서 채웁니다.')}
-        ${field('이름 (영문)', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: Coupon">`)}
+        ${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: Coupon">`)}
         ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 쿠폰">`)}
         ${field(t ? '키 컬럼' : '키 속성', keySel)}
         ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 고르세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류로 막힙니다.</div>` : ''}
@@ -1871,7 +1893,7 @@ ${controls}${body}`;
       ${field('원천 테이블', tableSel)}
       ${field('키', keyField, own(o) ? '' : '키는 정의한 모듈에서만 바꿀 수 있습니다.')}
       ${field('상위 객체', parents)}
-      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 바꾼 내용은 표준 모듈을 고치지 않고 '내 변경'에 확장으로 기록됩니다.</div>`}
+      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 바꾼 내용은 표준 모듈을 고치지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button>
         <a class="btn" href="#props" data-act="mgpropsof" data-name="${esc(o.name)}">속성 보기</a><a class="btn" href="#links" data-act="mglinksof" data-name="${esc(o.name)}">관계 보기</a>
         <div class="grow" style="flex:1"></div><button class="btn danger" data-act="mgdel"${S.mg.busy ? ' disabled' : ''}>객체 제외</button></div></div></div>`;
@@ -1892,7 +1914,7 @@ ${controls}${body}`;
       return `<tr class="${S.mg.sel === id ? 'sel' : ''}" data-act="mgprop" data-id="${esc(id)}" style="cursor:pointer">
         ${S.mg.obj ? '' : `<td>${esc(mgLabel(p.object))}</td>`}
         <td><b>${esc(p.label || p.name)}</b> ${p.key ? '<span class="chip sm b">키</span>' : ''}${p.inherited ? `<span class="chip sm">상속 · ${esc(mgLabel(p.inherited))}</span>` : ''}<div class="muted mono">${esc(p.name)}</div></td>
-        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px" title="${esc(valueText(p, ', '))}">허용값 ${p.values.length}개${Object.keys(p.labels || {}).length ? ' · 이름 있음' : ''}</div>` : ''}</td>
+        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px" title="${esc(valueText(p, ', '))}">허용값 ${p.values.length}개${Object.keys(p.labels || {}).length ? ' · 코드명 등록' : ''}</div>` : ''}</td>
         <td class="mono" style="font-size:11.5px">${p.expr ? '<span class="chip sm">계산 속성</span>' : esc(p.column)}</td>
         <td><div class="chips">${p.required ? '<span class="chip sm">필수</span>' : ''}${p.mask ? `<span class="chip sm warn">${MASK_WORD[p.mask]}</span>` : ''}</div></td>
         <td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`;
@@ -1935,13 +1957,13 @@ ${controls}${body}`;
     if (f.mode === 'new') {
       const objSel = `<select data-in="mgf" data-f="object" data-re="1">${m.objects.map((o) => opt(o.name, `${o.label} (${o.name})`, v.object)).join('')}</select>`;
       return `<div class="card"><div class="ch">새 속성<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
-        ${field('객체', objSel)}${field('이름 (영문)', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: nickname">`)}${common}
+        ${field('객체', objSel)}${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: nickname">`)}${common}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>속성 추가</button></div></div>`;
     }
     const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 객체 ${mgLabel(p.inherited)}에서 물려받은 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
     return `<div class="card"><div class="ch">${esc(mgLabel(p.object))} · ${esc(p.label || p.name)} <span class="muted mono" style="font-weight:600">${esc(p.name)}</span><div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
       <div class="chips" style="margin-bottom:12px">${ownerChip(p)}${stateChips(p)}${p.key ? '<span class="chip sm b">키</span>' : ''}</div>${common}
-      ${own(p) || p.new ? '' : `<div class="hint" style="margin-bottom:12px">${esc(p.module_label)} 모듈의 속성입니다. 바꾼 내용은 '내 변경'에 확장으로 기록됩니다.</div>`}
+      ${own(p) || p.new ? '' : `<div class="hint" style="margin-bottom:12px">${esc(p.module_label)} 모듈의 속성입니다. 바꾼 내용은 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;align-items:center"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button><div style="flex:1"></div>
         <button class="btn danger" data-act="mgdel"${why || S.mg.busy ? ' disabled' : ''} title="${esc(why)}">속성 제외</button></div>
       ${why ? `<div class="muted" style="font-size:11.5px;margin-top:6px;text-align:right">${esc(why)}</div>` : ''}</div></div>`;
@@ -2012,13 +2034,13 @@ ${controls}${body}`;
     const objSel = (k) => `<select data-in="mgf" data-f="${k}" data-re="1"${ends ? '' : ' disabled'}><option value="">선택</option>${m.objects.map((o) => opt(o.name, `${o.label} (${o.name})`, v[k])).join('')}</select>`;
     const propSel = (k, obj) => `<select data-in="mgf" data-f="${k}"${ends && obj ? '' : ' disabled'}><option value="">선택</option>${(obj ? mgProps(obj) : []).filter((p) => !p.expr).map((p) => opt(p.name, `${p.label || p.name} (${p.name})${p.key ? ' · 키' : ''}`, v[k])).join('')}</select>`;
     const cards = `<select data-in="mgf" data-f="cardinality">${Object.entries(CARD).map(([k, x]) => opt(k, `${x} (${k})`, v.cardinality)).join('')}</select>`;
-    const body = `${f.mode === 'new' ? field('이름 (영문)', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: usedCoupon">`) : ''}
+    const body = `${f.mode === 'new' ? field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: usedCoupon">`) : ''}
       ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 사용 쿠폰">`)}
       <div class="rgrid two">${field('출발 객체', objSel('source'))}${field('출발 속성', propSel('sp', v.source))}</div>
       <div class="rgrid two">${field('도착 객체', objSel('target'))}${field('도착 속성', propSel('tp', v.target))}</div>
       ${ends ? '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">출발 속성 값과 도착 속성 값이 같은 행끼리 연결합니다.</div>' : '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">양 끝 객체와 연결 기준은 정의한 모듈에서만 바꿀 수 있습니다.</div>'}
       <div class="rgrid two">${field('카디널리티', cards)}${field('역관계 이름', `<input type="text" data-in="mgf" data-f="inverse" value="${esc(v.inverse)}" placeholder="예: couponUsedBy">`)}</div>
-      <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>출발 객체마다 반드시 있음</label>`;
+      <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 관계</label>`;
     if (f.mode === 'new') {
       return `<div class="card"><div class="ch">새 관계<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">${body}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>관계 추가</button></div></div>`;
@@ -2046,19 +2068,19 @@ ${controls}${body}`;
       const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
       const pick = v.kind === 'decision'
         ? `${field('판정', `<select data-in="mgf" data-f="decision">${S.st.decisions.map((d) => opt(d.name, `${d.label} (${d.name})`, v.decision)).join('')}</select>`)}${field('대상 키', `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: I1001">`)}`
-        : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('파라미터 (JSON)', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
+        : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('JSON 파라미터', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
       form = `<div class="review"><div class="rgrid">${field('번호', `<input type="text" data-in="mgf" data-f="id" value="${esc(v.id)}" placeholder="예: G1">`)}
           ${field('종류', `<select data-in="mgf" data-f="kind" data-re="1">${opt('query', '질의 결과 행 수', v.kind)}${opt('decision', '판정 결과', v.kind)}</select>`)}
-          ${field(v.kind === 'decision' ? '기대값 (JSON)' : '기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="${v.kind === 'decision' ? '예: {&quot;eligible&quot;: true}' : '예: 2'}">`)}</div>
+          ${field(v.kind === 'decision' ? 'JSON 기대값' : '기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="${v.kind === 'decision' ? '예: {&quot;eligible&quot;: true}' : '예: 2'}">`)}</div>
         ${field('질문', `<input type="text" data-in="mgf" data-f="text" value="${esc(v.text)}" placeholder="예: C001 고객의 주문은 몇 건인가요?">`)}<div class="rgrid two">${pick}</div>
         <div style="display:flex;gap:8px"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>질문 추가</button><button class="btn ghost" data-act="mgcancel">닫기</button></div></div>`;
     }
     if (f && f.mode === 'import') {
-      form = `<div class="review"><div class="field"><label>검증 질문 목록 (YAML 또는 JSON)</label><textarea class="code" data-in="mgf" data-f="text" style="min-height:160px" placeholder="- {id: G1, text: &quot;C001 고객의 주문은 몇 건인가요?&quot;, query: ordersOfCustomer, params: {customer: C001}, expect: {rows: 2}}">${esc(f.v.text)}</textarea></div>
+      form = `<div class="review"><div class="field"><label>YAML 또는 JSON 검증 질문 목록</label><textarea class="code" data-in="mgf" data-f="text" style="min-height:160px" placeholder="- {id: G1, text: &quot;C001 고객의 주문은 몇 건인가요?&quot;, query: ordersOfCustomer, params: {customer: C001}, expect: {rows: 2}}">${esc(f.v.text)}</textarea></div>
         <div style="display:flex;gap:8px"><button class="btn primary" data-act="mgqimport"${S.mg.busy ? ' disabled' : ''}>불러오기</button><button class="btn ghost" data-act="mgcancel">닫기</button></div></div>`;
     }
     return `<div class="card"><div class="ch">검증 질문 관리 <span class="chip sm">${m.questions.length}</span><div class="right"><button class="btn sm" data-act="mgqimp">목록 불러오기</button><button class="btn sm primary" data-act="mgqnew">새 질문</button></div></div>
-      <div class="cb">${pendingBar()}<div class="hint" style="margin-bottom:12px">정답이 정해진 질문(골든 질문)입니다. 질문을 추가하거나 제외하면 '내 변경'에 기록되고, 변경 요청이 승인되면 위 정답률 계산에 들어갑니다.</div>${form}</div>
+      <div class="cb">${pendingBar()}<div class="hint" style="margin-bottom:12px">정답이 정해진 골든 질문입니다. 질문을 추가하거나 제외하면 '관리 변경'에 기록되고, 변경 요청이 승인되면 위 정답률 계산에 들어갑니다.</div>${form}</div>
       <div class="cb scroll" style="padding:0;max-height:420px"><table class="tight"><tr><th>번호</th><th>질문</th><th>대상</th><th>정답</th><th>정의</th><th></th></tr>${rows}</table></div></div>`;
   }
 

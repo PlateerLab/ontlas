@@ -31,6 +31,22 @@ studio.decide("returnEligibility", "I1001")        # outputs, the rule that fire
   <img src="assets/architecture.png" alt="One ontology definition feeding execution adapters that compile one query IR to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin for the backends a deployment has" width="920">
 </p>
 
+## What it is for
+
+The studio sits between the systems a business already runs and the people and agents that ask about them.
+
+| Use | What it does |
+|---|---|
+| One shared definition | Objects, properties, relations, states, rules and roles are defined once over the source tables, in versioned module files a person can read and review |
+| The same question on every store | One query compiles to SQL, Cypher, GQL, SPARQL, SQL/PGQ or Gremlin, and a conformance run compares the rows each store returns |
+| Decisions with their grounds | Decision tables decide, not a language model; each answer carries the rule, the clause it cites, the source columns and the module version |
+| Action under control | Roles scope rows and mask properties; an agent only files a request, nothing is written until a person approves it, and an executed action can be rolled back |
+| Changes that are tried first | A new module version runs on a copy of the studio against the database check, backend agreement, validation questions and past decisions before it can be approved |
+| One domain across systems and customers | A standard stays as it is; a new system gets a binding and a customer's differences get a module of their own (see [Adapt a domain](#adapt-a-domain)) |
+
+A language model is optional. It turns plain questions into the ontology query and policy text into draft decision
+tables, and the engine checks what it writes; the rest of the studio runs without one.
+
 ## What it looks like
 
 The screens below are the studio page that `xds preview` writes for the example library in `examples/library`
@@ -213,6 +229,31 @@ A concept with no table of its own is asked through its subtypes: in SQL as the 
 in SPARQL and Cypher through the concept's type or label, and the conformance run checks the answers agree.
 `aligned` IRIs export as `skos:exactMatch`, `cite` as `dcterms:source`, the module as `rdfs:isDefinedBy`; an
 imported standard keeps its original IRIs as alignments.
+
+## Adapt a domain
+
+Adapting a domain to a system means leaving its standard as it is and writing only what differs. Whatever you start
+from, the result is the same kind of file, a module, so it is checked, reviewed, versioned, attached and detached like
+the rest.
+
+| You have | Path | It becomes |
+|---|---|---|
+| A standard that fits, and the system's tables | `mapping.suggest`, the page's "표준에 연결" | A `binding` module |
+| Table and code definitions (a data dictionary, an export from a modelling tool) | `xds draft --definitions` | A definition and its `binding`, with no rows needed |
+| Data files or a database | `xds draft` | A definition and its `binding` |
+| Past outcomes | `induce`, the rules step of a draft | A decision table |
+| Policy text | `xds policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
+| An OWL or RDFS ontology | `xds import-owl` | A starting definition |
+| Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
+| Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
+
+A definition drafted from one system describes that system. To carry a domain across systems, bind the tables to a
+standard instead: its queries, decisions and questions carry over, less what the tables do not hold. Matching goes by
+names, labels and types, so a system that abbreviates its names or words things differently gets few suggestions, and
+a person picks the rest.
+
+Two limits decide what can be adapted today: an object has one key property, so a table keyed by several columns
+together is left out, and a studio reads one source database.
 
 ## Start from your own data
 
@@ -422,7 +463,7 @@ answers (add, remove, or import a YAML or JSON list).
   <img src="assets/screens/manage.png" alt="Object management screen: every object with its source table, key, parent, property and relation counts and the module that defines it, a pending change waiting to be filed, and the selected object's form" width="920">
 </p>
 
-Every edit goes into one overlay module, `workspace` ("내 변경"). What it defines it changes directly; a standard's
+Every edit goes into one overlay module, `workspace` ("관리 변경"). What it defines it changes directly; a standard's
 objects, properties and relations it extends or removes, so a standard is never edited in place, and a standard's
 type and key and a property a type inherits stay where they are defined. Each edit takes out what it leaves broken
 elsewhere and says what that was:
@@ -623,6 +664,8 @@ tools/                      # render_screens.py (the README images), architectur
 - optional edges in Gremlin; TinkerPop 4 once it is released
 - sign-in through an organisation's identity provider for team studios
 - decision tables drawn from outcomes with dates as inputs (days between two columns)
+- objects keyed by several columns together, and relations joined on several columns
+- several source databases in one studio
 
 ## Repository model
 

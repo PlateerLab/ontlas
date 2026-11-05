@@ -84,7 +84,7 @@
   columns, keys and references, and the objects and relations that read each; a relation's junction table counts as
   read), 객체 관리, 속성 관리, 관계 관리 (with the relations the source's foreign keys suggest) and 검증 질문 관리 on the
   checks screen (add, remove, import a YAML or JSON list). Every edit goes into one overlay module, `workspace` (kind
-  `customer`, "내 변경"): what it defines it changes directly; a standard's elements it extends or removes, and a
+  `customer`, "관리 변경"): what it defines it changes directly; a standard's elements it extends or removes, and a
   standard's type and key and an inherited property are refused there. An edit that leaves the module's own element
   broken is refused. The edits are filed as one change request and tried on a copy; one the trial stops is sent back
   with its review and the edits stay. Routes `manage`, `manage/edit`, `manage/questions`, `manage/discard`,
@@ -106,6 +106,8 @@
   --definitions FILE [--tables PATTERNS]`; the data tab takes definition files beside data files (or alone).
   `DraftRules.table_prefixes` (default `tb_`, `tbl_`) are left out of object names. Example
   `examples/definitions`.
+- The README says what the studio is for and how a domain is adapted; the page's guide opens with the same. The
+  overlay module is labelled "관리 변경", and a draft's default names are no longer possessive.
 
 ## 0.4.0
 

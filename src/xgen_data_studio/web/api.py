@@ -773,7 +773,7 @@ class StudioSession:
                 raise ValueError("선택된 테이블이 없어 초안을 생성하지 못했습니다. 테이블을 하나 이상 선택해 주세요.")
             r = self._rules(rules)
             b = schema_backend(defs, names)
-            d = draft(b, name="my-schema", label=(label or "내 스키마")[:40], lang="ko", rules=r, definitions=defs,
+            d = draft(b, name="my-schema", label=(label or "정의서 초안")[:40], lang="ko", rules=r, definitions=defs,
                       origin={"kind": "definitions", "files": list(self.definitions),
                               "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개(행 없음)"})
             self.pending = (d, b, [], r)
@@ -786,7 +786,7 @@ class StudioSession:
         r = self._rules(rules)
         b = SqliteBackend()
         loaded = load_sqlite(chosen, b, row_keys=r.row_keys)
-        d = draft(b, name="my-data", label=(label or "내 데이터")[:40], loaded=loaded, lang="ko", rules=r,
+        d = draft(b, name="my-data", label=(label or "업로드 데이터")[:40], loaded=loaded, lang="ko", rules=r,
                   definitions=defs, origin={"kind": "files", "files": list(self.uploads), "detail": f"업로드 파일 {len(self.uploads)}개"})
         self.pending = (d, b, chosen, r)
         return self.files_state()
@@ -810,7 +810,7 @@ class StudioSession:
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"
         r = self._rules(rules)
-        d = draft(b, name="my-db", label=(label or "내 데이터베이스")[:40], lang="ko", rules=r,
+        d = draft(b, name="my-db", label=(label or "연결 데이터베이스")[:40], lang="ko", rules=r,
                   definitions=self._defs(), origin={"kind": "database", "detail": where})
         self.uploads, self.sizes = {}, {}
         self.pending = (d, b, [], r)

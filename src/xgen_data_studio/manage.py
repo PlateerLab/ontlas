@@ -36,7 +36,7 @@ class Edit:
 class Workspace:
     """Pending edits over the attached modules (`base`), with the attached workspace module as the starting point."""
 
-    def __init__(self, base: list[Module], current: Module | None = None, *, label: str = "내 변경",
+    def __init__(self, base: list[Module], current: Module | None = None, *, label: str = "관리 변경",
                  compose_kw: dict | None = None):
         self.base, self.kw = [m for m in base if m.name != NAME], dict(compose_kw or {})
         self.current = current
