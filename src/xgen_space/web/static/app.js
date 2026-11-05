@@ -1950,7 +1950,7 @@ ${controls}${body}`;
     if (S.pick) {
       const rows = S.st.repositories.map((r) => `<button class="pitem${r.id === S.st.repository.id ? ' on' : ''}" data-act="repouse" data-id="${esc(r.id)}"><b>${esc(r.label)}</b><span class="muted">${count(r.files)}개 파일 · ${fileSize(r.bytes)}</span></button>`).join('');
       html += `<div class="pop" style="top:${S.pick.top}px;right:${S.pick.right}px" role="dialog" aria-label="리포지토리 선택"><div class="ptitle">리포지토리</div>${rows}
-        <div class="pform"><input type="text" id="repolabel" placeholder="리포지토리 이름" aria-label="리포지토리 이름"><button class="btn sm primary" data-act="repomake">새로 만들기</button></div>
+        <div class="pform"><input type="text" id="repolabel" value="${esc(S.pick.label || '')}" placeholder="리포지토리 이름" aria-label="리포지토리 이름"><button class="btn sm primary" data-act="repomake">새로 만들기</button></div>
         <div class="pfoot"><button class="btn sm ghost" data-act="reporename">현재 이름 변경</button><button class="btn sm ghost danger" data-act="repodelete"${S.st.repositories.length > 1 ? '' : ' disabled'}>현재 리포지토리 삭제</button></div></div>`;
     }
     if (S.menu) {
@@ -1964,9 +1964,11 @@ ${controls}${body}`;
     if (S.pal) html += paletteBox();
     const keep = layer.querySelector('#palq');
     const at = keep ? keep.selectionStart : null;
+    const typing = document.activeElement && document.activeElement.id === 'repolabel';
     layer.innerHTML = html;
     const box = $('#palq');
     if (box) { box.focus(); if (at !== null) box.setSelectionRange(at, at); }
+    if (typing && $('#repolabel')) $('#repolabel').focus();
   }
 
   function fileDrawer(c) {
@@ -3063,7 +3065,10 @@ ${controls}${body}`;
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ACT.palette(); }
       if (ev.key === 'Escape') { if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); }
     });
-    layer.addEventListener('input', (ev) => { if (ev.target.id === 'palq') { S.pal.q = ev.target.value; S.pal.i = 0; paintLayer(); } });
+    layer.addEventListener('input', (ev) => {
+      if (ev.target.id === 'repolabel') S.pick.label = ev.target.value;
+      if (ev.target.id === 'palq') { S.pal.q = ev.target.value; S.pal.i = 0; paintLayer(); }
+    });
     layer.addEventListener('keydown', (ev) => {
       if (ev.target.id === 'repolabel' && ev.key === 'Enter') { ev.preventDefault(); ACT.repomake(); }
       if (ev.target.id !== 'palq') return;
