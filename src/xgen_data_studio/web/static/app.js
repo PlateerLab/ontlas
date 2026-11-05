@@ -2614,7 +2614,13 @@ ${controls}${body}`;
     dindt: (t) => { S.ind.target = t.value; S.ind.inputs = {}; refreshDraft(); },
     dindin: (t) => { S.ind.inputs[t.dataset.v] = t.checked; refreshDraft(); },
     mpick: (t) => { S.map.picked = t.checked ? [...new Set([...S.map.picked, t.dataset.v])] : S.map.picked.filter((x) => x !== t.dataset.v); S.map.sug = null; render(); },
-    mobj: (t) => { S.map.edits.objects[t.dataset.obj] = t.value; render(); },
+    mobj: async (t) => {
+      S.map.edits.objects[t.dataset.obj] = t.value;
+      if (!t.value) { render(); return; }
+      const tables = Object.fromEntries(Object.entries(S.map.edits.objects).filter(([, v]) => v));
+      try { S.map.sug = await api('draft/map', { standard: S.map.picked, edits: toEdits(), tables }); } catch (e) { fail(e); }
+      render();
+    },
     mcol: (t) => { S.map.edits.columns[t.dataset.ref] = t.value; },
   };
 

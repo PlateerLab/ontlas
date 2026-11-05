@@ -916,14 +916,16 @@ class StudioSession:
         comp, defs = self.studio.composition, self._defs()
         return list(comp.terms if comp else []) + list(getattr(defs, "terms", None) or [])
 
-    def suggest_mapping(self, standard: list, edits: dict | None = None) -> dict:
-        from xgen_data_studio.mapping import suggest
+    def suggest_mapping(self, standard: list, edits: dict | None = None, tables: dict | None = None) -> dict:
+        from xgen_data_studio.mapping import retarget, suggest
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 연결을 제안하지 못했습니다. 초안을 먼저 생성해 주세요.")
         _, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
+        if tables:
+            s = retarget(s, d, onto, {str(k): str(v) for k, v in tables.items() if v}, self._terms())
         objs = []
         for m in s.objects:
             o = onto.objects[m.object]
@@ -947,7 +949,8 @@ class StudioSession:
         mods, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
-        m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, base=mods)
+        m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, draft=d,
+                    terms=self._terms(), base=mods)
         comp = compose([*mods, m], **self.studio._compose_kw)
         if comp.issues:
             raise ValueError("정의 검사에서 오류가 발견되어 연결하지 못했습니다. " + "; ".join(comp.issues[:5]))

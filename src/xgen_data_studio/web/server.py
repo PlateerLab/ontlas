@@ -462,7 +462,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "draft/decision/drop":
                 return s.drop_decision(str(a.get("name", "")))
             if route == "draft/map":
-                return s.suggest_mapping(a.get("standard") or [], a.get("edits"))
+                return s.suggest_mapping(a.get("standard") or [], a.get("edits"), a.get("tables"))
             if route == "draft/map/apply":
                 return s.apply_mapping(a.get("standard") or [], a.get("edits"), a.get("mapping"))
             if route == "connect":

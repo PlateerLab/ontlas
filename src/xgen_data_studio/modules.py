@@ -245,6 +245,8 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     for k in ("aligned", "implements"):
         if patch.get(k):
             obj[k] = list(dict.fromkeys(list(obj.get(k) or []) + list(patch[k])))
+    if patch.get("implements_drop"):
+        obj["implements"] = [i for i in obj.get("implements") or [] if i not in patch["implements_drop"]]
     props = obj.setdefault("properties", {})
     for p, pd in (patch.get("properties") or {}).items():
         pd = _as_prop(pd)
@@ -490,6 +492,21 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
                 if ident not in module.remove.get(section, []):
                     module.remove.setdefault(section, []).append(ident)
                     taken.append(f"{SINGULAR.get(section, 'question')}:{ident}")
+                    progress = True
+            elif head in comp.ontology.objects and f"object:{head}" not in own and ": series needs " in issue:
+                patch = module.extend.setdefault("objects", {}).setdefault(head, {})
+                if patch.get("series") != {}:
+                    patch["series"] = {}
+                    progress = True
+            elif head in comp.ontology.objects and f"object:{head}" not in own and (
+                    drop := re.match(r"\S+: (?:title '[^']*' is not a property|implements (\S+) but lacks )", issue)):
+                patch = module.extend.setdefault("objects", {}).setdefault(head, {})
+                if drop.group(1):  # what its properties no longer fill: a title, an interface
+                    if drop.group(1) not in patch.setdefault("implements_drop", []):
+                        patch["implements_drop"].append(drop.group(1))
+                        progress = True
+                elif patch.get("title") != "":
+                    patch["title"] = ""
                     progress = True
             elif head in comp.ontology.objects and "state property" in issue and f"object:{head}" not in own:
                 if head not in module.remove.get("states", []):

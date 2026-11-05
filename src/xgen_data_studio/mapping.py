@@ -169,12 +169,23 @@ def _match_columns(onto, type_name: str, planned,
             pairs.append((s, prop, col, why))
     pairs.sort(key=lambda x: -x[0])
     used_p, used_c, matches = set(), set(), []
+    wide = next((c for c in planned.properties if c.name == planned.key and c.columns), None)
+    if wide is not None:  # a table keyed by several columns: no one of them identifies a row
+        used_p.add(obj.key)
+        used_c.add(wide.name)
+        matches.append(ColumnMatch(obj.key, wide.column, 0.6, "둘 다 키", list(wide.columns)))
     for s, prop, col, why in pairs:
         if s < COLUMN_MIN or prop in used_p or col.name in used_c:
             continue
         used_p.add(prop)
         used_c.add(col.name)
         matches.append(ColumnMatch(prop, col.column, round(s, 3), why, list(col.columns)))
+    title = _title_of(onto, type_name)
+    if title and title not in used_p and planned.title and planned.title not in used_c:
+        c = next(x for x in planned.properties if x.name == planned.title)
+        used_p.add(title)
+        used_c.add(c.name)
+        matches.append(ColumnMatch(title, c.column, COLUMN_MIN, "둘 다 표시 이름"))
     # an inherited property still without a column, of a type exactly one column has, takes it (an agreement's date
     # is the order's date). The type's own properties match by name or stay missing; an ancestor's key is the own key.
     for prop in props:
@@ -196,6 +207,15 @@ def _match_columns(onto, type_name: str, planned,
     extra = [c.column for c in planned.properties if c.column not in {m.column for m in matches}]
     coverage = sum(m.score for m in matches) / max(len(props), 1)
     return matches, missing, extra, coverage
+
+
+def _title_of(onto, type_name: str) -> str:
+    t = type_name
+    while t and t in onto.objects:
+        if onto.objects[t].title:
+            return onto.objects[t].title
+        t = onto.objects[t].parent
+    return ""
 
 
 def _inherited_key(onto, type_name: str, prop: str) -> bool:
@@ -231,6 +251,29 @@ def suggest(draft, onto, standard: list[str], terms: list[dict] | None = None) -
     unbound = [t for t in _candidates(onto) if t not in taken_t]
     return Suggestion(list(standard), matches, links, [o.table for o in draft.objects if o.table not in taken_o],
                       unbound)
+
+
+def retarget(s: Suggestion, draft, onto, tables: dict, terms: list[dict] | None = None) -> Suggestion:
+    """The suggestion after a person chose another table for a type: its columns and relations are matched again."""
+    words = aliases(terms)
+    objects, taken = [], set()
+    for m in s.objects:
+        table = tables.get(m.object, m.table)
+        po = next((o for o in draft.objects if o.table == table), None)
+        if table != m.table and po is not None:
+            cols, missing, extra, _ = _match_columns(onto, m.object, po, words)
+            m = ObjectMatch(m.object, table, m.score, "직접 지정", cols, missing, extra)
+        objects.append(m)
+        taken.add(m.object)
+    for t, table in tables.items():  # a type no table was suggested for, given one by hand
+        po = next((o for o in draft.objects if o.table == table), None)
+        if t not in taken and po is not None and t in onto.objects:
+            cols, missing, extra, _ = _match_columns(onto, t, po, words)
+            objects.append(ObjectMatch(t, table, 0.0, "직접 지정", cols, missing, extra))
+    used = {m.table for m in objects if tables.get(m.object, m.table)}
+    return Suggestion(s.standard, objects, _links(draft, onto, objects),
+                      [o.table for o in draft.objects if o.table not in used],
+                      [t for t in _candidates(onto) if t not in {m.object for m in objects}])
 
 
 def _links(draft, onto, matches: list[ObjectMatch]) -> dict[str, dict]:
@@ -301,11 +344,14 @@ def _owner(onto, type_name: str, prop: str) -> str:
 
 
 def binding(s: Suggestion, onto, *, name: str, label: str = "", edits: dict | None = None,
-            base: list[Module] | None = None) -> Module:
+            base: list[Module] | None = None, draft=None, terms: list[dict] | None = None) -> Module:
     """The binding module for the confirmed matches. edits: {objects: {Type: table|None},
     columns: {"Type.prop": column|None}} change or drop a suggestion before it is written. With `base` (the
     standard's modules), what the removals leave broken (a query on a removed property, a computed property built
-    from one) is taken out too, so the standard composes over the tables."""
+    from one) is taken out too, so the standard composes over the tables. With `draft`, a table chosen by hand is
+    matched column by column again."""
+    if draft is not None and (edits or {}).get("objects"):
+        s = retarget(s, draft, onto, {k: v for k, v in edits["objects"].items() if v}, terms)
     m = _binding(s, onto, name=name, label=label, edits=edits)
     if base is None:
         return m

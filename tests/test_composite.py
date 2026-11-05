@@ -9,6 +9,8 @@ from xgen_data_studio.definitions import Definitions, schema_backend
 from xgen_data_studio.draft import draft
 from xgen_data_studio.studio import Studio
 
+from .conftest import EXAMPLE
+
 SEED = """
 CREATE TABLE ord (ord_no TEXT PRIMARY KEY, memo TEXT);
 CREATE TABLE ord_line (ord_no TEXT, line_seq INTEGER, proc_seq INTEGER, status TEXT, qty INTEGER,
@@ -179,3 +181,55 @@ def test_a_drafted_composite_table_runs_end_to_end():
     assert check_bindings(st.onto, b).ok
     line = next(o for o in st.onto.objects.values() if o.table == "ORD_LINE")
     assert st.fetch(line.name, "O1|1")["qty"] == 2
+
+
+def _standard():
+    from xgen_data_studio.library import Library
+    from xgen_data_studio.modules import compose
+
+    base = Library(EXAMPLE.parent / "library").resolve(["core", "commerce"])
+    return base, compose(base, namespace="https://example.org/s#", name="s").ontology
+
+
+def _shop():
+    from xgen_data_studio.definitions import read_definitions
+
+    out = None
+    for f in ("테이블정의서.csv", "코드정의서.csv"):
+        d = read_definitions((EXAMPLE.parent / "definitions" / f).read_bytes(), f)
+        out = d if out is None else out.merge(d)
+    return draft(schema_backend(out), name="shop", lang="ko", definitions=out)
+
+
+def test_a_glossary_finds_a_systems_words_and_a_standards_key_reads_all_its_columns():
+    pytest.importorskip("yaml")
+    from xgen_data_studio.mapping import binding, suggest
+    from xgen_data_studio.modules import compose
+
+    base, onto = _standard()
+    d = _shop()
+    assert "Customer" not in {m.object for m in suggest(d, onto, ["commerce"]).objects}
+    s = suggest(d, onto, ["commerce"], [{"term": "고객", "synonyms": ["회원"]}])
+    tables = {m.object: m.table for m in s.objects}
+    assert tables["Customer"] == "TB_MEMBER" and tables["Order"] == "TB_ORDER" and tables["OrderItem"] == "TB_ORDER_ITEM"
+    item = next(m for m in s.objects if m.object == "OrderItem")
+    assert next(c for c in item.columns if c.property == "item_id").columns == ["ORDER_NO", "ITEM_SEQ"]
+    m = binding(s, onto, name="shop-standard", base=base)
+    comp = compose([*base, m], namespace="https://example.org/s#", name="s")
+    assert comp.issues == [] and comp.ontology.objects["OrderItem"].key_prop.cols == ["ORDER_NO", "ITEM_SEQ"]
+
+
+def test_a_table_chosen_by_hand_is_matched_column_by_column_again():
+    pytest.importorskip("yaml")
+    from xgen_data_studio.mapping import binding, retarget, suggest
+
+    base, onto = _standard()
+    d = _shop()
+    s = suggest(d, onto, ["commerce"])
+    moved = retarget(s, d, onto, {"Order": "TB_ORDER_ITEM", "Customer": "TB_MEMBER"})
+    tables = {m.object: m.table for m in moved.objects}
+    assert tables["Order"] == "TB_ORDER_ITEM" and tables["Customer"] == "TB_MEMBER"
+    order = next(m for m in moved.objects if m.object == "Order")
+    assert "ORDER_STAT_CD" not in {c.column for c in order.columns}  # no column of the table it left stays
+    m = binding(s, onto, name="x", base=base, draft=d, edits={"objects": {"Customer": "TB_MEMBER"}})
+    assert m.extend["objects"]["Customer"]["table"] == "TB_MEMBER"
