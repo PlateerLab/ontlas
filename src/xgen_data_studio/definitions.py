@@ -3,6 +3,8 @@
 Projects keep these as a table definition sheet (a row per column: table, column, their names, type, key, code
 group) and a code definition sheet (a row per code: group, code, name, in use), or export them from a modelling
 tool. `read_definitions` reads either sheet from CSV or Excel, or a JSON file in the shape of `Definitions.to_dict`.
+A glossary sheet (a row per term) and a message sheet (a row per message code) are read the same way, and ingest.py
+brings every other format to this same object, documents included.
 
 They do two things for a draft (draft.py): `schema_backend` builds an empty database with the declared keys and
 references, so a studio can be drafted from the schema alone, and the draft takes its object and property names,
@@ -43,6 +45,26 @@ CODE_HEADERS = {
     "name": ["코드명", "코드값명", "상세코드명", "소분류코드명", "name", "label", "codename"],
     "use": ["사용여부", "사용", "use", "use_yn", "useyn", "active"],
 }
+TERM_HEADERS = {
+    "term": ["용어", "표준용어", "용어명", "표준용어명", "term", "termname"],
+    "synonyms": ["유의어", "동의어", "이음동의어", "synonym", "synonyms", "alias", "aliases"],
+    "avoid": ["금칙어", "금지어", "혼용금지", "사용금지", "avoid", "forbidden"],
+    "definition": ["정의", "설명", "용어정의", "용어설명", "definition", "description"],
+    "english": ["영문명", "영문", "영문용어", "english", "englishname"],
+    "abbreviation": ["약어", "영문약어", "abbreviation", "abbr"],
+    "column": ["컬럼", "컬럼명", "column", "columnname"],
+    # a glossary says so by these too, though they stay behind: a related term is not a synonym
+    "kind": ["용어구분", "kind"],
+    "related": ["관련용어", "related", "relatedterms"],
+}
+MESSAGE_HEADERS = {
+    "code": ["메시지코드", "메시지id", "메시지번호", "messagecode", "messageid", "msgcode", "msgid", "code"],
+    "text": ["메시지내용", "메시지", "문구", "메시지문구", "message", "messagetext", "text"],
+    "kind": ["구분", "메시지구분", "유형", "kind", "type", "category"],
+    "screen": ["화면", "화면명", "화면id", "화면코드", "screen", "page"],
+}
+SECTIONS = ("tables", "codes", "terms", "messages", "documents")  # the keys of the canonical JSON
+DOCUMENT_KINDS = ("policy", "screen", "other")
 _GROUP_IN_LABEL = re.compile(r"\(([A-Za-z]{1,6}\d{1,6})\)")  # a label that names its code group: 주문상태(OD01)
 
 
@@ -87,6 +109,10 @@ class Definitions:
     tables: dict[str, TableDef] = field(default_factory=dict)
     codes: dict[str, CodeGroup] = field(default_factory=dict)
     sources: list[str] = field(default_factory=list)
+    # {term, synonyms, avoid, definition, english, abbreviation, column}
+    terms: list[dict] = field(default_factory=list)
+    messages: list[dict] = field(default_factory=list)  # {code, text, kind, screen}
+    documents: list[dict] = field(default_factory=list)  # {name, kind, text, sections: [{title, text}]}
 
     def table(self, name: str) -> TableDef | None:
         low = name.lower()
@@ -100,7 +126,9 @@ class Definitions:
         return None
 
     def merge(self, other: Definitions) -> Definitions:
-        out = Definitions(dict(self.tables), dict(self.codes), [*self.sources, *other.sources])
+        out = Definitions(dict(self.tables), dict(self.codes), [*self.sources, *other.sources],
+                          _later(self.terms, other.terms, "term"), _later(self.messages, other.messages, "code"),
+                          _later(self.documents, other.documents, "name"))
         out.tables.update(other.tables)
         out.codes.update(other.codes)
         return out
@@ -108,17 +136,20 @@ class Definitions:
     def counts(self) -> dict:
         return {"tables": len(self.tables), "columns": sum(len(t.columns) for t in self.tables.values()),
                 "references": sum(len(t.references) for t in self.tables.values()), "codes": len(self.codes),
-                "code_values": sum(len(g.values) for g in self.codes.values())}
+                "code_values": sum(len(g.values) for g in self.codes.values()),
+                **{k: len(v) for k, v in (("terms", self.terms), ("messages", self.messages),
+                                          ("documents", self.documents)) if v}}
 
     def to_dict(self) -> dict:
         return {"tables": [_clean(asdict(t)) for t in self.tables.values()],
                 "codes": {k: {**({"label": g.label} if g.label else {}), "values": g.values}
-                          for k, g in self.codes.items()}}
+                          for k, g in self.codes.items()},
+                "terms": self.terms, "messages": self.messages, "documents": self.documents}
 
     @classmethod
     def from_dict(cls, d: dict, source: str = "") -> Definitions:
         """The shape to_dict writes, and the usual synonyms: table/name, logical/label, not_null/required,
-        code_group/code, fks/references with ref_table/table."""
+        code_group/code, fks/references with ref_table/table, and the terms, messages and documents of ingest.py."""
         tables: dict[str, TableDef] = {}
         items = d.get("tables") or []
         if isinstance(items, dict):
@@ -152,7 +183,10 @@ class Definitions:
                      "use": str(v.get("use", True)).lower() not in ("n", "false", "0", "no")}
                     for v in (g.get("values") or []) if v.get("code") not in (None, "")]
             codes[str(k)] = CodeGroup(str(k), str(g.get("label") or g.get("name") or ""), vals)
-        return cls(tables, codes, [source] if source else [])
+        terms = [x for x in map(_term, d.get("terms") or []) if x["term"]]
+        messages = [x for x in map(_message, d.get("messages") or []) if x["code"]]
+        documents = [x for x in map(_document, d.get("documents") or []) if x["name"]]
+        return cls(tables, codes, [source] if source else [], terms, messages, documents)
 
 
 def read_definitions(data: bytes, source: str) -> Definitions | None:
@@ -162,7 +196,7 @@ def read_definitions(data: bytes, source: str) -> Definitions | None:
             d = json.loads(data.decode("utf-8-sig"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
-        return Definitions.from_dict(d, source) if isinstance(d, dict) and ("tables" in d or "codes" in d) else None
+        return Definitions.from_dict(d, source) if isinstance(d, dict) and any(k in d for k in SECTIONS) else None
     from xgen_data_studio.draft import ReadError, read_file
 
     try:
@@ -173,7 +207,8 @@ def read_definitions(data: bytes, source: str) -> Definitions | None:
 
 
 def from_sheets(sheets, source: str = "") -> Definitions | None:
-    """Table and code definition sheets among tables read from files (draft.Table); None when there are none."""
+    """Table, code, glossary and message sheets among tables read from files (draft.Table); None when there are
+    none."""
     out = Definitions(sources=[source] if source else [])
     found = False
     for sh in sheets:
@@ -195,7 +230,24 @@ def from_sheets(sheets, source: str = "") -> Definitions | None:
                 use = _cell(row, cols, "use").lower()
                 grp.values.append({"code": code, "name": _cell(row, cols, "name"),
                                    "use": use not in ("n", "no", "false", "0", "미사용")})
+            continue
+        cols = _match(sh.columns, TERM_HEADERS)
+        if "term" in cols and len(cols) > 1 and _listed(sh, cols, "term"):
+            found = True
+            out.terms += [t for t in (_term({k: _cell(r, cols, k) for k in cols}) for r in sh.rows) if t["term"]]
+            continue
+        cols = _match(sh.columns, MESSAGE_HEADERS)
+        if "code" in cols and "text" in cols and _listed(sh, cols, "code"):
+            found = True
+            rows = (_message({k: _cell(r, cols, k) for k in cols}) for r in sh.rows)
+            out.messages += [m for m in rows if m["code"] and m["text"]]  # a code alone is a section label
     return out if found else None
+
+
+def _listed(sh, cols: dict[str, int], key: str) -> bool:
+    """A definition sheet names each key about once; a log with code and message columns repeats them."""
+    keys = [k for k in (_cell(r, cols, key) for r in sh.rows) if k]
+    return len(set(keys)) * 2 > len(keys)
 
 
 def _table_rows(out: Definitions, sh, cols: dict[str, int]) -> None:
@@ -272,11 +324,13 @@ def _sql_type(c: ColumnDef) -> str:
 
 def _match(headers: list[str], spec: dict[str, list[str]]) -> dict[str, int]:
     norm = [re.sub(r"[\s()_\-./]", "", str(h or "")).lower() for h in headers]
+    # a qualifier in brackets leaves the header what it was: 용어명 (국문)
+    bare = [re.sub(r"[\s()_\-./]", "", re.sub(r"\([^()]*\)", "", str(h or ""))).lower() for h in headers]
     out: dict[str, int] = {}
     for key, names in spec.items():
         for n in names:
             n = re.sub(r"[\s()_\-./]", "", n).lower()
-            i = next((i for i, h in enumerate(norm) if h == n and i not in out.values()), None)
+            i = next((i for hs in (norm, bare) for i, h in enumerate(hs) if h == n and i not in out.values()), None)
             if i is not None:
                 out[key] = i
                 break
@@ -295,6 +349,41 @@ def _int(v: Any) -> int:
         return int(float(str(v).strip()))
     except (TypeError, ValueError):
         return 0
+
+
+def _names(v: Any) -> list[str]:
+    """Several names in one cell, or a list of them."""
+    items = v if isinstance(v, list) else re.split(r"[,;/·]", str(v or ""))
+    return [s for s in (str(x).strip() for x in items) if s]
+
+
+def _term(d: dict) -> dict:
+    return {"term": str(d.get("term") or d.get("name") or "").strip(),
+            "synonyms": _names(d.get("synonyms") or d.get("aliases")),
+            "avoid": _names(d.get("avoid") or d.get("forbidden")),
+            "definition": str(d.get("definition") or d.get("description") or ""),
+            "english": str(d.get("english") or ""),
+            "abbreviation": str(d.get("abbreviation") or d.get("abbr") or ""), "column": str(d.get("column") or "")}
+
+
+def _message(d: dict) -> dict:
+    return {"code": str(d.get("code") or d.get("id") or "").strip(),
+            "text": str(d.get("text") or d.get("message") or ""),
+            "kind": str(d.get("kind") or d.get("type") or ""), "screen": str(d.get("screen") or "")}
+
+
+def _document(d: dict) -> dict:
+    kind = str(d.get("kind") or "")
+    return {"name": str(d.get("name") or d.get("title") or "").strip(),
+            "kind": kind if kind in DOCUMENT_KINDS else "other", "text": str(d.get("text") or ""),
+            "sections": [{"title": str(s.get("title") or ""), "text": str(s.get("text") or "")}
+                         for s in d.get("sections") or []]}
+
+
+def _later(mine: list[dict], theirs: list[dict], key: str) -> list[dict]:
+    """The later source wins, as for tables, and one source may repeat a term that means two things."""
+    new = {x[key] for x in theirs}
+    return [x for x in mine if x[key] not in new] + list(theirs)
 
 
 def _clean(d: Any) -> Any:

@@ -1690,11 +1690,15 @@ ${controls}${body}`;
           <div class="chips" style="margin-top:4px">${t.columns.slice(0, 10).map((c) => `<span class="chip sm">${esc(c)}</span>`).join('')}${t.columns.length > 10 ? `<span class="chip sm">외 ${t.columns.length - 10}개</span>` : ''}</div></div>`).join('')}</div>
         <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('')
       : (f.definitions.length ? '' : '<div class="muted" style="font-size:12.5px">업로드한 파일이 없습니다.</div>');
-    const defs = f.definitions.map((x) => `<div class="fileitem"><div style="flex:1;min-width:0"><b>${esc(x.source)}</b> <span class="chip sm b">정의서</span>
-        <div class="muted" style="font-size:12px;margin:3px 0">테이블 ${show(x.tables.length)} · 컬럼 ${show(x.columns)} · 참조 ${show(x.references)} · 코드 그룹 ${show(x.codes)} · 코드값 ${show(x.code_values)}</div>
+    const defFacts = (x) => [['테이블', x.tables.length], ['컬럼', x.columns], ['참조', x.references], ['코드 그룹', x.codes], ['코드값', x.code_values], ['용어', x.terms], ['메시지', x.messages], ['문서', x.documents]]
+      .filter(([, n]) => n).map(([k, n]) => `${k} ${show(n)}`).join(' · ');
+    const docKind = { policy: '정책', screen: '화면', other: '문서' };
+    const defs = f.definitions.map((x) => `<div class="fileitem"><div style="flex:1;min-width:0"><b>${esc(x.source)}</b> <span class="chip sm b">${x.tables.length || x.groups.length || x.terms || x.messages ? '정의서' : '문서'}</span>
+        <div class="muted" style="font-size:12px;margin:3px 0">${defFacts(x)}</div>
         ${x.tables.length ? `<div class="scroll deflist">${x.tables.map((t) => `<label class="tick inline-tick" style="display:flex"><input type="checkbox" data-in="dtable" data-t="${esc(t.name)}"${S.dr.tables[t.name] === false ? '' : ' checked'}><span class="mono">${esc(t.name)}</span>&nbsp;<span class="muted">${esc(t.label)} · 컬럼 ${t.columns}${t.key.length > 1 ? ' · 복합 키' : (t.key.length ? '' : ' · 키 없음')}</span></label>`).join('')}</div>
           <div style="display:flex;gap:6px;margin-top:6px"><button class="btn sm ghost" data-act="dtall" data-src="${esc(x.source)}" data-on="1">전체 선택</button><button class="btn sm ghost" data-act="dtall" data-src="${esc(x.source)}" data-on="0">전체 해제</button></div>` : ''}
-        ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}</div>
+        ${x.groups.length ? `<div class="chips" style="margin-top:6px">${x.groups.slice(0, 12).map((g) => `<span class="chip sm">${esc(g.name)} ${esc(g.label)} · ${g.values}</span>`).join('')}${x.groups.length > 12 ? `<span class="chip sm">외 ${x.groups.length - 12}개</span>` : ''}</div>` : ''}
+        ${x.document_list.length ? `<div class="chips" style="margin-top:6px">${x.document_list.slice(0, 12).map((d) => `<span class="chip sm">${esc(d.name)} · ${docKind[d.kind] || '문서'} · 섹션 ${show(d.sections)}</span>`).join('')}</div>` : ''}</div>
         <button class="btn sm ghost" data-act="fremove" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 삭제">삭제</button></div>`).join('');
     const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 채웁니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 스키마(키, 참조, 코드값)로 초안을 생성합니다. 복합 키 테이블은 아직 객체로 만들지 않습니다.'}</div>` : '';
     const connect = f.connect ? `<div class="sec">데이터베이스 연결</div><div style="display:flex;gap:8px"><input type="text" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://… 또는 SQLite 파일 경로" style="flex:1">
@@ -1702,12 +1706,12 @@ ${controls}${body}`;
       : '<div class="hint" style="margin-top:12px">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, SQLite를 연결할 수 있습니다.</div>';
     const samples = f.samples.length ? `<button class="btn" data-act="fsample"${S.dr.busy ? ' disabled' : ''}>샘플 데이터 불러오기</button>` : '';
     const left = `<div class="card"><div class="ch">데이터 가져오기</div><div class="cb">
-      <label class="drop" data-drop="1"><input type="file" id="fileinput" multiple accept=".csv,.tsv,.txt,.xlsx,.json" hidden>
-        <b>CSV, Excel 파일을 끌어 놓거나 클릭해 선택하세요</b><span class="muted">테이블 정의서 · 코드 정의서(CSV, Excel, JSON)도 올릴 수 있습니다.</span><span class="muted">최대 ${lim.files}개 · 파일당 ${bytes(lim.file_bytes)} · 테이블당 ${show(lim.rows)}행. 업로드한 파일은 세션 종료 시 삭제됩니다. 개인정보가 포함된 파일은 업로드하지 마세요.</span></label>
+      <label class="drop" data-drop="1"><input type="file" id="fileinput" multiple accept=".csv,.tsv,.txt,.xlsx,.json,.sql,.ddl,.dbml,.pdm,.mwb,.docx,.pptx,.hwpx,.html,.htm,.md,.pdf" hidden>
+        <b>CSV, Excel 파일을 끌어 놓거나 클릭해 선택하세요</b><span class="muted">테이블 정의서, 코드 정의서, 용어 사전, 메시지 정의서, SQL, ERD, 문서 파일도 업로드할 수 있습니다.</span><span class="muted">최대 ${lim.files}개 · 파일당 ${bytes(lim.file_bytes)} · 테이블당 ${show(lim.rows)}행. 업로드한 파일은 세션 종료 시 삭제됩니다. 개인정보가 포함된 파일은 업로드하지 마세요.</span></label>
       <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">${samples}</div>
       ${list}${defs}${defHint}${connect}
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
-        <button class="btn primary" data-act="draft"${(f.files.length || f.definitions.length) && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
+        <button class="btn primary" data-act="draft"${(f.files.length || f.definitions.some((x) => x.tables.length)) && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
     const draft = f.pending ? `<div id="draft" style="display:flex;flex-direction:column;gap:16px">${draftBody()}</div>${mappingCard()}` : '';
     return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);align-items:start">${left}${rulesCard(f)}</div>${draft}`;
   }

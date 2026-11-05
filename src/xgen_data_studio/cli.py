@@ -42,6 +42,34 @@ def _text(arg: str) -> str:
     return p.read_text(encoding="utf-8") if p.exists() else arg
 
 
+def _ingested(files: list[str], adapters: list[str]):
+    """Files of any format as one definitions object, or None without files."""
+    from xgen_data_studio.ingest import IngestError, ingest, load_adapters
+
+    out = None
+    try:
+        load_adapters(adapters)
+        for f in files:
+            got = ingest(Path(f).read_bytes(), Path(f).name)
+            out = got if out is None else out.merge(got)
+    except IngestError as e:
+        raise SystemExit(str(e)) from None
+    return out
+
+
+def _ingest(a) -> int:
+    """Write the canonical JSON of the files given and print what it holds."""
+    defs = _ingested([x for f in a.files for x in (sorted(glob.glob(f)) or [f])], a.adapter)
+    text = json.dumps(defs.to_dict(), ensure_ascii=False, indent=1)
+    if a.output:
+        Path(a.output).write_text(text + "\n", encoding="utf-8")
+        _out({**defs.counts(), "written": a.output})
+    else:
+        _out(text)
+        print(json.dumps(defs.counts()), file=sys.stderr)
+    return 0
+
+
 def _draft(a) -> int:
     """Draft from files (loaded into data.sqlite), a SQLite file or PostgreSQL; write a studio folder or print."""
     import yaml
@@ -53,14 +81,10 @@ def _draft(a) -> int:
     out = Path(a.out) if a.out else None
     if out is not None and (out / "studio.yaml").exists():
         raise SystemExit(f"{out / 'studio.yaml'} already exists; give another --out")
-    loaded, origin, defs = None, {}, None
-    for f in a.definitions:
-        from xgen_data_studio.definitions import read_definitions
-
-        got = read_definitions(Path(f).read_bytes(), Path(f).name)
-        if got is None:
-            raise SystemExit(f"{f}: no table or code definitions found")
-        defs = got if defs is None else defs.merge(got)
+    loaded, origin = None, {}
+    defs = _ingested(a.definitions, a.adapter)
+    if defs is not None and not defs.tables and not (a.files or a.sqlite or a.dsn):
+        raise SystemExit("the definitions hold no tables; give a table definition or data files")
     if defs is not None and not (a.files or a.sqlite or a.dsn):  # the schema alone
         import fnmatch
         import sqlite3
@@ -310,9 +334,16 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--drop", action="append", default=[], help="leave out object:Name, link:name, property:X.p, query:q")
     s.add_argument("--rules", default="", help='draft rules as JSON or a .json file, e.g. {"enum_max": 10, "infer_links": false}')
     s.add_argument("--definitions", action="append", default=[],
-                   help="table and code definitions (.csv, .xlsx or .json): names and code values; alone, the schema")
+                   help="definitions in any format xds ingest reads: names and code values; alone, the schema")
+    s.add_argument("--adapter", action="append", default=[], help="a python file that registers another format")
     s.add_argument("--tables", default="", help="with --definitions alone: the tables to draft, e.g. 'TB_*,ORDERS'")
     s.add_argument("-o", "--out", default="", help="write library/, studio.yaml (and data.sqlite for files) here")
+
+    s = sub.add_parser("ingest", help="read definitions and documents of any format into one JSON")
+    s.add_argument("files", nargs="+", help="SQL, DBML, PowerDesigner, MySQL Workbench, Office, HWPX, HTML, text, PDF, "
+                                            "CSV, Excel or JSON files")
+    s.add_argument("-o", "--output", default="", help="write the JSON here and print the counts")
+    s.add_argument("--adapter", action="append", default=[], help="a python file that registers another format")
 
     s = sub.add_parser("serve", help="serve the studio page; every visitor gets a studio of their own")
     s.add_argument("config")
@@ -453,6 +484,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "draft":
         return _draft(a)
+
+    if a.cmd == "ingest":
+        return _ingest(a)
 
     if a.cmd == "serve":
         from xgen_data_studio.web import serve_config
