@@ -37,12 +37,18 @@ STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "b
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
 READ_ERROR = {
-    "format": "지원하지 않는 파일 형식이라 업로드하지 못했습니다. CSV, TSV, XLSX 파일을 업로드해 주세요.",
     "encoding": "파일 인코딩을 확인할 수 없어 읽지 못했습니다. UTF-8 또는 CP949로 저장해 다시 업로드해 주세요.",
     "empty": "데이터 행이 없어 테이블을 만들지 못했습니다. 첫 행에 컬럼 이름이 있는지 확인해 주세요.",
     "workbook": "XLSX 형식이 아니어서 파일을 열지 못했습니다. XLSX로 저장해 다시 업로드해 주세요.",
     "workbook_size": "압축 해제 크기가 64MB 한도를 초과해 파일을 열지 못했습니다. 시트를 나누어 다시 업로드해 주세요.",
     "openpyxl": "Excel 읽기 모듈이 설치되지 않아 XLSX 파일을 처리하지 못했습니다. CSV로 저장해 업로드해 주세요.",
+}
+INGEST_ERROR = {
+    "format": "파일 내용을 해석할 수 없어 읽지 못했습니다. 파일 형식을 확인해 다시 업로드해 주세요.",
+    "empty": "읽을 수 있는 정의나 본문이 없어 정의서를 만들지 못했습니다. 내용이 있는 파일을 업로드해 주세요.",
+    "too_large": "압축 해제 크기가 64MB 한도를 초과해 파일을 열지 못했습니다. 파일을 나누어 다시 업로드해 주세요.",
+    "needs_extra": "문서 읽기 모듈이 설치되지 않아 파일을 처리하지 못했습니다. DOCX 또는 TXT로 저장해 업로드해 주세요.",
+    "export_needed": "지원하지 않는 형식이라 내용을 읽지 못했습니다. {export_to} 파일로 내보내 다시 업로드해 주세요.",
 }
 MODULE_TEXT_MAX = 48 * 1024
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
@@ -663,7 +669,12 @@ class StudioSession:
                  "tables": [{"name": t.name, "label": t.label, "columns": len(t.columns), "key": t.primary_key}
                             for t in list(d.tables.values())[:600]],
                  "groups": [{"name": g.name, "label": g.label, "values": len(g.values)}
-                            for g in list(d.codes.values())[:600]]}
+                            for g in list(d.codes.values())[:600]],
+                 "terms": len(d.terms), "messages": len(d.messages), "documents": len(d.documents),
+                 "term_list": [{"term": t["term"], "synonyms": len(t["synonyms"])} for t in d.terms[:600]],
+                 "message_list": [{"code": m["code"], "chars": len(m["text"])} for m in d.messages[:600]],
+                 "document_list": [{"name": x["name"], "kind": x["kind"], "sections": len(x["sections"]),
+                                    "chars": len(x["text"])} for x in d.documents[:600]]}
                 for src, d in self.definitions.items()]
         from xgen_data_studio.draft import DraftRules
 
@@ -692,13 +703,18 @@ class StudioSession:
         if sum(others.values()) + len(data) > lim.total_bytes:
             raise ValueError(f"전체 업로드 용량이 {_size(lim.total_bytes)} 한도를 초과해 업로드하지 못했습니다. "
                              "파일을 삭제한 뒤 다시 업로드해 주세요.")
-        from xgen_data_studio.definitions import from_sheets, read_definitions
+        from xgen_data_studio.definitions import from_sheets
+        from xgen_data_studio.ingest import EXPORT_ANY, IngestError, ingest, is_sheet
 
-        if source.lower().endswith(".json"):  # only a definitions file comes as JSON
-            defs = read_definitions(data, source)
-            if defs is None:
-                raise ValueError(f"{source}: tables 또는 codes 항목이 없어 정의서로 읽지 못했습니다. "
-                                 "테이블 정의서 · 코드 정의서 JSON 인지 확인해 주세요.")
+        if not is_sheet(data, source):  # everything but rows rolls up into the one definitions object
+            try:
+                defs = ingest(data, source)
+            except IngestError as e:
+                if e.reason == "format" and source.lower().endswith(".json"):
+                    raise ValueError(f"{source}: tables 또는 codes 항목이 없어 정의서로 읽지 못했습니다. "
+                                     "테이블 정의서 · 코드 정의서 JSON 인지 확인해 주세요.") from None
+                text = INGEST_ERROR.get(e.reason, INGEST_ERROR["format"])
+                raise ValueError(f"{source}: " + text.format(export_to=e.info.get("export_to", EXPORT_ANY))) from None
             self.definitions = {**{k: v for k, v in self.definitions.items() if k != source}, source: defs}
             self.uploads.pop(source, None)
             self.sizes = {**others, source: len(data)}
@@ -785,6 +801,8 @@ class StudioSession:
                               "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개(행 없음)"})
             self.pending = (d, b, [], r)
             return self.files_state()
+        if not all_tables and defs is not None:
+            raise ValueError("테이블 정의가 없어 초안을 생성하지 못했습니다. 테이블 정의서 또는 데이터 파일을 업로드해 주세요.")
         if not all_tables:
             raise ValueError("업로드한 파일이 없어 초안을 생성하지 못했습니다. 파일을 업로드해 주세요.")
         chosen = [t for t in all_tables if wanted is None or t.name in wanted]
