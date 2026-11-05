@@ -47,6 +47,96 @@ The studio sits between the systems a business already runs and the people and a
 A language model is optional. It turns plain questions into the ontology query and policy text into draft decision
 tables, and the engine checks what it writes; the rest of the studio runs without one.
 
+## What sets it apart
+
+| Feature | How it works | Try it |
+|---|---|---|
+| One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `xds conformance examples/library/studio.yaml` |
+| Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `xds modules examples/library/studio.yaml --impact fashion` |
+| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice | `xds draft examples/files/*.csv -o my-studio` |
+| Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xds decide examples/library/studio.yaml returnEligibility I1001` |
+| Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xds agreement examples/library/studio.yaml` |
+| Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xds review examples/library/studio.yaml acme-1.1.0.yaml` |
+| Edits that say what they take | Removing a property or a relation on the management screens takes out the queries, decisions and questions that need it, and lists them before anything is filed | The page's 객체 관리, 속성 관리, 관계 관리 |
+| Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xds mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
+| Nothing to run first | The core has no required dependencies. SQLite and an in-process RDF graph are enough to try everything, and values stay in the source unless you ask for a projection | `python examples/commerce/demo.py` |
+
+## How to use it
+
+The package is not on PyPI yet, so install it from a checkout.
+
+```bash
+git clone https://github.com/PlateerLab/xgen-data-studio.git
+cd xgen-data-studio
+pip install -e ".[all]"
+```
+
+**1. See it working.** The example library holds commerce and finance standards, a fashion extension, one customer's
+differences and fictional data.
+
+```bash
+xds serve examples/library/studio.yaml --samples examples/files --policies examples/policies
+```
+
+Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written.
+
+**2. Bring your own data.** On the page, use 데이터 연결. From the command line:
+
+```bash
+xds draft examples/files/*.csv --name books --label "도서 대출" --lang ko -o my-studio    # from files
+xds draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
+xds draft --dsn "$XDS_DSN" --name shop -o my-studio                                     # from PostgreSQL
+xds serve my-studio/studio.yaml
+```
+
+A database needs `pip install -e ".[postgres]"`. A draft reads every table in full to profile it, so point it at a
+copy or a replica with a read-only account, not at a busy production database.
+
+**3. Check it.**
+
+```bash
+xds bindings my-studio/studio.yaml       # the definition against the database
+xds questions my-studio/studio.yaml      # validation questions: right, and grounded
+xds conformance my-studio/studio.yaml    # every registered query on every backend
+xds gates my-studio/studio.yaml          # the flow's pass conditions, measured
+```
+
+**4. Use it.**
+
+```bash
+xds run examples/library/studio.yaml revenueByCategory
+xds translate examples/commerce/ontology.yaml revenueByCategory --to cypher
+xds decide examples/library/studio.yaml returnEligibility I1001
+```
+
+**5. Adapt it.** Copy `examples/library/acme-overlay/1.0.0.yaml` to `acme-1.1.0.yaml`, set `version: 1.1.0`, change a
+rule, and review it on a copy of the studio. See [Adapt a domain](#adapt-a-domain) for the other ways in.
+
+```bash
+xds review examples/library/studio.yaml acme-1.1.0.yaml
+```
+
+**6. Share it.** `xds serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
+`xds mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
+
+The page, screen by screen:
+
+| Group | Screen | Use it to |
+|---|---|---|
+| 시작 | 사용 안내 | Read what each screen does, beside the demo video when there is one |
+| | 흐름 | See every stage from the source to the questions, and set the pass conditions |
+| 데이터 관리 | 데이터 소스 | See the source's tables, keys and references, and what reads each |
+| | 데이터 연결 | Upload files or definitions, connect a database, draft, bind to a standard |
+| | 객체 관리 | Change an object's table, key and parent, or add one from a table |
+| | 속성 관리 | Change a property's type, column, allowed values and their names, required flag and mask |
+| | 관계 관리 | Change relations and their join columns, and add the ones foreign keys suggest |
+| 온톨로지 | 온톨로지 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
+| | 온톨로지 | See objects and relations as a graph |
+| 활용 · 검증 | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
+| | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
+| | 검증 | Run the questions with known answers, and add, remove or import them |
+| | DB 대조 | Check the definition against the database |
+
 ## What it looks like
 
 The screens below are the studio page that `xds preview` writes for the example library in `examples/library`
@@ -555,12 +645,14 @@ only files a request, and nothing is written until a person approves it. Works w
 
 ## Install
 
+From a checkout (the package is not on PyPI yet):
+
 ```bash
-pip install xgen-data-studio                 # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
-pip install "xgen-data-studio[all]"          # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP
-pip install "xgen-data-studio[postgres]"     # + psycopg      ("[neo4j]" for the Neo4j driver)
-pip install "xgen-data-studio[xlsx]"         # + openpyxl, for drafting from Excel workbooks
-pip install "xgen-data-studio[gremlin]"      # + gremlinpython, for Gremlin Server
+pip install -e .                 # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
+pip install -e ".[all]"          # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP, openpyxl
+pip install -e ".[postgres]"     # + psycopg      ("[neo4j]" for the Neo4j driver)
+pip install -e ".[xlsx]"         # + openpyxl, for drafting from Excel workbooks
+pip install -e ".[gremlin]"      # + gremlinpython, for Gremlin Server
 ```
 
 Run the demo from a checkout with only PyYAML and rdflib installed:

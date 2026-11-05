@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import sys
@@ -48,6 +49,7 @@ def _draft(a) -> int:
     from xgen_data_studio.draft import DraftRules, draft, load_sqlite, read_file
 
     rules = DraftRules.from_dict(json.loads(_text(a.rules)) if a.rules else None)
+    a.files = [x for f in a.files for x in (sorted(glob.glob(f)) or [f])]  # PowerShell leaves wildcards as they are
     out = Path(a.out) if a.out else None
     if out is not None and (out / "studio.yaml").exists():
         raise SystemExit(f"{out / 'studio.yaml'} already exists; give another --out")

@@ -108,6 +108,9 @@
   `examples/definitions`.
 - The README says what the studio is for and how a domain is adapted; the page's guide opens with the same. The
   overlay module is labelled "관리 변경", and a draft's default names are no longer possessive.
+- The README says what sets the studio apart and how to use it, step by step and screen by screen, and installs from
+  a checkout (the package is not on PyPI). `xds draft` expands its own wildcards, for shells that leave them as they
+  are (PowerShell).
 
 ## 0.4.0
 

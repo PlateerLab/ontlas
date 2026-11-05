@@ -76,3 +76,10 @@ def test_mcp_server_lists_and_calls_tools(studio):
     assert "request_action" not in names
     res = asyncio.run(srv.call_tool("translate_query", {"query": "lowStock", "to": "sql:mysql"}))
     assert "`skus`" in str(res)
+
+
+def test_draft_expands_a_wildcard_the_shell_left_as_it_is(tmp_path):
+    pytest.importorskip("yaml")
+    out = tmp_path / "studio"
+    assert main(["draft", str(EXAMPLE.parent / "files" / "*.csv"), "--name", "books", "-o", str(out)]) == 0
+    assert (out / "studio.yaml").is_file() and (out / "data.sqlite").is_file()
