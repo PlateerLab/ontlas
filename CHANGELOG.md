@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.11.0
+
+- A space holds documents and vectors now, not only an ontology. Vector stores (memory, Qdrant over REST, pgvector) and
+  embedders (hash, any OpenAI-shaped service, a local multilingual model through fastembed) are ports with a registry;
+  `xspace vectors` holds every store to exact search, and a tie at the cut is not counted as a difference.
+- A document goes two ways: cut, embedded and written to every store, and turned into a document ontology of documents,
+  sections and concepts that runs on the same compilers. Concepts tie it to the domain ontology: a search names the
+  definitions a question speaks of, and an object shows the sections that mention it. A language model can read relations
+  from a section; one is kept only if both ends are words of that text.
+- Reasoners are a port too (rules, owlrl, shacl, reasonable, any HTTP service). `xspace reasoners` compares engines of one
+  logic, which found that reasonable 0.4.4 joins every subject of an inverse functional property with sameAs, so it stays
+  off the default list.
+- Other platforms come in through `/v1`: a token, a role, OpenAPI at `/v1/openapi.json` and function definitions at
+  `/v1/tools`, off unless `--api-token-env` is given. MCP gains `search_documents`, `list_documents` and `describe_space`.
+- `kind: gateway` reads through a platform's query service, so a space can use a connection the platform manages without
+  ever holding its password, and never writes. An answer that comes back full is marked as possibly cut. Also on the page.
+- The asset ontology is drawn as a map of files, tables, documents, stores, objects and queries, with what a change reaches.
+- Pipelines outlive a restart where repositories do. A connected database keeps its modules and asks to be connected again:
+  no address or token is written.
+- The board has a storage floor and the flow an index stage with a pass condition on document search. Six new screens
+  (data map, document ontology, vectors, adapters, document search, integrations), a guide rewritten around them, help for
+  the screen in hand, and first steps for a new visitor.
+
 ## 0.10.0
 
 - The example library is e-commerce alone. `commerce-operations` adds sellers, payments, refunds, carriers, shipments,
