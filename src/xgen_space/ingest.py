@@ -5,7 +5,8 @@ tables, codes, terms, messages and documents, the shape of `Definitions.to_dict`
 A format of your own is a python file that calls `register`, loaded with `load_adapters`.
 
 Uploads are untrusted. A zip is read only up to UNPACKED_MAX, whatever it declares, and its entries stay in memory;
-XML that declares a document type is refused, so no entity is ever defined or fetched; nothing in a file is run.
+XML that declares a document type is refused, so no entity is ever defined or fetched; nothing in a file is run. A
+compound file's chains and records are followed a bounded number of steps, whatever it says of itself.
 """
 from __future__ import annotations
 
@@ -18,9 +19,12 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 import zlib
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
+from datetime import datetime, timedelta
 from html.parser import HTMLParser
+from itertools import accumulate
 from pathlib import Path
 from typing import NamedTuple
 from xml.parsers import expat
@@ -34,7 +38,7 @@ from xgen_space.definitions import (
     header_row,
     read_definitions,
 )
-from xgen_space.draft import XLSX_UNPACKED_MAX, ReadError, read_file
+from xgen_space.draft import XLSX_UNPACKED_MAX, ReadError, Table, _table, read_file
 
 UNPACKED_MAX = XLSX_UNPACKED_MAX
 SHEETS = (".csv", ".tsv", ".xlsx", ".xlsm")
@@ -125,6 +129,8 @@ def _sniff(data: bytes, source: str) -> Adapter:
         return _pdf
     if data[:16] == b"SQLite format 3\0":
         return _sqlite
+    if data[:4] == OLE:
+        return _office
     if b"\0" in data[:4096] and data[:2] not in (b"\xff\xfe", b"\xfe\xff"):
         raise _export(source)
     text = _text(data, source)
@@ -148,6 +154,12 @@ def _export(source: str) -> IngestError:
     ext = Path(source).suffix.lower()
     to = EXPORT_TO.get(ext, EXPORT_ANY)
     return IngestError(f"{source}: {ext or 'this format'} cannot be read directly; export it to {to}", "export_needed",
+                       export_to=to)
+
+
+def _locked(source: str) -> IngestError:
+    to = EXPORT_TO.get(Path(source).suffix.lower(), EXPORT_ANY)
+    return IngestError(f"{source}: the file has a password; take it off, or export it to {to}", "export_needed",
                        export_to=to)
 
 
@@ -403,6 +415,15 @@ def _slide_items(parent: Iterable[ET.Element]) -> Iterator[tuple[bool, str]]:
                                             for tc in tr.findall("tc"))
 
 
+def _slide(out: _Outline, n: int, items: list[tuple[bool, str]]) -> None:
+    if items:
+        titles = [s for is_title, s in items if is_title]
+        out.heading(" ".join(titles) or f"Slide {n}")
+        for is_title, s in items:
+            if not is_title:
+                out.line(s)
+
+
 def _pptx(data: bytes, source: str) -> Definitions:
     z = _Archive(data, source)
     slides = _slide_files(z)
@@ -411,13 +432,7 @@ def _pptx(data: bytes, source: str) -> Definitions:
     out = _Outline()
     for n, name in enumerate(slides, 1):
         tree = _xml(z.read(name)).find("cSld/spTree")
-        items = [(is_title, s) for is_title, s in _slide_items(tree if tree is not None else ()) if s.strip()]
-        if items:
-            titles = [s for is_title, s in items if is_title]
-            out.heading(" ".join(titles) or f"Slide {n}")
-            for is_title, s in items:
-                if not is_title:
-                    out.line(s)
+        _slide(out, n, [(is_title, s) for is_title, s in _slide_items(tree if tree is not None else ()) if s.strip()])
     return _document(out, source, "screen")
 
 
@@ -476,6 +491,8 @@ class _Compound:
         self.data, self.source = data, source
         self.size = 1 << struct.unpack_from("<H", data, 30)[0]
         self.mini_size = 1 << struct.unpack_from("<H", data, 32)[0]
+        if self.size not in (512, 4096) or self.mini_size != 64:  # the only sizes there are; a FAT grows with the sector
+            raise IngestError(f"{source}: not a compound file", "format")
         self.limit = len(data) // self.size + 2
         directory, = struct.unpack_from("<I", data, 48)
         self.cutoff, mini_fat, _, difat_next, difat_count = struct.unpack_from("<IIIII", data, 56)
@@ -486,6 +503,8 @@ class _Compound:
             words = struct.unpack_from(f"<{self.size // 4}I", self._sector(difat_next))
             places += [x for x in words[:-1] if x < self.END]
             difat_next = words[-1]
+            if len(places) > self.limit:  # a file has no more FAT sectors than sectors: this list runs in a circle
+                raise IngestError(f"{source}: the sector list does not end", "format")
         self.fat = [w for p in places for w in struct.unpack(f"<{self.size // 4}I", self._sector(p))]
         chain = self._chain(mini_fat, self.fat)
         self.mini_fat = [w for p in chain for w in struct.unpack(f"<{self.size // 4}I", self._sector(p))]
@@ -538,15 +557,28 @@ class _Compound:
         elif e["type"] == 1:
             self._walk(e["child"], path + "/", seen)
 
+    def find(self, name: str) -> str | None:
+        """The path of a stream at the top of the file; some writers spell these names in other cases."""
+        return next((p for p in self.paths if p.lower() == name.lower()), None)
+
     def read(self, path: str) -> bytes:
         e = self.paths[path]
-        if e["size"] > UNPACKED_MAX:
+        size = e["size"] & 0xFFFFFFFF if self.size == 512 else e["size"]  # older writers left the high half unset
+        if size > UNPACKED_MAX:
             raise IngestError(f"{self.source}: {path} is too large", "too_large")
-        if e["size"] < self.cutoff:
+        if size < self.cutoff:
             raw = b"".join(self.mini[p * self.mini_size:(p + 1) * self.mini_size] for p in self._chain(e["start"], self.mini_fat))
         else:
             raw = b"".join(self._sector(p) for p in self._chain(e["start"], self.fat))
-        return raw[:e["size"]]
+        return raw[:size]
+
+
+def _compound(data: bytes, source: str) -> _Compound:
+    """A compound file; the older binary formats, and a file that only looks like one, are told what to export to."""
+    try:
+        return _Compound(data, source)
+    except (IngestError, struct.error, IndexError):
+        raise _export(source) from None
 
 
 _HWP_WIDE = {1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}  # controls of eight units
@@ -588,10 +620,7 @@ def _hwp_lines(raw: bytes) -> Iterator[str]:
 
 def _hwp(data: bytes, source: str) -> Definitions:
     """Text of a Hancom .hwp (5.x), standard library only; a file with a password or for viewing only says so."""
-    try:
-        z = _Compound(data, source)
-    except (IngestError, struct.error, IndexError):
-        raise _export(source) from None  # the older binary formats, and a file that only looks like one
+    z = _compound(data, source)
     if "FileHeader" not in z.paths or not z.read("FileHeader").startswith(b"HWP Document File"):
         raise _export(source)
     flags, = struct.unpack_from("<I", z.read("FileHeader"), 36)
@@ -612,6 +641,559 @@ def _hwp(data: bytes, source: str) -> Definitions:
         for line in _hwp_lines(raw):
             out.numbered(line)
     return _document(out, source)
+
+
+# ---- older Office files --------------------------------------------------------------------------------------
+
+_CONTROLS = {c: None for c in range(32) if c != 9}
+_DOC_CHARS = {**_CONTROLS, 0x0B: "\n", 0x1E: "-"}  # a line break, a hyphen that does not break
+_DOC_MARKS = re.compile("[\r\x07\x0c]")  # the end of a paragraph, of a table cell or row, of a page
+_DOC_FIELD = re.compile("[\x13\x14\x15]")  # a field opens, its instruction ends, it closes
+_DOC_HEADINGS = {*range(1, 10), 62}  # the built-in ids of Heading 1 to 9 and Title, the same in every language
+_DOC_OPERANDS = (1, 1, 2, 4, 2, 2, 0, 3)  # a property's operand size by the top bits of its id; 0: its first byte says
+_DOC_PLAIN = (0, False, False)
+
+
+class _DocFields:
+    """A field is an instruction and then what it shows; only that is text. Fields nest and may cross paragraphs."""
+
+    def __init__(self) -> None:
+        self.open = bytearray()  # each open field, 1 while still in its instruction
+        self.hidden = 0
+
+    def strip(self, text: str) -> str:
+        out, at = [], 0
+        for m in _DOC_FIELD.finditer(text):
+            if not self.hidden:
+                out.append(text[at:m.start()])
+            at = m.end()
+            if m.group() == "\x13":
+                self.open.append(1)
+                self.hidden += 1
+            elif self.open:
+                self.hidden -= self.open[-1]
+                self.open[-1] = 0
+                if m.group() == "\x15":
+                    self.open.pop()
+        if not self.hidden:
+            out.append(text[at:])
+        return "".join(out)
+
+
+class _DocProperties:
+    """What a paragraph is, by where its mark lies: the stream keeps this in 512-byte pages, a run of marks to a list of
+    properties. Marks may be told in any order, so the lists looked through share one budget."""
+
+    def __init__(self, word: bytes, plc: bytes, source: str):
+        count = max(len(plc) - 4, 0) // 8
+        self.word, self.source, self.left = word, source, 2 * len(word)
+        self.limits = struct.unpack_from(f"<{count + 1}I", plc) if count else ()
+        self.pages = struct.unpack_from(f"<{count}I", plc, 4 * (count + 1)) if count else ()
+        self.last: tuple[tuple[int, int], tuple[int, bool, bool]] = ((-1, -1), _DOC_PLAIN)
+
+    def at(self, fc: int) -> tuple[int, bool, bool]:
+        """(style, inside a table, ends a table row) of the paragraph whose mark lies at fc."""
+        i = bisect_right(self.limits, fc) - 1
+        if not 0 <= i < len(self.pages):
+            return _DOC_PLAIN
+        page = self.word[self.pages[i] * 512:self.pages[i] * 512 + 512]
+        runs = page[-1] if len(page) == 512 else 0
+        if not 0 < runs < 30:  # no more fit a page
+            return _DOC_PLAIN
+        j = bisect_right(struct.unpack_from(f"<{runs + 1}I", page), fc) - 1
+        if not 0 <= j < runs:
+            return _DOC_PLAIN
+        at = page[4 * (runs + 1) + 13 * j] * 2
+        if at == 0:
+            return _DOC_PLAIN
+        if (self.pages[i], at) != self.last[0]:
+            self.last = (self.pages[i], at), self._read(page, at)
+        return self.last[1]
+
+    def _read(self, page: bytes, at: int) -> tuple[int, bool, bool]:
+        size = page[at]
+        start = at + 1
+        if size:
+            size = size * 2 - 1
+        else:
+            size, start = page[at + 1] * 2, at + 2
+        blob = page[start:start + size]
+        in_table = row_end = False
+        i = 2
+        while i + 2 < len(blob):
+            self.left -= 1
+            if self.left < 0:
+                raise IngestError(f"{self.source}: paragraph properties do not end", "format")
+            sprm, = struct.unpack_from("<H", blob, i)
+            i += 2
+            if sprm == 0x2416:
+                in_table = bool(blob[i])
+            elif sprm == 0x2417:
+                row_end = bool(blob[i])
+            elif sprm == 0x6646:  # properties too long for the page; only the end of a wide table row has so many
+                row_end = True
+            size = _DOC_OPERANDS[sprm >> 13]
+            if sprm == 0xD608:  # the one list of properties whose length takes two bytes
+                size = int.from_bytes(blob[i:i + 2], "little") + 1
+            i += size or blob[i] + 1
+        return (int.from_bytes(blob[:2], "little"), in_table, row_end)
+
+
+def _doc_headings(raw: bytes) -> set[int]:
+    """The styles that are headings, from the style sheet: a header, then each style's size and id."""
+    if len(raw) < 4:
+        return set()
+    head, count = struct.unpack_from("<HH", raw)
+    at, out = 2 + head, set()
+    for style in range(count):
+        if at + 2 > len(raw):
+            break
+        size, = struct.unpack_from("<H", raw, at)
+        if size >= 2 and struct.unpack_from("<H", raw, at + 2)[0] & 0xFFF in _DOC_HEADINGS:
+            out.add(style)
+        at += 2 + size
+    return out
+
+
+def _doc_paragraphs(word: bytes, clx: bytes, left: int, source: str) -> Iterator[tuple[str, str, int]]:
+    """The main text as (paragraph, the mark that ended it, where that mark lies), read piece by piece. Each piece is
+    one byte a character or two, and the pieces need not lie in order: a fast save appends the changes."""
+    at = 0
+    while clx[at:at + 1] == b"\x01":  # formatting comes before the piece table
+        at += 3 + struct.unpack_from("<H", clx, at + 1)[0]
+    if clx[at:at + 1] != b"\x02":
+        raise IngestError(f"{source}: no piece table", "format")
+    size, = struct.unpack_from("<I", clx, at + 1)
+    count = (size - 4) // 12
+    if count < 1:
+        raise IngestError(f"{source}: no piece table", "format")
+    cps = struct.unpack_from(f"<{count + 1}I", clx, at + 5)
+    pieces = at + 5 + 4 * (count + 1)
+    buf: list[str] = []
+    for i in range(count):
+        if cps[i + 1] < cps[i]:
+            raise IngestError(f"{source}: the piece table runs backwards", "format")
+        n = min(cps[i + 1] - cps[i], left)  # together the pieces give no more than the text's own length
+        left -= n
+        if not left and not n:
+            break
+        fc, = struct.unpack_from("<I", clx, pieces + 8 * i + 2)
+        narrow = bool(fc & 0x40000000)
+        base = (fc & 0x3FFFFFFF) // 2 if narrow else fc & 0x3FFFFFFF
+        text = (word[base:base + n].decode("cp1252", "replace") if narrow
+                else word[base:base + 2 * n].decode("utf-16-le", "replace"))
+        start = used = 0
+        for m in _DOC_MARKS.finditer(text):
+            part = text[start:m.start()]
+            used += len(part) if narrow else len(part.encode("utf-16-le"))  # a pair of surrogates is one character
+            yield "".join([*buf, part]), m.group(), base + used
+            buf = []
+            used += 1 if narrow else 2
+            start = m.end()
+        buf.append(text[start:])
+    if any(buf):
+        yield "".join(buf), "", 0
+
+
+def _doc(z: _Compound, path: str, source: str) -> Definitions:
+    """Text of a Word 97 to 2003 .doc: paragraphs into sections at heading styles and numbers, a table's rows as rows.
+    Only the main text is read; footnotes, headers and text boxes lie outside it."""
+    word = z.read(path)
+    ident, = struct.unpack_from("<H", word)
+    flags, = struct.unpack_from("<H", word, 0x0A)
+    if ident != 0xA5EC:  # Word 95 and before lay the file out differently
+        raise _export(source)
+    if flags & 0x0100:
+        raise _locked(source)
+    name = z.find("1Table" if flags & 0x0200 else "0Table")
+    if name is None:
+        raise IngestError(f"{source}: no table stream", "format")
+    table = z.read(name)
+
+    def part(at: int) -> bytes:
+        fc, size = struct.unpack_from("<II", word, at)
+        return table[fc:fc + size]
+
+    length, = struct.unpack_from("<I", word, 76)
+    if length > UNPACKED_MAX:
+        raise IngestError(f"{source}: the text runs past {UNPACKED_MAX >> 20}MB", "too_large")
+    headings, props, fields = _doc_headings(part(0xA2)), _DocProperties(word, part(0x102), source), _DocFields()
+    out = _Outline()
+    row: list[str] = []
+    cell: list[str] = []
+    for raw, mark, fc in _doc_paragraphs(word, part(0x1A2), length, source):
+        text = fields.strip(raw).translate(_DOC_CHARS)
+        style, in_table, row_end = props.at(fc)
+        if mark == "\x07" and row_end:
+            if any(row):
+                out.line(" | ".join(row))
+            row = []
+        elif mark == "\x07":
+            row.append(" ".join(" ".join(cell + [text]).split()))  # a row stays one line, whatever breaks a cell holds
+            cell = []
+        elif in_table:
+            cell.append(text)
+        elif style in headings:
+            out.heading(text)
+        else:
+            out.numbered(text)
+    if any(row):
+        out.line(" | ".join(row))
+    return _document(out, source)
+
+
+_PPT_TEXT = {0x0FA0: "utf-16-le", 0x0FA8: "latin-1"}  # TextCharsAtom, TextBytesAtom
+_PPT_TITLES = (0, 6)  # what a TextHeaderAtom calls a title and a centred title
+
+
+class _PptRecords:
+    """The records of a PowerPoint stream. Offsets in the file may point anywhere, so all the walks spend from one
+    budget, and records that point back at each other end in an error."""
+
+    def __init__(self, raw: bytes, source: str):
+        self.raw, self.source, self.left = raw, source, len(raw) // 2 + 64
+
+    def _spend(self, n: int) -> None:
+        self.left -= n
+        if self.left < 0:
+            raise IngestError(f"{self.source}: the records do not end", "format")
+
+    def end_of(self, at: int, kind: int) -> int:
+        """Where the record at `at` ends, when it is the kind the file promised."""
+        _, found, size = struct.unpack_from("<HHI", self.raw, at)
+        if found != kind:
+            raise IngestError(f"{self.source}: a record is not where the file says", "format")
+        return at + 8 + size
+
+    def records(self, at: int, end: int, inside: bool = True) -> Iterator[tuple[int, int, int, int]]:
+        """(version and instance, kind, where the body lies, its size) of each record; a container's children follow it
+        in the stream, so going on from its head walks into them with no stack to overflow."""
+        end = min(end, len(self.raw))
+        while at + 8 <= end:
+            self._spend(1)
+            head, kind, size = struct.unpack_from("<HHI", self.raw, at)
+            yield head, kind, at + 8, size
+            at += 8 if inside and head & 0xF == 0xF else 8 + size
+
+    def places(self, at: int) -> tuple[int, dict[int, int]]:
+        """The document's id and where each id lies. Each save adds an edit; the newest says, older ones fill in."""
+        document, places, seen = 0, {}, set()
+        while at and at not in seen:
+            seen.add(at)
+            self._spend(1)
+            self.end_of(at, 0x0FF5)
+            last, directory, ref = struct.unpack_from("<III", self.raw, at + 16)
+            document = document or ref
+            i, end = directory + 8, self.end_of(directory, 0x1772)
+            while i + 4 <= end:
+                head, = struct.unpack_from("<I", self.raw, i)
+                count = head >> 20
+                self._spend(count + 1)
+                for k, offset in enumerate(struct.unpack_from(f"<{count}I", self.raw, i + 4)):
+                    places.setdefault((head & 0xFFFFF) + k, offset)
+                i += 4 + 4 * count
+            at = last
+        return document, places
+
+    def said(self, at: int, end: int) -> Iterator[int | tuple[bool, str]]:
+        """What the records say in order: a slide's id where it starts in a slide list, and (is the title, a line)."""
+        title = False
+        for _, kind, body, size in self.records(at, end):
+            if kind == 0x03F3:  # SlidePersistAtom
+                yield struct.unpack_from("<I", self.raw, body)[0]
+            elif kind == 0x0F9F:  # TextHeaderAtom: what the text after it is
+                title = struct.unpack_from("<I", self.raw, body)[0] in _PPT_TITLES
+            elif kind in _PPT_TEXT:
+                self._spend(size // 8)  # text is what grows, when many slides name the same record
+                for line in re.split("[\r\n\x0b]", self.raw[body:body + size].decode(_PPT_TEXT[kind], "replace")):
+                    line = line.translate(_CONTROLS)
+                    if line.strip():
+                        yield title, line
+
+
+def _ppt(z: _Compound, path: str, source: str) -> Definitions:
+    """Text of a PowerPoint 97 to 2003 deck, a section to a slide. A save may only append, so the stream still holds
+    what later edits replaced: slides are found from the newest edit, never by scanning. Title and body text is in the
+    slide list, the text of other shapes in the slide; masters and notes have their own and are left out."""
+    if z.find("EncryptedSummary"):
+        raise _locked(source)
+    name = z.find("Current User")
+    user = z.read(name) if name else b""
+    if len(user) < 20:  # PowerPoint 95 and before
+        raise _export(source)
+    token, edit = struct.unpack_from("<II", user, 12)
+    if token == 0xF3D1C4DF:
+        raise _locked(source)
+    s = _PptRecords(z.read(path), source)
+    document, places = s.places(edit)
+    if document not in places:
+        raise IngestError(f"{source}: no document record", "format")
+    at = places[document]
+    slides: list[tuple[int, list[tuple[bool, str]]]] = []
+    for head, kind, body, size in s.records(at + 8, s.end_of(at, 0x03E8), inside=False):
+        if kind == 0x0FF0 and head >> 4 == 0:  # the list of slides, where the others are masters and notes
+            for x in s.said(body, body + size):
+                if isinstance(x, int):
+                    slides.append((x, []))
+                elif slides:
+                    slides[-1][1].append(x)
+    out = _Outline()
+    for n, (ref, items) in enumerate(slides, 1):
+        if ref in places:
+            listed = {line for _, line in items}
+            items += [x for x in s.said(places[ref] + 8, s.end_of(places[ref], 0x03EE))
+                      if not isinstance(x, int) and x[1] not in listed]
+        _slide(out, n, items)
+    return _document(out, source, "screen")
+
+
+_XLS_BOF = (0x0009, 0x0209, 0x0409, 0x0809)
+_XLS_EOF = 0x000A
+_XLS_CONTINUE = 0x003C
+_XLS_SST = 0x00FC
+_XLS_LABELSST, _XLS_NUMBER, _XLS_RK, _XLS_MULRK = 0x00FD, 0x0203, 0x027E, 0x00BD
+_XLS_LABEL, _XLS_RSTRING, _XLS_BOOL, _XLS_FORMULA, _XLS_STRING = 0x0204, 0x00D6, 0x0205, 0x0006, 0x0207
+_XLS_DATE_FORMATS = (*range(14, 23), *range(27, 37), *range(45, 48), *range(50, 59))  # built in, Korean ones among them
+_XLS_1900, _XLS_1904 = datetime(1899, 12, 30), datetime(1904, 1, 1)
+_XLS_CELLS = 1 << 23  # a workbook's cells, the blanks between them counted: a small file can spread a few very wide
+
+
+def _biff(raw: bytes) -> Iterator[tuple[int, int, bytes]]:
+    """(where it starts, id, body) of each record."""
+    at = 0
+    while at + 4 <= len(raw):
+        rid, size = struct.unpack_from("<HH", raw, at)
+        yield at, rid, raw[at + 4:at + 4 + size]
+        at += 4 + size
+
+
+def _xls_text(rec: bytes, at: int, width: int = 2) -> str:
+    """A string: its length in `width` bytes, a flag, then characters of one byte unless the flag says two."""
+    n = int.from_bytes(rec[at:at + width], "little")
+    at += width + 1
+    if rec[at - 1] & 1:
+        return rec[at:at + 2 * n].decode("utf-16-le", "replace")
+    return rec[at:at + n].decode("latin-1")
+
+
+def _xls_strings(parts: list[bytes]) -> list[str]:
+    """The shared strings. They run on across CONTINUE records, and a string cut by one goes on after a flag byte
+    saying how wide its characters are from there."""
+    blob = b"".join(parts)
+    ends = list(accumulate(map(len, parts)))
+    count, = struct.unpack_from("<I", blob, 4)
+    at, out = 8, []
+    for _ in range(min(count, len(blob) // 3)):  # a string takes at least three bytes, whatever the count says
+        if at + 3 > len(blob):
+            break
+        left, flags = struct.unpack_from("<HB", blob, at)
+        at += 3
+        wide, runs, extra = flags & 1, 0, 0
+        if flags & 8:
+            runs, = struct.unpack_from("<H", blob, at)
+            at += 2
+        if flags & 4:
+            extra, = struct.unpack_from("<i", blob, at)
+            at += 4
+        text = []
+        while left and at < len(blob):
+            take = min(left, (ends[bisect_left(ends, at)] - at) >> wide)
+            text.append(blob[at:at + (take << wide)].decode("utf-16-le" if wide else "latin-1", "replace"))
+            at += take << wide
+            left -= take
+            if left and at < len(blob):
+                wide = blob[at] & 1
+                at += 1
+        out.append("".join(text))
+        at += 4 * runs + max(extra, 0)
+    return out
+
+
+def _xls_is_date(code: str) -> bool:
+    """A number format shows a date when y, m, d, h or s stand outside its quotes, escapes and brackets."""
+    return bool(re.search(r"[ymdhs]", re.sub(r'"[^"]*"|\\.|_.|\*.|\[[^\]]*\]', "", code), re.I))
+
+
+def _xls_date(v: float, epoch: datetime) -> object:
+    """The serial number of a date as .xlsx gives it. Excel takes 1900 for a leap year, so its first dates are a day
+    off, and a fraction alone is a time of day."""
+    try:
+        day, part = divmod(v, 1)
+        diff = timedelta(milliseconds=round(part * 86_400_000))
+        if 0 <= v < 1 and diff.days == 0:
+            return (datetime.min + diff).time()
+        if 0 < v < 60 and epoch == _XLS_1900:
+            day += 1
+        return epoch + timedelta(days=day) + diff
+    except (OverflowError, ValueError):  # nan and the like: a date no calendar holds stays the number it is
+        return v
+
+
+def _xls_rk(rk: int) -> float:
+    """A number packed in four bytes: an integer or the top of a double, perhaps a hundred times too large."""
+    if rk & 2:
+        v = float(struct.unpack("<i", struct.pack("<I", rk & 0xFFFFFFFC))[0] >> 2)
+    else:
+        v = struct.unpack("<d", b"\0\0\0\0" + struct.pack("<I", rk & 0xFFFFFFFC))[0]
+    return v / 100 if rk & 1 else v
+
+
+class _XlsBook(NamedTuple):
+    names: dict[int, str]  # the worksheets, by where their records start
+    strings: list[str]
+    dates: list[bool]  # by cell format: does a number in it show a date
+    epoch: datetime
+
+
+def _xls_book(records: Iterator[tuple[int, int, bytes]], source: str) -> _XlsBook:
+    """What the workbook says before its sheets, up to its first end record."""
+    names: dict[int, str] = {}
+    parts: list[bytes] = []
+    formats = dict.fromkeys(_XLS_DATE_FORMATS, True)
+    xfs: list[int] = []
+    epoch, previous = _XLS_1900, 0
+    for _, rid, rec in records:
+        if rid == _XLS_EOF:
+            break
+        if rid == 0x002F:  # FILEPASS
+            raise _locked(source)
+        if rid == 0x0085 and rec[5] == 0:  # BOUNDSHEET of a worksheet, not of a chart or macros
+            names[struct.unpack_from("<I", rec)[0]] = _xls_text(rec, 6, 1)
+        elif rid == 0x041E:  # FORMAT
+            formats[struct.unpack_from("<H", rec)[0]] = _xls_is_date(_xls_text(rec, 2))
+        elif rid == 0x00E0:  # XF
+            xfs.append(struct.unpack_from("<H", rec, 2)[0])
+        elif rid == 0x0022 and rec[:1] == b"\x01":  # DATEMODE
+            epoch = _XLS_1904
+        elif rid == _XLS_SST or (rid == _XLS_CONTINUE and previous == _XLS_SST):
+            parts.append(rec)
+        if rid != _XLS_CONTINUE:
+            previous = rid
+    return _XlsBook(names, _xls_strings(parts) if parts else [], [formats.get(x, False) for x in xfs], epoch)
+
+
+def _xls_too_large(source: str) -> IngestError:
+    return IngestError(f"{source}: the workbook spreads over more than {_XLS_CELLS} cells", "too_large")
+
+
+def _xls_cells(records: Iterator[tuple[int, int, bytes]], book: _XlsBook,
+               source: str) -> dict[int, dict[int, dict[int, object]]]:
+    """Each worksheet's cells by row and column. One pass in file order: a sheet's offset is only checked against where
+    records fall, so sheets that claim the same place cannot make it read twice."""
+    room = _XLS_CELLS
+
+    def put(rows: dict[int, dict[int, object]], r: int, c: int, value: object) -> None:
+        nonlocal room
+        if c < 256 and value is not None:  # a sheet has no more columns; a wider cell only spreads the rows out
+            rows.setdefault(r, {})[c] = value
+            room -= 1
+            if room < 0:
+                raise _xls_too_large(source)
+
+    def number(v: float, xf: int) -> object:
+        if xf < len(book.dates) and book.dates[xf]:
+            return _xls_date(v, book.epoch)
+        return int(v) if v.is_integer() else v  # .xlsx gives a whole number as one, and a header must read the same
+
+    sheets: dict[int, dict[int, dict[int, object]]] = {}
+    rows: dict[int, dict[int, object]] | None = None
+    depth = 0
+    waiting: tuple[int, int] | None = None
+    for at, rid, rec in records:
+        if rid in _XLS_BOF:
+            depth += 1
+            if depth == 1:
+                rows = sheets.setdefault(at, {}) if at in book.names else None
+        elif rid == _XLS_EOF:
+            depth = max(depth - 1, 0)
+        elif rows is None or depth != 1:  # a chart inside a sheet has cells of its own
+            continue
+        elif rid == _XLS_MULRK:
+            r, c = struct.unpack_from("<HH", rec)
+            for k in range((len(rec) - 6) // 6):
+                xf, rk = struct.unpack_from("<HI", rec, 4 + 6 * k)
+                put(rows, r, c + k, number(_xls_rk(rk), xf))
+        elif rid == _XLS_STRING:
+            if waiting:
+                put(rows, *waiting, _xls_text(rec, 0))
+            waiting = None
+        elif rid in (_XLS_LABELSST, _XLS_NUMBER, _XLS_RK, _XLS_LABEL, _XLS_RSTRING, _XLS_BOOL, _XLS_FORMULA):
+            r, c, xf = struct.unpack_from("<HHH", rec)
+            if rid == _XLS_LABELSST:
+                i, = struct.unpack_from("<I", rec, 6)
+                put(rows, r, c, book.strings[i] if i < len(book.strings) else None)
+            elif rid == _XLS_NUMBER:
+                put(rows, r, c, number(struct.unpack_from("<d", rec, 6)[0], xf))
+            elif rid == _XLS_RK:
+                put(rows, r, c, number(_xls_rk(struct.unpack_from("<I", rec, 6)[0]), xf))
+            elif rid == _XLS_BOOL:
+                put(rows, r, c, bool(rec[6]) if rec[7] == 0 else None)
+            elif rid != _XLS_FORMULA:
+                put(rows, r, c, _xls_text(rec, 6))
+            elif rec[12:14] != b"\xff\xff":
+                put(rows, r, c, number(struct.unpack_from("<d", rec, 6)[0], xf))
+            elif rec[6] == 0:  # the text is in the STRING record that follows
+                waiting = (r, c)
+            elif rec[6] == 1:
+                put(rows, r, c, bool(rec[8]))
+    return sheets
+
+
+def read_xls(data: bytes, source: str, *, max_rows: int = 0, header=None) -> list[Table]:
+    """Every sheet with rows of an Excel 97 to 2003 workbook, the way `draft.read_xlsx` gives them: the last result of a
+    formula, dates as dates, a workbook of one sheet named after the file."""
+    z = _compound(data, source)
+    path = z.find("Workbook")
+    records = _biff(z.read(path)) if path else iter(())
+    first = next(records, None)
+    if first is None or first[1] != 0x0809 or first[2][:2] != b"\x00\x06":  # Excel 95 and before
+        raise _export(source)
+    book = _xls_book(records, source)
+    sheets = _xls_cells(records, book, source)
+    out, spread = [], 0
+    for at, name in book.names.items():
+        found = sheets.get(at, {})
+        spread += sum(max(row) + 1 for row in found.values())
+        if spread > _XLS_CELLS:
+            raise _xls_too_large(source)
+        raw = [[row.get(c) for c in range(max(row) + 1)] for _, row in sorted(found.items())]
+        try:
+            out.append(_table(Path(source).stem if len(book.names) == 1 else name, f"{source} · {name}", raw, max_rows,
+                              header))
+        except ReadError:
+            continue
+    if not out:
+        raise ReadError(f"{source}: no sheet has rows", "empty")
+    return out
+
+
+def _xls(data: bytes, source: str) -> Definitions:
+    try:
+        sheets = read_xls(data, source, header=header_row)
+    except ReadError as e:
+        raise IngestError(str(e), READ_REASON.get(e.reason, "format")) from None
+    out = from_sheets(sheets, source)
+    return _sheets_as_text(sheets, source) if out is None else out
+
+
+def _office(data: bytes, source: str) -> Definitions:
+    """An older binary Office file, known by the streams it holds, since its name may be wrong and a web page or a newer
+    file is often saved under the old name."""
+    if data[:4] != OLE:
+        return _sniff(data, source)(data, source)
+    z = _compound(data, source)
+    if z.find("EncryptedPackage"):  # a newer file with a password is a compound file too
+        raise _locked(source)
+    word, deck = z.find("WordDocument"), z.find("PowerPoint Document")
+    if word:
+        return _doc(z, word, source)
+    if deck:
+        return _ppt(z, deck, source)
+    if z.find("Workbook"):
+        return _xls(data, source)
+    if "FileHeader" in z.paths:
+        return _hwp(data, source)
+    raise _export(source)
 
 
 class _Html(HTMLParser):
@@ -752,12 +1334,15 @@ def _sheets(data: bytes, source: str) -> Definitions:
     out = from_sheets(sheets, source)
     if out is None and Path(name).suffix.lower() == ".csv":
         raise IngestError(f"{source}: no table, code, term or message sheet found", "format")
-    if out is None:  # a project document of some other kind still comes in, as text a person or a model can read
-        text = "\n".join(" | ".join(str(c) for c in [*s.columns] if c) + "\n" + "\n".join(
-            " | ".join(str(c) for c in r if c) for r in s.rows) for s in sheets)
-        return Definitions(sources=[source], documents=[{"name": Path(source).stem, "kind": "other", "text": text,
-                                                         "sections": []}])
-    return out
+    return _sheets_as_text(sheets, source) if out is None else out
+
+
+def _sheets_as_text(sheets: list[Table], source: str) -> Definitions:
+    """A project document of some other kind still comes in, as text a person or a model can read."""
+    text = "\n".join(" | ".join(str(c) for c in [*s.columns] if c) + "\n" + "\n".join(
+        " | ".join(str(c) for c in r if c) for r in s.rows) for s in sheets)
+    return Definitions(sources=[source], documents=[{"name": Path(source).stem, "kind": "other", "text": text,
+                                                     "sections": []}])
 
 
 def _sqlite(data: bytes, source: str) -> Definitions:
@@ -1017,7 +1602,7 @@ def _reference(cols: list[str], toks: list[_Tok], i: int) -> dict | None:
     if not parts or not cols:
         return None
     ref = _bracket_names(toks, i)[0] if _at(toks, i).kind == "(" else []
-    return {"columns": cols, "table": parts[-1], "ref_columns": ref}
+    return {"columns": cols, "table": parts[-1], "schema": parts[-2] if len(parts) > 1 else "", "ref_columns": ref}
 
 
 def _is_constraint(item: list[_Tok]) -> bool:
@@ -1086,20 +1671,57 @@ def _column(t: TableDef, item: list[_Tok], defs: Definitions) -> None:
         i += 1
 
 
-def _create_table(st: list[_Tok], defs: Definitions) -> None:
+def _table_head(st: list[_Tok]) -> tuple[list[str], int] | None:
+    """The dotted name of a CREATE TABLE and where its columns open."""
     i = 1
     while _kw(_at(st, i)) in _TABLE_WORDS:
         i += 1
-    if _kw(_at(st, i)) != "TABLE":
-        return
+    if _kw(st[0]) != "CREATE" or _kw(_at(st, i)) != "TABLE":
+        return None
     i += 1
     if [_kw(_at(st, i + k)) for k in range(3)] == ["IF", "NOT", "EXISTS"]:
         i += 3
     parts, i = _dotted(st, i)
     if not parts or _at(st, i).kind != "(":
-        return  # AS SELECT, LIKE another table, PARTITION OF: nothing of its own to read
+        return None  # AS SELECT, LIKE another table, PARTITION OF: nothing of its own to read
+    return parts, i
+
+
+def _schemas(statements: list[list[_Tok]]) -> dict[str, set[str]]:
+    """The schemas each table name is created in, in lower case."""
+    out: dict[str, set[str]] = {}
+    for st in statements:
+        head = _table_head(st)
+        if head:
+            parts = head[0]
+            out.setdefault(parts[-1].lower(), set()).add(parts[-2].lower() if len(parts) > 1 else "")
+    return out
+
+
+def _table_name(parts: list[str], schemas: dict[str, set[str]], home: str = "") -> str:
+    """A table's name in the definitions. Its schema stays in the name only where two schemas hold the same name, so
+    neither table is lost. A name given without a schema means the one in `home`, the schema of the table saying it."""
+    name = parts[-1]
+    held = schemas.get(name.lower(), set())
+    schema = parts[-2] if len(parts) > 1 and parts[-2] else home
+    return f"{schema}.{name}" if len(held) > 1 and schema.lower() in held - {""} else name
+
+
+def _settle(t: TableDef, parts: list[str], schemas: dict[str, set[str]]) -> None:
+    """References read so far name their table as `_table_name` does, from where the table holding them lies."""
+    home = parts[-2] if len(parts) > 1 else ""
+    for r in t.references:
+        if "schema" in r:
+            r["table"] = _table_name([r.pop("schema"), r["table"]], schemas, home)
+
+
+def _create_table(st: list[_Tok], defs: Definitions, schemas: dict[str, set[str]]) -> None:
+    head = _table_head(st)
+    if head is None:
+        return
+    parts, i = head
     end = _group(st, i)
-    t = TableDef(parts[-1])
+    t = TableDef(_table_name(parts, schemas))
     items = _items(st[i + 1:end - 1])
     for item in items:
         if not _is_constraint(item):
@@ -1116,6 +1738,7 @@ def _create_table(st: list[_Tok], defs: Definitions) -> None:
             text = _at(tail, j + 2 if _at(tail, j + 1).kind == "=" else j + 1)
             if text.kind == "str":
                 _describe(t, text.value)
+    _settle(t, parts, schemas)
     defs.tables[t.name] = t
 
 
@@ -1127,14 +1750,14 @@ def _create_type(st: list[_Tok], defs: Definitions) -> None:
         defs.codes[parts[-1]] = CodeGroup(parts[-1], "", values)
 
 
-def _alter(st: list[_Tok], defs: Definitions) -> None:
+def _alter(st: list[_Tok], defs: Definitions, schemas: dict[str, set[str]]) -> None:
     if _kw(_at(st, 1)) != "TABLE":
         return
     i = 2
     while _kw(_at(st, i)) in ("ONLY", "IF", "EXISTS"):
         i += 1
     parts, i = _dotted(st, i)
-    t = defs.table(parts[-1]) if parts else None
+    t = defs.table(_table_name(parts, schemas)) if parts else None
     if t is None:
         return
     for item in _items(st[i:]):
@@ -1149,32 +1772,33 @@ def _alter(st: list[_Tok], defs: Definitions) -> None:
         for sub in subs:
             if _is_constraint(sub):
                 _constraint(t, sub, defs)
+    _settle(t, parts, schemas)
 
 
-def _comment_on(st: list[_Tok], defs: Definitions) -> None:
+def _comment_on(st: list[_Tok], defs: Definitions, schemas: dict[str, set[str]]) -> None:
     kind = _kw(_at(st, 2))
     parts, i = _dotted(st, 3)
     text = _at(st, i + 1)
     if _kw(_at(st, i)) != "IS" or text.kind != "str" or not parts:
         return
     if kind == "TABLE":
-        t = defs.table(parts[-1])
+        t = defs.table(_table_name(parts, schemas))
         if t is not None:
             _describe(t, text.value)
     elif kind == "COLUMN" and len(parts) > 1:
-        t = defs.table(parts[-2])
+        t = defs.table(_table_name(parts[:-1], schemas))
         c = t.column(parts[-1]) if t is not None else None
         if c is not None:
             _describe(c, text.value)
 
 
-def _extended_property(st: list[_Tok], defs: Definitions) -> None:
+def _extended_property(st: list[_Tok], defs: Definitions, schemas: dict[str, set[str]]) -> None:
     """SQL Server keeps its comments as MS_Description properties: name, value, then type and name of each level."""
     v = [x.value for x in st if x.kind == "str"]
     if len(v) < 2 or v[0] != "MS_Description":
         return
     levels = {v[k].upper(): v[k + 1] for k in range(2, len(v) - 1, 2)}
-    t = defs.table(levels.get("TABLE", ""))
+    t = defs.table(_table_name([levels.get("SCHEMA", ""), levels.get("TABLE", "")], schemas))
     if t is None:
         return
     c = t.column(levels["COLUMN"]) if "COLUMN" in levels else None
@@ -1186,18 +1810,20 @@ def _extended_property(st: list[_Tok], defs: Definitions) -> None:
 
 def _sql(data: bytes, source: str) -> Definitions:
     defs = Definitions(sources=[source])
-    for st in _statements(_sql_tokens(_text(data, source))):
+    statements = list(_statements(_sql_tokens(_text(data, source))))
+    schemas = _schemas(statements)
+    for st in statements:
         head = _kw(st[0])
         if head == "CREATE" and _kw(_at(st, 1)) == "TYPE":
             _create_type(st, defs)
         elif head == "CREATE":
-            _create_table(st, defs)
+            _create_table(st, defs, schemas)
         elif head == "ALTER":
-            _alter(st, defs)
+            _alter(st, defs, schemas)
         elif head == "COMMENT" and _kw(_at(st, 1)) == "ON":
-            _comment_on(st, defs)
+            _comment_on(st, defs, schemas)
         elif head in ("EXEC", "EXECUTE") and any(_kw(x) == "SP_ADDEXTENDEDPROPERTY" for x in st):
-            _extended_property(st, defs)
+            _extended_property(st, defs, schemas)
     return _found(defs, source)
 
 
@@ -1611,6 +2237,7 @@ register(".docx", _docx)
 register(".pptx", _pptx)
 register(".hwpx", _hwpx)
 register(".hwp", _hwp)
+register([".doc", ".ppt", ".xls"], _office)
 register([".html", ".htm"], _html)
 register([".md", ".markdown"], _md)
 register(".txt", _txt)

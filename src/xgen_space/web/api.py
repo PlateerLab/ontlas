@@ -53,7 +53,7 @@ INGEST_ERROR = {
     "empty": "읽을 수 있는 정의나 본문이 없어 정의서를 만들지 못했습니다. 내용이 있는 파일을 업로드해 주세요.",
     "too_large": "압축 해제 크기가 64MB 한도를 초과해 파일을 열지 못했습니다. 파일을 나누어 다시 업로드해 주세요.",
     "needs_extra": "문서 읽기 모듈이 설치되지 않아 파일을 처리하지 못했습니다. DOCX 또는 TXT로 저장해 업로드해 주세요.",
-    "export_needed": "지원하지 않는 형식이라 내용을 읽지 못했습니다. {export_to} 파일로 내보내 다시 업로드해 주세요.",
+    "export_needed": "암호가 걸렸거나 지원하지 않는 형식이라 내용을 읽지 못했습니다. 암호를 해제하거나 {export_to} 파일로 내보내 다시 업로드해 주세요.",
 }
 MODULE_TEXT_MAX = 48 * 1024
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts

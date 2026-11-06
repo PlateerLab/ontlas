@@ -4,7 +4,10 @@ import json
 import struct
 import sys
 import time
+import tracemalloc
 import zipfile
+from collections.abc import Iterator
+from itertools import accumulate
 
 import pytest
 
@@ -1300,3 +1303,786 @@ def test_a_malformed_hwp_ends_in_an_answer():
         ingest(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\xff" * 600, "a.hwp")
     with pytest.raises(IngestError):
         ingest(_hwp_file(["내용"])[:700], "a.hwp")
+
+
+# ---- older Office files --------------------------------------------------------------------------------------
+
+END, FREE = 0xFFFFFFFE, 0xFFFFFFFF
+MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def _ole(streams: dict[str, bytes]) -> bytes:
+    """A compound file of these streams in sectors of their own: a cutoff of 0 keeps them out of the mini stream, which
+    the .hwp tests cover."""
+    names = list(streams)
+    blobs = [streams[n].ljust((len(streams[n]) + 511) // 512 * 512, b"\0") for n in names]
+    n_dir = (len(names) + 4) // 4
+    n_fat = 1
+    while n_fat * 128 < n_fat + n_dir + sum(len(b) // 512 for b in blobs):
+        n_fat += 1
+    fat = [0xFFFFFFFD] * n_fat
+
+    def link(count: int) -> int:
+        start = len(fat)
+        fat.extend(range(start + 1, start + count))
+        if count:
+            fat.append(END)
+        return start if count else END
+
+    def entry(name: str, kind: int, *, right=FREE, child=FREE, start=END, size=0) -> bytes:
+        raw = name.encode("utf-16-le") + b"\0\0"
+        return (raw.ljust(64, b"\0") + struct.pack("<HBB", len(raw), kind, 1) + struct.pack("<III", FREE, right, child)
+                + b"\0" * 36 + struct.pack("<IQ", start, size))
+
+    directory_at = link(n_dir)
+    entries = [entry("Root Entry", 5, child=1 if names else FREE)]
+    for i, (n, b) in enumerate(zip(names, blobs)):
+        entries.append(entry(n, 2, right=i + 2 if i + 1 < len(names) else FREE, start=link(len(b) // 512),
+                             size=len(streams[n])))
+    directory = b"".join(entries).ljust(n_dir * 512, b"\0")
+    head = bytearray(512)
+    head[:8] = MAGIC
+    struct.pack_into("<HH", head, 30, 9, 6)
+    struct.pack_into("<II", head, 44, n_fat, directory_at)
+    struct.pack_into("<IIIII", head, 56, 0, END, 0, END, 0)
+    struct.pack_into("<109I", head, 76, *range(n_fat), *[FREE] * (109 - n_fat))
+    table = struct.pack(f"<{n_fat * 128}I", *fat, *[FREE] * (n_fat * 128 - len(fat)))
+    return bytes(head) + table + directory + b"".join(blobs)
+
+
+IN_TABLE, ROW_END = b"\x16\x24\x01", b"\x17\x24\x01"  # sprmPFInTable, sprmPFTtp
+
+
+def _word(pieces: list[str], props: list[tuple[int, bytes]], *, flags=0x0200, ident=0xA5EC, text_length=None,
+          cps=None, stream="1Table", again=1) -> bytes:
+    """A .doc: pieces of text, one byte a character where ASCII holds them and two elsewhere, and for each mark that
+    ends a paragraph or a cell its (style, properties). Styles 1 to 4 are Heading 1, Heading 2, Title and one of a
+    user's own. `again` names the same pieces that many times over in the piece table."""
+    start = 1536
+    body, marks, places = bytearray(), [], []
+    for piece in pieces:
+        narrow = piece.isascii()
+        places.append((start + len(body)) * 2 | 0x40000000 if narrow else start + len(body))
+        for ch in piece:
+            body += ch.encode("ascii" if narrow else "utf-16-le")
+            if ch in "\r\x07":
+                marks.append(start + len(body))
+    runs = len(marks)
+    assert runs == len(props) and runs < 30
+    page = bytearray(512)
+    struct.pack_into(f"<{runs + 1}I", page, 0, start, *marks)
+    page[511] = runs
+    top = 510
+    for i, (style, sprms) in enumerate(props):
+        blob = struct.pack("<H", style) + sprms
+        head = bytes([(len(blob) + 1) // 2]) if len(blob) % 2 else bytes([0, len(blob) // 2])
+        top = (top - len(head) - len(blob)) // 2 * 2
+        page[top:top + len(head) + len(blob)] = head + blob
+        page[4 * (runs + 1) + 13 * i] = top // 2
+    page_at = (start + len(body) + 511) // 512
+    word = bytearray(page_at * 512 + 512)
+    word[start:start + len(body)] = body
+    word[page_at * 512:] = page
+    lengths = [len(p.encode("utf-16-le")) // 2 for p in pieces]
+    cps = cps if cps is not None else [0, *accumulate(lengths * again)]
+    pcds = b"".join(struct.pack("<HIH", 0, fc, 0) for fc in places) * again
+    plc = struct.pack(f"<{len(cps)}I", *cps) + pcds
+    clx = b"\x01" + struct.pack("<H", 3) + b"abc" + b"\x02" + struct.pack("<I", len(plc)) + plc
+    styles = b"".join(struct.pack("<HH", 10, sti) + b"\0" * 8 for sti in (0, 1, 2, 62, 0xFFE))
+    stsh = struct.pack("<HH", 18, 5) + b"\0" * 16 + styles
+    bte = struct.pack("<III", start, marks[-1] if marks else start, page_at)
+    table = stsh + bte + clx
+    struct.pack_into("<HH", word, 0, ident, 0xC1)
+    struct.pack_into("<H", word, 0x0A, flags)
+    struct.pack_into("<I", word, 76, sum(lengths) * again if text_length is None else text_length)
+    struct.pack_into("<II", word, 0xA2, 0, len(stsh))
+    struct.pack_into("<II", word, 0x102, len(stsh), len(bte))
+    struct.pack_into("<II", word, 0x1A2, len(stsh) + len(bte), len(clx))
+    return _ole({"WordDocument": bytes(word), stream: table})
+
+
+def test_a_doc_gives_its_sections_by_heading_style_and_by_number():
+    d = ingest(_word(["반품 규정\r", "First body line.\r", "기간\r", "가까운 설명입니다.\r",
+                      "1. Scope\r", "Own style text\r"],
+                     [(3, b""), (0, b""), (1, b""), (0, b""), (0, b""), (4, b"")]), "규정.doc").documents[0]
+    assert d["name"] == "규정" and d["kind"] == "other"
+    assert [s["title"] for s in d["sections"]] == ["반품 규정", "기간", "1. Scope"]
+    assert d["sections"][0]["text"] == "First body line."
+    assert d["sections"][2]["text"] == "Own style text"
+
+
+def test_a_doc_reads_a_paragraph_across_pieces_of_both_widths():
+    d = ingest(_word(["Mixed ", "한글 ", "end\r"], [(0, b"")]), "a.doc").documents[0]
+    assert d["text"] == "Mixed 한글 end"
+
+
+def test_a_doc_finds_a_heading_past_characters_of_two_units():
+    # a pair of surrogates is one character in Python and two in the file, and styles are found by file position
+    # one piece, or the count starts afresh; enough of them to reach back past the heading's own paragraph
+    d = ingest(_word(["😀😀😀😀😀 앞줄\r제목\r본문\r"], [(0, b""), (1, b""), (0, b"")]), "a.doc").documents[0]
+    assert [s["title"] for s in d["sections"]] == ["", "제목"]
+
+
+def test_a_doc_keeps_a_table_as_rows():
+    cells = [(0, IN_TABLE)] * 2 + [(0, IN_TABLE + ROW_END)]
+    d = ingest(_word(["Before\r", "A\x07B\x07\x07", "줄 하나\r둘\x07\x07\x07", "After\r"],
+                     [(0, b""), *cells, (0, IN_TABLE), *cells, (0, b"")]), "a.doc").documents[0]
+    assert d["text"].split("\n") == ["Before", "A | B", "줄 하나 둘 |", "After"]
+
+
+def test_a_doc_shows_what_a_field_shows_and_not_its_instruction():
+    link = '\x13 HYPERLINK "http://example.org" \x14Our site\x15'
+    nested = "\x13 IF \x13 MERGEFIELD a \x14x\x15 = 1 \x14shown\x15"
+    d = ingest(_word([f"See {link} and {nested}.\r"], [(0, b"")]), "a.doc").documents[0]
+    assert d["text"] == "See Our site and shown."
+
+
+def test_a_doc_drops_what_is_not_text():
+    d = ingest(_word(["a\x01b\x0bc\x1ed\x1fe\tf\r"], [(0, b"")]), "a.doc").documents[0]
+    assert d["text"] == "ab\nc-de\tf"
+
+
+def test_a_doc_reads_the_table_stream_its_header_names():
+    assert ingest(_word(["Text\r"], [(0, b"")], flags=0, stream="0Table"), "a.doc").documents
+    assert _reason(_word(["Text\r"], [(0, b"")], flags=0), "a.doc") == "format"  # says 0Table, holds 1Table
+
+
+@pytest.mark.parametrize("flags", [0x0200 | 0x0100, 0x0200 | 0x0100 | 0x8000])
+def test_a_doc_with_a_password_is_refused_with_what_to_do(flags):
+    with pytest.raises(IngestError, match="password") as e:
+        ingest(_word(["Secret\r"], [(0, b"")], flags=flags), "a.doc")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "DOCX"
+
+
+def test_a_doc_from_word_95_says_what_to_export_to():
+    with pytest.raises(IngestError) as e:
+        ingest(_word(["Old\r"], [(0, b"")], ident=0xA5DC), "a.doc")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "DOCX"
+
+
+def test_a_malformed_doc_ends_in_an_answer():
+    assert _reason(_word(["Text\r"], [(0, b"")], cps=[5, 0]), "a.doc") == "format"
+    assert _reason(_word(["Text\r"], [(0, b"")], text_length=(1 << 26) + 1), "a.doc") == "too_large"
+    assert _reason(_word(["Text\r"], [(0, b"")], text_length=0), "a.doc") == "empty"
+    assert _reason(_ole({"WordDocument": b"\xec\xa5"}), "a.doc") == "format"
+
+
+def test_pieces_cannot_give_more_text_than_the_file_says_it_has():
+    # one long piece named a thousand times, in a text said to be one short line
+    data = _word(["x" * 4000 + "\r"], [(0, b"")], again=1000, text_length=10)
+    assert ingest(data, "a.doc").documents[0]["text"] == "x" * 10
+
+
+def test_fields_that_never_close_stay_linear():
+    start = time.perf_counter()
+    assert _reason(_word(["\x13" * 600_000 + "\r"], [(0, b"")]), "a.doc") == "empty"
+    assert time.perf_counter() - start < 10
+
+
+def test_paragraph_properties_made_to_be_slow_end():
+    # two paragraphs with long lists of properties, taken in turn four hundred thousand times over
+    long = b"\x00\x24\x00" * 70
+    data = _word(["x\r", "y\r"], [(0, long), (0, long)], again=200_000)
+    start = time.perf_counter()
+    assert _reason(data, "a.doc") == "format"
+    assert time.perf_counter() - start < 5
+
+
+def _rec(kind: int, body: bytes = b"", *, instance: int = 0) -> bytes:
+    return struct.pack("<HHI", instance << 4, kind, len(body)) + body
+
+
+def _box(kind: int, *children: bytes, instance: int = 0) -> bytes:
+    body = b"".join(children)
+    return struct.pack("<HHI", 0xF | instance << 4, kind, len(body)) + body
+
+
+def _atoms(text: str, text_type: int) -> bytes:
+    atom = (_rec(0x0FA8, text.encode("latin-1")) if text.isascii() else _rec(0x0FA0, text.encode("utf-16-le")))
+    return _rec(0x0F9F, struct.pack("<I", text_type)) + atom
+
+
+def _shape(text: str, text_type: int = 4) -> bytes:
+    """A shape's text, as deep in a slide's drawing as PowerPoint keeps it."""
+    return _box(0xF004, _box(0xF00D, _atoms(text, text_type)))
+
+
+def _slide_record(*shapes: bytes) -> bytes:
+    return _box(0x03EE, _box(0x040C, _box(0xF002, _box(0xF003, *shapes))))
+
+
+def _persist(places: dict[int, int]) -> bytes:
+    return _rec(0x1772, b"".join(struct.pack("<II", 1 << 20 | k, v) for k, v in places.items()))
+
+
+def _edit(last: int, directory: int, document: int = 1) -> bytes:
+    return _rec(0x0FF5, struct.pack("<IHBBIIII", 0, 0, 0, 3, last, directory, document, 0) + b"\0" * 4)
+
+
+def _ppt_file(raw: bytes, edit: int, *, token: int = 0xE391C05F, extra: dict | None = None) -> bytes:
+    user = _rec(0x0FF6, struct.pack("<IIIHH", 0x14, token, edit, 0, 0x03F4) + b"\0" * 12)
+    return _ole({"PowerPoint Document": raw, "Current User": user, **(extra or {})})
+
+
+def _deck(slides: list[tuple[list[bytes], bytes]], **kw) -> bytes:
+    """A deck of (what the slide list holds, the slide's own shapes): a slide id starts at 2, the document is 1."""
+    raw = b""
+    places = {}
+    for i, (_, shapes) in enumerate(slides):
+        places[2 + i] = len(raw)
+        raw += _slide_record(shapes)
+    listed = b"".join(_rec(0x03F3, struct.pack("<IIIII", 2 + i, 0, 0, 0, 0)) + b"".join(texts)
+                      for i, (texts, _) in enumerate(slides))
+    places[1] = len(raw)
+    raw += _box(0x03E8, _box(0x0FF0, _rec(0x03F3, b"\0" * 20), _atoms("마스터 글자", 0), instance=1),
+                _box(0x0FF0, listed), _box(0x0FF0, _rec(0x03F3, b"\0" * 20), _atoms("발표자 노트", 2), instance=2))
+    directory = len(raw)
+    raw += _persist(places)
+    edit = len(raw)
+    return _ppt_file(raw + _edit(0, directory), edit, **kw)
+
+
+def test_a_ppt_gives_a_section_to_a_slide_in_its_order():
+    d = ingest(_deck([([_atoms("첫 화면", 0), _atoms("첫줄\r둘째\x0bsame paragraph", 1)], _shape("글상자")),
+                      ([_atoms("Ascii title", 6)], b""),
+                      ([], _shape("목록만 있는 화면"))]), "화면.ppt").documents[0]
+    assert d["name"] == "화면" and d["kind"] == "screen"
+    assert [s["title"] for s in d["sections"]] == ["첫 화면", "Ascii title", "Slide 3"]
+    assert d["sections"][0]["text"].split("\n") == ["첫줄", "둘째", "same paragraph", "글상자"]
+    assert d["sections"][2]["text"] == "목록만 있는 화면"
+
+
+def test_a_ppt_leaves_out_masters_notes_and_slides_with_nothing_on_them():
+    d = ingest(_deck([([_atoms("제목", 0)], b""), ([], b"")]), "a.ppt").documents[0]
+    assert len(d["sections"]) == 1 and "마스터" not in d["text"] and "노트" not in d["text"]
+
+
+def test_a_ppt_finds_a_title_in_a_shape_as_it_does_in_the_slide_list():
+    d = ingest(_deck([([], _shape("도형 제목", 0) + _shape("도형 본문"))]), "a.ppt").documents[0]
+    assert d["sections"] == [{"title": "도형 제목", "text": "도형 본문"}]
+
+
+def test_a_ppt_says_a_line_once_when_a_writer_keeps_it_in_both_places():
+    d = ingest(_deck([([_atoms("제목", 0), _atoms("본문", 1)], _shape("제목", 0) + _shape("본문"))]), "a.ppt").documents[0]
+    assert d["sections"] == [{"title": "제목", "text": "본문"}]
+
+
+def test_a_ppt_shows_the_newest_edit_and_not_what_it_replaced():
+    # a fast save appends: the older slide is still in the stream, and only the edit chain says it is gone
+    old = _slide_record(_shape("지난 판"))
+    doc_at = len(old)
+    doc = _box(0x03E8, _box(0x0FF0, _rec(0x03F3, struct.pack("<IIIII", 2, 0, 0, 0, 0))))
+    first_dir = doc_at + len(doc)
+    raw = old + doc + _persist({1: doc_at, 2: 0})
+    first_edit = len(raw)
+    raw += _edit(0, first_dir)
+    new_at = len(raw)
+    raw += _slide_record(_shape("새 판"))
+    second_dir = len(raw)
+    raw += _persist({2: new_at})
+    second_edit = len(raw)
+    raw += _edit(first_edit, second_dir)
+    d = ingest(_ppt_file(raw, second_edit), "a.ppt").documents[0]
+    assert "새 판" in d["text"] and "지난" not in d["text"]
+
+
+@pytest.mark.parametrize("kw", [{"token": 0xF3D1C4DF}, {"extra": {"EncryptedSummary": b"\0" * 64}}])
+def test_a_ppt_with_a_password_is_refused_with_what_to_do(kw):
+    with pytest.raises(IngestError, match="password") as e:
+        ingest(_deck([([_atoms("제목", 0)], b"")], **kw), "a.ppt")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "PPTX"
+
+
+def test_a_ppt_from_before_97_says_what_to_export_to():
+    data = _ole({"PowerPoint Document": b"\0" * 64, "Current User": b"\0" * 8})
+    assert _reason(data, "a.ppt") == "export_needed"
+
+
+def test_a_malformed_ppt_ends_in_an_answer():
+    assert _reason(_ppt_file(b"\0" * 64, 0), "a.ppt") == "format"  # no edit at all
+    assert _reason(_ppt_file(_rec(0x1234, _rec(0x1234, b"\0" * 64)), 8), "a.ppt") == "format"  # lands on something else
+    loop = _persist({1: 0})  # an edit that follows itself, and a document that is no document
+    assert _reason(_ppt_file(loop + _edit(len(loop), 0), len(loop)), "a.ppt") == "format"
+
+
+def test_slides_that_all_point_at_one_long_record_end():
+    many = b"".join(_rec(0x0FA8, b"x") for _ in range(20_000))
+    slide = _box(0x03EE, many)
+    ids = {2 + i: 0 for i in range(3000)}
+    listed = b"".join(_rec(0x03F3, struct.pack("<IIIII", k, 0, 0, 0, 0)) for k in ids)
+    doc = _box(0x03E8, _box(0x0FF0, listed))
+    directory = len(slide) + len(doc)
+    raw = slide + doc + _persist({1: len(slide), **ids})
+    start = time.perf_counter()
+    assert _reason(_ppt_file(raw + _edit(0, directory), len(raw)), "a.ppt") == "format"
+    assert time.perf_counter() - start < 5
+
+
+def test_one_long_text_named_by_many_slides_is_not_read_again_and_again():
+    slide = _box(0x03EE, _rec(0x0FA8, b"x" * 200_000))
+    ids = {2 + i: 0 for i in range(300)}
+    doc = _box(0x03E8, _box(0x0FF0, b"".join(_rec(0x03F3, struct.pack("<IIIII", k, 0, 0, 0, 0)) for k in ids)))
+    directory = len(slide) + len(doc)
+    raw = slide + doc + _persist({1: len(slide), **ids})
+    assert _reason(_ppt_file(raw + _edit(0, directory), len(raw)), "a.ppt") == "format"
+
+
+def _biff(rid: int, body: bytes = b"") -> bytes:
+    return struct.pack("<HH", rid, len(body)) + body
+
+
+def _bof(kind: int, version: int = 0x0600) -> bytes:
+    return _biff(0x0809, struct.pack("<HHHHII", version, kind, 0, 0, 0, 0))
+
+
+def _label(text: str, length: int = 2) -> bytes:
+    return len(text).to_bytes(length, "little") + b"\x01" + text.encode("utf-16-le")
+
+
+def _strings(items: list[str]) -> bytes:
+    return struct.pack("<II", len(items), len(items)) + b"".join(_label(x) for x in items)
+
+
+def _number(r: int, c: int, v: float, xf: int = 0) -> bytes:
+    return _biff(0x0203, struct.pack("<HHHd", r, c, xf, v))
+
+
+def _shared(r: int, c: int, i: int) -> bytes:
+    return _biff(0x00FD, struct.pack("<HHHI", r, c, 0, i))
+
+
+def _workbook(sheets: dict[str, bytes], *, head: bytes = b"", sst: bytes = b"", version: int = 0x0600,
+          stream: str = "Workbook", kinds: dict[str, int] | None = None) -> bytes:
+    """A workbook of sheets given as their cell records; `head` goes into the globals, before the sheet list."""
+    def globals_(places: list[int]) -> bytes:
+        bound = b"".join(_biff(0x0085, struct.pack("<IBB", at, 0, (kinds or {}).get(n, 0)) + _label(n, 1))
+                         for n, at in zip(sheets, places))
+        return _bof(5, version) + head + bound + sst + _biff(0x000A)
+
+    size = len(globals_([0] * len(sheets)))
+    places, body = [], b""
+    for cells in sheets.values():
+        places.append(size + len(body))
+        body += _bof(0x10, version) + cells + _biff(0x000A)
+    return _ole({stream: globals_(places) + body})
+
+
+def _table_of(rows: list[list]) -> tuple[bytes, bytes]:
+    """The cell records of rows and the shared strings they use."""
+    strings: list[str] = []
+    cells = b""
+    for r, row in enumerate(rows):
+        for c, v in enumerate(row):
+            if isinstance(v, str):
+                strings.append(v)
+                cells += _shared(r, c, len(strings) - 1)
+            elif v is not None:
+                cells += _number(r, c, v)
+    return cells, _biff(0x00FC, _strings(strings))
+
+
+DEFINITION_ROWS = [["테이블 정의서"], ["테이블명", "테이블한글명", "컬럼명", "컬럼한글명", "데이터타입", "길이", "PK"],
+                   ["TB_ORDER", "주문", "ORDER_NO", "주문번호", "VARCHAR", 20, "Y"],
+                   ["TB_ORDER", "주문", "AMOUNT", "금액", "NUMBER", 12, None]]
+CODE_ROWS = [["코드그룹", "코드그룹명", "코드", "코드명", "사용여부"], ["OD01", "주문상태", "10", "접수", "Y"], ["OD01", "주문상태", "20", "완료", "N"]]
+DATA_ROWS = [["id", "이름", "금액"], [1, "회원", 1000.5], [2, "손님", 3]]
+
+
+def _two_sheets(first: list[list], second: list[list]) -> bytes:
+    a, _ = _table_of(first)
+    strings = [v for row in first + second for v in row if isinstance(v, str)]
+    cells, n = b"", len([v for row in first for v in row if isinstance(v, str)])
+    for r, row in enumerate(second):
+        for c, v in enumerate(row):
+            if isinstance(v, str):
+                cells += _shared(r, c, n)
+                n += 1
+            elif v is not None:
+                cells += _number(r, c, v)
+    return _workbook({"정의서": a, "코드": cells}, sst=_biff(0x00FC, _strings(strings)))
+
+
+def test_a_definition_workbook_reads_as_its_xlsx_does():
+    d = ingest(_two_sheets(DEFINITION_ROWS, CODE_ROWS), "정의.xls")
+    assert list(d.tables) == ["TB_ORDER"] and d.tables["TB_ORDER"].primary_key == ["ORDER_NO"]
+    assert d.tables["TB_ORDER"].label == "주문" and d.tables["TB_ORDER"].columns[0].length == 20
+    assert [v["code"] for v in d.codes["OD01"].values] == ["10", "20"] and d.sources == ["정의.xls"]
+
+
+def test_xls_and_xlsx_give_the_same_definitions_and_the_same_rows():
+    pytest.importorskip("openpyxl")
+    from datetime import datetime
+
+    from openpyxl import Workbook
+
+    from xgen_space.draft import read_file
+
+    wb = Workbook()
+    wb.active.title = "정의서"
+    codes = wb.create_sheet("코드")
+    for row in DEFINITION_ROWS:
+        wb.active.append(row)
+    for row in CODE_ROWS:
+        codes.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    ours = ingest(_two_sheets(DEFINITION_ROWS, CODE_ROWS), "a.xls")
+    assert ours.to_dict() == ingest(buf.getvalue(), "a.xlsx").to_dict()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["id", "이름", "가입일"])
+    ws.append([1, "회원", datetime(2024, 3, 1)])
+    ws.append([2.5, None, datetime(2024, 3, 1, 13, 5, 7)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    cells, sst = _table_of([["id", "이름", "가입일"], [1, "회원", None], [2.5, None, None]])
+    cells += _number(1, 2, 45352, xf=1) + _number(2, 2, 45352 + (13 * 3600 + 5 * 60 + 7) / 86400, xf=1)
+    formats = _biff(0x00E0, b"\0" * 20) + _biff(0x00E0, struct.pack("<HH", 0, 14) + b"\0" * 16)
+    data = _workbook({"Sheet": cells}, head=formats, sst=sst)
+    ours, theirs = ingest_module.read_xls(data, "a.xls")[0], read_file(buf.getvalue(), "a.xlsx")[0]
+    assert (ours.name, ours.columns, ours.rows) == (theirs.name, theirs.columns, theirs.rows)
+
+
+def test_a_data_sheet_gives_its_rows_and_comes_in_as_text_as_in_a_newer_workbook():
+    cells, sst = _table_of(DATA_ROWS)
+    doc = ingest(_workbook({"Sheet1": cells}, sst=sst), "회원.xls").documents[0]
+    assert doc["name"] == "회원" and doc["kind"] == "other" and "회원 | 1000.5" in doc["text"]
+    t = ingest_module.read_xls(_workbook({"Sheet1": cells}, sst=sst), "회원.xls")[0]
+    assert t.name == "회원" and t.columns == ["id", "이름", "금액"]
+    assert t.rows == [["1", "회원", "1000.5"], ["2", "손님", "3"]]
+
+
+def test_a_workbook_of_several_sheets_is_named_by_them_and_leaves_out_what_has_no_rows():
+    cells, sst = _table_of(DATA_ROWS)
+    out = ingest_module.read_xls(_workbook({"일반": cells, "빈 시트": b"", "차트": b"", "끝": cells}, sst=sst,
+                                       kinds={"차트": 2}), "a.xls")
+    assert [t.name for t in out] == ["일반", "끝"] and out[0].source == "a.xls · 일반"
+
+
+def test_a_chart_sheet_is_no_sheet_of_the_workbook():
+    cells, sst = _table_of(DATA_ROWS)
+    data = _workbook({"데이터": cells, "차트": _number(0, 0, 1)}, sst=sst, kinds={"차트": 2})
+    assert [t.name for t in ingest_module.read_xls(data, "회원.xls")] == ["회원"]  # one worksheet, named after the file
+
+
+def _rk_int(v: int, hundredths: bool = False) -> int:
+    return (v << 2 & 0xFFFFFFFF) | 2 | int(hundredths)
+
+
+def _rk_double(v: float, hundredths: bool = False) -> int:
+    return struct.unpack("<II", struct.pack("<d", v))[1] & 0xFFFFFFFC | int(hundredths)
+
+
+def test_every_kind_of_cell_a_workbook_holds():
+    rks = b"".join(struct.pack("<HI", 0, rk) for rk in (_rk_int(7), _rk_int(150, True)))
+    multi = struct.pack("<HH", 2, 1) + rks + b"\x02\0"
+    cells = b"".join([
+        _biff(0x0204, struct.pack("<HHH", 0, 0, 0) + _label("a")),
+        _biff(0x0204, struct.pack("<HHH", 0, 1, 0) + b"\x02\0\0bc"),
+        _biff(0x00D6, struct.pack("<HHH", 0, 2, 0) + _label("한") + b"\0\0"),
+        _biff(0x00FD, struct.pack("<HHHI", 0, 3, 0, 0)),
+        _biff(0x027E, struct.pack("<HHHI", 1, 0, 0, _rk_int(-5))),
+        _biff(0x027E, struct.pack("<HHHI", 1, 1, 0, _rk_double(2.5))),
+        _biff(0x027E, struct.pack("<HHHI", 1, 2, 0, _rk_int(1234, True))),
+        _biff(0x027E, struct.pack("<HHHI", 1, 3, 0, _rk_double(1000.0, True))),
+        _biff(0x00BD, multi),
+        _number(2, 3, 0.25),
+        _biff(0x0205, struct.pack("<HHHBB", 2, 0, 0, 1, 0)),  # a boolean
+        _biff(0x0205, struct.pack("<HHHBB", 3, 0, 0, 7, 1)),  # an error value stays blank
+        _biff(0x0006, struct.pack("<HHH", 3, 1, 0) + struct.pack("<d", 42) + b"\0" * 8),
+        _biff(0x0006, struct.pack("<HHH", 3, 2, 0) + b"\0\0\0\0\0\0\xff\xff" + b"\0" * 8),
+        _biff(0x0207, _label("결과")),
+        _biff(0x0006, struct.pack("<HHH", 3, 3, 0) + b"\x01\0\x01\0\0\0\xff\xff" + b"\0" * 8),
+    ])
+    t = ingest_module.read_xls(_workbook({"s": cells}, sst=_biff(0x00FC, _strings(["공유"]))), "a.xls")[0]
+    assert t.columns == ["a", "bc", "한", "공유"]
+    assert t.rows == [["-5", "2.5", "12.34", "10"], ["true", "7", "1.5", "0.25"], [None, "42", "결과", "true"]]
+
+
+def test_a_chart_inside_a_sheet_gives_no_cells():
+    chart = _bof(0x20) + _number(5, 0, 99) + _biff(0x000A)
+    cells, sst = _table_of(DATA_ROWS)
+    assert len(ingest_module.read_xls(_workbook({"s": cells + chart + _number(3, 0, 3)}, sst=sst), "a.xls")[0].rows) == 3
+
+
+@pytest.mark.parametrize("formats,xf,serial,epoch,text", [
+    (b"", 14, 45352, b"", "2024-03-01"),
+    (b"", 22, 45352.5, b"", "2024-03-01T12:00:00"),
+    (b"", 20, 0.5, b"", "12:00:00"),
+    (b"", 14, 44, b"", "1900-02-13"),  # before the leap day Excel takes 1900 to have
+    (b"", 14, 43890, b"\x01\0", "2024-03-01"),  # counted from 1904
+    (_biff(0x041E, struct.pack("<H", 164) + _label('yyyy"년" mm"월"')), 164, 45352, b"", "2024-03-01"),
+    (_biff(0x041E, struct.pack("<H", 165) + _label('#,##0"일"')), 165, 45352, b"", "45352"),  # a word in quotes is no date
+    (_biff(0x041E, struct.pack("<H", 166) + _label(r"0.0\d;[Red]0.0")), 166, 1.5, b"", "1.5"),
+    (b"", 14, 1e300, b"", str(int(1e300))),  # no calendar holds it
+])
+def test_a_number_is_a_date_when_its_format_says_so(formats, xf, serial, epoch, text):
+    head = formats + _biff(0x00E0, struct.pack("<HH", 0, xf) + b"\0" * 16) + (_biff(0x0022, epoch) if epoch else b"")
+    t = ingest_module.read_xls(_workbook({"s": _shared(0, 0, 0) + _number(1, 0, serial)}, head=head,
+                                     sst=_biff(0x00FC, _strings(["h"]))), "a.xls")[0]
+    assert t.rows == [[text]]
+
+
+def _columns(cells: bytes, sst: bytes) -> list[str]:
+    return ingest_module.read_xls(_workbook({"s": cells}, sst=sst), "a.xls")[0].columns
+
+
+def test_shared_strings_run_on_across_records_and_change_width_there():
+    three = _shared(0, 0, 0) + _shared(0, 1, 1) + _shared(0, 2, 2)
+    head = struct.pack("<II", 3, 3)
+    wide = struct.pack("<HB", 6, 1) + "가나다".encode("utf-16-le")
+    rest = "라마바".encode("utf-16-le")
+    after = struct.pack("<HB", 4, 0) + b"abcd"
+    last = struct.pack("<HB", 1, 0) + b"z"
+    sst = _biff(0x00FC, head + wide) + _biff(0x003C, b"\x01" + rest + after[:1]) + _biff(0x003C, after[1:] + last)
+    assert _columns(three, sst) == ["가나다라마바", "abcd", "z"]
+    sst = _biff(0x00FC, head + wide) + _biff(0x003C, b"\x00def" + after + last)  # the rest fits one byte a character
+    assert _columns(three, sst) == ["가나다def", "abcd", "z"]
+    narrow = struct.pack("<II", 1, 1) + struct.pack("<HB", 4, 0) + b"ab"
+    sst = _biff(0x00FC, narrow) + _biff(0x003C, b"\x01" + "한글".encode("utf-16-le"))
+    assert _columns(_shared(0, 0, 0), sst) == ["ab한글"]
+
+
+def test_a_string_that_starts_a_record_needs_no_flag_and_one_cut_at_its_start_does():
+    first = struct.pack("<II", 2, 2) + struct.pack("<HB", 1, 0) + b"a"
+    second = struct.pack("<HB", 1, 0) + b"b"
+    two = _shared(0, 0, 0) + _shared(0, 1, 1)
+    assert _columns(two, _biff(0x00FC, first) + _biff(0x003C, second)) == ["a", "b"]
+    sst = _biff(0x00FC, first + second[:3]) + _biff(0x003C, b"\x00" + second[3:])  # the head ends the record
+    assert _columns(two, sst) == ["a", "b"]
+
+
+def test_shared_strings_skip_their_rich_text_and_phonetic_parts():
+    rich = struct.pack("<HBH", 2, 8, 2) + b"ab" + b"\xee" * 8
+    phonetic = struct.pack("<HBi", 2, 4, 6) + b"cd" + b"\xee" * 6
+    both = struct.pack("<HBHi", 2, 12, 1, 3) + b"ef" + b"\xee" * 4 + b"\xee" * 3
+    sst = _biff(0x00FC, struct.pack("<II", 3, 3) + rich + phonetic + both)
+    assert _columns(_shared(0, 0, 0) + _shared(0, 1, 1) + _shared(0, 2, 2), sst) == ["ab", "cd", "ef"]
+
+
+def test_a_workbook_with_a_password_is_refused_with_what_to_do():
+    cells, sst = _table_of(DATA_ROWS)
+    with pytest.raises(IngestError, match="password") as e:
+        ingest(_workbook({"s": cells}, head=_biff(0x002F, b"\x01\0" + b"\0" * 52), sst=sst), "a.xls")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "XLSX"
+
+
+@pytest.mark.parametrize("kw", [{"version": 0x0500}, {"stream": "Book"}])
+def test_a_workbook_from_excel_95_says_what_to_export_to(kw):
+    cells, sst = _table_of(DATA_ROWS)
+    with pytest.raises(IngestError) as e:
+        ingest(_workbook({"s": cells}, sst=sst, **kw), "a.xls")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "XLSX"
+
+
+def test_a_malformed_workbook_ends_in_an_answer():
+    assert _reason(_ole({"Workbook": b"\x09\x08"}), "a.xls") == "export_needed"  # not even a whole record
+    assert _reason(_workbook({}), "a.xls") == "empty"
+    assert _reason(_workbook({"s": b""}), "a.xls") == "empty"
+    assert _reason(_workbook({"s": _biff(0x0203, b"\0\0")}), "a.xls") == "format"  # a cell cut short
+    past = _workbook({"s": _shared(0, 0, 9) + _number(0, 1, 1)}, sst=_biff(0x00FC, _strings(["a"])))
+    assert ingest_module.read_xls(past, "a.xls")[0].columns == ["column1", "1"]  # a string past the end is a blank
+
+
+def test_shared_strings_that_lie_about_their_number_and_length_end():
+    sst = _biff(0x00FC, struct.pack("<II", 0xFFFFFFFF, 0xFFFFFFFF) + struct.pack("<HB", 0xFFFF, 1) + b"ab")
+    assert _columns(_shared(0, 0, 0), sst) == ["扡"]
+
+
+def test_a_cell_past_the_last_column_spreads_nothing():
+    cells, sst = _table_of(DATA_ROWS)
+    t = ingest_module.read_xls(_workbook({"s": cells + _number(0, 60000, 1)}, sst=sst), "a.xls")[0]
+    assert len(t.columns) == 3
+
+
+def test_a_workbook_that_spreads_past_the_limit_is_refused(monkeypatch):
+    monkeypatch.setattr(ingest_module, "_XLS_CELLS", 1000)
+    far = b"".join(_number(r, 200, 1) for r in range(20))  # twenty cells, four thousand places
+    assert _reason(_workbook({"s": far}), "a.xls") == "too_large"
+    again = _number(0, 0, 1) * 2000  # counted as they are read, so memory is held before anything is laid out
+    assert _reason(_workbook({"s": again}), "a.xls") == "too_large"
+
+
+def test_old_office_files_are_known_by_what_they_hold():
+    cells, sst = _table_of(DATA_ROWS)
+    assert ingest(_word(["본문\r"], [(0, b"")]), "export.dat").documents
+    assert ingest(_deck([([_atoms("제목", 0)], b"")]), "a.pot").documents[0]["kind"] == "screen"
+    assert ingest(_workbook({"s": cells}, sst=sst), "a.xlt").documents
+    assert ingest(_workbook({"s": cells}, sst=sst), "wrong.doc").documents[0]["name"] == "wrong"
+    assert "본문" in ingest(_hwp_file(["본문입니다."]), "export.dat").documents[0]["text"]
+
+
+def test_a_newer_file_or_a_web_page_saved_under_the_old_name_still_reads():
+    assert ingest(_zip(DOCX), "a.doc").documents
+    assert ingest(b"<html><body><p>hello</p></body></html>", "a.xls").documents
+    assert ingest(b"a\tb\n1\t2\n3\t4\n", "a.xls").documents
+
+
+def test_a_compound_file_of_nothing_known_says_what_to_export_to():
+    assert _reason(_ole({"Contents": b"\0" * 64}), "a.doc") == "export_needed"
+    assert _reason(_ole({"Contents": b"\0" * 64}), "a.dat") == "export_needed"
+
+
+def test_a_newer_file_with_a_password_says_so():
+    with pytest.raises(IngestError, match="password") as e:
+        ingest(_ole({"EncryptionInfo": b"\0" * 64, "EncryptedPackage": b"\0" * 64}), "a.xls")
+    assert e.value.reason == "export_needed" and e.value.info["export_to"] == "XLSX"
+
+
+def test_stream_names_may_be_in_another_case():
+    cells, sst = _table_of(DATA_ROWS)
+    assert ingest(_workbook({"s": cells}, sst=sst, stream="WORKBOOK"), "a.xls").documents
+
+
+def test_the_high_half_of_a_stream_size_is_ignored_in_a_small_sector_file():
+    raw = bytearray(_ole({"Workbook": b"\0" * 64}))
+    at = 512 * 2 + 128 + 124  # the second directory entry's size, its high half
+    raw[at:at + 4] = b"\xff\xff\xff\xff"
+    assert _reason(bytes(raw), "a.xls") == "export_needed"  # read as 64 bytes, not as far past the limit
+
+
+def test_a_sector_list_that_runs_in_a_circle_ends_quickly():
+    # each list sector names sector 1 for a FAT 127 times and itself as next: a megabyte would build a billion entries
+    size = 1 << 20
+    data = bytearray(size)
+    data[:8] = MAGIC
+    struct.pack_into("<HH", data, 30, 9, 6)
+    struct.pack_into("<II", data, 44, 109, 0)
+    struct.pack_into("<IIIII", data, 56, 4096, END, 0, 1, size // 512)
+    struct.pack_into("<109I", data, 76, *[1] * 109)
+    struct.pack_into("<128I", data, 1024, *[1] * 127, 1)
+    start = time.perf_counter()
+    assert _reason(bytes(data), "a.doc") == "export_needed"
+    assert time.perf_counter() - start < 5
+
+
+def test_a_sector_of_a_size_no_compound_file_has_builds_no_fat():
+    # with sectors as long as the file, the header's 109 places would make a FAT of many times the file
+    size = 1 << 18
+    data = bytearray(size)
+    data[:8] = MAGIC
+    struct.pack_into("<HH", data, 30, 16, 6)
+    struct.pack_into("<II", data, 44, 109, 0)
+    struct.pack_into("<IIIII", data, 56, 4096, END, 0, END, 0)
+    struct.pack_into("<109I", data, 76, *[0] * 109)
+    data[1 << 16:] = b"\x01\x02\x03\x04" * ((size - (1 << 16)) // 4)
+    tracemalloc.start()
+    try:
+        assert _reason(bytes(data), "a.doc") == "export_needed"
+        assert tracemalloc.get_traced_memory()[1] < 4 * size
+    finally:
+        tracemalloc.stop()
+
+
+@pytest.mark.parametrize("at,shift", [(30, 7), (32, 3)])
+def test_a_size_no_compound_file_has_is_refused(at, shift):
+    data = bytearray(_ole({"Workbook": b"\0" * 64}))
+    struct.pack_into("<H", data, at, shift)
+    assert _reason(bytes(data), "a.xls") == "export_needed"
+
+
+def _mutations(data: bytes, seed: int, count: int) -> Iterator[bytes]:
+    import random
+
+    rnd = random.Random(seed)
+    for _ in range(count):
+        raw = bytearray(data)
+        for _ in range(rnd.choice((1, 4, 32))):
+            at = rnd.randrange(512, len(raw))
+            raw[at] = rnd.choice((0, 1, 0x7F, 0xFF, rnd.randrange(256)))
+        yield bytes(raw)
+
+
+def _samples() -> list[tuple[str, bytes]]:
+    cells, sst = _table_of(DEFINITION_ROWS)
+    return [("a.doc", _word(["제목\r", "A\x07", "\x07", "\x13 F \x14x\x15\r"],
+                            [(1, b""), (0, IN_TABLE), (0, IN_TABLE + ROW_END), (0, b"")])),
+            ("a.ppt", _deck([([_atoms("제목", 0)], _shape("글상자"))])),
+            ("a.xls", _workbook({"s": cells}, sst=sst))]
+
+
+@pytest.mark.parametrize("source,data", _samples(), ids=lambda x: x if isinstance(x, str) else "")
+def test_a_damaged_file_reads_or_ends_in_an_answer_and_never_in_anything_else(source, data):
+    for raw in _mutations(data, 96, 400):
+        try:
+            assert isinstance(ingest(raw, source), Definitions)
+        except IngestError:
+            pass
+
+
+def test_the_page_takes_an_old_workbook_of_definitions_and_says_what_a_password_needs(session):
+    st = session.upload("정의.xls", _two_sheets(DEFINITION_ROWS, CODE_ROWS))
+    assert st["files"] == [] and st["definitions"][0]["tables"][0]["key"] == ["ORDER_NO"]
+    st = session.upload("규정.doc", _word(["본문입니다.\r"], [(0, b"")]))
+    assert any(x["documents"] == 1 for x in st["definitions"])
+    with pytest.raises(ValueError, match="암호를 해제하거나 PPTX 파일로 내보내"):
+        session.upload("a.ppt", _deck([([_atoms("제목", 0)], b"")], token=0xF3D1C4DF))
+
+
+# ---- the same table name in two schemas ----------------------------------------------------------------------
+
+SCHEMAS = """
+CREATE TABLE sales.customer (id INT PRIMARY KEY, name VARCHAR(50));
+CREATE TABLE hr.customer (id INT PRIMARY KEY, dept VARCHAR(20), status VARCHAR(1) CHECK (status IN ('A','B')));
+CREATE TABLE sales.orders (id INT PRIMARY KEY, customer_id INT REFERENCES customer(id), staff_id INT,
+                           FOREIGN KEY (staff_id) REFERENCES hr.customer(id));
+CREATE TABLE sales.note (id INT PRIMARY KEY, customer_id INT, order_id INT);
+ALTER TABLE sales.note ADD CONSTRAINT fk1 FOREIGN KEY (customer_id) REFERENCES hr.customer (id);
+ALTER TABLE sales.note ADD CONSTRAINT fk2 FOREIGN KEY (order_id) REFERENCES orders (id);
+ALTER TABLE hr.customer ADD CONSTRAINT fk3 FOREIGN KEY (id) REFERENCES sales.customer (id);
+COMMENT ON TABLE hr.customer IS 'staff';
+COMMENT ON COLUMN sales.customer.name IS 'shopper name';
+"""
+
+
+def test_tables_of_one_name_in_two_schemas_are_both_kept():
+    d = ingest(SCHEMAS.encode(), "two.sql")
+    assert set(d.tables) == {"sales.customer", "hr.customer", "orders", "note"}
+    assert [c.name for c in d.tables["sales.customer"].columns] == ["id", "name"]
+    assert [c.name for c in d.tables["hr.customer"].columns] == ["id", "dept", "status"]
+    assert d.tables["hr.customer"].label == "staff" and d.tables["sales.customer"].column("name").label == "shopper name"
+    assert d.tables["hr.customer"].column("status").code == "hr.customer.status"
+
+
+def test_a_reference_finds_the_table_of_its_schema_and_stays_plain_elsewhere():
+    d = ingest(SCHEMAS.encode(), "two.sql")
+    assert d.tables["orders"].references == [
+        {"columns": ["customer_id"], "table": "sales.customer", "ref_columns": ["id"]},
+        {"columns": ["staff_id"], "table": "hr.customer", "ref_columns": ["id"]}]
+    assert [r["table"] for r in d.tables["note"].references] == ["hr.customer", "orders"]
+    assert [r["table"] for r in d.tables["hr.customer"].references] == ["sales.customer"]
+    assert d.tables["sales.customer"].references == []
+
+
+def test_two_schemas_draft_as_two_objects():
+    pytest.importorskip("yaml")
+    d = ingest(SCHEMAS.encode(), "two.sql")
+    dr = draft(schema_backend(d), name="shop", definitions=d)
+    assert {"SalesCustomer", "HrCustomer"} <= {o.name for o in dr.objects}
+    assert {(lk.source, lk.target) for lk in dr.links} >= {("Order", "SalesCustomer"), ("Order", "HrCustomer")}
+
+
+def test_one_schema_keeps_plain_names_and_a_later_definition_still_wins():
+    d = ingest(b"CREATE TABLE dbo.t (a INT);\nCREATE TABLE dbo.t (b INT);\n"
+               b"CREATE TABLE dbo.u (c INT REFERENCES dbo.t(b));", "a.sql")
+    assert set(d.tables) == {"t", "u"} and [c.name for c in d.tables["t"].columns] == ["b"]
+    assert d.tables["u"].references == [{"columns": ["c"], "table": "t", "ref_columns": ["b"]}]
+
+
+def test_schemas_that_differ_only_by_case_are_one_schema():
+    d = ingest(b"CREATE TABLE App.t (a INT);\nCREATE TABLE app.t (b INT);", "a.sql")
+    assert set(d.tables) == {"t"} and [c.name for c in d.tables["t"].columns] == ["b"]
+
+
+def test_a_table_with_no_schema_and_its_namesake_in_one_are_both_kept():
+    d = ingest(b"CREATE TABLE t (a INT);\nCREATE TABLE hr.t (b INT);\nCREATE TABLE u (c INT REFERENCES t(a));", "a.sql")
+    assert set(d.tables) == {"t", "hr.t", "u"} and d.tables["u"].references[0]["table"] == "t"
+
+
+def test_sql_server_comments_find_the_table_of_their_schema():
+    d = ingest("""CREATE TABLE [sales].[t] (a INT);
+CREATE TABLE [hr].[t] (b INT);
+EXEC sp_addextendedproperty N'MS_Description', N'staff', N'SCHEMA', N'hr', N'TABLE', N't';
+""".encode(), "a.sql")
+    assert d.tables["hr.t"].label == "staff" and d.tables["sales.t"].label == ""
