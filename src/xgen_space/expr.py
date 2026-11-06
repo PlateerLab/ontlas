@@ -3,7 +3,9 @@
     net_price: {type: decimal, expr: "unit_price * quantity"}
     total:     {type: decimal, expr: "coalesce(sum(hasItem.net_price), 0)"}
     last_price: {type: decimal, expr: "latest(priceChanges.price)"}
+    bulk:       {type: boolean, expr: "quantity >= @bulk_quantity"}
 
+`@name` reads a named parameter (see model.Parameter), written into each language as a literal.
 Nulls follow one rule everywhere: a null operand gives null, division by zero gives null, and an `if` whose
 condition is null gives null. Aggregates follow a path of links from the object and ignore null values, like SQL.
 """
@@ -21,7 +23,7 @@ FUNCTIONS = {"coalesce": (1, 8), "if": (3, 3), "abs": (1, 1), "round": (1, 2), "
              "month": (1, 1), "day": (1, 1), "days_between": (2, 2)}
 DATE_FUNCTIONS = ("year", "month", "day", "days_between")
 _NUMBER = ("integer", "decimal")
-_TOKEN = re.compile(r"\s*(?:(\d+\.\d+|\d+)|('(?:[^'\\]|\\.)*')|([A-Za-z_][A-Za-z0-9_]*)|(<=|>=|!=|[-+*/()=<>,.]))")
+_TOKEN = re.compile(r"\s*(?:(\d+\.\d+|\d+)|('(?:[^'\\]|\\.)*')|([A-Za-z_][A-Za-z0-9_]*)|(<=|>=|!=|[-+*/()=<>,.@]))")
 
 
 class ExprError(ValueError):
@@ -37,6 +39,11 @@ class Lit:
 @dataclass(frozen=True)
 class Prop:
     name: str
+
+
+@dataclass(frozen=True)
+class Named:
+    name: str  # a named parameter, read when the expression is prepared
 
 
 @dataclass(frozen=True)
@@ -163,6 +170,9 @@ class _Parser:
             return Lit(Decimal(t), "decimal") if "." in t else Lit(int(t), "integer")
         if self.peek("str"):
             return Lit(self.take(), "string")
+        if self.peek("op", "@"):
+            self.take()
+            return Named(self.take("name"))
         if self.peek("op", "("):
             self.take()
             node = self.or_()
@@ -288,8 +298,18 @@ def _as_time(node: Lit, kind: str) -> Lit:
         raise ExprError(f"{node.value!r} is not a {kind}") from None
 
 
+def _named(onto, node: Named) -> Lit:
+    p = onto.parameters.get(node.name)
+    if p is None:
+        raise ExprError(f"unknown parameter '@{node.name}'")
+    return Lit(Decimal(str(p.value)) if p.type == "decimal" else p.value, p.type)
+
+
 def prepare(onto, type_name: str, node):
-    """Give date-like text literals the type of what they meet: a date or datetime operand, a date function."""
+    """Give date-like text literals the type of what they meet: a date or datetime operand, a date function; and
+    named parameters their value."""
+    if isinstance(node, Named):
+        return _named(onto, node)
     if isinstance(node, Unary):
         return Unary(node.op, prepare(onto, type_name, node.arg))
     if isinstance(node, Call):
@@ -337,6 +357,8 @@ class _Typer:
         """The type of an expression; `stack` (the computed properties being typed) also checks for loops."""
         if isinstance(node, Lit):
             return node.type
+        if isinstance(node, Named):
+            return _named(self.onto, node).type
         if isinstance(node, Prop):
             return self.prop_type(type_name, node.name, stack)
         if isinstance(node, Unary):

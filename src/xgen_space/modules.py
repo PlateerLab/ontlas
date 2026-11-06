@@ -13,9 +13,10 @@ from xgen_space.model import Ontology
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
 # data (the draft rules). Both plug in and out like the rest.
 KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
-SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities")
+SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities", "parameters")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
-            "actions": "action", "roles": "role", "queries": "query", "identities": "identity"}
+            "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
+            "parameters": "parameter"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -358,6 +359,18 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
     touched.setdefault(f"role:{name}", []).append(m.name)
 
 
+def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict) -> None:
+    if name not in acc["parameters"]:
+        raise ModuleError(f"{m.key} extends parameter '{name}', which no attached module defines")
+    patch = dict(patch) if isinstance(patch, dict) else {"value": patch}  # return_window_days: 30 is enough
+    cur = acc["parameters"][name]
+    cur = dict(cur) if isinstance(cur, dict) else {"value": cur}
+    if "type" in patch and "type" in cur and patch["type"] != cur["type"]:
+        raise ModuleError(f"{m.key} changes the type of parameter {name} from {cur['type']} to {patch['type']}")
+    acc["parameters"][name] = {**cur, **copy.deepcopy(patch)}
+    touched.setdefault(f"parameter:{name}", []).append(m.name)
+
+
 def compose(modules: list[Module], *, name: str = "", namespace: str = "", version: str = "",
             label: str = "") -> Composition:
     """Apply modules in requirement order: define, then extend, then remove; record who did what."""
@@ -395,8 +408,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_decision(acc, m, k, patch or {}, touched)
                 elif s == "roles":
                     _extend_role(acc, m, k, patch or {}, touched)
+                elif s == "parameters":
+                    _extend_parameter(acc, m, k, patch, touched)
                 else:
-                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions or roles")
+                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, roles or "
+                                      "parameters")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():

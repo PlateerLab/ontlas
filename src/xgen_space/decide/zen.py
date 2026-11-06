@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from xgen_space.decide.cells import parse_test, to_zen
-from xgen_space.decide.table import DecisionError
+from xgen_space.decide.table import DecisionError, answer
 from xgen_space.model import DecisionTable
 
 
@@ -20,10 +20,11 @@ def to_jdm(table: DecisionTable) -> dict:
     rules = []
     for r in ordered:
         row: dict[str, str] = {"_id": r.id, "_description": r.note}
+        then = answer(table, r)
         for n in table.inputs:
-            row[f"in_{n}"] = to_zen(parse_test(r.when.get(n, "")))
+            row[f"in_{n}"] = to_zen(parse_test(r.when.get(n, ""), table.named))
         for n in table.outputs:
-            row[f"out_{n}"] = json.dumps(r.then[n], ensure_ascii=False) if n in r.then else ""
+            row[f"out_{n}"] = json.dumps(then[n], ensure_ascii=False) if n in then else ""
         rules.append(row)
     return {
         "contentType": "application/vnd.gorules.decision",

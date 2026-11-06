@@ -1,6 +1,8 @@
 """Consistency checks for an ontology definition."""
 from __future__ import annotations
 
+import re
+
 from xgen_space.model import CARDINALITIES, TYPES, Ontology, valid_name
 
 
@@ -117,6 +119,7 @@ def validate_ontology(o: Ontology) -> list[str]:
             if n not in o.links:
                 add(f"exclusive pair uses unknown link '{n}'")
 
+    issues.extend(_parameters(o))
     issues.extend(_computed(o))
     for t in o.objects.values():
         of = t.series.get("of") if t.series else ""
@@ -197,6 +200,7 @@ def validate_ontology(o: Ontology) -> list[str]:
 
 
 MASKS = ("partial", "full")
+PARAMETER_TYPES = ("integer", "decimal", "string", "boolean")
 PARAM_KEYS = {"type", "label", "required", "min", "max", "values", "pattern", "max_length"}
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
@@ -205,6 +209,28 @@ def _prop_of(o: Ontology, type_name: str, name: str):
     from xgen_space.check import _find_prop
 
     return _find_prop(o, type_name, name)
+
+
+def _parameters(o: Ontology) -> list[str]:
+    from xgen_space.values import accepts
+
+    issues = []
+    for p in o.parameters.values():
+        head = f"parameter {p.name}"
+        if not valid_name(p.name):
+            issues.append(f"{head}: the name is not an identifier")
+        if p.type not in PARAMETER_TYPES:
+            issues.append(f"{head}: type '{p.type}' is not one of {PARAMETER_TYPES}")
+        elif p.value is None:
+            issues.append(f"{head}: needs a value")
+        elif not accepts(p.type, p.value):
+            issues.append(f"{head}: {p.value!r} is not {p.type}")
+        elif p.type in ("integer", "decimal"):
+            if p.min is not None and p.value < p.min:
+                issues.append(f"{head}: {p.value} is below {p.min}")
+            if p.max is not None and p.value > p.max:
+                issues.append(f"{head}: {p.value} is above {p.max}")
+    return issues
 
 
 def _computed(o: Ontology) -> list[str]:
@@ -219,8 +245,6 @@ def _computed(o: Ontology) -> list[str]:
 
 
 def _parameter(spec) -> list[str]:
-    import re
-
     if isinstance(spec, str):
         spec = {"type": spec}
     if not isinstance(spec, dict):
@@ -286,10 +310,11 @@ def _identities(o: Ontology) -> list[str]:
 
 NORMALIZERS = ("none", "trim", "lower", "digits", "alnum")
 HIT_POLICIES = ("first", "collect", "unique", "priority")
+NAMED = re.compile(r"@[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _decisions(o: Ontology) -> list[str]:
-    from xgen_space.decide.cells import CellError, parse_test
+    from xgen_space.decide.cells import CellError, parse_test, resolve
     from xgen_space.decide.checks import table_findings
 
     issues = []
@@ -325,12 +350,15 @@ def _decisions(o: Ontology) -> list[str]:
                 if k not in d.inputs:
                     issues.append(f"decision {d.name} rule {r.id}: unknown input '{k}'")
                 try:
-                    parse_test(v)
+                    parse_test(v, d.named)
                 except CellError as e:
                     issues.append(f"decision {d.name} rule {r.id}: {k}: {e}")
-            for k in r.then:
+            for k, v in r.then.items():
                 if k not in d.outputs:
                     issues.append(f"decision {d.name} rule {r.id}: unknown output '{k}'")
+                # only where parameters are in use: without them, "@text" has always been plain text
+                if d.named and isinstance(v, str) and resolve(v, d.named) is v and NAMED.fullmatch(v):
+                    issues.append(f"decision {d.name} rule {r.id}: {k}: unknown parameter '{v}'")
             if (d.hit_policy == "priority") != (r.priority is not None):
                 issues.append(f"decision {d.name} rule {r.id}: "
                               + ("hit policy priority needs a priority on every rule" if d.hit_policy == "priority"

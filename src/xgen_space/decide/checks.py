@@ -163,7 +163,7 @@ class _Space:
 
 
 def _space(onto: Ontology | None, table: DecisionTable) -> _Space:
-    tests = [{k: parse_test(v) for k, v in r.when.items()} for r in table.rules]
+    tests = [{k: parse_test(v, table.named) for k, v in r.when.items()} for r in table.rules]
     columns = [c for c in dict.fromkeys([*table.inputs, *(k for t in tests for k in t)])
                if any(not isinstance(t.get(c, Any_()), Any_) for t in tests)]
     atoms = [_atoms(onto, table, c, [t[c] for t in tests if c in t]) for c in columns]

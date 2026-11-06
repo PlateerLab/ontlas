@@ -136,6 +136,21 @@ class Interface:
 
 
 @dataclass
+class Parameter:
+    """A value rules read by name, so a customer module changes it in one place."""
+
+    name: str
+    value: Any
+    type: str = "integer"
+    label: str = ""
+    unit: str = ""
+    description: str = ""
+    cite: str = ""
+    min: float | None = None
+    max: float | None = None
+
+
+@dataclass
 class DecisionInput:
     name: str
     type: str
@@ -162,6 +177,11 @@ class DecisionTable:
     label: str = ""
     hit_policy: str = "first"
     cite: str = ""
+    parameters: dict[str, Parameter] = field(default_factory=dict, repr=False, compare=False)  # the ontology's
+
+    @property
+    def named(self) -> dict[str, Any]:
+        return {p.name: p.value for p in self.parameters.values()}
 
 
 @dataclass
@@ -277,6 +297,7 @@ class Ontology:
     questions: list[Question] = field(default_factory=list)
     exclusive: list[tuple[str, str]] = field(default_factory=list)
     identities: dict[str, Identity] = field(default_factory=dict)
+    parameters: dict[str, Parameter] = field(default_factory=dict)
 
     def obj(self, name: str) -> ObjectType:
         try:
@@ -415,6 +436,15 @@ def _decision(name: str, d: dict) -> DecisionTable:
                          hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""))
 
 
+def _parameter(name: str, d: Any) -> Parameter:
+    if not isinstance(d, dict):  # a bare value: return_window_days: 14
+        d = {"value": d}
+    value = d.get("value")
+    found = {bool: "boolean", int: "integer", float: "decimal", str: "string"}.get(type(value), "integer")
+    return Parameter(name, value, d.get("type", found), d.get("label", ""), d.get("unit", ""), d.get("description", ""),
+                     d.get("cite", ""), d.get("min"), d.get("max"))
+
+
 def _action(name: str, d: dict) -> ActionType:
     crit = [Criterion(decision=c.get("decision", ""), expect=dict(c.get("expect", {})),
                       states=list(c.get("states", []))) for c in d.get("criteria", [])]
@@ -471,6 +501,10 @@ def _from_dict(d: dict) -> Ontology:
     links = {k: _link(k, v) for k, v in d.get("links", {}).items()}
     identities = {k: _identity(k, v) for k, v in (d.get("identities") or {}).items()}
     expand_identities(objects, links, identities)
+    parameters = {k: _parameter(k, v) for k, v in (d.get("parameters") or {}).items()}
+    decisions = {k: _decision(k, v) for k, v in d.get("decisions", {}).items()}
+    for dt in decisions.values():
+        dt.parameters = parameters
     return Ontology(
         name=d.get("ontology") or d.get("name") or "ontology",
         namespace=d["namespace"],
@@ -480,7 +514,7 @@ def _from_dict(d: dict) -> Ontology:
         links=links,
         interfaces={k: Interface(k, list(v.get("properties", [])), v.get("label", ""))
                     for k, v in d.get("interfaces", {}).items()},
-        decisions={k: _decision(k, v) for k, v in d.get("decisions", {}).items()},
+        decisions=decisions,
         actions={k: _action(k, v) for k, v in d.get("actions", {}).items()},
         roles={k: _role(k, v) for k, v in d.get("roles", {}).items()},
         queries={k: RegisteredQuery(k, v["query"], v.get("label", ""), v.get("description", ""),
@@ -491,6 +525,7 @@ def _from_dict(d: dict) -> Ontology:
                             params=dict(q.get("params", {}))) for q in d.get("questions", [])],
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
         identities=identities,
+        parameters=parameters,
     )
 
 
@@ -548,13 +583,17 @@ def _to_dict(o: Ontology) -> dict:
                                   "members": {m.type: m.fields for m in i.members.values()},
                                   "rules": [_clean({"id": r.id, "match": r.match, "normalize": r.normalize})
                                             for r in i.rules]}) for i in o.identities.values()}
+    parameters = {p.name: _clean({"type": p.type, "label": p.label, "unit": p.unit, "description": p.description,
+                                  "cite": p.cite}) | {"value": p.value}
+                  | {k: v for k, v in (("min", p.min), ("max", p.max)) if v is not None}
+                  for p in o.parameters.values()}
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
                          "params": q.params}) | {"expect": q.expect} for q in o.questions]
     return _clean({
         "ontology": o.name, "namespace": o.namespace, "version": o.version, "label": o.label,
-        "objects": objects, "links": links,
+        "parameters": parameters, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
         "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "questions": questions,
         "exclusive": [list(x) for x in o.exclusive], "identities": identities,
