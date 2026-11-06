@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "xgen-space"
 version = "0.11.0"
-description = "One domain ontology definition, executed on whatever database, graph store or reasoner a deployment has: a query IR compiled to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin, with computed properties, decisions, actions, roles, reviewed definition changes, an asset graph and conformance tests."
+description = "One space for every kind of data an AI can use: files, documents, vectors, graphs and ontologies, tied to no store, model, domain or platform."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "jinsoo96", email = "wlstn010203@gmail.com" }]
 keywords = [
     "ontology", "knowledge-graph", "semantic-layer", "sparql", "cypher", "gql", "sql-pgq", "r2rml",
@@ -22,7 +22,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Database",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: Other/Proprietary License",
+    "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = []
 

@@ -962,7 +962,7 @@ core suite with no optional dependencies.
 
 ## License
 
-Source-available. Copyright (c) 2026 Jinsoo Kim.
+Open source under the [Apache License 2.0](LICENSE). Copyright 2026 Jinsoo Kim.
 
-Members of the PlateerLab organization may use, modify and ship it as part of Plateer products (LICENSE §4).
-For anyone else, reading and citing are fine; any other use needs written permission. See [`LICENSE`](LICENSE).
+Use it, change it and ship it, in a product or not, as that license says. The page's graph engine is sigma.js and graphology,
+bundled under the MIT license; their notices are in `src/xgen_space/web/static/graph-kit-NOTICE.txt`.

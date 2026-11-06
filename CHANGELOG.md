@@ -2,6 +2,7 @@
 
 ## 0.11.0
 
+- XGEN Space is open source now, under the Apache License 2.0. Versions before this one stay under the terms they shipped with.
 - A space holds documents and vectors now, not only an ontology. Vector stores (memory, Qdrant over REST, pgvector) and
   embedders (hash, any OpenAI-shaped service, a local multilingual model through fastembed) are ports with a registry;
   `xspace vectors` holds every store to exact search, and a tie at the cut is not counted as a difference.
