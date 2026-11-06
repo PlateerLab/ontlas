@@ -222,11 +222,16 @@ class Role:
     execute: list[str] = field(default_factory=list)
     mask: dict[str, str] = field(default_factory=dict)  # "Type.prop" -> partial | full, on top of the properties' own
     unmask: list[str] = field(default_factory=list)     # "Type.prop" or "Type.*" this role sees in clear
+    scope: dict[str, Any] = field(default_factory=dict)  # {attribute: seller_id, types: {Type: property | {via, property}}}
+    scoped: dict[str, dict] = field(default_factory=dict)  # made from scope: the row filter each type gets
+    closed: set[str] = field(default_factory=set)  # decisions that read a scoped row with no regard for the scope
 
     def can_read(self, type_name: str) -> bool:
         return "*" in self.read or type_name in self.read
 
     def can(self, verb: str, name: str) -> bool:
+        if verb == "run" and name in self.closed:  # roles.decide_in_scope asks them inside the scope
+            return False
         names = getattr(self, verb)
         return "*" in names or name in names
 
@@ -485,7 +490,8 @@ def _role(name: str, d: dict) -> Role:
     return Role(name=name, label=d.get("label", ""), read=list(d.get("read", [])),
                 row_filters=dict(d.get("row_filters", {})), run=list(d.get("run", [])),
                 request=list(d.get("request", [])), execute=list(d.get("execute", [])),
-                mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])))
+                mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])),
+                scope=dict(d.get("scope") or {}))
 
 
 def _identity(name: str, d: dict) -> Identity:
@@ -518,6 +524,40 @@ def expand_identities(objects: dict[str, ObjectType], links: dict[str, LinkType]
                 links[name] = LinkType(name, ident.name, member, "one_to_many",
                                        via=Via(ident.member_table(member), ident.key, "member_key"),
                                        label=f"{ident.label or ident.name} 구성원")
+
+
+def _scope_filter(onto: Ontology, where: Any, attribute: str) -> dict | None:
+    """The row filter of one scoped type: its own property, or one reached over links."""
+    who = {"principal": attribute}
+    if isinstance(where, str):
+        return {"eq": [f"$self.{where}", who]}
+    if not isinstance(where, dict) or not where.get("property"):
+        return None
+    nodes: dict[str, str] = {}
+    edges, prev = [], "$self"
+    for i, step in enumerate(where.get("via") or []):
+        lk = onto.links.get(step) or onto.link_by_inverse(step)
+        if lk is None:
+            return None
+        nodes[f"s{i}"] = lk.target if lk.name == step else lk.source
+        edges.append([prev, step, f"s{i}"])
+        prev = f"s{i}"
+    if not nodes:
+        return {"eq": [f"$self.{where['property']}", who]}
+    return {"exists": {"match": nodes, "edges": edges, "where": {"eq": [f"{prev}.{where['property']}", who]}}}
+
+
+def _role_scopes(onto: Ontology) -> None:
+    """A role's scope as a row filter on each type it names and their subtypes, so a read goes the way row_filters do.
+    A decision on such a type reads its row outside any query, so the role loses it until it is asked in scope."""
+    from xgen_space.check import is_a
+
+    for r in onto.roles.values():
+        for name, where in (r.scope.get("types") or {}).items():
+            spec = _scope_filter(onto, where, str(r.scope.get("attribute", "")))
+            if spec is not None and name in onto.objects:
+                r.scoped.update({t: spec for t in onto.objects if t not in r.scoped and is_a(onto, t, name)})
+        r.closed = {d.name for d in onto.decisions.values() if d.target in r.scoped}
 
 
 def _valid_now(t: ObjectType) -> str:
@@ -588,6 +628,7 @@ def _from_dict(d: dict) -> Ontology:
         parameters=parameters,
     )
     _period_values(onto)
+    _role_scopes(onto)
     return onto
 
 
@@ -641,7 +682,8 @@ def _to_dict(o: Ontology) -> dict:
                                "call": a.call, "undo": a.undo})
                | {"approval": a.approval} for a in o.actions.values()}
     roles = {r.name: _clean({"label": r.label, "read": r.read, "row_filters": r.row_filters, "run": r.run,
-                             "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask})
+                             "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask,
+                             "scope": r.scope})
              for r in o.roles.values()}
     identities = {i.name: _clean({"label": i.label, "table": i.table,
                                   "members": {m.type: m.fields for m in i.members.values()},

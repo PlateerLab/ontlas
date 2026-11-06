@@ -160,7 +160,8 @@ def validate_ontology(o: Ontology) -> list[str]:
             if c.decision and c.decision not in o.decisions:
                 add(f"action {a.name}: criterion uses unknown decision '{c.decision}'")
         for v in a.set.values():
-            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters:
+            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters \
+                    and not v.startswith("$principal."):
                 add(f"action {a.name}: '{v}' is not a parameter")
 
     for r in o.roles.values():
@@ -182,6 +183,8 @@ def validate_ontology(o: Ontology) -> list[str]:
                 continue
             if tn not in o.objects or not pn or (pn != "*" and _prop_of(o, tn, pn) is None):
                 add(f"role {r.name}: '{ref}' is not Type.property")
+        if r.scope:
+            issues.extend(f"role {r.name}: scope: {e}" for e in _scope(o, r))
     issues.extend(_identities(o))
 
     from xgen_space.check import check
@@ -218,6 +221,37 @@ def _prop_of(o: Ontology, type_name: str, name: str):
     from xgen_space.check import _find_prop
 
     return _find_prop(o, type_name, name)
+
+
+def _scope(o: Ontology, r) -> list[str]:
+    from xgen_space.check import is_a
+
+    out = [f"unknown key '{k}'" for k in r.scope if k not in ("attribute", "types")]
+    if not r.scope.get("attribute"):
+        out.append("needs attribute: what the principal says it belongs to")
+    if not r.scope.get("types"):
+        out.append("needs types: the property that holds it on each type")
+    for name, where in (r.scope.get("types") or {}).items():
+        if name not in o.objects:
+            out.append(f"unknown type '{name}'")
+            continue
+        spec = {"property": where} if isinstance(where, str) else where if isinstance(where, dict) else {}
+        here = name
+        for step in spec.get("via") or []:
+            lk = o.links.get(step) or o.link_by_inverse(step)
+            if lk is None:
+                out.append(f"{name}: unknown link '{step}' in via")
+                here = ""
+                break
+            here = lk.target if lk.name == step else lk.source
+        if not spec.get("property"):
+            out.append(f"{name}: give a property, or {{via: [links], property}}")
+        elif here and _prop_of(o, here, spec["property"]) is None:
+            out.append(f"{name}: {here} has no property '{spec['property']}'")
+    for t in o.objects:  # a parent read in full would show the rows of its scoped subtypes
+        if t not in r.scoped and r.can_read(t) and any(is_a(o, s, t) for s in r.scoped):
+            out.append(f"it reads {t} in full, whose subtypes are scoped; scope {t} or do not read it")
+    return out
 
 
 def _format(p, stored_text: bool) -> list[str]:

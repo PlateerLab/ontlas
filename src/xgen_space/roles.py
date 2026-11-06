@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from xgen_space.ir import Agg, And, Exists, Not, Or, Query, Ref, filter_refs, parse_filter
+from xgen_space.ir import Agg, And, Cmp, Column, Exists, Not, Or, Query, Ref, filter_refs, parse_filter
 from xgen_space.model import TEXT_SUFFIX, Ontology, Role
 
 
@@ -42,10 +42,11 @@ def _rewrite(node: Any, alias: str, renames: dict[str, str], principal_attrs: se
 
 
 def row_filter(role: Role, type_name: str, alias: str) -> tuple[Any, set[str]]:
-    spec = role.row_filters.get(type_name)
-    if not spec:
+    specs = [s for s in (role.row_filters.get(type_name), role.scoped.get(type_name)) if s]
+    if not specs:
         return None, set()
     attrs: set[str] = set()
+    spec = specs[0] if len(specs) == 1 else {"and": specs}
     return parse_filter(_rewrite(spec, alias, {}, attrs)), attrs
 
 
@@ -103,6 +104,9 @@ def mask_style(onto: Ontology, role: Role, type_name: str, prop: str, _seen: fro
             return ""
         seen = _seen | {(type_name, prop)}
         if any(mask_style(onto, role, t, n, seen) for t, n in deps if (t, n) != (type_name, prop)):
+            return "full"
+        # an aggregate over a scoped type counts every row of it, also those outside this role's scope
+        if any(t != type_name and t in role.scoped for t, _ in deps):
             return "full"
     return ""
 
@@ -168,6 +172,35 @@ def mask_rows(columns: list[str], rows: list[tuple], plan: dict[str, str]) -> li
         return rows
     idx = {i: plan[c] for i, c in enumerate(columns) if c in plan}
     return [tuple(mask_value(v, idx[i]) if i in idx else v for i, v in enumerate(r)) for r in rows]
+
+
+def in_scope(studio, role: Role, type_name: str, key: Any, principal: dict | None) -> bool:
+    """Whether one object is within a role's rows, asked the way a read asks."""
+    obj = studio.onto.obj(type_name)
+    spec, attrs = row_filter(role, type_name, "x")
+    principal = principal or {}
+    missing = sorted(a for a in attrs if a not in principal)
+    if missing:
+        raise AccessDenied(f"role {role.name} needs principal attributes {missing}")
+    q = Query(nodes={"x": type_name}, where=Cmp(Ref("x", obj.key), "eq", str(key)),
+              columns=[Column(Ref("x", obj.key), "k")]).with_where(spec)
+    return bool(studio.run(q, {f"principal__{a}": principal[a] for a in attrs}).rows)
+
+
+def decide_in_scope(studio, name: str, key: Any, role_name: str, principal: dict | None, params: dict | None = None):
+    """A decision for a scoped role: refused for a row outside its scope, and shown through its masks."""
+    role = studio.onto.roles.get(role_name)
+    table = studio.onto.decisions.get(name)
+    if role is None or table is None or not ("*" in role.run or name in role.run):
+        raise AccessDenied(f"role {role_name} may not run decision '{name}'")
+    if table.target in role.scoped and not in_scope(studio, role, table.target, key, principal):
+        raise AccessDenied(f"{table.target} {key} is outside the scope of role {role.name}")
+    res = studio.decide(name, key, params)
+    for ev in res.evidence:
+        style = mask_style(studio.onto, role, ev.object_type, ev.property) if ev.object_type else ""
+        if style:
+            ev.value = res.inputs[ev.input] = mask_value(ev.value, style)
+    return res
 
 
 def apply_role(onto: Ontology, q: Query, role_name: str, principal: dict | None) -> tuple[Query, dict]:

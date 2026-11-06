@@ -14,6 +14,7 @@ from typing import Any, Callable
 from xgen_space.compile.sql import qi
 from xgen_space.expr import encode_text_date
 from xgen_space.model import KEY_SEP
+from xgen_space.roles import AccessDenied, in_scope
 from xgen_space.values import accepts, coerce, normalize
 
 
@@ -22,6 +23,7 @@ class Actor:
     id: str
     kind: str = "human"
     roles: list[str] = field(default_factory=list)
+    principal: dict[str, Any] = field(default_factory=dict)  # what a scoped role reads: {seller_id: S1}
 
 
 @dataclass
@@ -232,20 +234,72 @@ class ActionService:
         roles = [self.studio.onto.roles[r] for r in actor.roles if r in self.studio.onto.roles]
         return any(r.can(verb, action) for r in roles)
 
+    def _scoped_roles(self, actor: Actor, verb: str, a) -> list:
+        """The roles an actor reaches this type through, or none where one of them reaches every row."""
+        roles = [self.studio.onto.roles[r] for r in actor.roles if r in self.studio.onto.roles]
+        allowed = [r for r in roles if r.can(verb, a.name)]
+        return allowed if allowed and all(a.target in r.scoped for r in allowed) else []
+
+    def _outside(self, actor: Actor, verb: str, a, key: str) -> str:
+        """Why this object is beyond the actor's scope, if it is."""
+        roles = self._scoped_roles(actor, verb, a)
+        why = f"{a.target} {key} is outside the scope of {actor.id}"
+        for r in roles:
+            try:
+                if in_scope(self.studio, r, a.target, key, actor.principal):
+                    return ""
+            except AccessDenied as e:
+                why = str(e)
+        return why if roles else ""
+
+    def _fill_scope(self, actor: Actor, a, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+        """What a scoped actor does not choose: a parameter named after the scope's attribute, and any property a
+        write would set that holds it. Returns (params, fixed properties, problems)."""
+        params, fixed, problems = dict(params), {}, []
+        for r in self._scoped_roles(actor, "request", a):
+            attr = r.scope.get("attribute", "")
+            value = actor.principal.get(attr)
+            if value is None:
+                continue
+            if attr in a.parameters:
+                if params.get(attr) not in (None, "", value):
+                    problems.append(f"{attr}: {params[attr]!r} is not {actor.id}'s own")
+                params[attr] = value
+            where = (r.scope.get("types") or {}).get(a.target)
+            if isinstance(where, str):
+                fixed[where] = value
+        return params, fixed, problems
+
     def request(self, action: str, key: str, params: dict | None = None, *, actor: Actor) -> Proposal:
         onto = self.studio.onto
         a = onto.actions.get(action)
         if a is None:
             raise KeyError(f"unknown action '{action}'")
-        params, problems = check_parameters(a.parameters, dict(params or {}))
+        filled, fixed, foreign = self._fill_scope(actor, a, dict(params or {}))
+        params, problems = check_parameters(a.parameters, filled)
+        problems += foreign
         checks = [CheckResult("role", self._allowed(actor, "request", action), f"{actor.id} roles {actor.roles}"),
                   CheckResult("parameters", not problems, "; ".join(problems))]
+        outside = self._outside(actor, "request", a, str(key))
+        if outside:  # nothing more is read, so an answer says nothing of a row beyond the scope
+            checks.append(CheckResult("scope", False, outside))
+            p = Proposal(f"P{next(self._ids)}", action, a.target, str(key), params, actor, "rejected", checks, {})
+            self.proposals[p.id] = p
+            self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
+            return p
         obj = onto.obj(a.target)
         current = self.studio.fetch(a.target, key)
         checks.append(CheckResult("target", current is not None, f"{a.target} {key}"))
         changes: dict[str, Any] = {}
         for p, v in a.set.items():
-            changes[p] = params.get(v[1:]) if isinstance(v, str) and v.startswith("$") else v
+            if isinstance(v, str) and v.startswith("$principal."):
+                attr = v.split(".", 1)[1]
+                changes[p] = actor.principal.get(attr)
+                if changes[p] is None:
+                    checks.append(CheckResult("principal", False, f"{actor.id} has no {attr}"))
+            else:
+                changes[p] = params.get(v[1:]) if isinstance(v, str) and v.startswith("$") else v
+        changes.update({p: v for p, v in fixed.items() if p in changes})
         if a.transition_to and current is not None:
             sm = obj.states
             state = current.get(sm.property)
@@ -274,7 +328,8 @@ class ActionService:
             p.status = "rejected"
             self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
             return p
-        auto = not a.approval and actor.kind == "human" and self._allowed(actor, "execute", action)
+        auto = not a.approval and actor.kind == "human" and self._allowed(actor, "execute", action) \
+            and not self._outside(actor, "execute", a, str(key))
         if auto:
             self._execute(p, actor)
         return p
@@ -287,6 +342,9 @@ class ActionService:
             raise PermissionError("only a person approves an action")
         if not self._allowed(approver, "execute", p.action):
             raise PermissionError(f"{approver.id} may not execute {p.action}")
+        outside = self._outside(approver, "execute", self.studio.onto.actions[p.action], p.key)
+        if outside:
+            raise PermissionError(outside)
         p.approved_by = approver.id
         self._log(approver, "approved", p)
         self._execute(p, approver)
@@ -334,6 +392,9 @@ class ActionService:
         if not self._allowed(actor, "execute", p.action):
             raise PermissionError(f"{actor.id} may not execute {p.action}")
         a = self.studio.onto.actions[p.action]
+        outside = self._outside(actor, "execute", a, p.key)
+        if outside:
+            raise PermissionError(outside)
         if a.call and not a.undo:
             raise ActionError(f"{p.action} sent an external request and declares no undo request, so it cannot "
                               "be rolled back here")

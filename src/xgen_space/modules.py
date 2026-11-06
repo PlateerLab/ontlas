@@ -351,6 +351,10 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
             r[k] = list(dict.fromkeys(list(r.get(k) or []) + list(patch[k])))
     if patch.get("row_filters"):
         r.setdefault("row_filters", {}).update(copy.deepcopy(patch["row_filters"]))
+    if patch.get("scope"):
+        scope = r.setdefault("scope", {})
+        scope.update({k: copy.deepcopy(v) for k, v in patch["scope"].items() if k != "types"})
+        scope.setdefault("types", {}).update(copy.deepcopy(patch["scope"].get("types") or {}))
     if patch.get("mask"):
         mask = patch["mask"]
         cur = r.get("mask") or {}
@@ -482,6 +486,8 @@ def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:
         if type_name:
             r["read"] = [x for x in r.get("read") or [] if x != type_name]
             (r.get("row_filters") or {}).pop(type_name, None)
+            # a property that goes stays named: validate refuses it, where dropping it would open the rows
+            ((r.get("scope") or {}).get("types") or {}).pop(type_name, None)
         gone = (lambda ref: ref.startswith(f"{type_name}.")) if type_name else (lambda ref: ref == prop)
         if isinstance(r.get("mask"), dict):
             r["mask"] = {k: v for k, v in r["mask"].items() if not gone(k)}
