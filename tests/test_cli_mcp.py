@@ -6,7 +6,7 @@ import pytest
 from xgen_space.cli import main
 from xgen_space.tools import StudioTools
 
-from .conftest import EXAMPLE
+from .conftest import BOOKS, EXAMPLE
 
 
 def _run(capsys, *args) -> tuple[int, str]:
@@ -81,5 +81,5 @@ def test_mcp_server_lists_and_calls_tools(studio):
 def test_draft_expands_a_wildcard_the_shell_left_as_it_is(tmp_path):
     pytest.importorskip("yaml")
     out = tmp_path / "studio"
-    assert main(["draft", str(EXAMPLE.parent / "files" / "*.csv"), "--name", "books", "-o", str(out)]) == 0
+    assert main(["draft", str(BOOKS / "*.csv"), "--name", "books", "-o", str(out)]) == 0
     assert (out / "studio.yaml").is_file() and (out / "data.sqlite").is_file()

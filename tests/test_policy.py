@@ -8,10 +8,9 @@ import pytest
 from xgen_space.library import Library
 from xgen_space.policy import PolicyDrafter, cites
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 from .test_web import _build
 
-LIB = EXAMPLE.parent / "library"
 NS = {"namespace": "https://example.org/studio#"}
 POLICY = (EXAMPLE.parent / "policies" / "교환정책서.md").read_text(encoding="utf-8")
 

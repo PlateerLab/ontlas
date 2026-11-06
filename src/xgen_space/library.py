@@ -1,4 +1,4 @@
-"""Ontology library: every domain package (commerce, finance, energy, ...) kept apart, versioned, composable."""
+"""Ontology library: every domain package (commerce, logistics, energy, ...) kept apart, versioned, composable."""
 from __future__ import annotations
 
 import json
@@ -122,7 +122,7 @@ class Library:
 
     def import_owl(self, text: str, name: str, *, kind: str = "domain", label: str = "", version: str = "0.1.0",
                    namespace: str = "", requires: list[str] = (), fmt: str = "turtle") -> tuple[Module, Any]:
-        """A standard vocabulary (FIBO, schema.org, GS1 ...) as a new module, its source IRIs kept as alignments."""
+        """A standard vocabulary (schema.org, GS1 ...) as a new module, its source IRIs kept as alignments."""
         from xgen_space.exchange.importer import from_owl
 
         onto, report = from_owl(text, namespace=namespace, fmt=fmt, name=name)

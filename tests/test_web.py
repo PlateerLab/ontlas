@@ -7,9 +7,9 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from .conftest import EXAMPLE
+from .conftest import BOOKS, LIB
 
-CFG = EXAMPLE.parent / "library" / "studio.yaml"
+CFG = LIB / "studio.yaml"
 ALL = {"core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "finance", "finance-bindings",
        "party-identity"}
 
@@ -134,7 +134,7 @@ def test_http_keeps_each_visitor_apart():
 def test_a_visitor_brings_files_reviews_the_draft_and_plugs_it_in(session):
     from xgen_space.web.api import DataOptions
 
-    session.data = DataOptions(samples=EXAMPLE.parent / "files")
+    session.data = DataOptions(samples=BOOKS)
     assert len(session.use_samples()["files"]) == 6
     view = session.make_draft("도서관")["pending"]
     assert [s["id"] for s in view["steps"]][:2] == ["read", "objects"] and len(view["graph"]["nodes"]) == 5
@@ -238,7 +238,7 @@ def test_the_guide_offers_one_video_in_byte_ranges(tmp_path):
 def test_a_visitor_sets_the_rules_edits_each_step_and_any_module(session):
     from xgen_space.web.api import DataOptions
 
-    session.data = DataOptions(samples=EXAMPLE.parent / "files")
+    session.data = DataOptions(samples=BOOKS)
     session.use_samples()
     view = session.make_draft("도서관", rules={"queries": ["list"]}, tables=["회원", "대출"])["pending"]
     assert view["counts"] == {"objects": 2, "links": 1, "properties": 10, "queries": 2, "states": 1, "actions": 0,

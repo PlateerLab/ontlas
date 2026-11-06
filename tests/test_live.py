@@ -16,10 +16,9 @@ from xgen_space import Ontology
 from xgen_space.backends.sql import SqliteBackend
 from xgen_space.studio import Studio
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
 NOW = datetime(2026, 10, 30, 12, 0)
-LIB = EXAMPLE.parent / "library"
 SEEDS = [(EXAMPLE / "seed.sql").read_text(encoding="utf-8"), (LIB / "seed_finance.sql").read_text(encoding="utf-8")]
 
 

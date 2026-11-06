@@ -72,8 +72,8 @@ cd xgen-space
 pip install -e ".[all]"
 ```
 
-**1. See it working.** The example library holds commerce and finance standards, a fashion extension, one customer's
-differences and fictional data.
+**1. See it working.** The example library is one fictional shop: a commerce standard, its operations (sellers, payments,
+refunds, shipping, coupons, reviews), a fashion extension and one customer's differences.
 
 ```bash
 xspace serve examples/library/studio.yaml --samples examples/files --policies examples/policies
@@ -85,7 +85,7 @@ Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the lib
 the draft on 초안 생성 (see [The data catalog](#the-data-catalog)). From the command line:
 
 ```bash
-xspace draft examples/files/*.csv --name books --label "도서 대출" --lang ko -o my-studio    # from files
+xspace draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
 xspace draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
 xspace draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
 xspace draft --dsn "$XSPACE_DSN" --name shop -o my-studio                                     # from a database
@@ -147,8 +147,8 @@ The page follows the data from raw files to checked answers. `Ctrl K` jumps to a
 ## What it looks like
 
 The screens below are the studio page that `xspace preview` writes for the example library in `examples/library`
-(common concepts, commerce, finance, a fashion extension, one customer's differences, and the bindings to two
-databases). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the
+(common concepts, commerce and its operations, a fashion extension, one customer's differences, and the bindings to
+one database). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the
 decision with its evidence and the reach of a column change are what the library computed for that example.
 
 `xspace serve` turns the same screens into a working page: plug modules in and out, edit any module as its file,
@@ -167,16 +167,16 @@ same studio file, so nothing one person does reaches another; with `--users`, a 
   <img src="assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
 </p>
 
-<p align="center"><b>The ontology library.</b> Commerce, finance and every other domain live as separate, versioned packages;
+<p align="center"><b>The ontology library.</b> Commerce and every domain added later live as separate, versioned packages;
 a studio plugs in the ones it needs, and the screen shows what unplugging one would take away before it happens.</p>
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screens/ontology.png" alt="Ontology screen: schema graph coloured by the module each type comes from, domain types hanging under common concepts, and the selected type's properties with their columns and modules"></td>
+    <td width="50%"><img src="assets/screens/ontology.png" alt="Ontology screen: knowledge graph coloured by the module each type comes from and sized by its connections, domain types hanging under common concepts, and the selected type's properties with their columns and modules"></td>
     <td width="50%"><img src="assets/screens/query.png" alt="Query screen: one ontology query, its text in eight backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
   </tr>
   <tr>
-    <td><b>Ontology.</b> Every type coloured by the module it comes from; domain types hang under common concepts (customer and borrower under party, order and loan under agreement); each property shows its column and module, each type its standard alignments.</td>
+    <td><b>Ontology.</b> A knowledge graph on WebGL: every type coloured by the module it comes from (by detected community when one module holds them all) and sized by its connections, with layouts to choose from, search, and a selected type lighting only its neighbours. Domain types hang under common concepts (customer and seller under party, order under agreement); each property shows its column and module, each type its standard alignments.</td>
     <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
   </tr>
   <tr>
@@ -285,7 +285,7 @@ Domain knowledge comes and goes, so it is packaged. A library keeps each package
 | Kind | Example | What it holds |
 |---|---|---|
 | `core` | `core` (공통 개념) | Concepts every domain hangs from: party, agreement, the `Named` interface |
-| `domain` | `commerce`, `finance` | The standard definition of a domain, aligned to schema.org, GS1 or FIBO, with no tables in it |
+| `domain` | `commerce`, `commerce-operations` | The standard definition of a domain, aligned to schema.org or GS1, with no tables in it |
 | `industry` | `fashion`, `food` | What one industry adds on top of the standard: material and season, expiry and storage |
 | `customer` | `acme-overlay` | Only what one customer does differently: an extra property, a VIP rule placed ahead of the standard ones, a query taken out |
 | `binding` | `commerce-bindings` | The tables and columns of one database. Swap it, and the same definition reads another system |
@@ -312,16 +312,16 @@ remove: {queries: [wishlistCount]}
 ```python
 from xgen_space.library import Library
 lib = Library("examples/library")
-studio = Studio.from_library(lib, ["commerce-bindings", "fashion", "acme-overlay", "finance-bindings"])  # + requirements
+studio = Studio.from_library(lib, ["commerce-operations-bindings", "fashion", "acme-overlay"])  # + requirements
 db = studio.add_backend("source", SqliteBackend())
-for seed in ("examples/commerce/seed.sql", "examples/library/seed_finance.sql"):
+for seed in ("examples/commerce/seed.sql", "examples/library/seed_operations.sql"):
     db.script(open(seed, encoding="utf-8").read())
 
 studio.composition.owner("property:OrderItem.gift_wrap")     # 'acme-overlay': every element knows its module
 studio.detach_impact("fashion").removed                      # what would go, before anything goes
 studio.detach("acme-overlay"); studio.attach("acme-overlay") # the VIP rule leaves and comes back
 studio.detach("commerce")                                    # refused: three modules depend on it (cascade=True to take them too)
-studio.run("allParties")                                     # one concept, two domains: customers and borrowers
+studio.run("allParties")                                     # one concept, two types: customers and sellers
 studio.check_bindings()                                      # the definition against the actual database
 ```
 
@@ -465,11 +465,11 @@ modules a library expects, a definition and its bindings, keeping the reason for
 | Questions | Each generated query with the rows it gives now, to check later changes against |
 
 ```bash
-xspace draft members.csv books.csv loans.csv -o lib-demo     # lib-demo/library/, data.sqlite, studio.yaml
+xspace draft members.csv products.csv orders.csv -o shop-demo   # shop-demo/library/, data.sqlite, studio.yaml
 xspace draft --sqlite shop.db --name shop                     # opened read-only; prints the two modules
 xspace draft --dsn "$XSPACE_DSN" -o shop                         # the studio file reads ${XSPACE_DSN}, not the password
-xspace draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o lib-demo
-xspace serve lib-demo/studio.yaml
+xspace draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o shop-demo
+xspace serve shop-demo/studio.yaml
 ```
 
 Nothing in the draft is fixed. The rules above are `DraftRules` (how many distinct values still make a category,
@@ -609,15 +609,14 @@ identities:
     table: person_identity
     members:
       Customer: {phone: phone, name: name}
-      Borrower: {phone: phone, name: name}
+      Seller: {phone: phone, name: name}
     rules:
       - {id: same-phone-name, match: [phone, name], normalize: {phone: digits, name: trim}}
 ```
 
 `studio.resolve_identity("Person")` joins the records that share every field of a rule (after normalizing), keeps
 the evidence for each join, and writes the crosswalk in one transaction: `Person` is then an ordinary object with a
-link to each member type, asked for the same way on every backend (`customersWhoBorrow` in the example library finds
-the customer who is also a borrower).
+link to each member type, asked for the same way on every backend.
 
 ## Changes are reviewed before they are approved
 
@@ -703,7 +702,7 @@ change set.
 | Shape validation | `reason.shacl.to_shacl(onto)`, `validate(onto, projection)` | SHACL shapes from the definition, checked with pySHACL |
 | OWL reasoning | `reason.owl_rl.materialize(onto, projection)` | owlrl closure; tested to derive exactly what the built-in rules derive |
 | Standards out | `exchange.owl.to_owl(onto)`, `exchange.r2rml.to_r2rml(onto)` | OWL 2 and R2RML, with a report of what was preserved, adjusted or left out |
-| Standards in | `exchange.importer.from_owl(ttl)` | a starting definition from FIBO, schema.org, GS1 or any OWL/RDFS, with the same report |
+| Standards in | `exchange.importer.from_owl(ttl)` | a starting definition from schema.org, GS1 or any OWL/RDFS, with the same report |
 
 ## The data map
 
@@ -796,16 +795,16 @@ xspace draft --definitions bundle.json --name shop -o shop        # the JSON, dr
 xspace gates examples/library/studio.yaml                         # the flow's pass conditions, measured
 xspace agreement examples/library/studio.yaml                     # past decisions decided again
 xspace review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
-xspace identity examples/library/studio.yaml Person --write       # join the records, write the crosswalk
+xspace identity studio.yaml Person --write       # join the records, write the crosswalk
 xspace sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
 xspace nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
 xspace policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
 xspace users add users.yaml kim --roles editor                    # a person of a team studio (xspace serve --users)
 xspace library list examples/library                              # every package, its kind, versions and requirements
 xspace library create my-lib energy --kind domain --label "에너지 설비" --requires core
-xspace library import-owl my-lib fibo-loans.ttl fibo-loans --requires core
+xspace library import-owl my-lib schema-orders.ttl schema-orders --requires core
 xspace library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
-xspace library compose examples/library commerce-bindings finance-bindings -o ontology.yaml
+xspace library compose examples/library commerce-operations-bindings -o ontology.yaml
 xspace modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
 xspace bindings examples/library/studio.yaml                      # the definition against the database
 ```
@@ -823,7 +822,7 @@ project: [graph]
 
 ## Design
 
-- **Domains are packages.** Commerce, finance and every later domain are versioned modules in a library; a
+- **Domains are packages.** Commerce and every later domain are versioned modules in a library; a
   customer's differences and a database's bindings are modules too, so the standard is never edited to fit one site.
 - **Domains meet in concepts.** Domain types hang from shared concepts and align to public vocabularies, so a
   question about a concept reaches every domain that specialises it.
@@ -858,9 +857,9 @@ src/xgen_space/
   catalog.py repository.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
   web/                      # xspace serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
-examples/library/           # the same domain as packages, plus finance, fashion, food and a customer overlay
-examples/files/             # a fictional library's CSV files, for drafting from data
-tools/                      # render_screens.py (the README images), architecture.html
+examples/library/           # the same domain as packages, plus shop operations, fashion, food and a customer overlay
+examples/files/             # a fictional shop's CSV files, for drafting from data
+tools/                      # render_screens.py (the README images), make_commerce_seed.py (the shop), graph-kit/ (the graph engine bundle)
 ```
 
 ## Roadmap

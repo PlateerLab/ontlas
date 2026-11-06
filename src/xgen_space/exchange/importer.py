@@ -1,4 +1,4 @@
-"""Import an OWL/RDFS vocabulary (FIBO, schema.org, GS1, an earlier export) as a starting definition."""
+"""Import an OWL/RDFS vocabulary (schema.org, GS1, an earlier export) as a starting definition."""
 from __future__ import annotations
 
 import re

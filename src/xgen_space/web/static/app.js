@@ -175,7 +175,7 @@
   ];
 
   const S = {
-    st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, obj: null,
+    st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
@@ -341,12 +341,12 @@
     }
     if (S.tab === 'convert' && !S.conv) loadConvert();
     if (S.tab === 'onto') {
-      mountGraph($('#graph'), S.st.graph, { pos: S.pos, sel: () => S.sel, pick: selectObject });
+      mountGraph($('#graph'), S.st.graph, { key: 'onto', pos: S.pos, sel: () => S.gsel, pick: (id) => selectObject(id), clear: () => { S.gsel = null; } });
       if (!S.sel) {
         const d = S.st.decisions[0];
         S.sel = (d && S.st.graph.nodes.some((x) => x.id === d.target)) ? d.target : (S.st.graph.nodes[0] || {}).id;
       }
-      if (S.sel && (!S.obj || S.obj.name !== S.sel)) selectObject(S.sel);
+      if (S.sel && (!S.obj || S.obj.name !== S.sel)) selectObject(S.sel, true);
     }
     if (S.tab === 'query' && !S.q.res && !S.q.busy && S.q.mode === 'list') {
       if (!S.q.name && S.st.queries.length) pickQuery(S.st.queries[0].name);
@@ -618,15 +618,15 @@
   <div class="right"><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
 <div class="stats">${stats}</div>
 <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr)">
-  <div class="card"><div class="ch">Schema 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span><span><i class="box"></i>모듈</span><span>- - 하위 유형</span></div></div>
-    <div class="cb" style="padding:0"><div class="graph-wrap"><canvas id="graph"></canvas><div class="tip">드래그로 이동 · 휠로 확대</div></div></div></div>
+  <div class="card"><div class="ch">온톨로지 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span></div></div>
+    <div class="cb" style="padding:0"><div class="kg" id="graph"></div></div></div>
   <div class="card"><div class="cb scroll" id="objdetail" style="max-height:640px">${S.obj ? objDetail(S.obj) : '<div class="empty">Node를 선택하면 정의가 표시됩니다.</div>'}</div></div>
 </div>`;
   }
 
-  async function selectObject(name) {
+  async function selectObject(name, quiet) {
     S.sel = name;
-    drawGraph();
+    if (!quiet) { S.gsel = name; drawGraph(); }
     try {
       S.obj = await api('object?name=' + encodeURIComponent(name));
       const box = $('#objdetail');
@@ -661,227 +661,10 @@
       ${links ? `<div class="sec">관계</div><div class="chips">${links}</div>` : ''}`;
   }
 
-  // ---- schema graph: positions settle once and stay; modules drawn as dashed groups --------------------------------
+  // ---- graph: graph.js draws it; positions stay in S.pos and S.dpos across renders ---------------------------------------
 
-  const G = { canvas: null, view: null, nodes: [], edges: [], clusters: [], drag: null, ro: null, sel: () => null, pick: null, shown: null, label: null };
-
-  function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
-
-  function layout(data, pos) {
-    const ids = data.clusters.map((c) => c.id);
-    const centers = {};
-    ids.forEach((c, i) => { const a = (2 * Math.PI * i) / Math.max(ids.length, 1) - Math.PI / 2; centers[c] = { x: Math.cos(a) * 240, y: Math.sin(a) * 200 }; });
-    const nodes = data.nodes.map((n) => ({ ...n, x: (pos[n.id] || {}).x, y: (pos[n.id] || {}).y, vx: 0, vy: 0 }));
-    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const edges = data.edges.filter((e) => byId[e.source] && byId[e.target]).map((e) => ({ ...e, s: byId[e.source], t: byId[e.target] }));
-    let fresh = 0;
-    for (const n of nodes) {
-      if (n.x !== undefined) continue;
-      fresh += 1;
-      const known = edges.filter((e) => (e.s === n && e.t.x !== undefined) || (e.t === n && e.s.x !== undefined)).map((e) => (e.s === n ? e.t : e.s));
-      const base = known.length ? { x: known.reduce((a, k) => a + k.x, 0) / known.length, y: known.reduce((a, k) => a + k.y, 0) / known.length } : centers[n.module] || { x: 0, y: 0 };
-      const a = hash(n.id) * Math.PI * 2;
-      n.x = base.x + Math.cos(a) * 60; n.y = base.y + Math.sin(a) * 60;
-    }
-    if (fresh) {
-      const pinned = new Set(nodes.filter((n) => pos[n.id]).map((n) => n.id));
-      let alpha = pinned.size ? 0.5 : 1;
-      for (let t = 0; t < 500 && alpha > 0.004; t += 1) {
-        for (let i = 0; i < nodes.length; i += 1) {
-          for (let j = i + 1; j < nodes.length; j += 1) {
-            const a = nodes[i], b = nodes[j];
-            let dx = a.x - b.x, dy = a.y - b.y;
-            const d2 = Math.max(dx * dx + dy * dy, 64), d = Math.sqrt(d2);
-            const f = (a.module === b.module ? 7600 : 9500) / d2 * alpha;
-            dx /= d; dy /= d;
-            a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
-          }
-        }
-        for (const e of edges) {
-          if (e.s === e.t) continue;
-          const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y, d = Math.max(Math.hypot(dx, dy), 1);
-          const f = (d - (e.subtype ? 130 : 160)) * 0.035 * alpha;
-          e.s.vx += (dx / d) * f; e.s.vy += (dy / d) * f; e.t.vx -= (dx / d) * f; e.t.vy -= (dy / d) * f;
-        }
-        const cm = {};
-        for (const n of nodes) { const c = cm[n.module] || (cm[n.module] = { x: 0, y: 0, k: 0 }); c.x += n.x; c.y += n.y; c.k += 1; }
-        for (const n of nodes) {
-          const c = cm[n.module];
-          n.vx += ((c.x / c.k) - n.x) * 0.04 * alpha - n.x * 0.006 * alpha;
-          n.vy += ((c.y / c.k) - n.y) * 0.04 * alpha - n.y * 0.006 * alpha;
-        }
-        for (const n of nodes) {
-          if (pinned.has(n.id)) { n.vx = 0; n.vy = 0; continue; }
-          n.vx *= 0.6; n.vy *= 0.6; n.x += n.vx; n.y += n.vy;
-        }
-        alpha *= 0.985;
-      }
-    }
-    for (const n of nodes) pos[n.id] = { x: n.x, y: n.y };
-    const clusters = data.clusters.map((c) => ({ ...c, nodes: nodes.filter((n) => n.module === c.id) })).filter((c) => c.nodes.length);
-    return { nodes, edges, clusters };
-  }
-
-  function fit(W, H) {
-    const xs = G.nodes.map((n) => n.x), ys = G.nodes.map((n) => n.y);
-    if (!xs.length) return { k: 1, tx: W / 2, ty: H / 2 };
-    const minX = Math.min(...xs) - 70, maxX = Math.max(...xs) + 70, minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + 60;
-    const k = Math.min(W / (maxX - minX), H / (maxY - minY), 1.6);
-    return { k, tx: W / 2 - ((minX + maxX) / 2) * k, ty: H / 2 - ((minY + maxY) / 2) * k };
-  }
-
-  function hull(points) {
-    const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    if (p.length < 3) return p;
-    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    const lo = [], up = [];
-    for (const x of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], x) <= 0) lo.pop(); lo.push(x); }
-    for (const x of p.slice().reverse()) { while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], x) <= 0) up.pop(); up.push(x); }
-    return lo.slice(0, -1).concat(up.slice(0, -1));
-  }
-
-  function mountGraph(canvas, data, opt) {
-    if (!canvas) return;
-    const laid = layout(data, opt.pos);
-    Object.assign(G, { canvas, nodes: laid.nodes, edges: laid.edges, clusters: laid.clusters, view: null,
-      pos: opt.pos, sel: opt.sel, pick: opt.pick, shown: opt.shown || null, label: opt.label || null });
-    if (G.ro) G.ro.disconnect();
-    G.ro = new ResizeObserver(() => { G.view = null; drawGraph(); });
-    G.ro.observe(canvas);
-    const at = (ev) => {
-      const r = canvas.getBoundingClientRect();
-      const sx = ev.clientX - r.left, sy = ev.clientY - r.top, v = G.view;
-      return { sx, sy, x: (sx - v.tx) / v.k, y: (sy - v.ty) / v.k };
-    };
-    const hit = (p) => G.nodes.find((n) => (!G.shown || G.shown('node', n)) && Math.hypot(n.x - p.x, n.y - p.y) * G.view.k < 16);
-    canvas.onpointerdown = (ev) => {
-      const p = at(ev), n = hit(p);
-      G.drag = { n, sx: p.sx, sy: p.sy, tx: G.view.tx, ty: G.view.ty, moved: false };
-      canvas.setPointerCapture(ev.pointerId);
-      canvas.classList.add('drag');
-    };
-    canvas.onpointermove = (ev) => {
-      if (!G.drag) { const n = hit(at(ev)); canvas.style.cursor = n ? 'pointer' : 'grab'; return; }
-      const p = at(ev), d = G.drag;
-      if (Math.hypot(p.sx - d.sx, p.sy - d.sy) > 3) d.moved = true;
-      if (!d.moved) return;
-      if (d.n) { d.n.x = p.x; d.n.y = p.y; G.pos[d.n.id] = { x: p.x, y: p.y }; } else { G.view.tx = d.tx + p.sx - d.sx; G.view.ty = d.ty + p.sy - d.sy; G.manual = true; }
-      drawGraph(true);
-    };
-    canvas.onpointerup = () => {
-      const d = G.drag;
-      G.drag = null;
-      canvas.classList.remove('drag');
-      if (d && !d.moved && d.n && G.pick) G.pick(d.n.id);
-    };
-    canvas.onwheel = (ev) => {
-      ev.preventDefault();
-      const p = at(ev), f = Math.exp(-ev.deltaY * 0.0015), v = G.view;
-      v.k = Math.min(Math.max(v.k * f, 0.3), 3);
-      v.tx = p.sx - p.x * v.k; v.ty = p.sy - p.y * v.k; G.manual = true;
-      drawGraph(true);
-    };
-    G.manual = false;
-    drawGraph();
-  }
-
-  function drawGraph(keepView) {
-    const canvas = G.canvas;
-    if (!canvas || !document.body.contains(canvas)) return;
-    const W = canvas.clientWidth, H = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
-    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
-    if (!G.view || (!keepView && !G.manual)) G.view = fit(W, H);
-    const v = G.view, ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    ctx.translate(v.tx, v.ty);
-    ctx.scale(v.k, v.k);
-    const font = (px, w = 600) => `${w} ${px / Math.max(v.k, 0.7)}px Pretendard, "Malgun Gothic", sans-serif`;
-    const seen = (kind, x) => (G.shown ? G.shown(kind, x) : 1);
-    const name = (n) => (G.label ? G.label(n) : n.label);
-    // module groups
-    for (const c of G.clusters) {
-      const pts = [];
-      const members = c.nodes.filter((n) => seen('node', n));
-      if (!members.length) continue;
-      for (const n of members) for (let i = 0; i < 12; i += 1) { const a = (i / 12) * Math.PI * 2; pts.push([n.x + Math.cos(a) * 38, n.y + Math.sin(a) * 34]); }
-      const h = hull(pts);
-      ctx.beginPath();
-      h.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(26,115,232,0.035)';
-      ctx.fill();
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = '#c3ccd8';
-      ctx.lineWidth = 1.2 / v.k;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-      ctx.setLineDash([]);
-      const top = Math.min(...h.map((p) => p[1]));
-      const mid = (Math.min(...h.map((p) => p[0])) + Math.max(...h.map((p) => p[0]))) / 2;
-      ctx.font = font(11.5, 700);
-      ctx.textAlign = 'center';
-      ctx.lineWidth = 4 / Math.max(v.k, 0.7);
-      ctx.strokeStyle = '#fff';
-      ctx.strokeText(c.label, mid, top - 7);
-      ctx.fillStyle = '#8a96a5';
-      ctx.fillText(c.label, mid, top - 7);
-    }
-    const sel = G.sel();
-    // edges
-    for (const e of G.edges) {
-      const alpha = Math.min(seen('edge', e), seen('node', e.s), seen('node', e.t));
-      if (!alpha) continue;
-      ctx.globalAlpha = alpha;
-      const on = sel && (e.source === sel || e.target === sel);
-      const { s, t } = e;
-      ctx.strokeStyle = on ? '#1a73e8' : '#a7b2c1';
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.lineWidth = (on ? 1.8 : 1.2) / Math.max(v.k, 0.7);
-      ctx.setLineDash(e.subtype ? [5, 4] : []);
-      if (s === t) {
-        ctx.beginPath();
-        ctx.arc(s.x + 20, s.y - 20, 12, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        continue;
-      }
-      const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
-      const x1 = s.x + ux * 12, y1 = s.y + uy * 12, x2 = t.x - ux * 14, y2 = t.y - uy * 14;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * 8 - uy * 4, y2 - uy * 8 + ux * 4); ctx.lineTo(x2 - ux * 8 + uy * 4, y2 - uy * 8 - ux * 4); ctx.closePath(); ctx.fill();
-      if (!e.subtype && s !== t && (on || v.k > 1.4)) {
-        ctx.font = font(10.5, on ? 700 : 500);
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 4 / Math.max(v.k, 0.7);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeText(e.label, (s.x + t.x) / 2, (s.y + t.y) / 2 - 3);
-        ctx.fillStyle = on ? '#15509f' : '#6b7685';
-        ctx.fillText(e.label, (s.x + t.x) / 2, (s.y + t.y) / 2 - 3);
-      }
-    }
-    ctx.globalAlpha = 1;
-    // nodes
-    for (const n of G.nodes) {
-      const alpha = seen('node', n);
-      if (!alpha) continue;
-      ctx.globalAlpha = alpha;
-      const on = n.id === sel;
-      if (on) { ctx.beginPath(); ctx.arc(n.x, n.y, 17, 0, Math.PI * 2); ctx.fillStyle = 'rgba(26,115,232,0.16)'; ctx.fill(); }
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, 10, 0, Math.PI * 2);
-      if (n.abstract) { ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = on ? '#1a73e8' : '#13213c'; ctx.stroke(); } else { ctx.fillStyle = on ? '#1a73e8' : '#13213c'; ctx.fill(); }
-      ctx.font = font(12.5, 700);
-      ctx.textAlign = 'center';
-      ctx.lineWidth = 4 / Math.max(v.k, 0.7);
-      ctx.strokeStyle = '#fff';
-      ctx.strokeText(name(n), n.x, n.y + 27);
-      ctx.fillStyle = on ? '#15509f' : '#1b2330';
-      ctx.fillText(name(n), n.x, n.y + 27);
-    }
-    ctx.globalAlpha = 1;
-  }
+  const mountGraph = (el, data, opt) => window.SpaceGraph.mount(el, data, opt);
+  const drawGraph = () => window.SpaceGraph.refresh();
 
   // ---- queries -------------------------------------------------------------------------------------------------
 
@@ -1489,7 +1272,8 @@ ${controls}${body}`;
   function mountDraftGraph() {
     const p = S.files && S.files.pending;
     if (!p) return;
-    mountGraph($('#dgraph'), S.dr.graph || p.graph, { pos: S.dpos, sel: () => S.dr.sel, shown: draftShown,
+    mountGraph($('#dgraph'), S.dr.graph || p.graph, { key: 'draft', pos: S.dpos, sel: () => S.dr.sel, shown: draftShown,
+      clear: () => { S.dr.sel = null; },
       label: (n) => S.dr.ed.labels['object:' + n.id] || n.label,
       pick: (id) => { S.dr.sel = S.dr.sel === id ? null : id; S.dr.view = 'properties'; S.dr.step = Math.max(S.dr.step, stepIndex('properties') + 1); refreshDraft(); } });
   }
@@ -1723,7 +1507,7 @@ ${controls}${body}`;
     return `<div class="grid" style="grid-template-columns:240px minmax(0,1fr);align-items:start">
       <div class="card"><div class="ch">생성 단계</div><div class="cb dsteps">${steps}</div></div>
       <div class="card"><div class="ch">${esc(p.label)} 초안<div class="right legend"><span><i class="fill"></i>객체</span><span>→ 관계</span></div></div>
-        <div class="cb" style="padding:0"><div class="graph-wrap" style="height:360px"><canvas id="dgraph"></canvas><div class="tip">${done ? 'Node를 선택하면 속성이 표시됩니다' : esc(STEP[p.steps[Math.min(S.dr.step, p.steps.length - 1)].id][1])}</div></div></div></div>
+        <div class="cb" style="padding:0;position:relative"><div class="kg" id="dgraph" style="height:420px"></div><div class="kg-tip">${done ? 'Node를 선택하면 속성이 표시됩니다' : esc(STEP[p.steps[Math.min(S.dr.step, p.steps.length - 1)].id][1])}</div></div></div>
     </div>
     <div class="card"><div class="ch">${curTitle[0]}<div class="right muted" style="font-weight:600;font-size:12px">${curTitle[1]}</div></div><div class="cb scroll" id="ddetail" style="max-height:520px">${stepDetail(p, cur)}</div></div>
     <div class="card"><div class="cb" id="dcheck">${checkBar()}</div></div>`;
@@ -2641,7 +2425,7 @@ ${controls}${body}`;
   // what every screen holds of the pipeline on screen, for when another one takes its place
   function clearViews() {
     clearInterval(S.dr.timer);
-    Object.assign(S, { impact: null, pos: {}, sel: null, files: null, dpos: {}, conv: null, changes: null, agree: null, flset: null, ident: null, ed: null, change: null });
+    Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, conv: null, changes: null, agree: null, flset: null, ident: null, ed: null, change: null });
     Object.assign(S.dr, { step: 0, view: 'read', sel: null, ed: NEW_EDITS(), rev: null, graph: null, rules: null, tables: {}, timer: 0 });
     stale();
     Object.assign(S.mg, { form: null, sel: '', q: '', obj: '', table: '', open: false, review: null });
@@ -2762,7 +2546,7 @@ ${controls}${body}`;
       for (const [k, v] of Object.entries(S.map.edits.columns)) edits.columns[k] = v || null;
       try {
         await api('draft/map/apply', { standard: S.map.picked, edits: toEdits(), mapping: edits });
-        Object.assign(S, { impact: null, pos: {}, sel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
+        Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
         stale();
         S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false };
         S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
@@ -3048,7 +2832,7 @@ ${controls}${body}`;
       render();
       try {
         await api('draft/apply', { edits: toEdits() });
-        Object.assign(S, { impact: null, pos: {}, sel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
+        Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
         stale();
         S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
         S.dr.busy = false;
@@ -3069,7 +2853,7 @@ ${controls}${body}`;
     aparam: (t) => { S.d.params[t.dataset.k] = t.value; },
     dname: (t) => { S.dr.label = t.value; },
     dsn: (t) => { S.dr.dsn = t.value; },
-    dlab: (t) => { S.dr.ed.labels[t.dataset.el] = t.value; if (t.dataset.el.startsWith('object:')) drawGraph(true); },
+    dlab: (t) => { S.dr.ed.labels[t.dataset.el] = t.value; if (t.dataset.el.startsWith('object:')) drawGraph(); },
     dvalues: (t) => { S.dr.ed.values[t.dataset.ref] = t.value; },
     dalabel: (t) => { S.dr.add.label = t.value; },
     drule: (t) => {

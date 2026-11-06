@@ -3,9 +3,8 @@ import json
 
 import pytest
 
-from .conftest import EXAMPLE
+from .conftest import LIB
 
-LIB = EXAMPLE.parent / "library"
 MODULES = ["core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "finance", "finance-bindings",
            "party-identity"]
 

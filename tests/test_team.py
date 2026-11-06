@@ -9,7 +9,7 @@ import pytest
 
 from xgen_space.web.team import Users, check_password, hash_password
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
 
 def test_passwords_are_salted_and_checked_in_constant_form():
@@ -30,7 +30,7 @@ def team(tmp_path):
 
     root = tmp_path / "examples"
     shutil.copytree(EXAMPLE, root / "commerce")
-    shutil.copytree(EXAMPLE.parent / "library", root / "library")
+    shutil.copytree(LIB, root / "library")
     users = Users.load(tmp_path / "users.yaml")
     users.add("kim", "kim-password-1", name="김", roles=["editor"])
     users.add("lee", "lee-password-1", name="이", roles=["approver"])

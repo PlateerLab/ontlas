@@ -2,10 +2,10 @@ module: build-rules
 version: 1.0.0
 kind: method
 label: 구축 규칙 · 예시
-description: 데이터에서 초안을 만들 때 쓰는 규칙입니다. 적용하면 데이터 연결의 생성 설정 기본값이 이 모듈의 값으로 바뀝니다(허용값은 종류 12개 · 평균 3회 반복까지, 처리 · 진행 컬럼도 상태로, 차주 · 직원 표도 사람 표로).
+description: 데이터에서 초안을 만들 때 쓰는 규칙입니다. 적용하면 데이터 연결의 생성 설정 기본값이 이 모듈의 값으로 바뀝니다(허용값은 종류 12개 · 평균 3회 반복까지, 처리 · 진행 컬럼도 상태로, 직원 표도 사람 표로).
 
 draft_rules:
   enum_max: 12
   enum_repeat: 3.0
   state_hints: [status, state, stat, 상태, 처리, 진행]
-  person_hints: [member, customer, user, client, person, 회원, 고객, 사용자, 차주, 직원]
+  person_hints: [member, customer, user, client, person, 회원, 고객, 사용자, 직원]

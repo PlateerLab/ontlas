@@ -22,6 +22,7 @@ STATIC = Path(__file__).parent / "static"
 COOKIE = "xspace_session"
 LOGIN = "xspace_login"
 MEDIA = "/media/demo.mp4"
+KIT = "/graph-kit.js"
 MAX_BODY = 64 * 1024
 
 
@@ -29,8 +30,14 @@ def page() -> bytes:
     """index.html with the stylesheet and script inlined, so a cache in front never serves a stale pair."""
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     css = BASE_CSS + (STATIC / "app.css").read_text(encoding="utf-8")
-    js = (STATIC / "scene.js").read_text(encoding="utf-8") + (STATIC / "app.js").read_text(encoding="utf-8")
+    js = f"window.GRAPH_KIT_URL={json.dumps(KIT + '?v=' + kit_version())};" + "".join(
+        (STATIC / name).read_text(encoding="utf-8") for name in ("scene.js", "graph.js", "app.js"))
     return html.replace("/*CSS*/", css).replace("/*JS*/", js).encode("utf-8")
+
+
+def kit_version() -> str:
+    """The graph engine stays out of the page, loaded when a graph opens; its address changes with its content."""
+    return hashlib.sha256((STATIC / "graph-kit.js").read_bytes()).hexdigest()[:10]
 
 
 class Sessions:
@@ -185,7 +192,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
+            if "Cache-Control" not in (extra or {}):
+                self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "same-origin")
             if new and sid:
@@ -274,6 +282,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                                          "frame-ancestors 'none'"})
             if url.path == MEDIA and the_guide["video"]:
                 return self._media(video)
+            if url.path == KIT:
+                return self._send(200, (STATIC / "graph-kit.js").read_bytes(), "text/javascript; charset=utf-8",
+                                  extra={"Cache-Control": "public, max-age=31536000, immutable"})
             if url.path == "/api/guide":
                 return self._json(200, the_guide)
             if url.path == "/api/me":

@@ -5,9 +5,9 @@ import pytest
 from xgen_space.modules import Module
 from xgen_space.review import ChangeError, FlowSettings
 
-from .conftest import EXAMPLE
+from .conftest import LIB
 
-STUDIO = EXAMPLE.parent / "library" / "studio.yaml"
+STUDIO = LIB / "studio.yaml"
 
 
 @pytest.fixture

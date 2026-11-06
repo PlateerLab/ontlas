@@ -5,10 +5,8 @@ from xgen_space.draft import draft, load_sqlite, read_csv, studio_from
 from xgen_space.library import Library
 from xgen_space.modules import compose
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 from .test_draft import _files
-
-LIB = EXAMPLE.parent / "library"
 
 
 def _library_draft():

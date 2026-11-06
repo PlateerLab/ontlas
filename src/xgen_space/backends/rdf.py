@@ -11,12 +11,43 @@ from xgen_space.backends.base import Backend, Capabilities, Result
 from xgen_space.compile.base import Compiled
 
 
+def connected(triples: list[tuple], bound=lambda term: False) -> list[tuple]:
+    """A triple pattern order where each pattern shares a variable with what is bound before it, wherever one does."""
+    from rdflib import BNode, Variable
+
+    def free(term) -> bool:
+        return isinstance(term, (Variable, BNode))
+
+    left, out = list(triples), []
+    seen = {x for t in left for x in t if free(x) and bound(x)}
+    while left:
+        best = max(left, key=lambda t: (sum(free(x) and x in seen for x in t), sum(not free(x) for x in t)))
+        left.remove(best)
+        out.append(best)
+        seen.update(x for x in best if free(x))
+    return out
+
+
+def _walk(ctx, part):
+    """rdflib runs the patterns with the fewest free terms first, so every `?x a :Type` goes first and a path of n hops
+    becomes the product of n classes: 70 orders and 115 items along five hops took minutes. Here a basic graph pattern
+    walks along what it has bound."""
+    from rdflib.plugins.sparql.evaluate import evalBGP
+
+    if part.name != "BGP":
+        raise NotImplementedError
+    return evalBGP(ctx, connected(part.triples, lambda term: ctx[term] is not None))
+
+
 class RdflibBackend(Backend):
     def __init__(self, graph: Any = None, name: str = "rdflib"):
         try:
             import rdflib
         except ImportError as e:
             raise ImportError("RdflibBackend needs the [rdf] extra (rdflib)") from e
+        from rdflib.plugins.sparql import CUSTOM_EVALS
+
+        CUSTOM_EVALS["xspace-walk"] = _walk
         self.graph = graph if graph is not None else rdflib.Graph()
         self.name = name
         self.capabilities = Capabilities("sparql", "1.1", load=True, reasoning=["owlrl"])

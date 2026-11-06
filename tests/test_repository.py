@@ -1,14 +1,15 @@
 """Repositories and the catalog over them: folders, what a file turned out to be, what goes into a draft."""
 import gc
 import json
-from pathlib import Path
 
 import pytest
 
 from xgen_space.repository import Repositories, clean_path, is_litter
 
+from .conftest import LIB
+
 CSV = "회원번호,이름\nM1,가\nM2,나\n".encode("utf-8")
-EXAMPLE = Path(__file__).parent.parent / "examples" / "library" / "studio.yaml"
+EXAMPLE = LIB / "studio.yaml"
 
 
 @pytest.fixture

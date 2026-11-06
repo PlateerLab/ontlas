@@ -6,9 +6,9 @@ from xgen_space.backends.sql import SqliteBackend
 from xgen_space.draft import ReadError, draft, infer_type, load_sqlite, read_csv, read_file, romanize, studio_from
 from xgen_space.modules import compose
 
-from .conftest import EXAMPLE
+from .conftest import BOOKS
 
-FILES = EXAMPLE.parent / "files"
+FILES = BOOKS
 
 
 def _files() -> list:

@@ -1,0 +1,26 @@
+module: commerce-operations-bindings
+version: 1.0.0
+kind: binding
+label: 이커머스 운영 원천 Binding
+description: 이커머스 운영 온톨로지를 예시 커머스 DB의 테이블과 컬럼에 연결합니다
+requires: [commerce-operations, commerce-bindings]
+
+extend:
+  objects:
+    Seller: {table: sellers}
+    Payment: {table: payments}
+    Refund: {table: refunds}
+    Carrier: {table: carriers}
+    Shipment: {table: shipments}
+    Coupon: {table: coupons}
+    Review: {table: reviews}
+  links:
+    soldBy: {via: {table: product_sellers, source: product_id, target: seller_id}}
+    paidWith: {"on": {order_id: order_id}}
+    hasRefund: {"on": {claim_id: claim_id}}
+    refundedFrom: {"on": {payment_id: payment_id}}
+    shippedBy: {"on": {order_id: order_id}}
+    carriedBy: {"on": {carrier_id: carrier_id}}
+    usedCoupon: {via: {table: order_coupons, source: order_id, target: coupon_id}}
+    wrote: {"on": {customer_id: customer_id}}
+    reviews: {"on": {product_id: product_id}}

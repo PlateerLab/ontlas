@@ -3,8 +3,7 @@ name: studio
 namespace: https://example.org/studio#
 now: "2026-10-30T12:00:00"
 notice: 가상 예시 데이터
-modules: [core, commerce, commerce-bindings, fashion, acme-overlay, finance, finance-bindings, party-identity]
-resolve: [Person]
+modules: [core, commerce, commerce-bindings, commerce-operations, commerce-operations-bindings, fashion, acme-overlay]
 flow:
   gates:
     bind: {max_errors: 0}
@@ -21,6 +20,6 @@ monitor:
   faults:
     - {label: 식품 업종 모듈 적용, attach: food}
 backends:
-  source: {kind: sqlite, path: ":memory:", seed: [../commerce/seed.sql, seed_finance.sql], source: true}
+  source: {kind: sqlite, path: ":memory:", seed: [../commerce/seed.sql, seed_operations.sql], source: true}
   graph: {kind: rdflib}
 project: [graph]

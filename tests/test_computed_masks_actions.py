@@ -10,7 +10,7 @@ from xgen_space.compile.base import CompileError, compiler_for
 from xgen_space.expr import ExprError, check_computed, dependencies, parse_expr
 from xgen_space.roles import AccessDenied, mask_value
 
-from .conftest import EXAMPLE
+from .conftest import LIB
 
 AGENT = Actor("agent-1", "agent", ["customer_agent"])
 OPERATOR = Actor("op", "human", ["operator"])
@@ -208,7 +208,7 @@ def test_identity_joins_customers_and_borrowers_across_systems():
     pytest.importorskip("rdflib")
     from xgen_space.config import load_studio
 
-    st = load_studio(EXAMPLE.parent / "library" / "studio.yaml")
+    st = load_studio(LIB / "studio.yaml")
     rep = st.resolve_identity("Person")
     assert rep.summary() == {"identity": "Person", "records": 6, "identities": 5, "joined": 1, "findings": 0,
                              "written": True}

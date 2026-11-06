@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.0
+
+- The example library is e-commerce alone. `commerce-operations` adds sellers, payments, refunds, carriers, shipments,
+  coupons, reviews and a shipping fee decision, and the shop grows to 27 customers and 70 orders
+  (`tools/make_commerce_seed.py`, a fixed seed, all invented). The sample files are the shop's raw CSV files.
+  The finance package and the book lending files moved to `tests/fixtures`, so what two domains show stays tested.
+- The graph is drawn with sigma.js on WebGL: colour by module, or by detected community when one module holds all, size
+  by connections, curved edges with arrows, a selected type lighting only its neighbours, search, six layouts, rotation,
+  full screen. Layouts run once and stop. The engine is a separate file, loaded the first time a graph opens.
+- The in-memory graph answers a long path. rdflib ran every `?x a :Type` first, so a query over five hops became the
+  product of five classes and a measurement of the pipeline never ended on real row counts. A basic graph pattern now
+  walks along what it has bound: 70 orders across five hops went from minutes to 0.1 seconds.
+
 ## 0.9.0
 
 - `.hwp` (Hancom 5.x) is read with the standard library: text by section, tables' cells included. A file with a password

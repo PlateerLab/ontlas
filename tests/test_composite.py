@@ -9,7 +9,7 @@ from xgen_space.definitions import Definitions, schema_backend
 from xgen_space.draft import draft
 from xgen_space.studio import Studio
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
 SEED = """
 CREATE TABLE ord (ord_no TEXT PRIMARY KEY, memo TEXT);
@@ -187,7 +187,7 @@ def _standard():
     from xgen_space.library import Library
     from xgen_space.modules import compose
 
-    base = Library(EXAMPLE.parent / "library").resolve(["core", "commerce"])
+    base = Library(LIB).resolve(["core", "commerce"])
     return base, compose(base, namespace="https://example.org/s#", name="s").ontology
 
 

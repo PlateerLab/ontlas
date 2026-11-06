@@ -1,0 +1,26 @@
+library: .
+name: studio
+namespace: https://example.org/studio#
+now: "2026-10-30T12:00:00"
+notice: 가상 예시 데이터
+modules: [core, commerce, commerce-bindings, fashion, acme-overlay, finance, finance-bindings, party-identity]
+resolve: [Person]
+flow:
+  gates:
+    bind: {max_errors: 0}
+    query: {min_agree: 1.0}
+    decide: {min_agreement: 0.8}
+    check: {min_accuracy: 0.9}
+  agreement:
+    decision: returnEligibility
+    query: pastReturnCases
+    inputs: {days_since_delivery: days_after_delivery, item_status: status_then,
+             category_returnable: returnable_then, customer_grade: grade_then}
+    expect: {eligible: approved}
+monitor:
+  faults:
+    - {label: 식품 업종 모듈 적용, attach: food}
+backends:
+  source: {kind: sqlite, path: ":memory:", seed: [../commerce/seed.sql, seed_finance.sql], source: true}
+  graph: {kind: rdflib}
+project: [graph]

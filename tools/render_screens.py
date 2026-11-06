@@ -2,8 +2,8 @@
 
     python tools/render_screens.py            # needs playwright with chromium installed
 
-Writes assets/screens/{library,ontology,query,decision,map}.png from `xspace preview`,
-assets/screens/{monitor,catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
+Writes assets/screens/{library,query,decision,map}.png from `xspace preview`,
+assets/screens/{monitor,ontology,catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
 at 2x.
 """
 from __future__ import annotations
@@ -50,6 +50,11 @@ def live_screens(page, base: str, out: Path) -> None:
     page.evaluate("document.fonts.ready")
     page.wait_for_timeout(2500)
     page.locator(".mcard").screenshot(path=str(out / "monitor.png"))
+    page.goto(base + "/#onto")
+    page.wait_for_selector(".kg-stage canvas", timeout=30000)
+    page.evaluate("document.fonts.ready")
+    page.wait_for_timeout(1500)
+    page.locator("#main .grid").first.screenshot(path=str(out / "ontology.png"))
     page.goto(base + "/#catalog")
     page.locator(".cempty").wait_for()
     page.click("[data-act=fsample]")
@@ -82,11 +87,12 @@ def main() -> None:
         page_file = Path(tmp) / "studio.html"
         page_file.write_text(html, encoding="utf-8")
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(args=["--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist",
+                                              "--enable-unsafe-swiftshader"])  # the graph is WebGL
             page = browser.new_page(viewport={"width": 1500, "height": 1000}, device_scale_factor=2)
             page.goto(page_file.as_uri(), wait_until="networkidle")
             page.evaluate("document.fonts.ready")
-            for sid in ("library", "ontology", "query", "decision", "map"):
+            for sid in ("library", "query", "decision", "map"):
                 page.locator(f"#{sid}").screenshot(path=str(out / "screens" / f"{sid}.png"))
             page.set_viewport_size({"width": 1500, "height": 900})
             live_screens(page, _serve(ROOT / "examples" / "library" / "studio.yaml", ROOT / "examples" / "files"),

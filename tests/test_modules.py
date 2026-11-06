@@ -7,9 +7,8 @@ from xgen_space.library import Library
 from xgen_space.modules import Module, ModuleError, Requirement, compose, removal_impact
 from xgen_space.studio import Studio
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
-LIB = EXAMPLE.parent / "library"
 ALL = ["core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "finance", "finance-bindings"]
 NOW = datetime(2026, 10, 30, 12, 0)
 
@@ -33,7 +32,8 @@ def composed(lib) -> Studio:
 
 def test_library_lists_every_package(lib):
     rows = {r["name"]: r for r in lib.list()}
-    assert set(rows) == {*ALL, "food", "party-identity", "return-quality", "build-rules"}
+    assert set(rows) == {*ALL, "food", "party-identity", "return-quality", "build-rules", "commerce-operations",
+                         "commerce-operations-bindings"}
     assert rows["finance"]["kind"] == "domain" and rows["acme-overlay"]["kind"] == "customer"
     assert rows["commerce-bindings"]["requires"] == ["commerce"]
 

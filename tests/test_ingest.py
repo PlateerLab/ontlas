@@ -14,7 +14,7 @@ from xgen_space.definitions import Definitions, from_sheets, schema_backend
 from xgen_space.draft import Table, draft
 from xgen_space.ingest import IngestError, adapter_paths, ingest, is_sheet, load_adapters, register
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
 W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
 A = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
@@ -847,6 +847,7 @@ PLUGIN = """
 from xgen_space.definitions import Definitions, TableDef
 from xgen_space.ingest import register
 
+
 def read(data, source):
     return Definitions({"T": TableDef("T", data.decode())}, sources=[source])
 
@@ -1061,7 +1062,7 @@ def session():
     from xgen_space.config import load_studio
     from xgen_space.web.api import StudioSession
 
-    return StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
+    return StudioSession(load_studio(LIB / "studio.yaml"))
 
 
 def test_the_page_takes_every_format_and_lists_it_without_the_full_text(session):
@@ -1213,7 +1214,7 @@ def test_an_uploaded_document_feeds_the_policy_draft_by_section_and_a_code_shows
     from xgen_space.config import load_studio
     from xgen_space.web.api import StudioSession
 
-    s = StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
+    s = StudioSession(load_studio(LIB / "studio.yaml"))
     s.upload("규정.md", "# 반품\n\n7일 이내 반품합니다.\n\n# 교환\n\n14일 이내 교환합니다.\n".encode())
     got = s.document_text("규정")
     assert got["ok"] and got["sections"] == ["반품", "교환"] and "14일" in got["text"]

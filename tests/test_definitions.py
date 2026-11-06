@@ -6,7 +6,7 @@ import pytest
 from xgen_space.definitions import Definitions, from_sheets, read_definitions, schema_backend
 from xgen_space.draft import Table, draft
 
-from .conftest import EXAMPLE
+from .conftest import EXAMPLE, LIB
 
 DEFS = EXAMPLE.parent / "definitions"
 
@@ -110,7 +110,7 @@ def test_the_page_drafts_from_uploaded_definitions():
     from xgen_space.config import load_studio
     from xgen_space.web.api import StudioSession
 
-    s = StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
+    s = StudioSession(load_studio(LIB / "studio.yaml"))
     for f in ("테이블정의서.csv", "코드정의서.csv"):
         st = s.upload(f, (DEFS / f).read_bytes())
     assert st["files"] == [] and [x["source"] for x in st["definitions"]] == ["테이블정의서.csv", "코드정의서.csv"]

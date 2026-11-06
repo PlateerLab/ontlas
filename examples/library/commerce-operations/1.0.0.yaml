@@ -1,0 +1,186 @@
+module: commerce-operations
+version: 1.0.0
+kind: domain
+label: 이커머스 운영 온톨로지
+description: 판매자, 결제, 환불, 배송, 택배사, 쿠폰, 상품평과 배송비 판정을 정의합니다
+requires: [commerce]
+
+objects:
+  Seller:
+    label: 판매자
+    parent: Party
+    key: seller_id
+    aligned: [https://schema.org/Organization]
+    properties:
+      seller_id: {type: string, label: 판매자 번호, required: true}
+      commission_rate: {type: decimal, label: 수수료율}
+
+  Payment:
+    label: 결제
+    key: payment_id
+    aligned: [https://schema.org/Invoice]
+    properties:
+      payment_id: {type: string, label: 결제 번호, required: true}
+      order_id: {type: string, label: 주문 번호}
+      method:
+        type: enum
+        label: 결제 수단
+        values: {CARD: 신용카드, EASY_PAY: 간편결제, BANK_TRANSFER: 계좌이체, VIRTUAL_ACCOUNT: 가상계좌}
+      amount: {type: decimal, unit: KRW, label: 결제 금액}
+      paid_at: {type: datetime, label: 결제 일시}
+      pay_status:
+        type: enum
+        label: 결제 상태
+        values: {PENDING: 입금 대기, APPROVED: 승인, CANCELLED: 취소}
+
+  Refund:
+    label: 환불
+    key: refund_id
+    properties:
+      refund_id: {type: string, label: 환불 번호, required: true}
+      claim_id: {type: string, label: 클레임 번호}
+      payment_id: {type: string, label: 결제 번호}
+      amount: {type: decimal, unit: KRW, label: 환불 금액}
+      requested_at: {type: datetime, label: 요청 일시}
+      refund_status:
+        type: enum
+        label: 환불 상태
+        values: {REQUESTED: 요청, DONE: 완료}
+
+  Carrier:
+    label: 택배사
+    key: carrier_id
+    title: name
+    implements: [Named]
+    properties:
+      carrier_id: {type: string, label: 택배사 번호, required: true}
+      name: {type: string, label: 택배사명}
+
+  Shipment:
+    label: 배송
+    key: shipment_id
+    aligned: [https://schema.org/ParcelDelivery]
+    properties:
+      shipment_id: {type: string, label: 배송 번호, required: true}
+      order_id: {type: string, label: 주문 번호}
+      carrier_id: {type: string, label: 택배사 번호}
+      tracking_no: {type: string, label: 운송장 번호}
+      shipped_at: {type: datetime, label: 출고 일시}
+      delivered_at: {type: datetime, label: 배송 완료 일시}
+      ship_status:
+        type: enum
+        label: 배송 상태
+        values: {IN_TRANSIT: 배송 중, DELIVERED: 배송 완료}
+
+  Coupon:
+    label: 쿠폰
+    key: coupon_id
+    title: name
+    implements: [Named]
+    aligned: [https://schema.org/Offer]
+    properties:
+      coupon_id: {type: string, label: 쿠폰 번호, required: true}
+      name: {type: string, label: 쿠폰명}
+      discount_rate: {type: decimal, label: 할인율}
+      min_amount: {type: decimal, unit: KRW, label: 최소 주문 금액}
+      expires_at: {type: datetime, label: 만료 일시}
+
+  Review:
+    label: 상품평
+    key: review_id
+    aligned: [https://schema.org/Review]
+    properties:
+      review_id: {type: string, label: 상품평 번호, required: true}
+      customer_id: {type: string, label: 고객 번호}
+      product_id: {type: string, label: 상품 번호}
+      rating: {type: integer, label: 평점}
+      written_at: {type: datetime, label: 작성 일시}
+      body: {type: string, label: 내용}
+
+links:
+  soldBy: {from: Product, to: Seller, inverse: sells, label: 판매자}
+  paidWith: {from: Order, to: Payment, cardinality: one_to_many, inverse: paymentOf, label: 결제}
+  hasRefund: {from: Claim, to: Refund, cardinality: one_to_many, inverse: refundOf, label: 환불}
+  refundedFrom: {from: Refund, to: Payment, cardinality: many_to_one, inverse: refunds, label: 환불 결제}
+  shippedBy: {from: Order, to: Shipment, cardinality: one_to_many, inverse: shipmentOf, label: 배송}
+  carriedBy: {from: Shipment, to: Carrier, cardinality: many_to_one, inverse: carries, label: 택배사}
+  usedCoupon: {from: Order, to: Coupon, inverse: usedIn, label: 사용 쿠폰}
+  wrote: {from: Customer, to: Review, cardinality: one_to_many, inverse: writtenBy, label: 작성}
+  reviews: {from: Review, to: Product, cardinality: many_to_one, inverse: reviewedIn, label: 상품}
+
+decisions:
+  shippingFee:
+    label: 배송비
+    target: Order
+    cite: 배송비 정책서 v1.0 2조
+    hit_policy: first
+    inputs:
+      order_total: {type: decimal, property: total}
+      order_status: {type: string, property: status}
+    outputs: {fee: decimal, reason: string}
+    rules:
+      - {id: cancelled, when: {order_status: '= "CANCELLED"'}, then: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
+      - {id: free, when: {order_total: ">= 50000"}, then: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
+      - {id: basic, when: {}, then: {fee: 3000, reason: 기본 배송비 3천원입니다}}
+
+queries:
+  paymentsByMethod:
+    label: 결제 수단별 금액
+    query:
+      match: {p: Payment}
+      where: {eq: [p.pay_status, APPROVED]}
+      return: [p.method, {sum: p.amount, as: amount}, {count: p, as: payments}]
+      order: [-amount]
+  pendingRefunds:
+    label: 처리 중인 환불
+    query:
+      match: {r: Refund, c: Claim}
+      edges: [[c, hasRefund, r]]
+      where: {eq: [r.refund_status, REQUESTED]}
+      return: [r.refund_id, c.reason, r.amount, r.requested_at]
+      order: [requested_at]
+  shipmentsInTransit:
+    label: 배송 중인 주문
+    query:
+      match: {o: Order, s: Shipment, k: Carrier}
+      edges: [[o, shippedBy, s], [s, carriedBy, k]]
+      where: {eq: [s.ship_status, IN_TRANSIT]}
+      return: [o.order_id, {col: k.name, as: carrier}, s.tracking_no, s.shipped_at]
+      order: [shipped_at]
+  carrierLoad:
+    label: 택배사별 배송 건수
+    query:
+      match: {s: Shipment, k: Carrier}
+      edges: [[s, carriedBy, k]]
+      return: [{col: k.name, as: carrier}, {count: s, as: shipments}]
+      order: [-shipments]
+  sellerRevenue:
+    label: 판매자별 매출
+    query:
+      match: {o: Order, i: OrderItem, s: Sku, p: Product, v: Seller}
+      edges: [[o, hasItem, i], [i, ofSku, s], [s, skuOf, p], [p, soldBy, v]]
+      where: {ne: [o.status, CANCELLED]}
+      return: [{col: v.name, as: seller}, {sum: i.line_total, as: revenue}, {count: i, as: items}]
+      order: [-revenue]
+  couponUsage:
+    label: 쿠폰별 사용 주문 수
+    query:
+      match: {o: Order, c: Coupon}
+      edges: [[o, usedCoupon, c]]
+      return: [{col: c.name, as: coupon}, {count: o, as: orders}]
+      order: [-orders]
+  productRatings:
+    label: 상품별 평균 평점
+    query:
+      match: {r: Review, p: Product}
+      edges: [[r, reviews, p]]
+      return: [{col: p.name, as: product}, {avg: r.rating, as: rating}, {count: r, as: reviews}]
+      order: [-rating]
+
+questions:
+  - {id: OP1, text: "지금 배송 중인 주문은 몇 건인가요?", query: shipmentsInTransit, expect: {rows: 5}}
+  - {id: OP2, text: "처리 중인 환불은 몇 건인가요?", query: pendingRefunds, expect: {rows: 1}}
+  - {id: OP3, text: "승인된 결제에 쓰인 결제 수단은 몇 가지인가요?", query: paymentsByMethod, expect: {rows: 4}}
+  - {id: OP4, text: "9만 7천원 주문 O1 의 배송비는 얼마인가요?", decision: shippingFee, key: O1, expect: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
+  - {id: OP5, text: "취소된 주문 O4 의 배송비는 얼마인가요?", decision: shippingFee, key: O4, expect: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
+  - {id: OP6, text: "3만 8천원 주문 O16 의 배송비는 얼마인가요?", decision: shippingFee, key: O16, expect: {fee: 3000}}

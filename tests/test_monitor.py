@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-EXAMPLE = Path(__file__).parent.parent / "examples" / "library" / "studio.yaml"
+from .conftest import LIB
+
+EXAMPLE = LIB / "studio.yaml"
 
 
 @pytest.fixture
