@@ -16,6 +16,9 @@
   `/v1/tools`, off unless `--api-token-env` is given. MCP gains `search_documents`, `list_documents` and `describe_space`.
 - `kind: gateway` reads through a platform's query service, so a space can use a connection the platform manages without
   ever holding its password, and never writes. An answer that comes back full is marked as possibly cut. Also on the page.
+- `.doc`, `.ppt` and `.xls` (Office 97 to 2003) are read with the standard library: a data sheet in `.xls` comes in as rows
+  and a definition sheet as definitions, as `.xlsx` does. A file with a password, or from before 97, is refused with what to
+  do. Tables of one name in two schemas are both kept, as `schema.table`.
 - The asset ontology is drawn as a map of files, tables, documents, stores, objects and queries, with what a change reaches.
 - Pipelines outlive a restart where repositories do. A connected database keeps its modules and asks to be connected again:
   no address or token is written.

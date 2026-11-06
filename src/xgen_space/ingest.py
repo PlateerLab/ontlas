@@ -110,6 +110,12 @@ def ingest(data: bytes, source: str) -> Definitions:
 def is_sheet(data: bytes, source: str) -> bool:
     """A file of rows: data for the page, unless its headers make it a definition sheet. A .txt may be either rows or
     prose."""
+    if Path(source).suffix.lower() == ".xls":
+        try:  # a web page or a locked file under this name goes the way of documents, and says what is wrong there
+            read_xls(data, source)
+            return True
+        except Exception:
+            return False
     if Path(source).suffix.lower() != ".txt":
         return Path(source).suffix.lower() in SHEETS
     try:

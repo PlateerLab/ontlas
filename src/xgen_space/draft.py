@@ -222,6 +222,10 @@ def read_file(data: bytes, source: str, *, max_rows: int = 0, header=None) -> li
         return [read_csv(data, source, max_rows=max_rows)]
     if ext in (".xlsx", ".xlsm"):
         return read_xlsx(data, source, max_rows=max_rows, header=header)
+    if ext == ".xls":
+        from xgen_space.ingest import read_xls
+
+        return read_xls(data, source, max_rows=max_rows, header=header)
     raise ReadError(f"{source}: give a .csv, .tsv or .xlsx file", "format")
 
 
