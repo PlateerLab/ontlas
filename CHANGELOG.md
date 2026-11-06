@@ -23,6 +23,9 @@
   catalog with composite keys. Oracle now runs on a real server: identifiers follow the catalog's case, dates are ISO in the
   session, an empty text literal asks for null. Both pass conformance on live servers (Oracle Free 23, SQL Server 2022); the
   `[oracle]` and `[mssql]` extras need sqlglot 29. `fetch` works on an integer key.
+- Conditional aggregates: `sum(link.prop where cond)` in computed properties and `{"sum": ..., "where": ...}` in query columns,
+  on every language. Gremlin compiles optional links and computed properties. GQL and SQL/PGQ compile link aggregates and date
+  functions; SQL/PGQ is verified on Oracle 23, GQL is checked as text only. A column named like its alias is valid SPARQL now.
 - The asset ontology is drawn as a map of files, tables, documents, stores, objects and queries, with what a change reaches.
 - Pipelines outlive a restart where repositories do. A connected database keeps its modules and asks to be connected again:
   no address or token is written.

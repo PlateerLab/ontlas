@@ -188,7 +188,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
   </tr>
   <tr>
     <td><b>Ontology.</b> A knowledge graph on WebGL: every type coloured by the module it comes from (by detected community when one module holds them all) and sized by its connections, with layouts to choose from, search, and a selected type lighting only its neighbours. Domain types hang under common concepts (customer and seller under party, order under agreement); each property shows its column and module, each type its standard alignments.</td>
-    <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
+    <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, SQL Server, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
   </tr>
   <tr>
     <td><img src="assets/screens/decision.png" alt="Decision screen: the decision table with the rule that fired, the evidence path to source columns, and an action request waiting for a person's approval"></td>
@@ -608,10 +608,10 @@ parameters, so a model or a person can pick one by name.
 | GQL | Spanner Graph, BigQuery Graph, Fabric Graph | OPTIONAL MATCH | `EXISTS {}` | `{1,3}` + ANY | refused | `CallableBackend` around your driver |
 | SPARQL 1.1 | rdflib, Fuseki, GraphDB, Stardog, Virtuoso, Oxigraph | OPTIONAL | FILTER EXISTS | path alternatives + DISTINCT | CONTAINS | `RdflibBackend`, `SparqlEndpointBackend` (Graph Store Protocol · Update) |
 | SQL/PGQ | Oracle 26ai, Spanner | refused | refused | `{1,3}` | POSITION | `graph_ddl()` writes the property graph over the tables |
-| Gremlin 3.8 | Gremlin Server, JanusGraph, Neptune | refused | `where()` | `repeat().emit()` | TextP.containing | `GremlinBackend`, loads a projection with one list binding per script |
+| Gremlin 3.8 | Gremlin Server, JanusGraph, Neptune | `optional()` | `where()` | `repeat().emit()` | TextP.containing | `GremlinBackend`, loads a projection with one list binding per script |
 
 A backend declares its `Capabilities`; a query that needs something a backend lacks is refused before it runs,
-with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, MySQL, Oracle, Fuseki, Neo4j and Gremlin Server when
+with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, MySQL, Oracle, SQL Server, Fuseki, Neo4j and Gremlin Server when
 their addresses are set (`XSPACE_LIVE_PG`, `XSPACE_LIVE_MYSQL`, `XSPACE_LIVE_ORACLE`, `XSPACE_LIVE_FUSEKI`, `XSPACE_LIVE_NEO4J`,
 `XSPACE_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
 after that only the change set (`DELETE DATA` / `INSERT DATA`, or `MERGE` / `DELETE`).
@@ -947,8 +947,9 @@ tools/                      # render_screens.py (the README images), make_commer
 
 ## Roadmap
 
-- computed properties with filtered aggregates (`sum(hasItem.line_total where ...)`), and in Gremlin and SQL/PGQ
-- optional edges in Gremlin; TinkerPop 4 once it is released
+- GQL run on a real engine: its text is compiled and checked as text, and no server here executes it
+- `MIN` and `MAX` over a group with a missing value on Jena and Oxigraph, which leave the whole group unbound
+- TinkerPop 4 once it is released
 - sign-in through an organisation's identity provider for team studios
 - decision tables drawn from outcomes with dates as inputs (days between two columns)
 - several source databases in one studio
