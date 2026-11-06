@@ -241,7 +241,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series", "period"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:

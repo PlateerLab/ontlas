@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from xgen_space.check import find_prop
 from xgen_space.compile.sql import qi
+from xgen_space.decide.views import through_view
 from xgen_space.expr import encode_text_date
 from xgen_space.ir import And, Cmp, Column, Order, Query, Ref
 from xgen_space.model import KEY_SEP
@@ -99,6 +100,7 @@ class SqlWriteback:
         self.backend = backend
 
     def apply(self, onto, type_name: str, key: str, changes: dict[str, Any]) -> int:
+        type_name, changes = through_view(onto, type_name, changes)
         obj = onto.obj(type_name)
         cols = obj.key_prop.cols
         parts = str(key).split(KEY_SEP, len(cols) - 1) if len(cols) > 1 else [key]

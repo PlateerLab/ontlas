@@ -97,10 +97,15 @@ class ObjectType:
     aligned: list[str] = field(default_factory=list)
     series: dict[str, str] = field(default_factory=dict)  # observations over time: {time: property, of: link}
     period: dict[str, Any] = field(default_factory=dict)  # rows valid for a time: {start, end, of: link, end_exclusive}
+    view: dict[str, Any] = field(default_factory=dict)  # defined by a query, not a table: {name, query} (decide.views)
 
     @property
     def abstract(self) -> bool:
         return not self.table
+
+    @property
+    def view_name(self) -> str:
+        return str(self.view.get("name") or re.sub(r"(?<!^)(?=[A-Z])", "_", self.name).lower() + "_view")
 
     def prop(self, name: str) -> Property:
         try:
@@ -494,12 +499,15 @@ def _object(name: str, d: dict) -> ObjectType:
     series = dict(d.get("series") or {})
     if series.get("time", "") + TEXT_SUFFIX in props:  # a graph holds the stored text, which sorts the same
         series["time"] += TEXT_SUFFIX
-    return ObjectType(name=name, key=d["key"], properties=props,
+    t = ObjectType(name=name, key=d["key"], properties=props,
                       label=d.get("label", ""), description=d.get("description", ""),
                       table=source.get("table", d.get("table", "")), title=d.get("title", ""),
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
-                      series=series, period=dict(d.get("period") or {}))
+                      series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}))
+    if t.view and not t.table:  # bound to the view it makes, as to a table
+        t.table = t.view_name
+    return t
 
 
 def _link(name: str, d: dict) -> LinkType:
@@ -757,10 +765,12 @@ def _to_dict(o: Ontology) -> dict:
                          "transitions": [_clean({"from": x.source, "to": x.target, "action": x.action,
                                                  "guard": x.guard, "set": x.set, "call": x.call, "after": x.after})
                                          for x in t.states.transitions]})
+        bound = t.table and not (t.view and t.table == t.view_name)
         objects[t.name] = _clean({"label": t.label, "description": t.description,
-                                  "source": {"table": t.table} if t.table else None, "key": t.key, "title": t.title,
+                                  "source": {"table": t.table} if bound else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
                                   "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
+                                  "view": t.view,
                                   "series": t.series and {**t.series, "time": t.series["time"].removesuffix(TEXT_SUFFIX)}})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,

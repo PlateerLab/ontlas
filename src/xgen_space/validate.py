@@ -82,6 +82,10 @@ def validate_ontology(o: Ontology) -> list[str]:
                 add(f"{t.name}: series time '{tp.name}' is text in a form that does not sort by time ({tp.format})")
         if t.period:
             issues.extend(f"{t.name}: period: {e}" for e in _period(o, t))
+        if t.view:
+            from xgen_space.decide.views import view_issues
+
+            issues.extend(f"{t.name}: view: {e}" for e in view_issues(o, t))
 
     for lk in o.links.values():
         if not valid_name(lk.name):
@@ -148,6 +152,13 @@ def validate_ontology(o: Ontology) -> list[str]:
                 add(f"action {a.name}: '{p}' is computed and cannot be set")
         for name, spec in a.parameters.items():
             issues.extend(f"action {a.name}: parameter '{name}': {e}" for e in _parameter(spec))
+        written = [*a.set, *([t.states.property] if a.transition_to and t.states else [])]
+        if t.view and written and not any(i.startswith(f"{t.name}: view:") for i in issues):
+            from xgen_space.decide.views import write_issue
+
+            why = write_issue(o, t, [p for p in written if p in t.properties])
+            if why:
+                add(f"action {a.name}: {why}")
         if a.call:
             issues.extend(f"action {a.name}: call: {e}" for e in _call(a.call))
         if a.undo:

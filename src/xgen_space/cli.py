@@ -321,6 +321,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--cascade", action="store_true")
     s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
 
+    s = sub.add_parser("views", help="the statements that make the views objects are defined by")
+    s.add_argument("config")
+    s.add_argument("--backend")
+    s.add_argument("--apply", action="store_true", help="run them on the source")
+
     s = sub.add_parser("transitions", help="the rows whose time-based transitions have come due")
     s.add_argument("config")
     s.add_argument("--apply", action="store_true", help="take them, writing to the source")
@@ -674,6 +679,13 @@ def main(argv: list[str] | None = None) -> int:
                   "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts())})
             return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
+    elif a.cmd == "views":
+        from xgen_space.decide.views import create_views, view_statements
+
+        if a.apply:
+            _out({"ran": create_views(studio, a.backend)})
+        else:
+            _out(";\n".join(view_statements(studio.onto, studio.backend(a.backend))) + ";")
     elif a.cmd == "transitions":
         from dataclasses import asdict
 
