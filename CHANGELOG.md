@@ -48,6 +48,12 @@
   (data map, document ontology, vectors, adapters, document search, integrations), a guide rewritten around them, help for
   the screen in hand, and first steps for a new visitor.
 
+- What a person approves reaches every way in. With `--users`, `/v1` answers from the studio the team shares, a running
+  `xspace mcp` reads the library again once a change is saved there, and the `workspace` module comes back at the next start.
+- The decision page lists every request waiting for a person, whoever filed it: another person, a platform or an agent.
+- A matched rule in a decision table stays a table row; the style of a search result had turned it into a column.
+- Words on the page and in the reasons the server writes are the product's own.
+
 ## 0.10.0
 
 - The example library is e-commerce alone. `commerce-operations` adds sellers, payments, refunds, carriers, shipments,

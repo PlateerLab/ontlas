@@ -42,7 +42,7 @@ class Workspace:
         self.current = current
         start = copy.deepcopy(current.to_dict()) if current else {"module": NAME, "version": "0.1.0",
                                                                    "kind": "customer", "label": label}
-        start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 그대로 두고 확장 · 제외로 얹습니다.")
+        start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
         self._base_onto = compose(self.base, **self.kw).ontology

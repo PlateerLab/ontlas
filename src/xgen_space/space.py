@@ -166,7 +166,7 @@ def keywords(chunks: list[Chunk], known: dict[str, Concept], limit: int = KEYWOR
 DOCUMENT_MODULE = {
     "module": "documents", "version": "1.0.0", "kind": "domain", "label": "문서 온톨로지",
     "namespace": "https://example.org/space/documents#",
-    "description": "공간에 들어온 문서의 구조와 문서가 언급하는 개념을 자동으로 만든 온톨로지입니다",
+    "description": "공간에 등록된 문서의 구조와 문서가 언급하는 개념으로 자동 생성한 온톨로지입니다",
     "objects": {
         "Document": {"label": "문서", "key": "doc_id", "title": "title", "table": "documents", "properties": {
             "doc_id": {"type": "string", "label": "문서 번호", "required": True}, "title": {"type": "string", "label": "제목"},

@@ -726,9 +726,12 @@ class StudioSession(SpaceMixin):
                 detail = c.detail.replace("->", "→")
                 title = CHECK_LABEL.get(c.name, c.name)
             checks.append({"name": c.name, "title": title, "passed": c.passed, "detail": detail})
-        return plain({"id": p.id, "action": p.action, "label": a.label if a else p.action, "target": p.target,
+        labels = {k: (v.get("label") if isinstance(v, dict) else "") or k for k, v in (a.parameters if a else {}).items()}
+        target = st.onto.objects.get(p.target)
+        labels.update({k: x.label for k, x in (target.properties if target else {}).items() if x.label and k in p.changes})
+        return plain({"id": p.id, "action": p.action, "label": a.label if a else p.action, "target": p.target, "labels": labels,
                       "target_label": self._obj_label(p.target), "key": p.key, "params": p.params,
-                      "requested_by": p.requested_by.id, "status": p.status, "checks": checks,
+                      "requested_by": p.requested_by.id, "requested_kind": p.requested_by.kind, "status": p.status, "checks": checks,
                       "changes": p.changes, "before": p.before, "approved_by": p.approved_by, "call": p.call,
                       "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
                           not (a and a.call) or bool(a and a.undo))})
@@ -757,6 +760,10 @@ class StudioSession(SpaceMixin):
         proj = self._reproject()
         self._note("approve", f"요청 {p.id}: 실행 전 값으로 되돌렸습니다.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
+
+    def pending_actions(self) -> dict:
+        """Requests waiting for a person, whoever asked: this page, another person, a platform or an agent."""
+        return {"pending": [self._proposal(p) for p in self.studio.actions.proposals.values() if p.status == "pending"]}
 
     def approve(self, proposal_id: str, approve: bool) -> dict:
         approver = self._approver()
@@ -1447,7 +1454,7 @@ class StudioSession(SpaceMixin):
         self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
                             f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
                             f"테이블에 없는 속성 {removed}개 제외"
-                            + (f"(이 속성을 쓰는 {', '.join(uses)} 제외)" if uses else "")
+                            + (f"(이 속성을 사용하는 {', '.join(uses)} 제외)" if uses else "")
                             + (f", 예시 데이터 기준 표준 검증 질문 {renewed}개는 업로드 데이터의 답으로 다시 등록" if renewed else "")
                             + (f", 업로드 데이터로 답할 수 없는 표준 검증 질문 {len(wrong) - renewed}개 제외"
                                if len(wrong) > renewed else ""))
@@ -1811,7 +1818,7 @@ class StudioSession(SpaceMixin):
         if isinstance(items, dict):
             items = items.get("questions")
         if not isinstance(items, list) or not items:
-            raise ValueError("검증 질문 목록이 없어 불러오지 못했습니다. questions 목록을 넣어 주세요.")
+            raise ValueError("검증 질문 목록이 없어 불러오지 못했습니다. questions 목록을 입력해 주세요.")
         added, failed = [], []
         for q in items[:200]:
             try:
@@ -1914,8 +1921,8 @@ class StudioSession(SpaceMixin):
         if self.origin.get("kind") == "connect":
             return {"ok": False, "error": "연결한 DB에는 교차표를 쓰지 않습니다. 사내 설치에서 xspace 명령으로 실행해 주세요."}
         rep = self.studio.resolve_identity(name)
-        self._note("identity", f"{name}: 기록 {rep.records}건을 {len(rep.clusters)}개로 묶었습니다 "
-                               f"(묶인 건 {len(rep.joined)}).")
+        self._note("identity", f"{name}: 기록 {rep.records}건을 {len(rep.clusters)}개로 통합했습니다 "
+                               f"(통합된 건 {len(rep.joined)}).")
         return plain({"ok": True, **rep.to_dict()})
 
     def sync(self) -> dict:

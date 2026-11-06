@@ -103,6 +103,80 @@ def test_a_team_signs_in_and_works_in_one_studio_by_role(team):
     assert _call(base, "/api/state", cookie=kim)[0] == 401
 
 
+def test_a_teams_api_answers_from_the_studio_the_team_works_in(team):
+    from xgen_space.rest import Rest
+    from xgen_space.tools import StudioTools
+
+    base, _, sessions = team
+    shared = sessions.shared
+    rest = Rest(StudioTools(shared.studio, actor_id="api"), "t", source=lambda: shared.studio, lock=shared.lock)
+    ask = {"decision": "returnEligibility", "key": "I1001"}
+    assert "14일" in rest.answer("POST", "/v1/decide", ask)[1]["outputs"]["reason"]
+    kim, lee = _login(base, "kim", "kim-password-1"), _login(base, "lee", "lee-password-1")
+    src = _call(base, "/api/module?name=acme-overlay", cookie=kim)[1]["yaml"]
+    cid = _call(base, "/api/module/save", {"text": src.replace("14일까지", "21일까지")}, cookie=kim)[1]["change"]["id"]
+    assert "14일" in rest.answer("POST", "/v1/decide", ask)[1]["outputs"]["reason"]  # asked, not approved
+    assert _call(base, "/api/change/decide", {"id": cid}, cookie=lee)[1]["ok"]
+    assert "21일" in rest.answer("POST", "/v1/decide", ask)[1]["outputs"]["reason"]
+
+
+def test_a_request_from_outside_waits_where_a_person_finds_it(team):
+    from xgen_space.rest import Rest
+    from xgen_space.tools import StudioTools
+
+    base, _, sessions = team
+    shared = sessions.shared
+    agent = StudioTools(shared.studio, role="customer_agent", principal={"customer_id": "C001"}, actor_id="api")
+    rest = Rest(agent, "t", source=lambda: shared.studio, lock=shared.lock)
+    code, out = rest.answer("POST", "/v1/actions", {"action": "requestReturn", "key": "I1001", "params": {"reason": "사이즈"}})
+    assert code == 200 and out["status"] == "pending"
+    lee = _login(base, "lee", "lee-password-1")
+    waiting = _call(base, "/api/actions/pending", cookie=lee)[1]["pending"]
+    assert [(p["id"], p["key"], p["requested_kind"]) for p in waiting] == [(out["id"], "I1001", "agent")]
+    assert _call(base, "/api/approve", {"id": out["id"], "approve": True}, cookie=lee)[1]["ok"]
+    assert _call(base, "/api/actions/pending", cookie=lee)[1]["pending"] == []
+
+
+def test_what_the_management_screens_approved_comes_back_with_the_studio(team):
+    from xgen_space.config import load_studio
+
+    _, root, _ = team
+    home = root / "library" / "workspace"
+    home.mkdir()
+    (home / "0.1.0.yaml").write_text("""module: workspace
+version: 0.1.0
+kind: customer
+label: 관리 변경
+requires: [commerce]
+extend:
+  objects:
+    Customer:
+      properties:
+        nickname: {type: string, label: 별명, column: name}
+""", encoding="utf-8")
+    assert "nickname" in load_studio(root / "library" / "studio.yaml").onto.objects["Customer"].properties
+
+
+def test_a_running_agent_goes_by_a_change_once_it_reaches_the_library(team):
+    pytest.importorskip("mcp")
+    from xgen_space.config import load_studio
+    from xgen_space.mcp_server import following
+    from xgen_space.tools import StudioTools
+
+    _, root, _ = team
+    config = root / "library" / "studio.yaml"
+    first = load_studio(config)
+    current = following(config, first)
+    assert current() is first
+    home = root / "library" / "acme-overlay"
+    text = (home / "1.0.0.yaml").read_text(encoding="utf-8")
+    (home / "1.0.1.yaml").write_text(text.replace("version: 1.0.0", "version: 1.0.1").replace("14일까지", "21일까지"), encoding="utf-8")
+    assert "21일" in StudioTools(current()).decide("returnEligibility", "I1001")["outputs"]["reason"]
+    (home / "1.0.2.yaml").write_text("module: [", encoding="utf-8")
+    kept = current()  # a broken file leaves the rules in force
+    assert "21일" in StudioTools(kept).decide("returnEligibility", "I1001")["outputs"]["reason"]
+
+
 def test_sign_in_attempts_are_limited(team):
     base, _, _ = team
     codes = [_call(base, "/api/login", {"user": "kim", "password": "bad-guess-00"})[0] for _ in range(11)]

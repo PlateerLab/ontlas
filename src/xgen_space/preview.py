@@ -489,7 +489,7 @@ def _screen_query(studio: Studio, name: str, active: str, counts) -> str:
                          f'<td class="num">{c.text.count(chr(10)) + 1}줄</td><td class="num">{len(c.params)}개</td></tr>')
         except CompileError as e:
             tabs.append(f'<span class="tab off" title="{_e(e)}">{_e(label)}</span>')
-            langs.append(f'<tr><td><b>{_e(label)}</b></td><td><span class="chip warn">지원 안 함</span></td>'
+            langs.append(f'<tr><td><b>{_e(label)}</b></td><td><span class="chip warn">미지원</span></td>'
                          f'<td colspan="2" class="muted">{_e(e)}</td></tr>')
     results = []
     first = None
@@ -663,7 +663,7 @@ def _screen_map(studio: Studio, counts) -> str:
   <div class="right"><span class="chip">Agent 조회 범위</span><span class="chip b">영향 범위</span><span class="chip">미사용 데이터</span></div></div>
 <div class="grid" style="grid-template-columns:1.7fr 1fr">
   <div class="card"><div class="ch">영향 범위 · <span class="mono" style="font-weight:600">{_e(cat.assets[start].label)}</span>
-    <div class="right"><span class="chip warn">변경 시 영향 {len(impacted)}곳</span></div></div>
+    <div class="right"><span class="chip warn">변경 시 영향 {len(impacted)}건</span></div></div>
     <div class="cb" style="flex:1;padding:10px 14px">{svg}</div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
     <div class="card"><div class="ch">고객응대 Agent 조회 범위</div><div class="cb">

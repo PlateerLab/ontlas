@@ -4,7 +4,8 @@ from __future__ import annotations
 import contextlib
 import functools
 import sys
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from xgen_space.studio import Studio
 from xgen_space.tools import StudioTools
@@ -53,14 +54,51 @@ def _guard(fn):
     return run
 
 
+def following(config: str | Path, studio: Studio) -> Callable[[], Studio]:
+    """The studio of a file, read again once an approved change reaches its library: a running agent goes by the rules in force.
+    A library that cannot be read keeps the studio it had, and says so."""
+    import yaml
+
+    from xgen_space.config import load_studio
+
+    root = studio.library.root if studio.library is not None else None
+
+    def stamp() -> list:
+        return sorted((str(p), p.stat().st_mtime_ns) for p in Path(root).rglob("*.yaml")) if root else []
+
+    seen = stamp()
+
+    def current() -> Studio:
+        nonlocal studio, seen
+        now = stamp()
+        if now != seen:
+            seen = now
+            try:
+                studio = load_studio(config)
+            except (OSError, ValueError, yaml.YAMLError) as e:
+                print(f"library changed but could not be read: {e}", file=sys.stderr)
+        return studio
+
+    return current
+
+
 def build_server(studio: Studio, *, role: str | None = None, principal: dict | None = None,
-                 read_only: bool = False, name: str = "xgen-space"):
+                 read_only: bool = False, name: str = "xgen-space", fresh: Callable[[], Studio] | None = None):
     tools = StudioTools(studio, role=role, principal=principal, read_only=read_only)
     raw = _server_class()(name)
 
+    def current(fn):
+        @functools.wraps(fn)
+        def run(*args, **kwargs):
+            if fresh is not None:
+                tools.studio = fresh()
+            return fn(*args, **kwargs)
+
+        return run
+
     class _Server:
         def tool(self):
-            return lambda fn: raw.tool()(_guard(fn))
+            return lambda fn: raw.tool()(_guard(current(fn)))
 
     server = _Server()
 
@@ -147,5 +185,6 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
     a = ap.parse_args(argv)
     principal = dict(x.split("=", 1) for x in a.principal)
-    server = build_server(load_studio(a.config), role=a.role, principal=principal, read_only=a.read_only)
+    studio = load_studio(a.config)
+    server = build_server(studio, role=a.role, principal=principal, read_only=a.read_only, fresh=following(a.config, studio))
     server.run(a.transport)

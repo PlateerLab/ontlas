@@ -81,12 +81,12 @@
   // the manual: one section per screen, in the order a first visit goes through them
   const GUIDE = [
     ['monitor', '원천 데이터부터 검증까지 파이프라인 상태를 단계별로 확인합니다.', [
-      '원천 데이터, 변환, 온톨로지 구축, 저장소 어댑터, 활용, 검증 순서로 데이터가 올라갑니다.',
+      '원천 데이터, 변환, 온톨로지 구축, 저장소 어댑터, 활용, 검증 순서로 데이터를 처리합니다.',
       '단계별 수치는 2초마다 갱신합니다. 정의나 파일이 바뀌면 즉시, 그 밖에는 20초마다 파이프라인을 점검합니다.',
       '수치를 선택하면 해당 화면으로 이동합니다. 상단 탭에서 단계를 선택하면 해당 단계를 강조합니다.',
       '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 연쇄 장애에서 원인 경로를 확인합니다.',
       '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
-      '[장애 테스트]를 선택하면 예시 모듈을 적용해 장애 상황을 확인합니다. [복구]를 선택하면 원래 상태로 돌아갑니다.']],
+      '[장애 테스트]를 선택하면 예시 모듈을 적용해 장애 상황을 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 문서 검색 적중률, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
@@ -94,10 +94,10 @@
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
     ['map', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계를 그래프로 확인합니다.', [
       'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
-      '범례를 선택하면 해당 묶음을 숨기거나 다시 표시합니다.',
+      '범례를 선택하면 해당 그룹을 숨기거나 다시 표시합니다.',
       '미사용 자산은 객체, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
     ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
-      '문서 파일을 올리면 벡터 저장소에 색인되고 문서 온톨로지에 추가됩니다. 초안 열의 선택을 해제하면 색인에서도 빠집니다.',
+      '문서 파일을 올리면 벡터 저장소에 색인되고 문서 온톨로지에 추가됩니다. 초안 열의 선택을 해제하면 색인에서도 제외됩니다.',
       '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
       '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다. 이미지, 영상, 압축 파일은 원본으로 보관합니다.',
       '초안 열의 선택을 해제하면 파일 또는 폴더를 초안과 변환 결과에서 제외합니다.',
@@ -120,7 +120,7 @@
       '생성 설정에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의를 지정하고 초안에 넣을 테이블을 선택합니다.',
       '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, Binding 순서로 초안이 생성됩니다.',
       'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOC, DOCX, PPT, PPTX, HWP, HWPX, PDF 문서와 XLS, XLSX 파일을 함께 사용할 수 있습니다.',
-      '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 묶습니다.',
+      '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 통합합니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
       '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
       '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 Mapping한 제안이 표시됩니다. 내용을 확인하고 수정한 뒤 [표준에 연결해 적용]을 선택합니다.',
@@ -142,7 +142,7 @@
       '관계 그래프는 [온톨로지]에서 확인합니다.']],
     ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, Binding, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
       '적용 스위치를 끄면 함께 해제되는 모듈과 제거되는 항목을 먼저 표시합니다.',
-      '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 올라갑니다. 해제하면 스페이스 설정으로 돌아갑니다.',
+      '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 변경됩니다. 해제하면 스페이스 설정으로 복원됩니다.',
       '구축 규칙 모듈을 적용하면 초안 생성의 생성 설정 기본값이 모듈의 규칙으로 바뀝니다.',
       '고객사 차이 · ACME 모듈을 해제하면 판정 · 처리에서 VIP 반품 규칙 대신 표준 규칙이 적용됩니다.',
       '해제된 모듈을 다시 적용하면 필요한 모듈도 함께 적용됩니다.',
@@ -150,10 +150,10 @@
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
     ['onto', '객체 간 관계를 그래프로 확인합니다.', [
-      'Node를 선택하면 이웃만 강조되고 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. 빈 곳을 선택하면 강조가 풀립니다.',
+      'Node를 선택하면 이웃만 강조되고 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. 빈 영역을 선택하면 강조가 해제됩니다.',
       '색은 모듈별입니다. 모듈이 하나면 데이터에서 찾은 Community별로 표시합니다. 크기는 연결 수입니다. 표시 설정에서 색상 기준과 라벨을 바꿉니다.',
-      'Node 검색에서 이름, 객체명, 테이블명으로 찾습니다. 왼쪽 도구에서 레이아웃 선택, 회전, 화면 맞춤, 확대, 전체 화면을 사용합니다. Node는 끌어서 옮길 수 있습니다.',
-      '식별 통합 객체를 선택하면 묶인 기록과 근거를 확인하고, [다시 묶어 교차표 저장]으로 다시 묶습니다.',
+      'Node 검색에서 이름, 객체명, 테이블명으로 찾습니다. 왼쪽 도구에서 레이아웃 선택, 회전, 화면 맞춤, 확대, 전체 화면을 사용합니다. Node는 드래그로 이동할 수 있습니다.',
+      '식별 통합 객체를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.',
       '관계를 선택하면 연결된 객체로 이동합니다.',
       '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
     ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어와 연결됩니다.', [
@@ -183,9 +183,11 @@
     ['decide', '결정표 판정 결과와 근거를 확인하고 처리 요청을 승인합니다.', [
       '검증 질문을 선택하면 해당 대상을 판정합니다.',
       '처리를 요청하면 권한, Parameter 값 범위, 상태 전이, 판정 조건을 검사합니다.',
+      '다른 사용자나 Agent가 요청한 건은 승인 대기 요청에서 승인하거나 반려합니다.',
       '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
     ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
+      '[규칙 수정]을 선택하면 라이브러리로 이동합니다. 모듈 편집에서 규칙과 기준값을 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
       '기준값은 결정표와 계산 속성이 @이름으로 참조합니다. 고객사 모듈은 기준값만 변경합니다.',
       '지표의 [계산]을 선택하면 값, 분자와 분모, 기준을 표시합니다.',
       '출처 충돌에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인 후 반영됩니다.',
@@ -198,7 +200,7 @@
     ['check', '검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다.', [
       '[다시 실행]으로 현재 상태를 다시 검증합니다.',
       '근거 제시율은 답에 적용 규칙 또는 질의, 출처(규정 조항, 원천 컬럼), 판본(모듈 버전)이 모두 있는 질문의 비율입니다. 누락 항목은 근거 열에 표시됩니다.',
-      '검증 질문 관리에서 정답이 정해진 질문을 추가하거나 제외하고, [목록 불러오기]로 YAML · JSON 목록을 한 번에 넣습니다. 변경 요청이 승인되면 정답률 계산에 들어갑니다.',
+      '검증 질문 관리에서 정답이 정해진 질문을 추가하거나 제외하고, [목록 불러오기]로 YAML · JSON 목록을 한 번에 추가합니다. 변경 요청이 승인되면 정답률 계산에 포함됩니다.',
       '승인 처리로 데이터가 바뀐 경우 [초기화]로 되돌립니다.']],
     ['bind', '온톨로지 정의와 원천 DB의 테이블, 컬럼, 타입, 키, 값을 대조합니다.', [
       '모듈 적용 상태를 바꾼 뒤 [다시 대조]를 선택합니다.',
@@ -225,9 +227,9 @@
     ['용어집, 메시지 목록', '데이터 카탈로그 > 초안 생성', '용어 사전 모듈'],
     ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
-    ['정책서, 화면설계서', '온톨로지 라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
+    ['정책서, 화면설계서', '라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
     ['객체, 속성, 관계 수정', '객체 관리, 속성 관리, 관계 관리', '관리 변경 모듈'],
-    ['모듈 정의 파일', '온톨로지 라이브러리 > 새 모듈', '종류별 모듈']];
+    ['모듈 정의 파일', '라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
   const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
   const FLOW = [
@@ -445,6 +447,7 @@
     if (S.tab === 'flow' && !S.flset) loadFlowSettings();
     if (S.tab === 'library' && !S.changes) loadChanges();
     if (S.tab === 'decide' && !S.agree) loadAgreement();
+    if (S.tab === 'decide' && !S.pa) loadPending();
     if (S.tab === 'data') { if (!S.files) loadFiles(); else mountDraftGraph(); }
     if (S.tab === 'library' && !S.files) loadFiles();  // the documents a policy draft can start from
     if (S.tab === 'catalog') {
@@ -932,7 +935,7 @@
       ${lane('쿼리 언어', '저장소별 쿼리로 자동 변환합니다.', langs)}
       ${lane('임베딩 모델', 'studio.yaml의 space.embedder 또는 serve --embedder 옵션으로 변경합니다.', emb)}
       ${lane('추론기', 'studio.yaml의 reasoners에서 변경합니다. 외부 추론 서비스는 kind: http로 연결합니다.', reas)}
-      ${lane('도메인', '온톨로지 라이브러리에서 적용 · 해제합니다.', dom)}
+      ${lane('도메인', '라이브러리에서 적용 · 해제합니다.', dom)}
     </div>`;
   }
 
@@ -998,7 +1001,7 @@
 
   function viewRules() {
     const r = S.ru;
-    const head = pageHead('규칙 · 지표', '기준값, 지표 산식, 출처 충돌, 결정표 점검 결과를 확인합니다');
+    const head = pageHead('규칙 · 지표', '기준값, 지표 산식, 출처 충돌, 결정표 점검 결과를 확인합니다', '<a class="btn" href="#library">규칙 수정</a>');
     if (!r) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const empty = (t) => `<div class="muted" style="font-size:12.5px">${esc(t)}</div>`;
     const params = r.parameters.length ? `<table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>변경 모듈</th></tr>${r.parameters.map((p) => `<tr><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${esc(show(p.value))}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td>${esc(p.touched.join(', ') || '-')}</td></tr>`).join('')}</table>` : empty('기준값이 없습니다. 모듈의 parameters에 정의합니다.');
@@ -1246,7 +1249,7 @@ ${controls}${body}`;
       <div class="cb scroll" style="padding:0"><table class="tight" style="font-size:12.5px"><tr>${head}</tr>${rows}</table></div></div>
     <div class="card"><div class="ch">근거 경로<div class="right muted" style="font-weight:600;font-size:12px">입력값별 원천 컬럼</div></div><div class="cb">${ev || '<div class="empty">원천 컬럼에서 읽은 입력값이 없습니다.</div>'}</div></div>
   </div>
-  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${actionCard(r)}${agreementCard()}${auditCard()}</div>
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${pendingCard()}${actionCard(r)}${agreementCard()}${auditCard()}</div>
 </div>`;
   }
 
@@ -1256,7 +1259,7 @@ ${controls}${body}`;
     const d = S.d, p = d.proposal && d.proposal.key === r.key && d.proposal.action === a.name ? d.proposal : null;
     const roles = S.st.roles;
     if (!d.role) d.role = (roles.find((x) => x.principal.length) || roles[0] || {}).name || '';
-    const params = Object.keys(a.parameters).map((k) => `<div class="field"><label>${esc(k)}</label><input type="text" data-in="aparam" data-k="${esc(k)}" value="${esc(d.params[k] ?? (k === 'reason' ? '사이즈가 맞지 않음' : ''))}"></div>`).join('');
+    const params = Object.keys(a.parameters).map((k) => `<div class="field"><label>${esc((a.parameters[k] || {}).label || k)}</label><input type="text" data-in="aparam" data-k="${esc(k)}" value="${esc(d.params[k] ?? (k === 'reason' ? '사이즈가 맞지 않음' : ''))}"></div>`).join('');
     let state = '';
     if (p) {
       const [cls, label] = STATUS[p.status] || ['', p.status];
@@ -1274,6 +1277,23 @@ ${controls}${body}`;
       <div class="field"><label>요청 역할</label><select data-in="arole">${roles.map((x) => `<option value="${esc(x.name)}"${x.name === d.role ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>
       ${params}<button class="btn primary" style="width:100%" data-act="request" data-action="${esc(a.name)}">${esc(r.target_label)} ${esc(r.key)} ${esc(a.label)} 요청</button>
       ${state}</div></div>`;
+  }
+
+  async function loadPending() {
+    S.pa = { pending: [] };
+    try { S.pa = await api('actions/pending'); } catch (e) { S.pa = { pending: [] }; }
+    if (S.tab === 'decide') render();
+  }
+
+  function pendingCard() {
+    const mine = S.d.proposal ? S.d.proposal.id : '';
+    const list = ((S.pa || {}).pending || []).filter((p) => p.id !== mine);
+    if (!list.length) return '';
+    const row = (p) => `<div class="hit"><div class="hit-top"><b>${esc(p.target_label)} ${esc(p.key)} ${esc(p.label)}</b><span style="margin-left:auto"></span><span class="muted" style="font-size:12px">요청 ${esc(p.id)} · ${p.requested_kind === 'agent' ? 'Agent' : esc(p.requested_by)}</span></div>
+      <div class="muted" style="font-size:12.5px">${Object.entries(p.params).map(([k, v]) => `${esc(p.labels[k] || k)} ${esc(show(v))}`).join(' · ') || '요청 값 없음'}</div>
+      ${Object.keys(p.changes).length ? `<div class="muted" style="font-size:12.5px">${Object.keys(p.changes).map((k) => `${esc(p.labels[k] || k)} ${esc(show(p.before[k]))} → ${esc(show(p.changes[k]))}`).join(' · ')}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm primary" data-act="approve" data-id="${esc(p.id)}">승인</button><button class="btn sm" data-act="reject" data-id="${esc(p.id)}">반려</button></div></div>`;
+    return `<div class="card"><div class="ch">승인 대기 요청<div class="right"><span class="chip sm warn">${list.length}건</span></div></div><div class="cb">${list.map(row).join('')}</div></div>`;
   }
 
   async function loadAgreement() {
@@ -1316,7 +1336,7 @@ ${controls}${body}`;
     try {
       const r = await api('approve', { id, approve: yes });
       if (!r.ok) throw new Error(r.error);
-      S.d.proposal = r.proposal;
+      S.d.proposal = r.proposal; S.pa = null;
       S.q.res = null; S.qa = null; S.bind = null; S.fl = null; S.d.keys = {};
       await load();
       await startDecide();
@@ -1348,9 +1368,9 @@ ${controls}${body}`;
     const clusters = v.clusters.map((c) => `<tr><td class="mono">${esc(c.id)}</td><td>${c.members.map((m) => `<span class="chip sm">${esc(m)}</span>`).join(' ')}</td>
       <td class="muted" style="font-size:12px">${c.evidence.map((e) => `${esc(e.rule)}: ${esc(e.value)}`).join('<br>')}</td></tr>`).join('');
     return `<div class="sec">식별 통합 · 구성원 ${esc(v.members.map((m) => m.label).join(', '))}</div><div class="chips">${rules}</div>
-      <div class="muted" style="font-size:12.5px;margin:6px 0">기록 ${v.records}건 · 통합 ${v.identities}건 · 둘 이상 묶인 건 ${v.joined}${v.findings ? ` · 확인 필요 ${v.findings}` : ''}</div>
+      <div class="muted" style="font-size:12.5px;margin:6px 0">기록 ${v.records}건 · 통합 ${v.identities}건 · 둘 이상 통합된 건 ${v.joined}${v.findings ? ` · 확인 필요 ${v.findings}` : ''}</div>
       ${clusters ? `<table class="tight"><tr><th>통합 번호</th><th>구성원</th><th>근거</th></tr>${clusters}</table>` : ''}
-      <button class="btn sm" data-act="iresolve" data-name="${esc(name)}" style="margin-top:8px">다시 묶어 교차표 저장</button>`;
+      <button class="btn sm" data-act="iresolve" data-name="${esc(name)}" style="margin-top:8px">재통합 후 교차표 저장</button>`;
   }
 
   async function loadIdentities() {
@@ -1579,7 +1599,7 @@ ${controls}${body}`;
       <div class="sec">판정 일치율</div><div class="rgrid two">
         <label class="field"><span>결정표</span><select data-in="fagree" data-kind="decision"><option value="">사용 안 함</option>${f.decisions.map((d) => `<option value="${esc(d.name)}"${d.name === a.decision ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>
         <label class="field"><span>처리 기록 질의</span><select data-in="fagree" data-kind="query"><option value="">-</option>${f.queries.map((x) => `<option value="${esc(x.name)}"${x.name === a.query ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label></div>
-      ${maps}<div class="hint" style="margin-top:10px">처리 기록 질의는 한 건이 한 행입니다. 결정표 입력마다 그때 값을 담은 컬럼을, 결과마다 실제 처리 결과 컬럼을 지정합니다. 변경 요청은 저장한 조건으로 검토합니다.${(f.raised || []).length ? ' 검증 기준 모듈이 더 높은 조건을 정한 항목은 모듈 조건을 적용하고, 모듈을 해제하면 저장한 조건으로 돌아갑니다.' : ''}</div></div></div>`;
+      ${maps}<div class="hint" style="margin-top:10px">처리 기록 질의는 한 건이 한 행입니다. 결정표 입력마다 그때 값을 담은 컬럼을, 결과마다 실제 처리 결과 컬럼을 지정합니다. 변경 요청은 저장한 조건으로 검토합니다.${(f.raised || []).length ? ' 검증 기준 모듈이 더 높은 조건을 정한 항목은 모듈 조건을 적용하고, 모듈을 해제하면 저장한 조건으로 복원됩니다.' : ''}</div></div></div>`;
   }
 
   // ---- data in: files or a database, drafted step by step, reviewed, plugged in ------------------------------------
@@ -1831,7 +1851,7 @@ ${controls}${body}`;
     const form = `<div class="sec">지난 처리 결과로 판정 표 만들기</div>
       <div class="field"><label>결과 컬럼</label><select data-in="dindt"><option value="">선택</option>${outs.map((x) => `<option value="${esc(x.element)}"${x.element === t ? ' selected' : ''}>${esc(o.labelOf(x.object))} · ${esc(x.label)}</option>`).join('')}</select></div>
       ${inputs}<button class="btn sm" data-act="dinduce" style="margin-top:8px"${t && Object.values(S.ind.inputs).some(Boolean) ? '' : ' disabled'}>판정 표 만들기</button>
-      <div class="hint" style="margin-top:6px">결과 컬럼은 실제 처리 결과(허용값 또는 참 · 거짓)입니다. 규칙마다 지난 몇 건 중 몇 건이 맞는지 표시하고, 교차 검증으로 처음 보는 건의 정확도를 잽니다.</div>`;
+      <div class="hint" style="margin-top:6px">결과 컬럼은 실제 처리 결과(허용값 또는 참 · 거짓)입니다. 규칙마다 지난 몇 건 중 몇 건이 맞는지 표시하고, 교차 검증으로 처음 보는 건의 정확도를 측정합니다.</div>`;
     return `<div class="sec">상태 전이</div>${sm ? `<table class="tight"><tr><th>객체</th><th>전이</th><th>근거</th></tr>${sm}</table>` : '<div class="muted" style="font-size:12.5px">상태 컬럼이 없습니다. 생성 설정의 상태 컬럼 이름을 확인하세요.</div>'}
       ${acts ? `<div class="sec">상태 변경 Action</div><div class="chips">${acts}</div>` : ''}
       <div class="sec">역할</div>${roles ? `<table class="tight">${roles}</table>` : '<div class="muted" style="font-size:12.5px">역할을 만들지 않았습니다.</div>'}
@@ -1875,7 +1895,7 @@ ${controls}${body}`;
     } else if (sg && !sg.ok) body = `<div class="banner no" style="margin-top:10px"><div class="why">${esc(sg.error)}</div></div>`;
     return `<div class="card"><div class="ch">표준에 연결<div class="right muted" style="font-weight:600;font-size:12px">새 객체 대신 표준 정의에 Binding</div></div><div class="cb">
       <div class="chips">${picks}</div><button class="btn sm" data-act="mapsuggest" style="margin-top:10px"${m.picked.length && !m.busy ? '' : ' disabled'}>${m.busy ? '<span class="spin"></span>처리 중' : '연결 제안'}</button>
-      <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키로 대응시킵니다. 제안을 확인하고 수정한 뒤 적용하세요.</div>${body}</div></div>`;
+      <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키 기준으로 연결합니다. 제안을 확인하고 수정한 뒤 적용하세요.</div>${body}</div></div>`;
   }
 
   function checkBar() {
@@ -2333,7 +2353,7 @@ ${controls}${body}`;
   function gatewayCard() {
     const g = S.gw;
     return `<div class="card" style="max-width:760px;margin-top:14px"><div class="ch">플랫폼 연결</div><div class="cb">
-      <div class="muted" style="font-size:12.5px;margin-bottom:10px">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 빌려 읽습니다. DB 비밀번호는 필요하지 않고, 읽기 전용과 허용 테이블은 플랫폼 정책을 따릅니다.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 사용합니다. DB 비밀번호는 필요하지 않고, 읽기 전용과 허용 테이블은 플랫폼 정책을 따릅니다.</div>
       <div class="field"><label for="gwurl">쿼리 서비스 주소</label><input type="text" id="gwurl" data-in="gwurl" value="${esc(g.url)}" placeholder="https://platform.example/query"></div>
       <div class="rgrid two"><div class="field"><label for="gwconn">연결 번호</label><input type="text" id="gwconn" data-in="gwconn" value="${esc(g.connection)}" placeholder="12"></div>
         <div class="field"><label for="gwdialect">DB 종류</label><select id="gwdialect" data-in="gwdialect">${[['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['oracle', 'Oracle']].map(([k, l]) => `<option value="${k}"${g.dialect === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
@@ -2506,7 +2526,7 @@ ${controls}${body}`;
         ${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: Coupon">`)}
         ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 쿠폰">`)}
         ${t && t.key.length > 1 ? field('키', `<input type="text" value="${esc(t.key.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field(t ? '키 컬럼' : '키 속성', keySel)}
-        ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 선택하세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류로 막힙니다.</div>` : ''}
+        ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 선택하세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류가 발생합니다.</div>` : ''}
         ${t && t.links.length ? `<div class="hint" style="margin:-4px 0 12px">관계 ${esc(t.links.map(linkLabel).join(', '))}의 연결 테이블입니다. 객체로 만들 필요가 없으면 [닫기]를 선택하세요.</div>` : ''}
         ${t ? `<label class="tick"><input type="checkbox" data-in="mgf" data-f="cols"${v.cols ? ' checked' : ''}>테이블 컬럼 ${t.columns.length}개를 속성으로 추가</label>` : ''}
         ${field('상위 객체', parents, '상위 객체의 속성과 관계를 상속합니다.')}
@@ -2711,7 +2731,7 @@ ${controls}${body}`;
         <div style="display:flex;gap:8px"><button class="btn primary" data-act="mgqimport"${S.mg.busy ? ' disabled' : ''}>불러오기</button><button class="btn ghost" data-act="mgcancel">닫기</button></div></div>`;
     }
     return `<div class="card"><div class="ch">검증 질문 관리 <span class="chip sm">${m.questions.length}</span><div class="right"><button class="btn sm" data-act="mgqimp">목록 불러오기</button><button class="btn sm primary" data-act="mgqnew">새 질문</button></div></div>
-      <div class="cb">${pendingBar()}<div class="hint" style="margin-bottom:12px">정답이 정해진 골든 질문입니다. 질문을 추가하거나 제외하면 '관리 변경'에 기록되고, 변경 요청이 승인되면 위 정답률 계산에 들어갑니다.</div>${form}</div>
+      <div class="cb">${pendingBar()}<div class="hint" style="margin-bottom:12px">정답이 정해진 골든 질문입니다. 질문을 추가하거나 제외하면 '관리 변경'에 기록되고, 변경 요청이 승인되면 위 정답률 계산에 포함됩니다.</div>${form}</div>
       <div class="cb scroll" style="padding:0;max-height:420px"><table class="tight"><tr><th>번호</th><th>질문</th><th>대상</th><th>정답</th><th>정의</th><th></th></tr>${rows}</table></div></div>`;
   }
 
@@ -3156,7 +3176,7 @@ ${controls}${body}`;
         if (!r.ok) throw new Error(r.error);
         S.ident = null; stale();
         await load();
-        toast(`기록 ${r.records}건을 ${r.identities}건으로 묶어 교차표를 저장했습니다.`);
+        toast(`기록 ${r.records}건을 ${r.identities}건으로 통합해 교차표를 저장했습니다.`);
       } catch (e) { fail(e); }
     },
     medit: async (t) => {
@@ -3249,7 +3269,7 @@ ${controls}${body}`;
     },
     mgopen: () => { S.mg.open = !S.mg.open; render(); },
     mgdiscard: async () => {
-      if (!window.confirm('대기 중인 변경을 모두 취소합니다. 표준 모듈과 승인된 변경은 그대로 남습니다.')) return;
+      if (!window.confirm('대기 중인 변경을 모두 취소합니다. 표준 모듈과 승인된 변경은 유지됩니다.')) return;
       try { S.mg.st = await api('manage/discard', {}); S.mg.form = null; S.mg.sel = ''; S.mg.review = null; toast('대기 중인 변경을 취소했습니다.'); } catch (e) { fail(e); }
       render();
     },
@@ -3521,7 +3541,7 @@ ${controls}${body}`;
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'srtext') searchNow(); });
     window.addEventListener('hashchange', () => {
       S.tab = location.hash.slice(1) || 'monitor';
-      S.cat.file = null;
+      S.cat.file = null; S.pa = null;
       if (S.mg.keep) S.mg.keep = false;
       else if (S.mg.form && S.mg.form.kind !== 'question') { S.mg.form = null; S.mg.sel = ''; }
       render();

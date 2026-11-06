@@ -747,7 +747,8 @@ answers (add, remove, or import a YAML or JSON list).
   <img src="assets/screens/manage.png" alt="Object management screen: every object with its source table, key, parent, property and relation counts and the module that defines it, a pending change waiting to be filed, and the selected object's form" width="920">
 </p>
 
-Every edit goes into one overlay module, `workspace` ("관리 변경"). What it defines it changes directly; a standard's
+Every edit goes into one overlay module, `workspace` ("관리 변경"). Saved to the library, it comes back at the next start
+without being listed in the studio file. What it defines it changes directly; a standard's
 objects, properties and relations it extends or removes, so a standard is never edited in place, and a standard's
 type and key and a property a type inherits stay where they are defined. Each edit takes out what it leaves broken
 elsewhere and says what that was:
@@ -844,7 +845,8 @@ curl localhost:7710/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \
 `/v1/openapi.json` describes the API for whatever imports OpenAPI and `/v1/tools` lists it as function definitions; `xspace
 openapi` writes the same file. Search, queries in any language, translation and decisions run under the role of the token, with
 its row filters and masks. It is read-only unless started with `--api-write`, and then an action is only a request a person
-approves. `/v1` stays off unless a token is set.
+approves. `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
+person approves holds for it at once, and an action it requests waits on the decision page for a person to approve.
 
 The other direction: a platform that manages database connections can lend one. `kind: gateway` sends SQL as text to its query
 service and reads the rows back, so the password never reaches the space and the platform's read-only rule and table allow-list
@@ -864,6 +866,9 @@ xspace mcp examples/commerce/studio.yaml --role customer_agent --principal custo
 Tools: `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
 `decide`, `request_action`, `list_proposals`. Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. Works with the MCP Python SDK 1.x and 2.x.
+
+A running server reads the library again once an approved change is saved there (`--library-write`). A request stays in its own
+process, so when people approve on a team's page, have the agent call `/v1` instead.
 
 ## Install
 

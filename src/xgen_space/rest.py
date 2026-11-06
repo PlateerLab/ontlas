@@ -6,6 +6,7 @@ The page's /api is for a browser session. This one has no session: a token, a ro
 from __future__ import annotations
 
 import hmac
+import threading
 from typing import Any, Callable
 
 from xgen_space.tools import StudioTools
@@ -69,13 +70,19 @@ def tool_list() -> list[dict]:
 
 
 class Rest:
-    def __init__(self, tools: StudioTools, token: str):
-        self.tools, self.token = tools, token
+    """With `source` it answers from the studio a team shares, under that studio's lock: what a person approved on the page
+    is what a platform sees, and what a platform requests is what a person finds there."""
+
+    def __init__(self, tools: StudioTools, token: str, *, source: Callable[[], Any] | None = None, lock: Any = None):
+        self.tools, self.token, self.source = tools, token, source
+        self.lock = lock or threading.Lock()
 
     def allowed(self, header: str) -> bool:
         return bool(self.token) and hmac.compare_digest(header.encode("utf-8"), f"Bearer {self.token}".encode("utf-8"))
 
     def answer(self, method: str, path: str, body: dict) -> tuple[int, Any]:
+        if self.source is not None:
+            self.tools.studio = self.source()
         for p, m, _, _, _, required, handler in ROUTES:
             if p != path:
                 continue

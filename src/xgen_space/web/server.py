@@ -129,7 +129,6 @@ def guide(video: Path | None) -> dict:
     return {"video": f"{MEDIA}?v={int(video.stat().st_mtime)}", "chapters": chapters}
 
 
-REST_LOCK = threading.Lock()
 
 
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
@@ -316,7 +315,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._json(404, {"error": "API is off on this server. Start it with --api-token-env."})
             if not rest.allowed(self.headers.get("Authorization") or ""):
                 return self._json(401, {"error": "a valid bearer token is required"})
-            with REST_LOCK:
+            with rest.lock:
                 code, out = rest.answer(method, path, body)
             self._json(code, out)
 
@@ -419,6 +418,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.object(a["name"])
                 if route == "keys":
                     return {"keys": s.keys(a["type"])}
+                if route == "actions/pending":
+                    return s.pending_actions()
                 if route == "audit":
                     return {"audit": s.audit()}
                 if route == "files":
@@ -623,13 +624,15 @@ def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: 
     logins = Logins(Users.load(users)) if users else None
     sessions = TeamSessions(build, logins) if logins else Sessions(build, limit=limit, idle=idle)
     rest = None
-    if api and api.get("token"):  # one studio of its own, read-only unless told otherwise
+    if api and api.get("token"):  # a team's own studio, or one of its own; read-only unless told otherwise
         from xgen_space.rest import Rest
         from xgen_space.tools import StudioTools
 
-        tools = StudioTools(build().studio, role=api.get("role") or None, principal=api.get("principal"),
-                            actor_id="api", read_only=not api.get("write"))
-        rest = Rest(tools, api["token"])
+        shared = sessions.shared if logins else None
+        tools = StudioTools(shared.studio if shared else build().studio, role=api.get("role") or None,
+                            principal=api.get("principal"), actor_id="api", read_only=not api.get("write"))
+        rest = Rest(tools, api["token"], source=(lambda: shared.studio) if shared else None,
+                    lock=shared.lock if shared else None)
     httpd = ThreadingHTTPServer((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
                                                            quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
                                                            video=video, logins=logins, rest=rest))

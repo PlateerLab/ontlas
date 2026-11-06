@@ -67,7 +67,7 @@ def similarity(a: list[str], b: list[str]) -> tuple[float, str]:
             if px and py:
                 d = 2 * len(px & py) / (len(px) + len(py))
                 if d * 0.9 > best:
-                    best, why = d * 0.9, f"'{x}' ~ '{y}' (글자 {round(d * 100)}% 겹침)"
+                    best, why = d * 0.9, f"'{x}' ~ '{y}' (이름 유사도 {round(d * 100)}%)"
     return best, why
 
 
@@ -151,10 +151,10 @@ def _column_score(onto, type_name: str, prop: str, col, planned, key: str, table
         overlap = len(a & b) / len(a | b)
         score += 0.2 * overlap
         if overlap:
-            notes.append(f"허용값 {round(overlap * 100)}% 겹침")
+            notes.append(f"허용값 일치율 {round(overlap * 100)}%")
     elif prop == key and col.name == table_key:
         score += 0.2
-        notes.append("둘 다 키")
+        notes.append("키 일치")
     return min(score, 1.0), ", ".join(notes)
 
 
@@ -173,7 +173,7 @@ def _match_columns(onto, type_name: str, planned,
     if wide is not None:  # a table keyed by several columns: no one of them identifies a row
         used_p.add(obj.key)
         used_c.add(wide.name)
-        matches.append(ColumnMatch(obj.key, wide.column, 0.6, "둘 다 키", list(wide.columns)))
+        matches.append(ColumnMatch(obj.key, wide.column, 0.6, "키 일치", list(wide.columns)))
     for s, prop, col, why in pairs:
         if s < COLUMN_MIN or prop in used_p or col.name in used_c:
             continue
@@ -185,7 +185,7 @@ def _match_columns(onto, type_name: str, planned,
         c = next(x for x in planned.properties if x.name == planned.title)
         used_p.add(title)
         used_c.add(c.name)
-        matches.append(ColumnMatch(title, c.column, COLUMN_MIN, "둘 다 표시 이름"))
+        matches.append(ColumnMatch(title, c.column, COLUMN_MIN, "표시 이름 일치"))
     # an inherited property still without a column, of a type exactly one column has, takes it (an agreement's date
     # is the order's date). The type's own properties match by name or stay missing; an ancestor's key is the own key.
     for prop in props:
@@ -197,7 +197,7 @@ def _match_columns(onto, type_name: str, planned,
         if len(same) == 1:
             used_p.add(prop)
             matches.append(ColumnMatch(prop, same[0].column, round(COLUMN_MIN, 3),
-                                       f"{p.type} 컬럼이 {same[0].column} 하나뿐"))
+                                       f"{p.type} 컬럼 후보 {same[0].column} 1개"))
     key_bound = any(m.property == obj.key for m in matches)
     if not key_bound:
         k = next(c for c in planned.properties if c.name == planned.key)
@@ -245,7 +245,7 @@ def suggest(draft, onto, standard: list[str], terms: list[dict] | None = None) -
             continue
         taken_t.add(t)
         taken_o.add(po.table)
-        reason = "; ".join(x for x in (why, f"컬럼 {len(cols)}개 대응") if x)
+        reason = "; ".join(x for x in (why, f"컬럼 {len(cols)}개 연결") if x)
         matches.append(ObjectMatch(t, po.table, round(score, 3), reason, cols, missing, extra))
     links = _links(draft, onto, matches)
     unbound = [t for t in _candidates(onto) if t not in taken_t]

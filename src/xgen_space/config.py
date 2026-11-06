@@ -128,10 +128,13 @@ def load_studio(path: str | Path) -> Studio:
     kw = {"now": now, "use_zen": bool(spec.get("zen", False))}
     if spec.get("modules"):
         from xgen_space.library import Library
+        from xgen_space.manage import NAME
 
         lib = Library(base / spec.get("library", "."))
-        studio = Studio.from_library(lib, list(spec["modules"]), namespace=spec.get("namespace", ""),
-                                     name=spec.get("name", ""), **kw)
+        wanted = list(spec["modules"])
+        if NAME in lib.names() and NAME not in wanted:  # what the management screens approved belongs to this studio
+            wanted.append(NAME)
+        studio = Studio.from_library(lib, wanted, namespace=spec.get("namespace", ""), name=spec.get("name", ""), **kw)
     else:
         studio = Studio(Ontology.load(base / spec["ontology"]).check(), **kw)
     for name, b in (spec.get("backends") or {}).items():
