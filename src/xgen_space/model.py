@@ -59,6 +59,10 @@ class Transition:
     source: str
     target: str
     action: str = ""
+    guard: dict[str, Any] = field(default_factory=dict)  # {decision, expect} or {property}: what must hold to take it
+    set: dict[str, Any] = field(default_factory=dict)    # what else it writes
+    call: dict[str, Any] = field(default_factory=dict)   # an external request sent after the write
+    after: dict[str, Any] = field(default_factory=dict)  # {days: 5 | "@name", since: property}: taken when that is over
 
 
 @dataclass
@@ -70,6 +74,11 @@ class StateMachine:
 
     def allows(self, source: str | None, target: str) -> bool:
         return any(t.source == source and t.target == target for t in self.transitions)
+
+    def find(self, source: str | None, target: str, action: str = "") -> Transition | None:
+        """The transition an action takes: the one that names it, else the first between the two states."""
+        found = [t for t in self.transitions if t.source == source and t.target == target]
+        return next((t for t in found if t.action == action), found[0] if found else None)
 
 
 @dataclass
@@ -460,7 +469,9 @@ def _states(d: dict | None) -> StateMachine | None:
     if not d:
         return None
     return StateMachine(property=d["property"], states=list(d.get("states", [])), initial=d.get("initial", ""),
-                        transitions=[Transition(t["from"], t["to"], t.get("action", ""))
+                        transitions=[Transition(t["from"], t["to"], t.get("action", ""), dict(t.get("guard") or {}),
+                                                dict(t.get("set") or {}), dict(t.get("call") or {}),
+                                                dict(t.get("after") or {}))
                                      for t in d.get("transitions", [])])
 
 
@@ -743,7 +754,8 @@ def _to_dict(o: Ontology) -> dict:
         sm = None
         if t.states:
             sm = _clean({"property": t.states.property, "states": t.states.states, "initial": t.states.initial,
-                         "transitions": [_clean({"from": x.source, "to": x.target, "action": x.action})
+                         "transitions": [_clean({"from": x.source, "to": x.target, "action": x.action,
+                                                 "guard": x.guard, "set": x.set, "call": x.call, "after": x.after})
                                          for x in t.states.transitions]})
         objects[t.name] = _clean({"label": t.label, "description": t.description,
                                   "source": {"table": t.table} if t.table else None, "key": t.key, "title": t.title,

@@ -71,6 +71,7 @@ def validate_ontology(o: Ontology) -> list[str]:
                 for s in (tr.source, tr.target):
                     if s not in sm.states:
                         add(f"{t.name}: transition uses unknown state '{s}'")
+                issues.extend(f"{t.name}: transition {tr.source} -> {tr.target}: {e}" for e in _transition(o, t, tr))
         if t.series:
             tp = t.properties.get(t.series.get("time", "").removesuffix(TEXT_SUFFIX))
             if tp is None:
@@ -160,8 +161,7 @@ def validate_ontology(o: Ontology) -> list[str]:
             if c.decision and c.decision not in o.decisions:
                 add(f"action {a.name}: criterion uses unknown decision '{c.decision}'")
         for v in a.set.values():
-            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters \
-                    and not v.startswith("$principal."):
+            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters and not _fills_itself(v):
                 add(f"action {a.name}: '{v}' is not a parameter")
 
     for r in o.roles.values():
@@ -231,6 +231,71 @@ def _prop_of(o: Ontology, type_name: str, name: str):
     from xgen_space.check import _find_prop
 
     return _find_prop(o, type_name, name)
+
+
+def _fills_itself(value: str) -> bool:
+    return value in ("$today", "$now") or value.startswith("$principal.")
+
+
+def _transition(o: Ontology, t, tr) -> list[str]:
+    out = []
+    g = tr.guard
+    if g:
+        unknown = set(g) - {"decision", "expect", "property"}
+        if unknown:
+            out.append(f"guard: unknown keys {sorted(unknown)}")
+        if bool(g.get("decision")) == bool(g.get("property")):
+            out.append("guard: give a decision or a property")
+        if g.get("decision") and g["decision"] not in o.decisions:
+            out.append(f"guard: unknown decision '{g['decision']}'")
+        if g.get("decision") and o.decisions.get(g["decision"]) and o.decisions[g["decision"]].target != t.name:
+            out.append(f"guard: decision '{g['decision']}' is not about {t.name}")
+        if g.get("property"):
+            p = _prop_of(o, t.name, g["property"])
+            if p is None:
+                out.append(f"guard: {t.name} has no property '{g['property']}'")
+            elif p.type != "boolean":
+                out.append(f"guard: property '{g['property']}' is {p.type}, not a true/false value")
+    action = o.actions.get(tr.action)
+    for name, v in tr.set.items():
+        p = _prop_of(o, t.name, name)
+        if p is None:
+            out.append(f"sets unknown property '{name}'")
+        elif p.expr and not p.format:
+            out.append(f"'{name}' is computed and cannot be set")
+        elif p.format and p.columns:
+            out.append(f"'{name}' is read from several columns and cannot be set")
+        if isinstance(v, str) and v.startswith("$") and not _fills_itself(v) and \
+                (action is None or v[1:] not in action.parameters):
+            out.append(f"'{v}' is not a parameter of {tr.action or 'any action'}")
+    if tr.call:
+        out.extend(f"call: {e}" for e in _call(tr.call))
+        if action is not None and action.call:
+            out.append(f"action {action.name} makes its own call; give one of them")
+    if tr.after:
+        out.extend(_after(o, t, tr))
+    return out
+
+
+def _after(o: Ontology, t, tr) -> list[str]:
+    out = [f"after: unknown keys {sorted(set(tr.after) - {'days', 'since'})}"] if set(tr.after) - {"days", "since"} else []
+    days = tr.after.get("days")
+    if isinstance(days, str) and days.startswith("@"):
+        p = o.parameters.get(days[1:])
+        if p is None:
+            out.append(f"after: unknown parameter '{days}'")
+        elif p.type != "integer":
+            out.append(f"after: parameter '{days}' is {p.type}, not a whole number")
+    elif isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        out.append("after: days takes a whole number or @parameter")
+    since = _prop_of(o, t.name, tr.after.get("since", ""))
+    if since is None:
+        out.append("after: since takes a date or datetime property")
+    elif since.type not in ("date", "datetime"):
+        out.append(f"after: since '{since.name}' is {since.type}, not a date or datetime")
+    if tr.action:
+        out.append("after: a transition on the clock is taken by no action")
+    return out
 
 
 def _scope(o: Ontology, r) -> list[str]:

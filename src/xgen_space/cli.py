@@ -321,6 +321,10 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--cascade", action="store_true")
     s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
 
+    s = sub.add_parser("transitions", help="the rows whose time-based transitions have come due")
+    s.add_argument("config")
+    s.add_argument("--apply", action="store_true", help="take them, writing to the source")
+
     s = sub.add_parser("metric", help="answer a metric with what it means; without a name, list the dictionary")
     s.add_argument("config")
     s.add_argument("name", nargs="?", default="")
@@ -670,6 +674,13 @@ def main(argv: list[str] | None = None) -> int:
                   "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts())})
             return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
+    elif a.cmd == "transitions":
+        from dataclasses import asdict
+
+        if a.apply:
+            _out([p.to_dict() for p in studio.actions.advance()])
+        else:
+            _out([asdict(d) for d in studio.actions.due()])
     elif a.cmd == "metric":
         from xgen_space.decide.metrics import answer_metric, dictionary
 
