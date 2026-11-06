@@ -255,6 +255,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--llm-key-env", default="")
     s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
     s.add_argument("--repairs", type=int, default=2)
+    s = sub.add_parser("compare", help="the same questions to one model with nothing, with documents and through the space")
+    s.add_argument("config")
+    s.add_argument("questions", help="YAML: questions with the words or the verdict a right answer has")
+    s.add_argument("--llm-url", required=True)
+    s.add_argument("--llm-model", required=True)
+    s.add_argument("--llm-key-env", default="")
+    s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
+    s.add_argument("--embedder", default="", help="hash, fastembed, or openai")
+    s.add_argument("--output", default="", help="write the whole report here as JSON")
     s = sub.add_parser("policy-draft", help="draft a decision table module from policy text with a language model")
     s.add_argument("config")
     s.add_argument("policy", help="the policy text (.md or .txt)")
@@ -705,6 +714,25 @@ def main(argv: list[str] | None = None) -> int:
         rep = evaluate(studio, yaml.safe_load(Path(a.questions).read_text(encoding="utf-8")), llm,
                        max_repairs=a.repairs)
         _out(rep)
+    elif a.cmd == "compare":
+        import yaml
+
+        from xgen_space.evaluate import compare
+        from xgen_space.nl import openai_chat
+        from xgen_space.tools import StudioTools
+
+        if a.embedder:
+            from xgen_space.embed import open_embedder
+
+            studio.space.embedder = open_embedder({"kind": a.embedder})
+        llm = openai_chat(a.llm_url, a.llm_model, key=os.environ.get(a.llm_key_env, "") if a.llm_key_env else "",
+                          extra=json.loads(a.llm_extra) if a.llm_extra else None)
+        spec = yaml.safe_load(Path(a.questions).read_text(encoding="utf-8"))
+        rep = compare(StudioTools(studio), spec["questions"] if isinstance(spec, dict) else spec, llm,
+                      note=lambda r: print(r["text"][:30], {k: v["right"] for k, v in r.items() if isinstance(v, dict)}, file=sys.stderr, flush=True))
+        if a.output:
+            Path(a.output).write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+        _out({"questions": rep["questions"], "modes": rep["modes"]})
     elif a.cmd == "policy-draft":
         import yaml
 

@@ -31,6 +31,8 @@ Repository = "https://github.com/PlateerLab/xgen-space"
 Changelog = "https://github.com/PlateerLab/xgen-space/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# One retrieval over rules, definitions and passages, fused with the graph between them.
+omnifuse = ["xgen-omnifuse>=0.8.4"]
 # Ontology and studio files in YAML (JSON needs nothing).
 yaml = ["pyyaml>=6"]
 # The in-process RDF backend, SPARQL reading, OWL import.
@@ -60,7 +62,7 @@ pdf = ["pypdf>=4"]
 embed = ["fastembed==0.7.3"]
 # A second OWL 2 RL engine, compared with owlrl by `xspace reasoners`.
 reasonable = ["reasonable==0.4.4", "rdflib>=7"]
-all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4"]
+all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4", "xgen-omnifuse>=0.8.4"]
 # The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
 live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]
 dev = ["pytest>=7", "ruff>=0.4"]

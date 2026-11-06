@@ -15,7 +15,9 @@ MAP_GROUPS = {"database": "source", "table": "source", "folder": "source", "file
               "collection": "document", "object": "ontology", "query": "use", "decision": "use", "action": "use", "role": "use",
               "vector_store": "store", "graph_store": "store", "reasoner": "store", "embedder": "store"}
 MAP_WORDS = {"source": "원천 데이터", "document": "문서", "ontology": "온톨로지", "store": "저장소 어댑터", "use": "활용"}
-DEPENDS = ("uses", "mapsTo", "hasProperty", "canRead", "hasRole", "embeddedIn", "contains")
+LOGIC_WORDS = {"rules": "규칙", "owl2rl": "OWL 2 RL", "shapes": "SHACL", "external": "외부 서비스"}
+VECTOR_WORDS = {"memory": "메모리", "qdrant": "Qdrant", "pgvector": "pgvector"}
+DEPENDS =("uses", "mapsTo", "hasProperty", "canRead", "hasRole", "embeddedIn", "contains")
 
 
 @dataclass
@@ -246,17 +248,20 @@ def from_ontology(onto: Ontology, *, database: str = "source", catalog: Catalog 
 
 def from_space(studio, space, files: dict | None = None) -> Catalog:
     """Everything in one map: the ontology's assets, the files that came in, the documents they became, the stores that hold
-    them. Read an edge as depends on: taking away what it points at touches what it comes from."""
-    cat = from_ontology(studio.onto, database=studio.source or "source")
+    them. Read an edge as depends on: taking away what it points at touches what it comes from. Stores are named by what they
+    are: the names in studio.yaml are keys, not words for a screen."""
+    source = studio.source or "source"
+    cat = from_ontology(studio.onto, database=source)
+    cat.assets[f"database:{source}"].label = "원천 DB"
     for name, b in studio.backends.items():
         if b.capabilities.load:
             gid = f"graph:{name}"
-            cat.add(gid, "graph_store", name, language=b.capabilities.language)
+            cat.add(gid, "graph_store", f"그래프 저장소 · {b.capabilities.language.upper()}", language=b.capabilities.language)
             for o in studio.onto.objects.values():
                 if o.table:
                     cat.relate(gid, "uses", f"object:{o.name}")
     for r in studio.reasoners.values():
-        cat.add(f"reasoner:{r.name}", "reasoner", r.name)
+        cat.add(f"reasoner:{r.name}", "reasoner", f"추론기 · {LOGIC_WORDS.get(r.logic, r.logic)}")
         for name, b in studio.backends.items():
             if b.capabilities.load:
                 cat.relate(f"reasoner:{r.name}", "uses", f"graph:{name}")
@@ -265,11 +270,11 @@ def from_space(studio, space, files: dict | None = None) -> Catalog:
     space.index()
     collection = f"collection:{space.collection}"
     cat.add(collection, "collection", f"문서 청크 {len(space.chunks)}개", chunks=len(space.chunks))
-    cat.add("embedder", "embedder", space.embedder.name.rsplit("/", 1)[-1])
+    cat.add("embedder", "embedder", f"임베딩 모델 · {space.embedder.name.rsplit('/', 1)[-1]}")
     cat.relate(collection, "uses", "embedder")
     for name, s in space.stores.items():
         vid = f"vector:{name}"
-        cat.add(vid, "vector_store", f"{name} ({s.kind})")
+        cat.add(vid, "vector_store", f"벡터 저장소 · {VECTOR_WORDS.get(s.kind, s.kind)}")
         cat.relate(vid, "uses", collection)
     held = {c.document for c in space.chunks.values()}
     for path, f in (files or {}).items():

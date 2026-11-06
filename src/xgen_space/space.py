@@ -225,6 +225,8 @@ class Space:
         self.took = 0
         self.lock = threading.RLock()
         self._made: dict[str, Any] = {}
+        self.retriever = ""  # the port a question goes through; with nothing said, the best one installed
+        self._knowledge: tuple | None = None
         self.relations: dict[tuple[str, str], list[dict]] = {}  # (document, section) -> what a model read there
 
     # ---- documents ---------------------------------------------------------------------------------------------
@@ -506,6 +508,16 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
                 out.append({"document": doc, "section": section, "count": n, "text": first.text[:150]})
         return sorted(out, key=lambda x: (-x["count"], x["document"], x["section"]))[:limit]
 
+    def knowledge(self, onto=None, terms: list[dict] | None = None):
+        """Definitions, rules and passages in one index, built again when any of them changes."""
+        from xgen_space.knowledge import build
+
+        self.index()
+        key = (id(onto), tuple(sorted(self.chunks)), len(terms or []), self.retriever)
+        if self._knowledge is None or self._knowledge[0] != key:
+            self._knowledge = (key, build(onto, self, terms, self.retriever))
+        return self._knowledge[1]
+
     def concepts_in(self, text: str, onto=None, terms: list[dict] | None = None) -> list[dict]:
         """The definitions a sentence names, which is how a search goes on from documents to the ontology."""
         names = dictionary(onto, terms)
@@ -547,6 +559,7 @@ def open_space(spec: dict | None, base: Path | None = None) -> Space:
     stores = {n: open_vector_store({**s, "name": n}) for n, s in (spec.get("vectors") or {}).items()}
     space = Space(open_embedder(spec.get("embedder")), stores or None, collection=spec.get("collection", "documents"),
                   checks=spec.get("checks"))
+    space.retriever = str(spec.get("retriever") or "")
     for d in _read_documents(list(spec.get("documents") or []), base or Path(".")):
         space.add(d, fixed=True)
     return space

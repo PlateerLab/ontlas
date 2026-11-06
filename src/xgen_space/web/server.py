@@ -131,6 +131,9 @@ def guide(video: Path | None) -> dict:
 
 
 
+OWN_LOCK = {"space/ask/more"}  # these wait on a model for tens of seconds and take the session's lock only around its data
+
+
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
                  video: Path | None = None, logins=None, rest=None):
     from xgen_space.web.team import NEEDS
@@ -388,10 +391,13 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             sid, s, new = self._session()
             user = self._user()
             try:
-                with s.lock:
-                    if user is not None:
-                        s.who = user.name
+                if route in OWN_LOCK:
                     out = self._route(method, route, a, s, sid)
+                else:
+                    with s.lock:
+                        if user is not None:
+                            s.who = user.name
+                        out = self._route(method, route, a, s, sid)
             except LookupError as e:
                 return self._json(400, {"error": f"요청한 항목을 찾을 수 없습니다. {e}"}, sid=sid, new=new)
             except PermissionError as e:
@@ -435,7 +441,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "catalog/json":
                     return s.catalog_json()
                 if route == "module":
-                    return s.module_source(a["name"])
+                    return s.module_source(a["name"], a.get("version", ""))
+                if route == "object/rows":
+                    return s.object_rows(a["name"], int(a.get("limit", 20)))
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
@@ -513,6 +521,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 처리하지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
                 return s.space_read()
+            if route == "space/ask":
+                return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None)
+            if route == "space/ask/more":
+                if not ask_limit.allow():
+                    return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."}
+                return s.space_ask_more(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None)
             if route == "space/answer":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 1분 뒤에 다시 시도해 주세요."}

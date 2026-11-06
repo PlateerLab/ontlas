@@ -54,6 +54,20 @@
 - A matched rule in a decision table stays a table row; the style of a search result had turned it into a column.
 - Words on the page and in the reasons the server writes are the product's own.
 
+- One question over everything. Definitions, rules and passages sit in one index behind a retriever port (`words`, or `omnifuse` for
+  fusion with the graph between them), and a question goes to the decision table, the record, a registered query or the passages. A
+  decision needs no model. The page's 통합 검색, `/v1/answer` and the MCP tool `answer_question` are the same code.
+- An agent reads less: `find_definitions` and `describe_object` give what a question is about instead of the whole ontology.
+- Rules, named values, states, actions and roles are edited on forms, the same way as objects: an edit, a trial on a copy, an approval.
+  A decision can replace or remove a rule of a standard over it (`rules_replace`, `rules_remove`) and an action can be extended.
+- A decision table reads in people's words: labels for inputs, `14일 이하` for `<= 14`, and an amount is no longer shown as a refusal.
+- The rows under an object can be read from its screen, and an earlier version of a module can be filed again.
+- With `--library-write`, what is switched on stays on across a restart, and a kept module that stopped fitting cannot keep a studio down.
+- `xspace compare` puts one question file to one model three ways: with nothing, with the documents alone and through the space.
+
+- A graph stays readable at a customer's size: past 120 nodes it opens folded into its communities, a node shows its first or second neighbours, and two nodes show the path between them. Labels keep clear of nodes.
+- The wrong answers on the check screen are grouped by cause, and a question a model is working on no longer holds up the rest of the page.
+
 ## 0.10.0
 
 - The example library is e-commerce alone. `commerce-operations` adds sellers, payments, refunds, carriers, shipments,

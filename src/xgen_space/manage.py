@@ -16,6 +16,7 @@ from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
                "cite")
 OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite")
@@ -42,7 +43,7 @@ class Workspace:
         self.current = current
         start = copy.deepcopy(current.to_dict()) if current else {"module": NAME, "version": "0.1.0",
                                                                    "kind": "customer", "label": label}
-        start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
+        start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
         self._base_onto = compose(self.base, **self.kw).ontology
@@ -303,6 +304,250 @@ class Workspace:
                 self._removed("questions").append(qid)
         return f"question:{qid}"
 
+    # ---- rules, named values, actions, roles and states ---------------------------------------------------------
+
+    def _owns(self, section: str, name: str) -> bool:
+        return name in (self.module.body.get(section) or {})
+
+    def _rule(self, a: dict, table) -> dict:
+        from xgen_space.decide.cells import CellError, parse_test
+        from xgen_space.decide.words import cell_of
+
+        rid = str(a.get("id") or "")
+        if not _RULE.match(rid):
+            raise EditError(f"rule id '{rid}' must be letters, digits, _ and - starting with a letter")
+        when: dict[str, str] = {}
+        for name, part in (a.get("when") or {}).items():
+            if name not in table.inputs:
+                raise EditError(f"decision {table.name} has no input '{name}'")
+            cell = cell_of(str(part.get("op") or "any"), part.get("value"), table.inputs[name].type) if isinstance(part, dict) else str(part)
+            if cell == "-":
+                continue
+            try:
+                parse_test(cell, table.named)
+            except CellError as e:
+                raise EditError(f"{name}: {e}") from None
+            when[name] = cell
+        then = dict(a.get("then") or {})
+        unknown = [k for k in then if k not in table.outputs]
+        if unknown:
+            raise EditError(f"decision {table.name} has no output '{unknown[0]}'")
+        spec: dict[str, Any] = {"id": rid, "when": when, "then": then}
+        if a.get("cite"):
+            spec["cite"] = str(a["cite"])
+        return spec
+
+    def _table(self, name: str):
+        t = self.composed().ontology.decisions.get(name)
+        if t is None:
+            raise EditError(f"decision '{name}' is unknown")
+        return t
+
+    def _add_rule(self, a: dict) -> str:
+        name = str(a.get("decision") or "")
+        t = self._table(name)
+        spec = self._rule(a, t)
+        if any(r.id == spec["id"] for r in t.rules):
+            raise EditError(f"rule '{spec['id']}' already exists in {name}")
+        first = a.get("first", True)
+        if self._owns("decisions", name):
+            rules = self._section("body", "decisions")[name].setdefault("rules", [])
+            rules.insert(0 if first else len(rules), spec)
+        else:
+            patch = self._section("extend", "decisions").setdefault(name, {})
+            patch.setdefault("rules_prepend" if first else "rules_append", []).append(spec)
+        return f"rule:{name}.{spec['id']}"
+
+    def _update_rule(self, a: dict) -> str:
+        name = str(a.get("decision") or "")
+        t = self._table(name)
+        spec = self._rule(a, t)
+        if not any(r.id == spec["id"] for r in t.rules):
+            raise EditError(f"rule '{spec['id']}' is unknown in {name}")
+        holders = [self._section("body", "decisions")[name].setdefault("rules", [])] if self._owns("decisions", name) else []
+        patch = None if holders else self._section("extend", "decisions").setdefault(name, {})
+        if patch is not None:
+            holders = [patch[k] for k in ("rules_prepend", "rules_append") if k in patch]
+        for rules in holders:
+            for i, r in enumerate(rules):
+                if r.get("id") == spec["id"]:
+                    rules[i] = spec
+                    return f"rule:{name}.{spec['id']}"
+        patch.setdefault("rules_replace", {})[spec["id"]] = spec
+        return f"rule:{name}.{spec['id']}"
+
+    def _delete_rule(self, a: dict) -> str:
+        name, rid = str(a.get("decision") or ""), str(a.get("id") or "")
+        t = self._table(name)
+        if not any(r.id == rid for r in t.rules):
+            raise EditError(f"rule '{rid}' is unknown in {name}")
+        if len(t.rules) == 1:
+            raise EditError(f"decision {name} needs at least one rule")
+        if self._owns("decisions", name):
+            spec = self._section("body", "decisions")[name]
+            spec["rules"] = [r for r in spec["rules"] if r.get("id") != rid]
+            return f"rule:{name}.{rid}"
+        patch = self._section("extend", "decisions").setdefault(name, {})
+        for k in ("rules_prepend", "rules_append"):
+            if any(r.get("id") == rid for r in patch.get(k) or []):
+                patch[k] = [r for r in patch[k] if r.get("id") != rid]
+                return f"rule:{name}.{rid}"
+        (patch.get("rules_replace") or {}).pop(rid, None)
+        patch.setdefault("rules_remove", []).append(rid)
+        return f"rule:{name}.{rid}"
+
+    def _add_decision(self, a: dict) -> str:
+        name, target = str(a.get("name") or ""), str(a.get("target") or "")
+        onto = self.composed().ontology
+        if not _IDENT.match(name):
+            raise EditError(f"decision name '{name}' must be letters, digits and _ starting with a letter")
+        if name in onto.decisions:
+            raise EditError(f"decision '{name}' already exists")
+        if target not in onto.objects:
+            raise EditError(f"object type '{target}' is unknown")
+        inputs = {str(k): dict(v) for k, v in (a.get("inputs") or {}).items()}
+        if not inputs:
+            raise EditError("give at least one input")
+        spec = {"label": a.get("label") or name, "target": target, "hit_policy": "first", "inputs": inputs,
+                "outputs": {"result": "boolean", "reason": "string"},
+                "rules": [{"id": "default", "when": {}, "then": {"result": False, "reason": str(a.get("otherwise") or "해당하는 규칙이 없습니다")}}]}
+        self._section("body", "decisions")[name] = spec
+        return f"decision:{name}"
+
+    def _update_parameter(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        p = self.composed().ontology.parameters.get(name)
+        if p is None:
+            raise EditError(f"named value '{name}' is unknown")
+        try:
+            value: Any = {"integer": int, "decimal": float, "number": float}.get(p.type, str)(a.get("value"))
+        except (TypeError, ValueError):
+            raise EditError(f"{name} takes a {p.type}") from None
+        if isinstance(value, (int, float)):
+            if p.min is not None and value < p.min:
+                raise EditError(f"{p.label or name} must be at least {p.min}")
+            if p.max is not None and value > p.max:
+                raise EditError(f"{p.label or name} must be at most {p.max}")
+        if self._owns("parameters", name):
+            self._section("body", "parameters")[name]["value"] = value
+        else:
+            self._section("extend", "parameters")[name] = {"value": value}
+        return f"parameter:{name}"
+
+    def _action_spec(self, a: dict) -> dict:
+        spec: dict[str, Any] = {}
+        for k in ("label", "parameters", "criteria", "transition_to", "approval", "cite"):
+            if k in a:
+                spec[k] = a[k]
+        return spec
+
+    def _add_action(self, a: dict) -> str:
+        name, target = str(a.get("name") or ""), str(a.get("target") or "")
+        onto = self.composed().ontology
+        if not _IDENT.match(name):
+            raise EditError(f"action name '{name}' must be letters, digits and _ starting with a letter")
+        if name in onto.actions:
+            raise EditError(f"action '{name}' already exists")
+        if target not in onto.objects:
+            raise EditError(f"object type '{target}' is unknown")
+        self._section("body", "actions")[name] = {"target": target, "approval": True, **self._action_spec(a)}
+        return f"action:{name}"
+
+    def _update_action(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if name not in self.composed().ontology.actions:
+            raise EditError(f"action '{name}' is unknown")
+        if self._owns("actions", name):
+            self._section("body", "actions")[name].update(self._action_spec(a))
+        else:
+            self._section("extend", "actions").setdefault(name, {}).update(self._action_spec(a))
+        return f"action:{name}"
+
+    def _delete_action(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if name not in self.composed().ontology.actions:
+            raise EditError(f"action '{name}' is unknown")
+        if self._owns("actions", name):
+            del self._section("body", "actions")[name]
+        else:
+            self._removed("actions").append(name)
+        return f"action:{name}"
+
+    def _add_role(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"role name '{name}' must be letters, digits and _ starting with a letter")
+        if name in self.composed().ontology.roles:
+            raise EditError(f"role '{name}' already exists")
+        spec = {k: a[k] for k in ("label", "read", "run", "request", "execute", "mask", "row_filters") if a.get(k)}
+        self._section("body", "roles")[name] = spec
+        return f"role:{name}"
+
+    def _update_role(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        r = self.composed().ontology.roles.get(name)
+        if r is None:
+            raise EditError(f"role '{name}' is unknown")
+        if self._owns("roles", name):
+            self._section("body", "roles")[name].update({k: a[k] for k in ("label", "read", "run", "request", "execute", "mask") if k in a})
+            return f"role:{name}"
+        patch = self._section("extend", "roles").setdefault(name, {})
+        if "label" in a:
+            patch["label"] = a["label"]
+        for k in ("read", "run", "request", "execute"):
+            if k not in a:
+                continue
+            want, have = list(a[k] or []), list(getattr(r, k))
+            patch[k] = [x for x in want if x not in have] or patch.get(k, [])
+            patch[f"{k}_drop"] = [x for x in have if x not in want] or patch.get(f"{k}_drop", [])
+        if "mask" in a:
+            want = dict(a["mask"] or {})
+            patch["mask"] = {k: v for k, v in want.items() if r.mask.get(k) != v}
+            patch["mask_drop"] = [k for k in r.mask if k not in want]
+        for k in [k for k, v in patch.items() if v in ([], {})]:
+            del patch[k]
+        return f"role:{name}"
+
+    def _delete_role(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if name not in self.composed().ontology.roles:
+            raise EditError(f"role '{name}' is unknown")
+        if self._owns("roles", name):
+            del self._section("body", "roles")[name]
+        else:
+            self._removed("roles").append(name)
+        return f"role:{name}"
+
+    def _update_states(self, a: dict) -> str:
+        name = str(a.get("object") or "")
+        t = self.composed().ontology.objects.get(name)
+        if t is None:
+            raise EditError(f"object type '{name}' is unknown")
+        states = [str(s).strip() for s in a.get("states") or [] if str(s).strip()]
+        if len(states) < 2:
+            raise EditError("a state machine has at least two states")
+        moves = [{k: v for k, v in {"from": m.get("from"), "to": m.get("to"), "action": m.get("action")}.items() if v}
+                 for m in a.get("transitions") or []]
+        for m in moves:
+            if m.get("from") not in states or m.get("to") not in states:
+                raise EditError(f"a transition goes between states: {m.get('from')} to {m.get('to')}")
+        spec = {"property": str(a.get("property") or ""), "states": states, "transitions": moves}
+        if a.get("initial"):
+            spec["initial"] = str(a["initial"])
+        prop = _prop(self.composed().ontology, name, spec["property"])
+        extra = [s for s in states if prop is not None and prop.values and s not in prop.values]  # a new state is a new value of its property
+        if self._owns_object(name):
+            body = self._section("body", "objects")[name]
+            body["states"] = spec
+            if extra and spec["property"] in (body.get("properties") or {}):
+                body["properties"][spec["property"]]["values"] = [*prop.values, *extra]
+        else:
+            patch = self._section("extend", "objects").setdefault(name, {})
+            patch["states_set"] = spec
+            if extra:
+                patch.setdefault("properties", {}).setdefault(spec["property"], {})["values_add"] = extra
+        return f"states:{name}"
+
     def _requires(self) -> None:
         """The modules whose elements this module extends, removes or hangs from, so it composes after them."""
         comp = compose(self.base, **self.kw)
@@ -313,6 +558,10 @@ class Workspace:
                 owners.add(comp.owner(f"property:{t}.{p}"))
         for lk in self.module.extend.get("links") or {}:
             owners.add(comp.owner(f"link:{lk}"))
+        for section, kind in (("decisions", "decision"), ("actions", "action"), ("roles", "role"), ("parameters", "parameter")):
+            owners |= {comp.owner(f"{kind}:{k}") for k in self.module.extend.get(section) or {}}
+        for section in ("decisions", "actions"):
+            owners |= {comp.owner(f"object:{spec.get('target')}") for spec in (self.module.body.get(section) or {}).values()}
         for s, items in self.module.remove.items():
             if s == "properties":
                 owners |= {comp.owner(f"property:{t}.{p}") for t, ps in items.items() for p in ps}

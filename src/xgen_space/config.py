@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,28 @@ def open_backend(spec: dict, base: Path):
 
 
 def load_studio(path: str | Path) -> Studio:
+    """A studio from its file. What was switched on and kept beside the library comes first; if that no longer loads,
+    the file's own list still does, so a module that stopped fitting the source cannot keep a studio from starting."""
+    try:
+        return _open_studio(path, True)
+    except Exception as e:  # a driver's own error: whatever a source says of a module that does not fit it
+        if not _keeps_modules(path):
+            raise
+        print(f"the modules kept on no longer load ({e}); starting from {Path(path).name}", file=sys.stderr)
+        return _open_studio(path, False)
+
+
+def _keeps_modules(path: str | Path) -> bool:
+    import yaml
+
+    from xgen_space.library import Library
+
+    p = Path(path)
+    spec = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    return bool(spec.get("modules")) and bool(Library(p.parent / spec.get("library", ".")).applied())
+
+
+def _open_studio(path: str | Path, applied: bool) -> Studio:
     import yaml
 
     p = Path(path)
@@ -131,7 +154,8 @@ def load_studio(path: str | Path) -> Studio:
         from xgen_space.manage import NAME
 
         lib = Library(base / spec.get("library", "."))
-        wanted = list(spec["modules"])
+        kept = lib.applied() if applied else []
+        wanted = kept or list(spec["modules"])
         if NAME in lib.names() and NAME not in wanted:  # what the management screens approved belongs to this studio
             wanted.append(NAME)
         studio = Studio.from_library(lib, wanted, namespace=spec.get("namespace", ""), name=spec.get("name", ""), **kw)

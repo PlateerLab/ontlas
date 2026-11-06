@@ -66,6 +66,20 @@ MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the b
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 EDIT_TEXT = [
+    (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
+    (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+    (r"^rule '(.+)' is unknown in (\S+)$", r"규칙 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^decision (\S+) needs at least one rule$", r"결정표에 규칙이 하나는 있어야 하므로 제외하지 못했습니다."),
+    (r"^decision (\S+) has no (?:input|output) '(.+)'$", r"결정표에 '\2' 항목이 없어 저장하지 못했습니다."),
+    (r"^decision '(.+)' (?:is unknown|already exists)$", r"결정표 '\1'을 처리하지 못했습니다. 이름을 확인해 주세요."),
+    (r"^(?:decision|action|role) name '(.*)' must be letters, digits and _ starting with a letter$", r"이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^give at least one input$", r"입력값이 없어 결정표를 만들지 못했습니다. 입력값을 선택해 주세요."),
+    (r"^(\S+): '(.+)' is not a literal; quote text as .*$", r"\1 조건의 값 '\2'을 읽지 못했습니다. 값을 확인해 주세요."),
+    (r"^(\S+) takes a (\S+)$", r"기준값 \1의 값 형식이 맞지 않아 저장하지 못했습니다."),
+    (r"^(.+) must be at least (\S+)$", r"\1 값은 \2 이상이어야 하므로 저장하지 못했습니다."),
+    (r"^(.+) must be at most (\S+)$", r"\1 값은 \2 이하여야 하므로 저장하지 못했습니다."),
+    (r"^a state machine has at least two states$", r"상태 값이 두 개 이상 있어야 하므로 저장하지 못했습니다."),
+    (r"^a transition goes between states: (\S*) to (\S*)$", r"전이의 상태 값 \1, \2이 상태 목록에 없어 저장하지 못했습니다."),
     (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
     (r"^(object|property|link) name '(.*)' must be letters, digits and _ starting with a letter$",
      r"이름 '\2'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
@@ -139,6 +153,11 @@ def _issue_text(msg: str) -> str:
         if re.match(pattern, msg):
             return re.sub(pattern, text, msg)
     return msg
+
+
+def mine_label(o, name: str) -> str:
+    t = o.objects.get(name)
+    return (t.label or name) if t is not None else name
 
 
 def _edit_text(msg: str) -> str:
@@ -420,9 +439,28 @@ class StudioSession(SpaceMixin):
         gone = [name, *imp.dependents] if cascade else [name]
         proj = self._reproject()
         warning = _projection_warning(proj)
+        self._keep_applied()
         self._note("detach", f"{', '.join(self._label(x) for x in gone)} 모듈을 해제했습니다. "
                    f"항목 {len(imp.removed)}개가 제거되었습니다. {warning}".strip(), removed=imp.removed[:12])
         return {"ok": True, "impact": imp.to_dict(), "projection": proj, "warning": warning}
+
+    def _keep_applied(self) -> None:
+        """What is on stays on across a restart, when approved changes are written to a library folder."""
+        comp = self.studio.composition
+        if self.store is not None and comp is not None:
+            self.store.keep_applied([m.name for m in comp.modules])
+
+    def object_rows(self, name: str, limit: int = 20) -> dict:
+        """The data under a definition: rows as the source holds them, in the object's own words."""
+        st = self.studio
+        t = st.onto.obj(name)
+        if not t.table:
+            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
+        props = [p for p in all_props(st.onto, name) if not find_prop(st.onto, name, p).expr][:12]
+        q = {"match": {"x": name}, "return": [f"x.{p}" for p in props], "limit": max(1, min(int(limit), 100))}
+        res = st.run(q)
+        return plain({"ok": True, "name": name, "label": t.label or name, "columns": res.columns,
+                      "labels": {p: find_prop(st.onto, name, p).label or p for p in props}, "rows": [list(r) for r in res.rows]})
 
     def attach(self, name: str) -> dict:
         before = {m.name for m in self.studio.composition.modules} if self.studio.composition else set()
@@ -431,6 +469,7 @@ class StudioSession(SpaceMixin):
         except ModuleError as e:
             return {"ok": False, "error": str(e)}
         added = [m.name for m in comp.modules if m.name not in before]
+        self._keep_applied()
         proj = self._reproject()
         warning = _projection_warning(proj)
         self._note("attach", f"{', '.join(self._label(x) for x in added)} 모듈을 적용했습니다. {warning}".strip(),
@@ -514,12 +553,12 @@ class StudioSession(SpaceMixin):
             return {"ok": False, "error": f"쿼리 문법을 해석하지 못했습니다. {_issue_text(str(e).split(chr(10))[0])}"}
         return self.run_query(q, role=role, principal=principal)
 
-    def ask(self, question: str, *, role: str = "", principal: dict | None = None) -> dict:
+    def ask(self, question: str, *, role: str = "", principal: dict | None = None, model: Callable[[str, str], str] | None = None) -> dict:
         if self.llm is None:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 자연어 질문을 처리하지 못했습니다."}
         from xgen_space.nl import IRGenerator, probe
 
-        llm, tries = self._budgeted()
+        llm, tries = self._budgeted(model)
         gen = IRGenerator(self.studio.onto, llm, role=role or None, terms=self._terms(),
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
@@ -657,6 +696,8 @@ class StudioSession(SpaceMixin):
         return [by_code[v] for v in outs.values() if isinstance(v, str) and v in by_code]
 
     def decide(self, name: str, key: str) -> dict:
+        from xgen_space.decide.words import cell_words, input_label, labels_of, unit_of, verdict
+
         st = self.studio
         table = st.onto.decisions[name]
         res = st.decide(name, key)
@@ -673,7 +714,10 @@ class StudioSession(SpaceMixin):
             except Exception as e:
                 zen = {"error": f"{type(e).__name__}: {e}"}
         first = next(iter(table.outputs), "")
-        rules = [{"id": r.id, "when": r.when, "then": r.then, "cite": r.cite, "hit": r.id in res.matched}
+        named = table.named
+        words = {i: {"unit": unit_of(st.onto, table, i), "labels": labels_of(st.onto, table, i)} for i in table.inputs}
+        rules = [{"id": r.id, "when": r.when, "then": r.then, "cite": r.cite, "hit": r.id in res.matched,
+                  "said": {i: cell_words(r.when.get(i, "-"), named, **words[i]) for i in table.inputs}}
                  for r in table.rules]
         comp = st.composition
         touched = comp.touched.get(f"decision:{name}", []) if comp else []
@@ -688,8 +732,10 @@ class StudioSession(SpaceMixin):
             "name": name, "label": table.label or name, "target": table.target,
             "target_label": self._obj_label(table.target), "key": key, "hit_policy": table.hit_policy,
             "inputs": list(table.inputs), "outputs": list(table.outputs), "result": outs,
+            "input_labels": {i: input_label(st.onto, table, i) for i in table.inputs},
             "overridden": res.overridden, "parameters": res.parameters, "conflicts": res.conflicts,
-            "yes": bool(picked) if collected else (bool(outs.get(first)) if first else False),
+            "yes": bool(picked) if collected else (verdict(table, outs)[1] if first else False),
+            "verdict": ("가능" if picked else "불가") if collected else verdict(table, outs)[0],
             "reason": " · ".join(str(x.get("name") or x.get("code") or x) if isinstance(x, dict) else str(x) for x in picked)
             if collected else next((v for v in outs.values() if isinstance(v, str)), ""),
             "matched": res.matched, "rules": rules, "values": res.inputs, "evidence": evidence,
@@ -1526,12 +1572,14 @@ class StudioSession(SpaceMixin):
         except ModuleError:
             raise LookupError(name) from None
 
-    def module_source(self, name: str) -> dict:
+    def module_source(self, name: str, version: str = "") -> dict:
         import yaml
 
-        m = self._module(name)
+        lib = self.studio.library
+        versions = list(lib.versions(name)) if lib is not None and name in lib.names() else []
+        m = lib.get(name, version) if version and version in versions else self._module(name)
         comp = self.studio.composition
-        return {"name": m.name, "label": m.label or m.name, "kind": m.kind, "version": m.version,
+        return {"name": m.name, "label": m.label or m.name, "kind": m.kind, "version": m.version, "versions": versions,
                 "applied": bool(comp) and m.name in {x.name for x in comp.modules},
                 "yaml": yaml.safe_dump(m.to_dict(), allow_unicode=True, sort_keys=False)}
 
@@ -1629,7 +1677,7 @@ class StudioSession(SpaceMixin):
         lib = self.studio.changes.store or self.studio.library
         bumped = ""
         if m.version in lib.versions(m.name):
-            if lib.get(m.name, m.version).to_dict() == m.to_dict():
+            if {**lib.get(m.name).to_dict(), "version": ""} == {**m.to_dict(), "version": ""}:  # an earlier version is a change from the latest
                 raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
             bumped, m.version = m.version, _next_version(lib.versions(m.name))
         cr = self.studio.changes.propose(m, by=self.who, attach=attach)
@@ -1759,8 +1807,43 @@ class StudioSession(SpaceMixin):
                    "objects": bound.get(t, []), "links": via.get(t, [])} for t, cols, pk, fks in catalog]
         import yaml
 
+        from xgen_space.decide.words import cell_parts, cell_words, input_label, labels_of, reads, unit_of
+
+        decisions = []
+        for t in o.decisions.values():
+            spec = [{"name": i, "label": input_label(o, t, i), "type": v.type, "unit": unit_of(o, t, i).strip(),
+                     "values": list((find_prop(o, *reads(o, t, i)).values if all(reads(o, t, i)) and find_prop(o, *reads(o, t, i)) else []) or []),
+                     "labels": labels_of(o, t, i)} for i, v in t.inputs.items()]
+            decisions.append({
+                "name": t.name, "label": t.label or t.name, "target": t.target, "target_label": t.target and mine_label(o, t.target),
+                "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
+                "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
+                "rules": [{"id": r.id, "cite": r.cite, "then": r.then,
+                           "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
+                           "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
+                          for r in t.rules]})
+        parameters = [{"name": p.name, "label": p.label or p.name, "value": p.value, "type": p.type, "unit": p.unit, "min": p.min, "max": p.max,
+                       "description": p.description, "cite": p.cite, "pending": f"parameter:{p.name}" in touched, **owner(f"parameter:{p.name}")}
+                      for p in o.parameters.values()]
+        actions = [{"name": a.name, "label": a.label or a.name, "target": a.target, "target_label": mine_label(o, a.target),
+                    "parameters": [{"name": k, "label": (v.get("label") if isinstance(v, dict) else "") or k, "type": (v.get("type") if isinstance(v, dict) else v) or "string"}
+                                   for k, v in a.parameters.items()],
+                    "criteria": [{"decision": c.decision, "expect": c.expect, "states": c.states} for c in a.criteria],
+                    "transition_to": a.transition_to, "approval": a.approval, "cite": a.cite,
+                    "pending": f"action:{a.name}" in touched, "new": a.name not in base.actions, **owner(f"action:{a.name}")}
+                   for a in o.actions.values()]
+        roles = [{"name": r.name, "label": r.label or r.name, "read": r.read, "run": r.run, "request": r.request, "execute": r.execute,
+                  "mask": r.mask, "unmask": r.unmask, "filters": sorted(r.row_filters), "pending": f"role:{r.name}" in touched,
+                  "new": r.name not in base.roles, **owner(f"role:{r.name}")} for r in o.roles.values()]
+        states = [{"object": t.name, "label": t.label or t.name, "property": t.states.property, "states": t.states.states,
+                   "initial": t.states.initial, "pending": f"object:{t.name}" in touched, **owner(f"object:{t.name}"),
+                   "transitions": [{"from": m.source, "to": m.target, "action": m.action} for m in t.states.transitions]}
+                  for t in o.objects.values() if t.states]
+
         return plain({
             "objects": objects, "properties": properties, "links": links, "questions": questions,
+            "decisions": decisions, "parameters": parameters, "actions": actions, "roles": roles, "states": states,
+            "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,

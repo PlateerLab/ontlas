@@ -303,6 +303,8 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
             base["column"] = col
         props[p] = base
         touched.setdefault(f"property:{name}.{p}", []).append(m.name)
+    if patch.get("states_set"):  # the whole machine, from the screen that edits it
+        obj["states"] = copy.deepcopy(patch["states_set"])
     if patch.get("transitions_add"):
         sm = obj.get("states")
         if not sm:
@@ -335,7 +337,12 @@ def _extend_decision(acc: dict, m: Module, name: str, patch: dict, touched: dict
         raise ModuleError(f"{m.key} extends decision '{name}', which no attached module defines")
     d.setdefault("inputs", {}).update(copy.deepcopy(patch.get("inputs") or {}))
     d.setdefault("outputs", {}).update(copy.deepcopy(patch.get("outputs") or {}))
-    rules = list(d.get("rules") or [])
+    gone, changed = set(patch.get("rules_remove") or []), dict(patch.get("rules_replace") or {})
+    known = {r.get("id") for r in d.get("rules") or []}
+    missing = sorted((gone | set(changed)) - known)
+    if missing:
+        raise ModuleError(f"{m.key} changes rule '{missing[0]}' of decision '{name}', which it does not have")
+    rules = [copy.deepcopy(changed.get(r.get("id"), r)) for r in d.get("rules") or [] if r.get("id") not in gone]
     d["rules"] = copy.deepcopy(list(patch.get("rules_prepend") or [])) + rules + \
         copy.deepcopy(list(patch.get("rules_append") or []))
     for k in ("label", "cite", "hit_policy"):
@@ -348,9 +355,13 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
     r = acc["roles"].get(name)
     if r is None:
         raise ModuleError(f"{m.key} extends role '{name}', which no attached module defines")
+    if "label" in patch:
+        r["label"] = patch["label"]
     for k in ("read", "run", "request", "execute", "unmask"):
         if patch.get(k):
             r[k] = list(dict.fromkeys(list(r.get(k) or []) + list(patch[k])))
+        if patch.get(f"{k}_drop"):
+            r[k] = [x for x in r.get(k) or [] if x not in patch[f"{k}_drop"]]
     if patch.get("row_filters"):
         r.setdefault("row_filters", {}).update(copy.deepcopy(patch["row_filters"]))
     if patch.get("scope"):
@@ -363,7 +374,23 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
         cur = {x: "partial" for x in cur} if isinstance(cur, list) else dict(cur)
         cur.update({x: "partial" for x in mask} if isinstance(mask, list) else mask)
         r["mask"] = cur
+    if patch.get("mask_drop"):
+        cur = r.get("mask") or {}
+        cur = {x: "partial" for x in cur} if isinstance(cur, list) else dict(cur)
+        r["mask"] = {k: v for k, v in cur.items() if k not in patch["mask_drop"]}
+    for t in patch.get("row_filters_drop") or []:
+        (r.get("row_filters") or {}).pop(t, None)
     touched.setdefault(f"role:{name}", []).append(m.name)
+
+
+def _extend_action(acc: dict, m: Module, name: str, patch: dict, touched: dict) -> None:
+    a = acc["actions"].get(name)
+    if a is None:
+        raise ModuleError(f"{m.key} extends action '{name}', which no attached module defines")
+    for k in ("label", "parameters", "criteria", "set", "transition_to", "approval", "cite"):
+        if k in patch:
+            a[k] = copy.deepcopy(patch[k])
+    touched.setdefault(f"action:{name}", []).append(m.name)
 
 
 def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict) -> None:
@@ -424,12 +451,14 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_decision(acc, m, k, patch or {}, touched)
                 elif s == "roles":
                     _extend_role(acc, m, k, patch or {}, touched)
+                elif s == "actions":
+                    _extend_action(acc, m, k, patch or {}, touched)
                 elif s == "parameters":
                     _extend_parameter(acc, m, k, patch, touched)
                 elif s in ("metrics", "conflicts"):
                     _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
-                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, roles, "
+                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, actions, roles, "
                                       "parameters, metrics or conflicts")
         for s, items in (m.remove or {}).items():
             if s == "properties":

@@ -177,6 +177,52 @@ def test_a_running_agent_goes_by_a_change_once_it_reaches_the_library(team):
     assert "21일" in StudioTools(kept).decide("returnEligibility", "I1001")["outputs"]["reason"]
 
 
+def test_what_is_switched_on_stays_on_across_a_restart(team):
+    from xgen_space.config import load_studio
+
+    base, root, _ = team
+    kim = _login(base, "kim", "kim-password-1")
+    assert _call(base, "/api/detach", {"name": "fashion"}, cookie=kim)[1]["ok"]
+    again = load_studio(root / "library" / "studio.yaml")
+    assert "fashion" not in {m.name for m in again.composition.modules}
+    assert _call(base, "/api/attach", {"name": "fashion"}, cookie=kim)[1]["ok"]
+    assert "fashion" in {m.name for m in load_studio(root / "library" / "studio.yaml").composition.modules}
+
+
+def test_a_module_that_stopped_fitting_cannot_keep_a_studio_from_starting(team):
+    from xgen_space.config import load_studio
+    from xgen_space.library import Library
+
+    _, root, _ = team
+    config = root / "library" / "studio.yaml"
+    Library(root / "library").keep_applied(["core", "commerce", "commerce-bindings", "food"])  # food reads a column this source lacks
+    assert "food" not in {m.name for m in load_studio(config).composition.modules}
+
+
+def test_an_earlier_version_can_be_read_and_filed_again(team):
+    base, _, _ = team
+    kim, lee = _login(base, "kim", "kim-password-1"), _login(base, "lee", "lee-password-1")
+    now = _call(base, "/api/module?name=acme-overlay", cookie=kim)[1]
+    out = _call(base, "/api/module/save", {"text": now["yaml"].replace("14일까지", "21일까지")}, cookie=kim)[1]
+    assert _call(base, "/api/change/decide", {"id": out["change"]["id"]}, cookie=lee)[1]["ok"]
+    later = _call(base, "/api/module?name=acme-overlay", cookie=kim)[1]
+    assert later["versions"] == ["1.0.0", "1.0.1"] and "21일까지" in later["yaml"]
+    old = _call(base, "/api/module?name=acme-overlay&version=1.0.0", cookie=kim)[1]
+    assert old["version"] == "1.0.0" and "14일까지" in old["yaml"]
+    out = _call(base, "/api/module/save", {"text": old["yaml"]}, cookie=kim)[1]
+    assert out["pending"] and out["change"]["version"] == "1.0.2"
+    assert _call(base, "/api/change/decide", {"id": out["change"]["id"]}, cookie=lee)[1]["ok"]
+    assert "14일까지" in _call(base, "/api/module?name=acme-overlay", cookie=kim)[1]["yaml"]
+
+
+def test_the_rows_under_an_object_read_in_its_own_words(team):
+    base, _, _ = team
+    kim = _login(base, "kim", "kim-password-1")
+    out = _call(base, "/api/object/rows?name=Order&limit=5", cookie=kim)[1]
+    assert out["ok"] and 0 < len(out["rows"]) <= 5 and out["labels"]["order_id"] == "주문 번호"
+    assert _call(base, "/api/object/rows?name=Party", cookie=kim)[1]["ok"] is False  # a concept has no table
+
+
 def test_sign_in_attempts_are_limited(team):
     base, _, _ = team
     codes = [_call(base, "/api/login", {"user": "kim", "password": "bad-guess-00"})[0] for _ in range(11)]

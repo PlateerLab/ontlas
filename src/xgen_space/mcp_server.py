@@ -108,6 +108,21 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         return tools.describe()
 
     @server.tool()
+    def answer_question(text: str) -> dict:
+        """Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause."""
+        return tools.answer_question(text)
+
+    @server.tool()
+    def find_definitions(text: str, k: int = 8) -> dict:
+        """The object types, rules, queries and actions a question is about. Read these rather than the whole ontology."""
+        return tools.find_definitions(text, k)
+
+    @server.tool()
+    def describe_object(name: str) -> dict:
+        """One object type with its properties, links, decisions and actions."""
+        return tools.describe_object(name)
+
+    @server.tool()
     def list_modules() -> list[dict]:
         """The ontology modules plugged into this studio: core concepts, domains, industry and customer layers."""
         return tools.list_modules()

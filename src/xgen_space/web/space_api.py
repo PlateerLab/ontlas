@@ -13,12 +13,24 @@ from pathlib import Path
 from typing import Any
 
 from xgen_space.embed import EmbedError
+from xgen_space.values import normalize
 from xgen_space.vectors import VectorError, conformance, known_kinds
 
 SEARCH_MAX = 300  # characters of a question
 K_MAX = 20
+ROUTE_SYSTEM = ("질문을 분류합니다. 데이터베이스 값을 조회, 집계, 목록으로 답해야 하면 data, 규정이나 정책이나 설명을 묻는 것이면 documents 를 "
+                "한 단어로만 답합니다.")
 ANSWER_SYSTEM = ("당신은 문서 근거로만 답하는 안내자입니다. 주어진 [번호] 근거 안의 내용으로만 한국어 합니다체 두세 문장으로 답하고, "
                  "문장 끝에 근거 번호를 [1]처럼 적습니다. 근거에 없으면 '문서에서 찾지 못했습니다'라고만 답합니다.")
+
+
+def plain(value: Any) -> Any:
+    """What a page can read: an amount from a database is a Decimal, and JSON has no such thing."""
+    if isinstance(value, dict):
+        return {k: plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [plain(v) for v in value]
+    return normalize(value)
 
 
 def _human(e: Exception) -> str:
@@ -57,8 +69,11 @@ class SpaceMixin:
             check = sp.check()
         except (VectorError, OSError, EmbedError) as e:
             st["error"] = _human(e)
+        onto = self.studio.onto
+        decided = [q.text for q in onto.questions if q.decision][:2]
+        named = [q.label for q in onto.queries.values() if q.label and not q.params][:1]
         return {**st, "items": docs, "concepts": len(made["concepts"]), "check": check, "can_connect": self.data.allow_connect,
-                "kinds": known_kinds()}
+                "kinds": known_kinds(), "examples": decided + named + [c["text"] for c in (check or {}).get("results", [])[:2]]}
 
     def space_search(self, text: str, k: int = 5, store: str = "") -> dict:
         text = str(text or "").strip()[:SEARCH_MAX]
@@ -77,6 +92,63 @@ class SpaceMixin:
         return {"ok": True, "text": text, "hits": hits, "named": named, "embedder": sp.embedder.describe(),
                 "store": hits[0]["store"] if hits else sp.primary(), "can_answer": self.llm is not None,
                 "compare": sp.compare(text, min(int(k or 5), K_MAX)) if len(sp.stores) > 1 else None}
+
+    def space_ask(self, text: str, role: str = "", principal: dict | None = None) -> dict:
+        """One question over everything here. The engine answers what it can, and says when a model could go further."""
+        from xgen_space.tools import StudioTools
+
+        self._sync_space()
+        tools = StudioTools(self.studio, role=role or None, principal=principal, actor_id=self.who or "page")
+        tools.terms = self._terms()
+        try:
+            out = tools.answer_question(text)
+        except (VectorError, OSError, EmbedError) as e:
+            raise ValueError(f"검색 엔진에서 찾지 못했습니다. {_human(e)}") from None
+        except PermissionError:
+            return {"ok": False, "error": "조회 권한이 없어 답변하지 못했습니다. 실행 역할을 확인해 주세요."}
+        sp, onto, terms = self.space, self.studio.onto, tools.terms
+        for s in out["sources"]:
+            s["concepts"] = [c["label"] for c in sp.concepts_in(s["text"], onto, terms) if c.get("element")][:6]
+        out["can_model"] = self.llm is not None
+        return plain(out)
+
+    def space_ask_more(self, text: str, role: str = "", principal: dict | None = None) -> dict:
+        """What the engine could not settle alone: a model picks data or documents, and words only what was found."""
+        if self.llm is None:
+            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 답변을 만들지 못했습니다. 찾은 근거를 확인해 주세요."}
+        with self.lock:
+            found = self.space_ask(text, role, principal)
+        if not found.get("ok"):
+            return found
+        llm, _ = self._budgeted()
+        try:
+            kind = llm(ROUTE_SYSTEM, found["question"]).strip().lower()
+        except (TimeoutError, OSError, ValueError, RuntimeError):
+            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 근거를 확인해 주세요."}
+        if "data" in kind and "documents" not in kind:
+            def waiting(system: str, user: str) -> str:  # the data stays locked, the wait for a model does not
+                self.lock.release()
+                try:
+                    return self.llm(system, user)
+                finally:
+                    self.lock.acquire()
+
+            with self.lock:
+                res = self.ask(found["question"], role=role, principal=principal, model=waiting)
+            first = next(iter(res.get("results") or []), None)
+            if res.get("ok") and first:
+                return {"ok": True, "route": "query", "answer": f"{res.get('label') or '조회'} 결과 {len(first.get('rows') or [])}건입니다.",
+                        "query": {"name": res.get("name") or "", "label": res.get("label") or "조회", "columns": first.get("columns") or [],
+                                  "rows": [dict(zip(first.get("columns") or [], r)) for r in (first.get("rows") or [])[:50]],
+                                  "total": len(first.get("rows") or [])}}
+        lines = [f"[{i + 1}] {s['title']}: {s['text']}" for i, s in enumerate(found["sources"][:5])]
+        if not lines:
+            return {"ok": False, "error": "찾은 근거가 없어 답변을 만들지 못했습니다."}
+        try:
+            said = llm(ANSWER_SYSTEM, f"질문: {found['question']}\n\n근거:\n" + "\n".join(lines)).strip()
+        except (TimeoutError, OSError, ValueError, RuntimeError):
+            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 근거를 확인해 주세요."}
+        return {"ok": True, "route": "documents", "answer": said}
 
     def space_answer(self, text: str) -> dict:
         """An answer from the passages, each sentence pointing at its passage. The model never sees more than what was found."""
@@ -329,6 +401,7 @@ class SpaceMixin:
                      "write": b.capabilities.write, "load": b.capabilities.load} for n, b in st.backends.items()]
         return {"backends": backends, "languages": [label for _, label in TARGETS], "vectors": sp["stores"],
                 "vector_kinds": known_kinds(), "embedder": sp["embedder"], "embedder_kinds": sorted(EMBEDDERS),
+                "retriever": self.space.knowledge(st.onto, self._terms()).describe(),
                 "reasoners": [r.describe() for r in st.reasoners.values()], "domains": self._domains(),
                 "can_connect": self.data.allow_connect}
 

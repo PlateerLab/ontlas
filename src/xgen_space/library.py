@@ -8,6 +8,8 @@ from typing import Any
 
 from xgen_space.modules import KINDS, SECTIONS, SINGULAR, Module, ModuleError, Requirement, version_key
 
+APPLIED = "applied.yaml"  # beside the modules, written by a studio that keeps what was switched on and off
+
 
 class Library:
     """A folder of modules laid out as <root>/<name>/<version>.yaml (or .json); the newest version is the default."""
@@ -82,6 +84,18 @@ class Library:
                 shutil.rmtree(self.root / name)
         else:
             shutil.rmtree(self.root / name)
+
+    def keep_applied(self, names: list[str]) -> None:
+        """The modules a running studio has on, for its next start."""
+        import yaml
+
+        (self.root / APPLIED).write_text(yaml.safe_dump({"modules": list(names)}, allow_unicode=True), encoding="utf-8")
+
+    def applied(self) -> list[str]:
+        import yaml
+
+        p = self.root / APPLIED
+        return list((yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("modules") or []) if p.is_file() else []
 
     def resolve(self, wanted: list[str]) -> list[Module]:
         """Pick a module for each requirement, pulling in what those require, newest allowed version first."""

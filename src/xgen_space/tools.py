@@ -19,6 +19,7 @@ class StudioTools:
         self.studio, self.role, self.principal = studio, role, dict(principal or {})
         self.actor = Actor(actor_id, "agent", [role] if role else [], principal=self.principal)
         self.read_only = read_only
+        self.terms: list[dict] | None = None  # the glossary, when the caller has one
 
     def describe(self) -> dict:
         d = self.studio.describe()
@@ -49,6 +50,56 @@ class StudioTools:
         from xgen_space.parse.cypher import parse_cypher
 
         return self.run_query(parse_cypher(text, self.studio.onto), params, backend)
+
+    def record(self, type_name: str, key: str) -> dict:
+        """One row of an object, under the role's limits and masks, with what each value is called."""
+        from xgen_space.check import all_props, find_prop
+
+        onto = self.studio.onto
+        t = onto.obj(type_name)
+        self._visible(type_name, key)
+        props = [p for p in all_props(onto, type_name) if not find_prop(onto, type_name, p).expr]
+        if self.role:
+            r = onto.roles[self.role]
+            props = [p for p in props if r.can_read(type_name)]
+        q = {"match": {"x": type_name}, "where": {"eq": [f"x.{t.key}", str(key)]}, "return": [f"x.{p}" for p in props]}
+        res = self.run_query(q)
+        row = res["rows"][0] if res["rows"] else {}
+        return {"type": type_name, "label": t.label or type_name, "key": str(key),
+                "values": [{"name": p, "label": find_prop(onto, type_name, p).label or p, "value": row.get(p)} for p in props]}
+
+    def describe_object(self, name: str) -> dict:
+        """One object and what touches it, for an agent that should not read a whole ontology to answer about one thing."""
+        d = self.describe()
+        if name not in d["objects"]:
+            raise KeyError(f"unknown object '{name}'")
+        onto = self.studio.onto
+        return {"object": d["objects"][name],
+                "links": [{"name": k, "from": lk.source, "to": lk.target, "label": lk.label, "inverse": lk.inverse}
+                          for k, lk in onto.links.items() if name in (lk.source, lk.target)],
+                "decisions": [k for k in d["decisions"] if onto.decisions[k].target == name],
+                "actions": [k for k in d["actions"] if onto.actions[k].target == name]}
+
+    def knowledge(self):
+        """Definitions, rules and passages in one index."""
+        from xgen_space.knowledge import build
+
+        space = self.studio.space
+        return space.knowledge(self.studio.onto, self.terms) if space is not None else build(self.studio.onto)
+
+    def find_definitions(self, text: str, k: int = 8) -> dict:
+        """The definitions a question is about, so an agent reads these rather than all of them."""
+        d = self.describe()
+        allowed = {f"object:{n}" for n in d["objects"]} | {f"query:{n}" for n in d["queries"]} | \
+            {f"decision:{n}" for n in d["decisions"]} | {f"action:{n}" for n in d["actions"]}
+        found = self.knowledge().find(str(text), max(1, min(int(k), 30)) * 3, ("object", "rule", "query", "action"))
+        return {"found": [f for f in found if f["element"] in allowed][:max(1, min(int(k), 30))]}
+
+    def answer_question(self, text: str) -> dict:
+        """One question to a decision, a record, a query or the documents, with what the answer stands on."""
+        from xgen_space.answer import answer_question
+
+        return _plain(answer_question(self, text))
 
     def _visible(self, type_name: str, key: str) -> None:
         if not self.role:
@@ -112,6 +163,14 @@ class StudioTools:
         hits = space.search(str(text), max(1, min(int(k), 50)), store=store, where=where)
         return {"embedder": space.embedder.describe(), "store": hits[0]["store"] if hits else space.primary(), "hits": hits,
                 "ontology": space.concepts_in(str(text), self.studio.onto)}
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return normalize(value)
 
 
 def _query_arg(query: Any) -> Any:

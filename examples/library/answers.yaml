@@ -1,0 +1,32 @@
+# Questions as a customer would put them, with what a right answer holds. Invented, like everything in this shop.
+# `section` is the passage that answers it, `must` the words a right answer has, `eligible` and `fee` what a decision gives.
+questions:
+  - {text: 택배가 일주일째 안 와요, document: 배송안내, section: 배송 지연, must: [5일]}
+  - {text: 입금을 안 하면 주문이 어떻게 되나요, document: 결제환불안내, section: 결제 수단, must: [24시간]}
+  - {text: 카드로 산 물건 환불은 며칠 걸려요, document: 결제환불안내, section: 환불 시점, must: [3일]}
+  - {text: 쿠폰 쓴 주문은 환불 금액이 어떻게 되나요, document: 결제환불안내, section: 환불 금액, must: [할인]}
+  - {text: 같은 주문이 두 번 결제됐어요, document: 결제환불안내, section: 결제 오류, must: [자동으로 취소]}
+  - {text: 단순 변심으로 돌려보내면 배송비는 누가 내나요, document: 반품정책서, section: 제5조 반품 비용, must: [6천원]}
+  - {text: 포장을 뜯은 속옷도 돌려보낼 수 있나요, document: 반품정책서, section: 제2조 반품 가능 카테고리, must: [속옷]}
+  - {text: VIP는 며칠까지 반품할 수 있나요, document: 반품정책서, section: 제4조 VIP 고객, must: [14일]}
+  - {text: 얼마 이상 사면 배송비가 무료인가요, document: 배송안내, section: 배송비, must: [5만원]}
+  - {text: 섬 지역은 배송이 더 걸리나요, document: 배송안내, section: 출고와 배송 기간, must: [이틀]}
+  - {text: 운송장 번호는 어디서 볼 수 있나요, document: 배송안내, section: 택배사, must: [주문 상세]}
+  - {text: 구매하지 않은 사람도 후기를 쓸 수 있나요, document: 상품평운영기준, section: 작성 자격, must: [구매한 고객만]}
+  - {text: 상품 평균 평점은 어떤 기간으로 계산하나요, document: 상품평운영기준, section: 평점, must: [1년]}
+  - {text: 나쁜 후기를 판매자가 지울 수 있나요, document: 상품평운영기준, section: 숨김 처리, must: [지울 수 없]}
+  - {text: 신규 회원 할인은 몇 퍼센트인가요, document: 쿠폰약관, section: 쿠폰 종류, must: [10%]}
+  - {text: 쿠폰 두 장을 같이 쓸 수 있나요, document: 쿠폰약관, section: 사용 조건, must: [하나만]}
+  - {text: 주문을 취소하면 쓴 쿠폰은 어떻게 되나요, document: 쿠폰약관, section: 쿠폰 회수, must: [돌려]}
+  - {text: 입점하려면 어떤 서류가 필요한가요, document: 판매자운영기준, section: 입점 심사, must: [사업자 등록증]}
+  - {text: 판매 수수료는 얼마인가요, document: 판매자운영기준, section: 수수료, must: [8%]}
+  - {text: 판매 대금은 언제 들어오나요, document: 판매자운영기준, section: 정산, must: [수요일]}
+  - {text: 평점이 낮은 판매자는 어떻게 되나요, document: 판매자운영기준, section: 판매자 평가, must: [개선 계획]}
+  - {text: 주문상품 I1001 반품 되나요, decision: returnEligibility, key: I1001, eligible: true}
+  - {text: 주문상품 I1003 반품 되나요, decision: returnEligibility, key: I1003, eligible: false}
+  - {text: I1004 반품 가능한가요, decision: returnEligibility, key: I1004, eligible: false}
+  - {text: 주문상품 I2074 반품 가능해요, decision: returnEligibility, key: I2074, eligible: false}
+  - {text: 주문 O1 배송비 얼마예요, decision: shippingFee, key: O1, fee: 0}
+  - {text: 주문 O4 배송비는요, decision: shippingFee, key: O4, fee: 0}
+  - {text: 주문 O16 배송비 알려 주세요, decision: shippingFee, key: O16, fee: 3000}
+  - {text: 카테고리별 매출, query: revenueByCategory}

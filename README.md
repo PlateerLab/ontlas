@@ -150,10 +150,14 @@ The sidebar follows the data from raw files to checked answers. A stage's screen
 | | 정의 관리 · 객체 | Change an object's table, key and parent, or add one from a table |
 | | 정의 관리 · 속성 | Change a property's type, column, allowed values and their names, required flag and mask |
 | | 정의 관리 · 관계 | Change relations and their join columns, and add the ones foreign keys suggest |
+| | 정의 관리 · 상태 | Change an object's states, its first state and the moves between them |
+| | 정의 관리 · 규칙 | Change a decision's rules and the named values they read on a form, or start a new decision table |
+| | 정의 관리 · 액션 | Change what a request takes, the decision it must pass, the state it leads to and whether a person approves it |
+| | 정의 관리 · 권한 | Change what each role reads, runs and requests, and which properties it sees masked |
 | | 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
 | ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores and whether questions find their documents |
 | | 구성 | See every swappable part, and run the tests that say a swap changed nothing |
-| ⑤ 활용 | 문서 검색 | Search documents by meaning and go on to the definitions they name |
+| ⑤ 활용 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause |
 | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 판정 · 규칙 · 판정 | Decide a case with its grounds, request an action, approve it, roll it back |
 | | 판정 · 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
@@ -348,6 +352,30 @@ words, since the nearest passage to a model is not always the one that says it.
 Concepts tie the two together. `xspace search` returns the passages and the definitions a question names, the object screen
 shows the sections that mention an object, and the map shows which queries a document touches. Relations between concepts are
 co-mentions, not extracted meaning: they say two things appear together.
+
+## One question over everything
+
+Definitions and rules from the ontology and passages from the documents sit in one index, so a rule and the clause it cites land
+side by side. How the index is searched is a port, `space.retriever`: `omnifuse` fuses lexical and dense seeds with the graph between
+the entries (`pip install "xgen-space[omnifuse]"`), and `words` needs nothing beyond the space. With nothing said, the best one
+installed is used.
+
+A question then goes to whatever can settle it, and a model is the last resort:
+
+| The question has | What answers | A model? |
+|---|---|---|
+| a key and a decision's name: `주문상품 I1001 반품 되나요?` | the decision table, with the rule, the source values and the clause | no |
+| a key alone | the record, under the role's limits and masks | no |
+| a registered query's name | the query | no |
+| anything else | rules and passages found; a data question becomes a query | words only what was found |
+
+The page's 통합 검색, `POST /v1/answer` and the MCP tool `answer_question` are the same code. `xspace compare` puts one question file to
+one model three ways, with nothing, with the documents alone and through the space, and counts the right answers. What is right comes
+from the file, not from a model:
+
+```bash
+xspace compare examples/library/studio.yaml examples/library/answers.yaml --llm-url https://models.example/v1 --llm-model my-model
+```
 
 ## Plug domains in and out
 
@@ -770,6 +798,12 @@ filter or mask it. What the module defines itself is left for a person to fix, s
 is refused. On the page the edits are filed as one change request; a request the trial stops comes back with its
 review (the conditions it failed and what the database check found), and the edits stay to be fixed.
 
+Rules, named values, states, actions and roles go the same way, on forms: 정의 관리 · 규칙 edits a rule's conditions and outcome input by
+input, and a rule from a standard is replaced over it (`rules_replace`, `rules_remove`) without touching the standard. Every edit lands in
+the workspace module, is tried on a copy and is approved like any other change. A library keeps its versions: open an earlier one in the
+module editor and file it, and it comes back as a new version. With `--library-write`, what is switched on stays on across a restart; if a
+kept module no longer fits the source, the studio starts from its file's own list and says so.
+
 ## A team studio
 
 ```bash
@@ -863,11 +897,12 @@ backends:
 xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
 ```
 
-Tools: `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
+Tools: `answer_question`, `find_definitions`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
 `decide`, `request_action`, `list_proposals`. Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. Works with the MCP Python SDK 1.x and 2.x.
 
-A running server reads the library again once an approved change is saved there (`--library-write`). A request stays in its own
+An agent need not read a whole ontology: `find_definitions` gives what a question is about and `describe_object` one object with what
+touches it. A running server reads the library again once an approved change is saved there (`--library-write`). A request stays in its own
 process, so when people approve on a team's page, have the agent call `/v1` instead.
 
 ## Install

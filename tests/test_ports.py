@@ -276,6 +276,10 @@ def test_the_page_shows_ports_map_and_document_ontology(session):
     ids = {n["id"] for n in m["nodes"]}
     assert {"object:Order", "table:orders", "document:배송안내", "vector:memory", "graph:graph", "reasoner:rules", "embedder"} <= ids
     assert all(e["source"] in ids and e["target"] in ids for e in m["edges"])
+    words = {n["id"]: n["label"] for n in m["nodes"]}  # stores read as what they are, not as the keys in studio.yaml
+    assert words["reasoner:rules"] == "추론기 · 규칙" and words["vector:memory"] == "벡터 저장소 · 메모리"
+    assert words["graph:graph"].startswith("그래프 저장소") and next(n["label"] for n in m["nodes"] if n["table"] == "database") == "원천 DB"
+    assert session.space_map_node("reasoner:rules")["label"] == "추론기 · 규칙"
     node = session.space_map_node("document:배송안내")
     assert any(x["kind"] == "vector_store" for x in node["impact"])
     q = session.space_queries()
