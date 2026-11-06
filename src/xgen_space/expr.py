@@ -4,8 +4,13 @@
     total:     {type: decimal, expr: "coalesce(sum(hasItem.net_price), 0)"}
     last_price: {type: decimal, expr: "latest(priceChanges.price)"}
     bulk:       {type: boolean, expr: "quantity >= @bulk_quantity"}
+    open_days:  {type: integer, expr: "days_between(opened_on, today())"}
+    price_now:  {type: decimal, expr: "current(prices.amount)"}
 
-`@name` reads a named parameter (see model.Parameter), written into each language as a literal.
+`@name` reads a named parameter (see model.Parameter), written into each language as a literal. So is `today()`, read
+when the query is compiled, which gives every backend the same day. `text_date(x, 'YYYYMMDD')` reads a date kept as
+text, and `current(link.prop)` the value of the row whose period (see ObjectType.period) holds today; where several
+rows of one thing are valid at once it gives the highest (`xspace periods` lists them).
 Nulls follow one rule everywhere: a null operand gives null, division by zero gives null, and an `if` whose
 condition is null gives null. Aggregates follow a path of links from the object and ignore null values, like SQL.
 """
@@ -13,15 +18,23 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-AGGREGATES = ("sum", "avg", "min", "max", "count", "latest", "earliest")
+from xgen_space.model import CURRENT_SUFFIX
+
+AGGREGATES = ("sum", "avg", "min", "max", "count", "latest", "earliest", "current")
 # name -> (least args, most args)
 FUNCTIONS = {"coalesce": (1, 8), "if": (3, 3), "abs": (1, 1), "round": (1, 2), "floor": (1, 1), "ceil": (1, 1),
              "lower": (1, 1), "upper": (1, 1), "length": (1, 1), "concat": (2, 8), "year": (1, 1),
-             "month": (1, 1), "day": (1, 1), "days_between": (2, 2)}
+             "month": (1, 1), "day": (1, 1), "days_between": (2, 2), "today": (0, 0), "now": (0, 0),
+             "text_date": (2, 2)}
 DATE_FUNCTIONS = ("year", "month", "day", "days_between")
+DATE_PARTS = ("YYYY", "MM", "DD", "HH", "MI", "SS")
+TIME_PARTS = ("HH", "MI", "SS")
+_PART = re.compile(r"YYYY|MM|DD|HH24|HH|MI|SS")
+_SEPARATORS = "-/.: _|T"
 _NUMBER = ("integer", "decimal")
 _TOKEN = re.compile(r"\s*(?:(\d+\.\d+|\d+)|('(?:[^'\\]|\\.)*')|([A-Za-z_][A-Za-z0-9_]*)|(<=|>=|!=|[-+*/()=<>,.@]))")
 
@@ -212,10 +225,61 @@ class _Parser:
                 raise ExprError(f"{low}() takes {least}{'' if least == most else f' to {most}'} arguments")
             if low == "round" and len(args) == 2 and not (isinstance(args[1], Lit) and args[1].type == "integer"):
                 raise ExprError("round(x, n) takes a whole number of places")
+            if low == "text_date":
+                if not (isinstance(args[1], Lit) and args[1].type == "string"):
+                    raise ExprError("text_date(x, 'YYYYMMDD') takes the layout as text")
+                date_format(args[1].value)
             return Call(low, tuple(args))
         if self.peek("op", "."):
             raise ExprError(f"'{name}.' follows a link; wrap it in an aggregate such as sum({name}.x) or count({name})")
         return Prop(name)
+
+
+def date_format(text: str) -> dict[str, tuple[int, int]]:
+    """Where each part of a date stands in text of this layout, as {part: (start, width)}, in the layout's order.
+    Parts are YYYY MM DD HH (or HH24) MI SS; a key read from two columns has the | between them."""
+    parts: dict[str, tuple[int, int]] = {}
+    i = pos = 0
+    while i < len(text):
+        m = _PART.match(text, i)
+        if m:
+            part = m.group()[:2] if m.group() == "HH24" else m.group()
+            if part in parts:
+                raise ExprError(f"date format '{text}' gives {part} twice")
+            parts[part] = (pos, len(part))
+            pos += len(part)
+            i = m.end()
+        elif text[i] in _SEPARATORS:
+            pos += 1
+            i += 1
+        else:
+            raise ExprError(f"cannot read date format '{text}' at '{text[i:]}'; "
+                            f"parts are {' '.join(DATE_PARTS)}, separators {_SEPARATORS!r}")
+    missing = [p for p in DATE_PARTS[:3] if p not in parts]
+    if missing:
+        raise ExprError(f"date format '{text}' gives no {', '.join(missing)}")
+    return parts
+
+
+def format_width(parts: dict[str, tuple[int, int]]) -> int:
+    return max(start + width for start, width in parts.values())
+
+
+def encode_text_date(iso: str, fmt: str) -> str:
+    """An ISO date or datetime in a text layout, for writing one back to its column."""
+    at = {"YYYY": iso[0:4], "MM": iso[5:7], "DD": iso[8:10], "HH": iso[11:13] or "00", "MI": iso[14:16] or "00",
+          "SS": iso[17:19] or "00"}
+    return _PART.sub(lambda m: at[m.group()[:2] if m.group() == "HH24" else m.group()], fmt)
+
+
+def _iso_pieces(fmt: str) -> tuple[dict[str, tuple[int, int]], list[str]]:
+    """The parts of a layout, and what to join for the ISO form: part names and fixed text."""
+    parts = date_format(fmt)
+    pieces = ["YYYY", "-", "MM", "-", "DD"]
+    if set(parts) & set(TIME_PARTS):
+        hour, minute, second = (x if x in parts else "00" for x in TIME_PARTS)
+        pieces += ["T", hour, ":", minute, ":", second]
+    return parts, pieces
 
 
 def parse_expr(text: str):
@@ -305,13 +369,35 @@ def _named(onto, node: Named) -> Lit:
     return Lit(Decimal(str(p.value)) if p.type == "decimal" else p.value, p.type)
 
 
+def _clock(onto) -> datetime:
+    return (onto.clock or datetime.now)()
+
+
+def _current(onto, type_name: str, node: Agg) -> Agg:
+    """The aggregate current(link.prop) stands for: the highest of the values only a valid row has."""
+    from xgen_space.check import _find_prop
+
+    last = follow(onto, type_name, node.path)[-1].type
+    if not onto.objects[last].period:
+        raise ExprError(f"current() needs {last} to give its period (period: {{start: ..., end: ...}})")
+    if _find_prop(onto, last, node.prop) is None:
+        raise ExprError(f"{last} has no property '{node.prop}'")
+    return Agg("max", node.path, node.prop + CURRENT_SUFFIX)
+
+
 def prepare(onto, type_name: str, node):
     """Give date-like text literals the type of what they meet: a date or datetime operand, a date function; and
-    named parameters their value."""
+    named parameters and the clock their value."""
     if isinstance(node, Named):
         return _named(onto, node)
+    if isinstance(node, Agg) and node.fn == "current":
+        return _current(onto, type_name, node)
     if isinstance(node, Unary):
         return Unary(node.op, prepare(onto, type_name, node.arg))
+    if isinstance(node, Call) and node.fn == "today":
+        return Lit(_clock(onto).date().isoformat(), "date")
+    if isinstance(node, Call) and node.fn == "now":
+        return Lit(_clock(onto).replace(microsecond=0).isoformat(), "datetime")
     if isinstance(node, Call):
         args = tuple(prepare(onto, type_name, a) for a in node.args)
         if node.fn in DATE_FUNCTIONS:
@@ -402,11 +488,19 @@ class _Typer:
                     if t not in ("string", "enum", "null"):
                         raise ExprError(f"{fn}() takes text, not {t}")
                 return "integer" if fn == "length" else "string"
+            if fn in ("today", "now"):
+                return "date" if fn == "today" else "datetime"
+            if fn == "text_date":
+                if ts[0] not in ("string", "enum", "null"):
+                    raise ExprError(f"text_date() takes text, not {ts[0]}")
+                return "datetime" if set(date_format(node.args[1].value)) & set(TIME_PARTS) else "date"
             for t in ts:
                 if t not in ("date", "datetime", "null"):
                     raise ExprError(f"{fn}() takes a date, not {t}")
             return "integer"
         if isinstance(node, Agg):
+            if node.fn == "current":
+                node = _current(self.onto, type_name, node)
             steps, prop = resolve_agg(self.onto, type_name, node)
             last = steps[-1].type
             if node.fn == "count":
@@ -483,6 +577,10 @@ def dependencies(onto, type_name: str, name: str, seen: set | None = None) -> se
             if node.fn in ("latest", "earliest") and series:
                 out.add((last, series["time"]))
                 out.add((last, onto.objects[last].key))
+            if node.fn == "current":  # the row is chosen by its period
+                for k in ("start", "end"):
+                    if onto.objects[last].period.get(k):
+                        out |= dependencies(onto, last, onto.objects[last].period[k], seen)
     return out
 
 
@@ -563,6 +661,18 @@ class SqlRenderer(Renderer):
     def _date(self, a: str) -> str:
         return f"SUBSTR(CAST({a} AS VARCHAR), 1, 10)"
 
+    def _text_date(self, a: str, fmt: str) -> str:
+        parts, pieces = _iso_pieces(fmt)
+        text = f"CAST({a} AS VARCHAR)"
+
+        def cut(part: str) -> str:
+            start, width = parts[part]
+            return f"SUBSTR({text}, {start + 1}, {width})"
+
+        joined = " || ".join(cut(x) if x in parts else f"'{x}'" for x in pieces)
+        return (f"(CASE WHEN LENGTH({text}) >= {format_width(parts)} AND {cut('MM')} BETWEEN '01' AND '12' "
+                f"AND {cut('DD')} BETWEEN '01' AND '31' THEN {joined} END)")
+
     def call(self, fn: str, args: list[str], nodes: tuple) -> str:
         if fn == "coalesce":
             return f"COALESCE({', '.join(args)})"
@@ -592,6 +702,8 @@ class SqlRenderer(Renderer):
             if self.native == "sqlite":
                 return f"CAST(julianday({b}) - julianday({a}) AS INTEGER)"
             return f"(CAST({b} AS DATE) - CAST({a} AS DATE))"
+        if fn == "text_date":
+            return self._text_date(args[0], nodes[1].value)
         raise ExprError(f"SQL has no rendering for {fn}()")
 
 
@@ -633,6 +745,20 @@ class SparqlRenderer(Renderer):
         return (f"({d} + FLOOR((153 * {mm} + 2) / 5) + 365 * {yy} + FLOOR({yy} / 4) - FLOOR({yy} / 100) "
                 f"+ FLOOR({yy} / 400) - 32045)")
 
+    def _text_date(self, a: str, fmt: str) -> str:
+        parts, pieces = _iso_pieces(fmt)
+        text = f"STR({a})"
+
+        def cut(part: str) -> str:
+            start, width = parts[part]
+            return f"SUBSTR({text}, {start + 1}, {width})"
+
+        joined = ", ".join(cut(x) if x in parts else f'"{x}"' for x in pieces)
+        kind = "dateTime" if "T" in pieces else "date"
+        fits = (f'STRLEN({text}) >= {format_width(parts)} && {cut("MM")} >= "01" && {cut("MM")} <= "12" '
+                f'&& {cut("DD")} >= "01" && {cut("DD")} <= "31"')
+        return f"IF({fits}, STRDT(CONCAT({joined}), <http://www.w3.org/2001/XMLSchema#{kind}>), {self.NULL})"
+
     def call(self, fn: str, args: list[str], nodes: tuple) -> str:
         if fn == "coalesce":
             return f"COALESCE({', '.join(args)})"
@@ -657,6 +783,8 @@ class SparqlRenderer(Renderer):
             return self._part(args[0], start, n)
         if fn == "days_between":
             return f"({self._day_number(args[1])} - {self._day_number(args[0])})"
+        if fn == "text_date":
+            return self._text_date(args[0], nodes[1].value)
         raise ExprError(f"SPARQL has no rendering for {fn}()")
 
 
@@ -684,8 +812,20 @@ class CypherRenderer(Renderer):
         num = f"CAST({a} AS FLOAT)" if self.gql else f"toFloat({a})"
         return f"(CASE WHEN {b} = 0 THEN null ELSE {num} / {b} END)"
 
+    def _text_date(self, a: str, fmt: str) -> str:
+        parts, pieces = _iso_pieces(fmt)
+        text = f"toString({a})"
+
+        def cut(part: str) -> str:
+            start, width = parts[part]
+            return f"substring({text}, {start}, {width})"
+
+        joined = " + ".join(cut(x) if x in parts else f"'{x}'" for x in pieces)
+        return (f"(CASE WHEN size({text}) >= {format_width(parts)} AND {cut('MM')} >= '01' AND {cut('MM')} <= '12' "
+                f"AND {cut('DD')} >= '01' AND {cut('DD')} <= '31' THEN {joined} END)")
+
     def call(self, fn: str, args: list[str], nodes: tuple) -> str:
-        if self.gql and fn in DATE_FUNCTIONS:
+        if self.gql and (fn in DATE_FUNCTIONS or fn == "text_date"):
             raise ExprError(f"ISO GQL has no portable form of {fn}() over text dates; register a backend query for it")
         if fn == "coalesce":
             return f"coalesce({', '.join(args)})"
@@ -712,4 +852,6 @@ class CypherRenderer(Renderer):
         if fn == "days_between":
             a, b = (f"date(substring(toString({x}), 0, 10))" for x in args)
             return f"duration.inDays({a}, {b}).days"
+        if fn == "text_date":
+            return self._text_date(args[0], nodes[1].value)
         raise ExprError(f"Cypher has no rendering for {fn}()")

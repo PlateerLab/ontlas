@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from xgen_space.compile.sql import qi
+from xgen_space.expr import encode_text_date
 from xgen_space.model import KEY_SEP
 from xgen_space.values import accepts, coerce, normalize
 
@@ -67,6 +68,12 @@ class ActionError(ValueError):
     """The action cannot go ahead as asked; the message says why."""
 
 
+def _stored(prop, value: Any) -> Any:
+    """A value in the form its column keeps: a date kept as text goes back in the text's layout."""
+    value = coerce(value, prop.type)
+    return encode_text_date(value, prop.format) if prop.format and value is not None else value
+
+
 class SqlWriteback:
     """Apply an action's changes to the bound source table with one UPDATE."""
 
@@ -80,7 +87,7 @@ class SqlWriteback:
         if len(parts) != len(cols):
             raise ValueError(f"key {key!r} of {type_name} has {len(parts)} parts, not {len(cols)}")
         sets = ", ".join(f"{qi(obj.prop(p).col)} = ?" for p in changes)
-        args = tuple(coerce(v, obj.prop(p).type) for p, v in changes.items()) + tuple(parts)
+        args = tuple(_stored(obj.prop(p), v) for p, v in changes.items()) + tuple(parts)
         where = " AND ".join(f"{qi(c)} = ?" for c in cols)
         return self.backend.run(f"UPDATE {qi(obj.table)} SET {sets} WHERE {where}", args)
 

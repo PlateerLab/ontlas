@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from xgen_space.model import CARDINALITIES, TYPES, Ontology, valid_name
+from xgen_space.model import CARDINALITIES, TEXT_SUFFIX, TYPES, Ontology, valid_name
 
 
 def validate_ontology(o: Ontology) -> list[str]:
@@ -42,11 +42,14 @@ def validate_ontology(o: Ontology) -> list[str]:
                     f"{sorted(set(p.labels) - {str(v) for v in p.values})}")
             if p.mask and p.mask not in MASKS:
                 add(f"{t.name}.{p.name}: mask '{p.mask}' is not one of {MASKS}")
-            if p.expr and p.column:
+            stored_text = p.name + TEXT_SUFFIX in t.properties  # a format makes the expression, over its column
+            if p.format:
+                issues.extend(f"{t.name}.{p.name}: {e}" for e in _format(p, stored_text))
+            if p.expr and p.column and not stored_text:
                 add(f"{t.name}.{p.name}: a computed property has no column; give expr or column, not both")
             if p.expr and p.name == t.key:
                 add(f"{t.name}: the key '{p.name}' cannot be computed")
-            if p.columns and (p.column or p.expr or len(p.columns) < 2):
+            if p.columns and (p.column or (p.expr and not stored_text) or len(p.columns) < 2):
                 add(f"{t.name}.{p.name}: columns takes two or more columns, in place of column or expr")
             seen = prop_types.get(p.name)
             if seen and seen[0] != p.type and {seen[0], p.type} != {"string", "enum"}:
@@ -69,11 +72,15 @@ def validate_ontology(o: Ontology) -> list[str]:
                     if s not in sm.states:
                         add(f"{t.name}: transition uses unknown state '{s}'")
         if t.series:
-            tp = t.properties.get(t.series.get("time", ""))
+            tp = t.properties.get(t.series.get("time", "").removesuffix(TEXT_SUFFIX))
             if tp is None:
                 add(f"{t.name}: series needs time: a date or datetime property")
             elif tp.type not in ("date", "datetime"):
                 add(f"{t.name}: series time '{tp.name}' is {tp.type}, not a date or datetime")
+            elif tp.format and not _sorts(tp.format):
+                add(f"{t.name}: series time '{tp.name}' is text in a form that does not sort by time ({tp.format})")
+        if t.period:
+            issues.extend(f"{t.name}: period: {e}" for e in _period(o, t))
 
     for lk in o.links.values():
         if not valid_name(lk.name):
@@ -134,7 +141,9 @@ def validate_ontology(o: Ontology) -> list[str]:
         for p in a.set:
             if p not in t.properties:
                 add(f"action {a.name}: sets unknown property '{p}'")
-            elif t.properties[p].expr:
+            elif t.properties[p].format and t.properties[p].columns:
+                add(f"action {a.name}: '{p}' is read from several columns and cannot be set")
+            elif t.properties[p].expr and not t.properties[p].format:
                 add(f"action {a.name}: '{p}' is computed and cannot be set")
         for name, spec in a.parameters.items():
             issues.extend(f"action {a.name}: parameter '{name}': {e}" for e in _parameter(spec))
@@ -209,6 +218,46 @@ def _prop_of(o: Ontology, type_name: str, name: str):
     from xgen_space.check import _find_prop
 
     return _find_prop(o, type_name, name)
+
+
+def _format(p, stored_text: bool) -> list[str]:
+    from xgen_space.expr import TIME_PARTS, ExprError, date_format
+
+    try:
+        parts = date_format(p.format)
+    except ExprError as e:
+        return [str(e)]
+    if p.type not in ("date", "datetime"):
+        return [f"format reads text as a date; declare it date or datetime, not {p.type}"]
+    if p.type == "date" and set(parts) & set(TIME_PARTS):
+        return [f"format {p.format} carries a time; declare it datetime"]
+    return [] if stored_text else ["format reads a stored column and takes no expr"]
+
+
+def _sorts(fmt: str) -> bool:
+    from xgen_space.expr import DATE_PARTS, date_format
+
+    parts = list(date_format(fmt))
+    return parts == [x for x in DATE_PARTS if x in parts]
+
+
+def _period(o: Ontology, t) -> list[str]:
+    out = [f"unknown key '{k}'" for k in t.period if k not in ("start", "end", "of", "end_exclusive")]
+    if not t.period.get("start"):
+        out.append("needs start: a date or datetime property")
+    for k in ("start", "end"):
+        name = t.period.get(k)
+        if not name:
+            continue
+        p = _prop_of(o, t.name, name)
+        if p is None:
+            out.append(f"{k} '{name}' is not a property")
+        elif p.type not in ("date", "datetime"):
+            out.append(f"{k} '{name}' is {p.type}, not a date or datetime")
+    of = t.period.get("of")
+    if of and not (of in o.links and o.links[of].source == t.name):
+        out.append(f"of '{of}' is not a link from {t.name}")
+    return out
 
 
 def _parameters(o: Ontology) -> list[str]:

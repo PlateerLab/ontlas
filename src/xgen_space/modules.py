@@ -239,7 +239,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
@@ -261,7 +261,8 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
                 pd.setdefault("type", "string")
             cur = {}
             origin[f"property:{name}.{p}"] = m.name
-        if "type" in pd and cur.get("type") and pd["type"] != cur["type"]:
+        text_date = cur.get("type") == "string" and pd.get("format")  # text a binding says holds a date
+        if "type" in pd and cur.get("type") and pd["type"] != cur["type"] and not text_date:
             raise ModuleError(f"{m.key} changes the type of {name}.{p} from {cur['type']} to {pd['type']}")
         add = pd.pop("values_add", [])
         names = pd.pop("labels", None)

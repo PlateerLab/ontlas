@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from xgen_space.ir import Agg, And, Exists, Not, Or, Query, Ref, filter_refs, parse_filter
-from xgen_space.model import Ontology, Role
+from xgen_space.model import TEXT_SUFFIX, Ontology, Role
 
 
 class AccessDenied(PermissionError):
@@ -81,6 +81,7 @@ def mask_style(onto: Ontology, role: Role, type_name: str, prop: str, _seen: fro
     hidden too."""
     from xgen_space.check import _find_prop
 
+    prop = prop.removesuffix(TEXT_SUFFIX)  # a date's stored text shows what the date shows
     names = _lineage(onto, type_name)
     if "*" in role.unmask or any(f"{t}.{prop}" in role.unmask or f"{t}.*" in role.unmask for t in names):
         return ""

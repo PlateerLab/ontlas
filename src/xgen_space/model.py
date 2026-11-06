@@ -17,6 +17,8 @@ class ModelError(ValueError):
 
 
 KEY_SEP = "|"  # between the values of a key read from several columns
+TEXT_SUFFIX = "__text"        # the stored text of a date kept as text
+CURRENT_SUFFIX = "__current"  # a period row's value while the row is valid, else null
 
 
 @dataclass
@@ -35,6 +37,8 @@ class Property:
     mask: str = ""   # partial | full: hidden from every role that is not given it in clear
     labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (a code's name), by value
     columns: list[str] = field(default_factory=list)  # read from several columns: a composite key or reference
+    format: str = ""  # a date stored as text in this layout, such as YYYYMMDD (see expr.date_format)
+    internal: bool = False  # made while loading, so not part of the definition: it is left out when written back
 
     @property
     def col(self) -> str:
@@ -83,6 +87,7 @@ class ObjectType:
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
     series: dict[str, str] = field(default_factory=dict)  # observations over time: {time: property, of: link}
+    period: dict[str, Any] = field(default_factory=dict)  # rows valid for a time: {start, end, of: link, end_exclusive}
 
     @property
     def abstract(self) -> bool:
@@ -298,6 +303,7 @@ class Ontology:
     exclusive: list[tuple[str, str]] = field(default_factory=list)
     identities: dict[str, Identity] = field(default_factory=dict)
     parameters: dict[str, Parameter] = field(default_factory=dict)
+    clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
         try:
@@ -385,7 +391,8 @@ def _prop(name: str, d: Any) -> Property:
                     description=d.get("description", ""), column=column, unit=d.get("unit", ""),
                     values=list(values), required=bool(d.get("required", False)),
                     cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
-                    mask=str(d.get("mask", "") or ""), labels=labels, columns=columns)
+                    mask=str(d.get("mask", "") or ""), labels=labels, columns=columns,
+                    format=str(d.get("format", "") or ""))
 
 
 def _states(d: dict | None) -> StateMachine | None:
@@ -396,14 +403,31 @@ def _states(d: dict | None) -> StateMachine | None:
                                      for t in d.get("transitions", [])])
 
 
+def _text_dates(props: dict[str, Property]) -> None:
+    """A date kept as text reads as a date everywhere: its text becomes a property of its own and the date is computed
+    from it, so filters, ordering and decisions see one date form in every language."""
+    for p in list(props.values()):
+        if p.format and p.type in ("date", "datetime") and not p.expr:
+            raw = Property(p.name + TEXT_SUFFIX, "string", description=f"{p.name} as stored", required=p.required,
+                           column="" if p.columns else p.column or p.name, columns=list(p.columns), mask=p.mask,
+                           internal=True)
+            props[raw.name] = raw
+            p.expr = f"text_date({raw.name}, '{p.format}')"
+
+
 def _object(name: str, d: dict) -> ObjectType:
     source = d.get("source") or {}
-    return ObjectType(name=name, key=d["key"], properties={k: _prop(k, v) for k, v in d.get("properties", {}).items()},
+    props = {k: _prop(k, v) for k, v in d.get("properties", {}).items()}
+    _text_dates(props)
+    series = dict(d.get("series") or {})
+    if series.get("time", "") + TEXT_SUFFIX in props:  # a graph holds the stored text, which sorts the same
+        series["time"] += TEXT_SUFFIX
+    return ObjectType(name=name, key=d["key"], properties=props,
                       label=d.get("label", ""), description=d.get("description", ""),
                       table=source.get("table", d.get("table", "")), title=d.get("title", ""),
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
-                      series=dict(d.get("series") or {}))
+                      series=series, period=dict(d.get("period") or {}))
 
 
 def _link(name: str, d: dict) -> LinkType:
@@ -496,6 +520,42 @@ def expand_identities(objects: dict[str, ObjectType], links: dict[str, LinkType]
                                        label=f"{ident.label or ident.name} 구성원")
 
 
+def _valid_now(t: ObjectType) -> str:
+    """The expression that says a period row is valid; an empty end stays open."""
+    def clock(name: str) -> str:
+        p = t.properties.get(name)
+        return "now()" if p is not None and p.type == "datetime" else "today()"
+
+    start, end = t.period.get("start", ""), t.period.get("end", "")
+    text = f"{start} <= {clock(start)}"
+    if end:
+        text += f" and coalesce({clock(end)} {'<' if t.period.get('end_exclusive') else '<='} {end}, true)"
+    return text
+
+
+def _period_values(onto: Ontology) -> None:
+    """For each current(link.prop), a value on the period type that is null outside the row's period: the row valid
+    now is then the maximum of them, which every language can already say."""
+    from xgen_space.check import _find_prop
+    from xgen_space.expr import Agg, ExprError, follow, parse_expr, walk
+
+    for t in list(onto.objects.values()):
+        for p in list(t.properties.values()):
+            if "current(" not in p.expr:
+                continue
+            try:
+                found = [n for n in walk(parse_expr(p.expr)) if isinstance(n, Agg) and n.fn == "current"]
+                for node in found:
+                    last = onto.objects[follow(onto, t.name, node.path)[-1].type]
+                    name = node.prop + CURRENT_SUFFIX
+                    src = _find_prop(onto, last.name, node.prop)
+                    if src is not None and last.period and name not in last.properties:
+                        last.properties[name] = Property(name, src.type, internal=True,
+                                                         expr=f"if({_valid_now(last)}, {src.name}, null)")
+            except ExprError:
+                continue  # validate names what is wrong with the expression
+
+
 def _from_dict(d: dict) -> Ontology:
     objects = {k: _object(k, v) for k, v in d.get("objects", {}).items()}
     links = {k: _link(k, v) for k, v in d.get("links", {}).items()}
@@ -505,7 +565,7 @@ def _from_dict(d: dict) -> Ontology:
     decisions = {k: _decision(k, v) for k, v in d.get("decisions", {}).items()}
     for dt in decisions.values():
         dt.parameters = parameters
-    return Ontology(
+    onto = Ontology(
         name=d.get("ontology") or d.get("name") or "ontology",
         namespace=d["namespace"],
         version=str(d.get("version", "0.1.0")),
@@ -527,6 +587,8 @@ def _from_dict(d: dict) -> Ontology:
         identities=identities,
         parameters=parameters,
     )
+    _period_values(onto)
+    return onto
 
 
 def _clean(d: dict) -> dict:
@@ -542,9 +604,10 @@ def _to_dict(o: Ontology) -> dict:
             continue
         props = {p.name: _clean({"type": p.type, "label": p.label, "description": p.description,
                                  "column": p.column, "unit": p.unit, "values": p.values, "required": p.required,
-                                 "cite": p.cite, "aligned": p.aligned, "expr": p.expr, "mask": p.mask,
-                                 "labels": p.labels, "columns": p.columns})
-                 for p in t.properties.values()}
+                                 "cite": p.cite, "aligned": p.aligned, "mask": p.mask, "labels": p.labels,
+                                 "expr": "" if p.name + TEXT_SUFFIX in t.properties else p.expr,
+                                 "columns": p.columns, "format": p.format})
+                 for p in t.properties.values() if not p.internal}
         sm = None
         if t.states:
             sm = _clean({"property": t.states.property, "states": t.states.states, "initial": t.states.initial,
@@ -553,7 +616,8 @@ def _to_dict(o: Ontology) -> dict:
         objects[t.name] = _clean({"label": t.label, "description": t.description,
                                   "source": {"table": t.table} if t.table else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
-                                  "aligned": t.aligned, "series": t.series, "properties": props, "states": sm})
+                                  "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
+                                  "series": t.series and {**t.series, "time": t.series["time"].removesuffix(TEXT_SUFFIX)}})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,
                               "via": {"table": lk.via.table, "source": lk.via.source_column,
