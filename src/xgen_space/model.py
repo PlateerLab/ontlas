@@ -17,6 +17,8 @@ class ModelError(ValueError):
 
 
 KEY_SEP = "|"  # between the values of a key read from several columns
+TEXT_SUFFIX = "__text"        # the stored text of a date kept as text
+CURRENT_SUFFIX = "__current"  # a period row's value while the row is valid, else null
 
 
 @dataclass
@@ -35,6 +37,8 @@ class Property:
     mask: str = ""   # partial | full: hidden from every role that is not given it in clear
     labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (a code's name), by value
     columns: list[str] = field(default_factory=list)  # read from several columns: a composite key or reference
+    format: str = ""  # a date stored as text in this layout, such as YYYYMMDD (see expr.date_format)
+    internal: bool = False  # made while loading, so not part of the definition: it is left out when written back
 
     @property
     def col(self) -> str:
@@ -55,6 +59,10 @@ class Transition:
     source: str
     target: str
     action: str = ""
+    guard: dict[str, Any] = field(default_factory=dict)  # {decision, expect} or {property}: what must hold to take it
+    set: dict[str, Any] = field(default_factory=dict)    # what else it writes
+    call: dict[str, Any] = field(default_factory=dict)   # an external request sent after the write
+    after: dict[str, Any] = field(default_factory=dict)  # {days: 5 | "@name", since: property}: taken when that is over
 
 
 @dataclass
@@ -66,6 +74,11 @@ class StateMachine:
 
     def allows(self, source: str | None, target: str) -> bool:
         return any(t.source == source and t.target == target for t in self.transitions)
+
+    def find(self, source: str | None, target: str, action: str = "") -> Transition | None:
+        """The transition an action takes: the one that names it, else the first between the two states."""
+        found = [t for t in self.transitions if t.source == source and t.target == target]
+        return next((t for t in found if t.action == action), found[0] if found else None)
 
 
 @dataclass
@@ -83,10 +96,16 @@ class ObjectType:
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
     series: dict[str, str] = field(default_factory=dict)  # observations over time: {time: property, of: link}
+    period: dict[str, Any] = field(default_factory=dict)  # rows valid for a time: {start, end, of: link, end_exclusive}
+    view: dict[str, Any] = field(default_factory=dict)  # defined by a query, not a table: {name, query} (decide.views)
 
     @property
     def abstract(self) -> bool:
         return not self.table
+
+    @property
+    def view_name(self) -> str:
+        return str(self.view.get("name") or re.sub(r"(?<!^)(?=[A-Z])", "_", self.name).lower() + "_view")
 
     def prop(self, name: str) -> Property:
         try:
@@ -136,6 +155,21 @@ class Interface:
 
 
 @dataclass
+class Parameter:
+    """A value rules read by name, so a customer module changes it in one place."""
+
+    name: str
+    value: Any
+    type: str = "integer"
+    label: str = ""
+    unit: str = ""
+    description: str = ""
+    cite: str = ""
+    min: float | None = None
+    max: float | None = None
+
+
+@dataclass
 class DecisionInput:
     name: str
     type: str
@@ -149,6 +183,9 @@ class DecisionRule:
     id: str = ""
     note: str = ""
     cite: str = ""
+    priority: int | None = None  # hit policy priority: the matching rule with the lowest number decides
+    source: str = ""  # where the rule came from: two sources that disagree are a conflict (see decide.conflicts)
+    overruled_by: dict[str, str] = field(default_factory=dict, repr=False, compare=False)  # rule id -> conflict, by a pick
 
 
 @dataclass
@@ -161,6 +198,11 @@ class DecisionTable:
     label: str = ""
     hit_policy: str = "first"
     cite: str = ""
+    parameters: dict[str, Parameter] = field(default_factory=dict, repr=False, compare=False)  # the ontology's
+
+    @property
+    def named(self) -> dict[str, Any]:
+        return {p.name: p.value for p in self.parameters.values()}
 
 
 @dataclass
@@ -196,11 +238,16 @@ class Role:
     execute: list[str] = field(default_factory=list)
     mask: dict[str, str] = field(default_factory=dict)  # "Type.prop" -> partial | full, on top of the properties' own
     unmask: list[str] = field(default_factory=list)     # "Type.prop" or "Type.*" this role sees in clear
+    scope: dict[str, Any] = field(default_factory=dict)  # {attribute: seller_id, types: {Type: property | {via, property}}}
+    scoped: dict[str, dict] = field(default_factory=dict)  # made from scope: the row filter each type gets
+    closed: set[str] = field(default_factory=set)  # decisions that read a scoped row with no regard for the scope
 
     def can_read(self, type_name: str) -> bool:
         return "*" in self.read or type_name in self.read
 
     def can(self, verb: str, name: str) -> bool:
+        if verb == "run" and name in self.closed:  # roles.decide_in_scope asks them inside the scope
+            return False
         names = getattr(self, verb)
         return "*" in names or name in names
 
@@ -250,6 +297,52 @@ class RegisteredQuery:
 
 
 @dataclass
+class ConflictAnswer:
+    source: str
+    says: dict[str, Any]
+    rule: str = ""
+    cite: str = ""
+
+
+@dataclass
+class SourceConflict:
+    """One input answered differently by two sources, for a person to pick (see decide.conflicts)."""
+
+    id: str
+    decision: str = ""
+    input: dict[str, Any] = field(default_factory=dict)
+    answers: list[ConflictAnswer] = field(default_factory=list)
+    rules: list[str] = field(default_factory=list)  # short for answers: the rules that disagree
+    label: str = ""
+    picked: str = ""  # the source that stands; empty while the conflict is open
+    by: str = ""
+    at: str = ""
+    reason: str = ""
+    found: bool = False  # read off the rules, with no record in a module yet
+
+    @property
+    def open(self) -> bool:
+        return not self.picked
+
+
+@dataclass
+class Metric:
+    """A named number with what it means (see decide.metrics)."""
+
+    name: str
+    formula: dict[str, Any]
+    owner: str = ""
+    time: dict[str, Any] = field(default_factory=dict)         # {property: alias.prop, basis: in words}
+    denominator: dict[str, Any] = field(default_factory=dict)  # left out for a plain total
+    label: str = ""
+    description: str = ""
+    unit: str = ""
+    scale: float = 1
+    cite: str = ""
+    params: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class Question:
     id: str
     text: str
@@ -276,6 +369,10 @@ class Ontology:
     questions: list[Question] = field(default_factory=list)
     exclusive: list[tuple[str, str]] = field(default_factory=list)
     identities: dict[str, Identity] = field(default_factory=dict)
+    parameters: dict[str, Parameter] = field(default_factory=dict)
+    metrics: dict[str, Metric] = field(default_factory=dict)
+    conflicts: dict[str, SourceConflict] = field(default_factory=dict)  # what is recorded; rules can show more
+    clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
         try:
@@ -302,6 +399,18 @@ class Ontology:
         from xgen_space.validate import validate_ontology
 
         return validate_ontology(self)
+
+    def findings(self) -> list:
+        """What the decision tables say twice or leave open: for a person to look at, nothing that stops them."""
+        from xgen_space.decide.checks import decision_findings
+
+        return decision_findings(self)
+
+    def source_conflicts(self) -> list[SourceConflict]:
+        """Where two sources answer one input differently, recorded or found in the rules."""
+        from xgen_space.decide.conflicts import source_conflicts
+
+        return source_conflicts(self)
 
     def check(self) -> Ontology:
         issues = self.validate()
@@ -357,25 +466,48 @@ def _prop(name: str, d: Any) -> Property:
                     description=d.get("description", ""), column=column, unit=d.get("unit", ""),
                     values=list(values), required=bool(d.get("required", False)),
                     cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
-                    mask=str(d.get("mask", "") or ""), labels=labels, columns=columns)
+                    mask=str(d.get("mask", "") or ""), labels=labels, columns=columns,
+                    format=str(d.get("format", "") or ""))
 
 
 def _states(d: dict | None) -> StateMachine | None:
     if not d:
         return None
     return StateMachine(property=d["property"], states=list(d.get("states", [])), initial=d.get("initial", ""),
-                        transitions=[Transition(t["from"], t["to"], t.get("action", ""))
+                        transitions=[Transition(t["from"], t["to"], t.get("action", ""), dict(t.get("guard") or {}),
+                                                dict(t.get("set") or {}), dict(t.get("call") or {}),
+                                                dict(t.get("after") or {}))
                                      for t in d.get("transitions", [])])
+
+
+def _text_dates(props: dict[str, Property]) -> None:
+    """A date kept as text reads as a date everywhere: its text becomes a property of its own and the date is computed
+    from it, so filters, ordering and decisions see one date form in every language."""
+    for p in list(props.values()):
+        if p.format and p.type in ("date", "datetime") and not p.expr:
+            raw = Property(p.name + TEXT_SUFFIX, "string", description=f"{p.name} as stored", required=p.required,
+                           column="" if p.columns else p.column or p.name, columns=list(p.columns), mask=p.mask,
+                           internal=True)
+            props[raw.name] = raw
+            p.expr = f"text_date({raw.name}, '{p.format}')"
 
 
 def _object(name: str, d: dict) -> ObjectType:
     source = d.get("source") or {}
-    return ObjectType(name=name, key=d["key"], properties={k: _prop(k, v) for k, v in d.get("properties", {}).items()},
+    props = {k: _prop(k, v) for k, v in d.get("properties", {}).items()}
+    _text_dates(props)
+    series = dict(d.get("series") or {})
+    if series.get("time", "") + TEXT_SUFFIX in props:  # a graph holds the stored text, which sorts the same
+        series["time"] += TEXT_SUFFIX
+    t = ObjectType(name=name, key=d["key"], properties=props,
                       label=d.get("label", ""), description=d.get("description", ""),
                       table=source.get("table", d.get("table", "")), title=d.get("title", ""),
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
-                      series=dict(d.get("series") or {}))
+                      series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}))
+    if t.view and not t.table:  # bound to the view it makes, as to a table
+        t.table = t.view_name
+    return t
 
 
 def _link(name: str, d: dict) -> LinkType:
@@ -400,11 +532,53 @@ def _decision(name: str, d: dict) -> DecisionTable:
         v = dict(v)
         inputs[k] = DecisionInput(name=k, type=v.pop("type", "string"), source=v)
     rules = [DecisionRule(when={k: str(x) for k, x in (r.get("when") or {}).items()}, then=dict(r.get("then") or {}),
-                          id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""))
+                          id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""),
+                          priority=r.get("priority"), source=str(r.get("source", "") or ""))
              for i, r in enumerate(d.get("rules", []))]
     return DecisionTable(name=name, inputs=inputs, outputs=dict(d.get("outputs", {})), rules=rules,
                          target=d.get("target", ""), label=d.get("label", ""),
                          hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""))
+
+
+def _parameter(name: str, d: Any) -> Parameter:
+    if not isinstance(d, dict):  # a bare value: return_window_days: 14
+        d = {"value": d}
+    value = d.get("value")
+    found = {bool: "boolean", int: "integer", float: "decimal", str: "string"}.get(type(value), "integer")
+    return Parameter(name, value, d.get("type", found), d.get("label", ""), d.get("unit", ""), d.get("description", ""),
+                     d.get("cite", ""), d.get("min"), d.get("max"))
+
+
+def _conflict(name: str, d: dict) -> SourceConflict:
+    answers = [ConflictAnswer(str(a.get("source", "")), dict(a.get("says") or {}), str(a.get("rule", "")),
+                              str(a.get("cite", ""))) for a in d.get("answers") or []]
+    return SourceConflict(name, d.get("decision", ""), dict(d.get("input") or {}), answers,
+                          [str(r) for r in d.get("rules") or []], d.get("label", ""), str(d.get("picked", "") or ""),
+                          str(d.get("by", "") or ""), str(d.get("at", "") or ""), str(d.get("reason", "") or ""))
+
+
+def _settle_conflicts(onto: Ontology) -> None:
+    """Fill in the answers of conflicts named by their rules, and give each pick its effect on the rules."""
+    for c in onto.conflicts.values():
+        table = onto.decisions.get(c.decision)
+        rules = {r.id: r for r in table.rules} if table else {}
+        for name in c.rules:
+            if name in rules:
+                r = rules[name]
+                says = {k: table.named.get(v[1:], v) if isinstance(v, str) and v.startswith("@") else v
+                        for k, v in r.then.items()}
+                c.answers.append(ConflictAnswer(r.source, says, r.id, r.cite))
+        if c.picked:
+            kept = [a.rule for a in c.answers if a.source == c.picked and a.rule in rules]
+            for a in c.answers:
+                if a.source != c.picked and a.rule in rules:
+                    rules[a.rule].overruled_by.update({k: c.id for k in kept})
+
+
+def _metric(name: str, d: dict) -> Metric:
+    return Metric(name, dict(d.get("formula") or {}), d.get("owner", ""), dict(d.get("time") or {}),
+                  dict(d.get("denominator") or {}), d.get("label", ""), d.get("description", ""), d.get("unit", ""),
+                  d.get("scale", 1), d.get("cite", ""), dict(d.get("params") or {}))
 
 
 def _action(name: str, d: dict) -> ActionType:
@@ -423,7 +597,8 @@ def _role(name: str, d: dict) -> Role:
     return Role(name=name, label=d.get("label", ""), read=list(d.get("read", [])),
                 row_filters=dict(d.get("row_filters", {})), run=list(d.get("run", [])),
                 request=list(d.get("request", [])), execute=list(d.get("execute", [])),
-                mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])))
+                mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])),
+                scope=dict(d.get("scope") or {}))
 
 
 def _identity(name: str, d: dict) -> Identity:
@@ -458,12 +633,86 @@ def expand_identities(objects: dict[str, ObjectType], links: dict[str, LinkType]
                                        label=f"{ident.label or ident.name} 구성원")
 
 
+def _scope_filter(onto: Ontology, where: Any, attribute: str) -> dict | None:
+    """The row filter of one scoped type: its own property, or one reached over links."""
+    who = {"principal": attribute}
+    if isinstance(where, str):
+        return {"eq": [f"$self.{where}", who]}
+    if not isinstance(where, dict) or not where.get("property"):
+        return None
+    nodes: dict[str, str] = {}
+    edges, prev = [], "$self"
+    for i, step in enumerate(where.get("via") or []):
+        lk = onto.links.get(step) or onto.link_by_inverse(step)
+        if lk is None:
+            return None
+        nodes[f"s{i}"] = lk.target if lk.name == step else lk.source
+        edges.append([prev, step, f"s{i}"])
+        prev = f"s{i}"
+    if not nodes:
+        return {"eq": [f"$self.{where['property']}", who]}
+    return {"exists": {"match": nodes, "edges": edges, "where": {"eq": [f"{prev}.{where['property']}", who]}}}
+
+
+def _role_scopes(onto: Ontology) -> None:
+    """A role's scope as a row filter on each type it names and their subtypes, so a read goes the way row_filters do.
+    A decision on such a type reads its row outside any query, so the role loses it until it is asked in scope."""
+    from xgen_space.check import is_a
+
+    for r in onto.roles.values():
+        for name, where in (r.scope.get("types") or {}).items():
+            spec = _scope_filter(onto, where, str(r.scope.get("attribute", "")))
+            if spec is not None and name in onto.objects:
+                r.scoped.update({t: spec for t in onto.objects if t not in r.scoped and is_a(onto, t, name)})
+        r.closed = {d.name for d in onto.decisions.values() if d.target in r.scoped}
+
+
+def _valid_now(t: ObjectType) -> str:
+    """The expression that says a period row is valid; an empty end stays open."""
+    def clock(name: str) -> str:
+        p = t.properties.get(name)
+        return "now()" if p is not None and p.type == "datetime" else "today()"
+
+    start, end = t.period.get("start", ""), t.period.get("end", "")
+    text = f"{start} <= {clock(start)}"
+    if end:
+        text += f" and coalesce({clock(end)} {'<' if t.period.get('end_exclusive') else '<='} {end}, true)"
+    return text
+
+
+def _period_values(onto: Ontology) -> None:
+    """For each current(link.prop), a value on the period type that is null outside the row's period: the row valid
+    now is then the maximum of them, which every language can already say."""
+    from xgen_space.check import _find_prop
+    from xgen_space.expr import Agg, ExprError, follow, parse_expr, walk
+
+    for t in list(onto.objects.values()):
+        for p in list(t.properties.values()):
+            if "current(" not in p.expr:
+                continue
+            try:
+                found = [n for n in walk(parse_expr(p.expr)) if isinstance(n, Agg) and n.fn == "current"]
+                for node in found:
+                    last = onto.objects[follow(onto, t.name, node.path)[-1].type]
+                    name = node.prop + CURRENT_SUFFIX
+                    src = _find_prop(onto, last.name, node.prop)
+                    if src is not None and last.period and name not in last.properties:
+                        last.properties[name] = Property(name, src.type, internal=True,
+                                                         expr=f"if({_valid_now(last)}, {src.name}, null)")
+            except ExprError:
+                continue  # validate names what is wrong with the expression
+
+
 def _from_dict(d: dict) -> Ontology:
     objects = {k: _object(k, v) for k, v in d.get("objects", {}).items()}
     links = {k: _link(k, v) for k, v in d.get("links", {}).items()}
     identities = {k: _identity(k, v) for k, v in (d.get("identities") or {}).items()}
     expand_identities(objects, links, identities)
-    return Ontology(
+    parameters = {k: _parameter(k, v) for k, v in (d.get("parameters") or {}).items()}
+    decisions = {k: _decision(k, v) for k, v in d.get("decisions", {}).items()}
+    for dt in decisions.values():
+        dt.parameters = parameters
+    onto = Ontology(
         name=d.get("ontology") or d.get("name") or "ontology",
         namespace=d["namespace"],
         version=str(d.get("version", "0.1.0")),
@@ -472,7 +721,7 @@ def _from_dict(d: dict) -> Ontology:
         links=links,
         interfaces={k: Interface(k, list(v.get("properties", [])), v.get("label", ""))
                     for k, v in d.get("interfaces", {}).items()},
-        decisions={k: _decision(k, v) for k, v in d.get("decisions", {}).items()},
+        decisions=decisions,
         actions={k: _action(k, v) for k, v in d.get("actions", {}).items()},
         roles={k: _role(k, v) for k, v in d.get("roles", {}).items()},
         queries={k: RegisteredQuery(k, v["query"], v.get("label", ""), v.get("description", ""),
@@ -483,7 +732,14 @@ def _from_dict(d: dict) -> Ontology:
                             params=dict(q.get("params", {}))) for q in d.get("questions", [])],
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
         identities=identities,
+        parameters=parameters,
+        metrics={k: _metric(k, v) for k, v in (d.get("metrics") or {}).items()},
+        conflicts={k: _conflict(k, v) for k, v in (d.get("conflicts") or {}).items()},
     )
+    _period_values(onto)
+    _role_scopes(onto)
+    _settle_conflicts(onto)
+    return onto
 
 
 def _clean(d: dict) -> dict:
@@ -499,18 +755,23 @@ def _to_dict(o: Ontology) -> dict:
             continue
         props = {p.name: _clean({"type": p.type, "label": p.label, "description": p.description,
                                  "column": p.column, "unit": p.unit, "values": p.values, "required": p.required,
-                                 "cite": p.cite, "aligned": p.aligned, "expr": p.expr, "mask": p.mask,
-                                 "labels": p.labels, "columns": p.columns})
-                 for p in t.properties.values()}
+                                 "cite": p.cite, "aligned": p.aligned, "mask": p.mask, "labels": p.labels,
+                                 "expr": "" if p.name + TEXT_SUFFIX in t.properties else p.expr,
+                                 "columns": p.columns, "format": p.format})
+                 for p in t.properties.values() if not p.internal}
         sm = None
         if t.states:
             sm = _clean({"property": t.states.property, "states": t.states.states, "initial": t.states.initial,
-                         "transitions": [_clean({"from": x.source, "to": x.target, "action": x.action})
+                         "transitions": [_clean({"from": x.source, "to": x.target, "action": x.action,
+                                                 "guard": x.guard, "set": x.set, "call": x.call, "after": x.after})
                                          for x in t.states.transitions]})
+        bound = t.table and not (t.view and t.table == t.view_name)
         objects[t.name] = _clean({"label": t.label, "description": t.description,
-                                  "source": {"table": t.table} if t.table else None, "key": t.key, "title": t.title,
+                                  "source": {"table": t.table} if bound else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
-                                  "aligned": t.aligned, "series": t.series, "properties": props, "states": sm})
+                                  "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
+                                  "view": t.view,
+                                  "series": t.series and {**t.series, "time": t.series["time"].removesuffix(TEXT_SUFFIX)}})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,
                               "via": {"table": lk.via.table, "source": lk.via.source_column,
@@ -525,8 +786,9 @@ def _to_dict(o: Ontology) -> dict:
             "label": dt.label, "target": dt.target, "hit_policy": dt.hit_policy, "cite": dt.cite,
             "inputs": {i.name: {"type": i.type, **i.source} for i in dt.inputs.values()},
             "outputs": dt.outputs,
-            "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite})
-                      for r in dt.rules]})
+            "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite,
+                              "source": r.source})
+                      | ({} if r.priority is None else {"priority": r.priority}) for r in dt.rules]})
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
                                "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states})
                                             for c in a.criteria],
@@ -534,20 +796,35 @@ def _to_dict(o: Ontology) -> dict:
                                "call": a.call, "undo": a.undo})
                | {"approval": a.approval} for a in o.actions.values()}
     roles = {r.name: _clean({"label": r.label, "read": r.read, "row_filters": r.row_filters, "run": r.run,
-                             "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask})
+                             "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask,
+                             "scope": r.scope})
              for r in o.roles.values()}
     identities = {i.name: _clean({"label": i.label, "table": i.table,
                                   "members": {m.type: m.fields for m in i.members.values()},
                                   "rules": [_clean({"id": r.id, "match": r.match, "normalize": r.normalize})
                                             for r in i.rules]}) for i in o.identities.values()}
+    parameters = {p.name: _clean({"type": p.type, "label": p.label, "unit": p.unit, "description": p.description,
+                                  "cite": p.cite}) | {"value": p.value}
+                  | {k: v for k, v in (("min", p.min), ("max", p.max)) if v is not None}
+                  for p in o.parameters.values()}
+    conflicts = {c.id: _clean({"label": c.label, "decision": c.decision, "input": c.input, "rules": c.rules,
+                               "answers": [_clean({"source": a.source, "says": a.says, "rule": a.rule, "cite": a.cite})
+                                           for a in c.answers if a.rule not in c.rules or not a.rule],
+                               "picked": c.picked, "by": c.by, "at": c.at, "reason": c.reason})
+                 for c in o.conflicts.values()}
+    metrics = {m.name: _clean({"label": m.label, "description": m.description, "unit": m.unit, "owner": m.owner,
+                               "formula": m.formula, "denominator": m.denominator, "time": m.time, "cite": m.cite,
+                               "params": m.params}) | ({} if m.scale == 1 else {"scale": m.scale})
+               for m in o.metrics.values()}
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
                          "params": q.params}) | {"expect": q.expect} for q in o.questions]
     return _clean({
         "ontology": o.name, "namespace": o.namespace, "version": o.version, "label": o.label,
-        "objects": objects, "links": links,
+        "parameters": parameters, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
-        "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "questions": questions,
+        "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "metrics": metrics,
+        "conflicts": conflicts, "questions": questions,
         "exclusive": [list(x) for x in o.exclusive], "identities": identities,
     })

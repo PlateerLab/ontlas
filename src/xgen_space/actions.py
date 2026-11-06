@@ -1,6 +1,7 @@
 """Actions: checked requests, human approval, write-back to the source, external calls, rollback and an audit trail."""
 from __future__ import annotations
 
+import datetime as dt
 import itertools
 import json
 import os
@@ -11,8 +12,13 @@ import urllib.request
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
+from xgen_space.check import find_prop
 from xgen_space.compile.sql import qi
+from xgen_space.decide.views import through_view
+from xgen_space.expr import encode_text_date
+from xgen_space.ir import And, Cmp, Column, Order, Query, Ref
 from xgen_space.model import KEY_SEP
+from xgen_space.roles import AccessDenied, in_scope
 from xgen_space.values import accepts, coerce, normalize
 
 
@@ -21,6 +27,7 @@ class Actor:
     id: str
     kind: str = "human"
     roles: list[str] = field(default_factory=list)
+    principal: dict[str, Any] = field(default_factory=dict)  # what a scoped role reads: {seller_id: S1}
 
 
 @dataclass
@@ -45,9 +52,22 @@ class Proposal:
     approved_by: str = ""
     call: dict[str, Any] = field(default_factory=dict)
     rolled_back_by: str = ""
+    revalidated: list[CheckResult] = field(default_factory=list)  # asked again right before it ran
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class Due:
+    """A row whose time-based transition has come due."""
+
+    type: str
+    key: str
+    source: str
+    target: str
+    since: str
+    days: int
 
 
 @dataclass
@@ -67,6 +87,12 @@ class ActionError(ValueError):
     """The action cannot go ahead as asked; the message says why."""
 
 
+def _stored(prop, value: Any) -> Any:
+    """A value in the form its column keeps: a date kept as text goes back in the text's layout."""
+    value = coerce(value, prop.type)
+    return encode_text_date(value, prop.format) if prop.format and value is not None else value
+
+
 class SqlWriteback:
     """Apply an action's changes to the bound source table with one UPDATE."""
 
@@ -74,13 +100,14 @@ class SqlWriteback:
         self.backend = backend
 
     def apply(self, onto, type_name: str, key: str, changes: dict[str, Any]) -> int:
+        type_name, changes = through_view(onto, type_name, changes)
         obj = onto.obj(type_name)
         cols = obj.key_prop.cols
         parts = str(key).split(KEY_SEP, len(cols) - 1) if len(cols) > 1 else [key]
         if len(parts) != len(cols):
             raise ValueError(f"key {key!r} of {type_name} has {len(parts)} parts, not {len(cols)}")
         sets = ", ".join(f"{qi(obj.prop(p).col)} = ?" for p in changes)
-        args = tuple(coerce(v, obj.prop(p).type) for p, v in changes.items()) + tuple(parts)
+        args = tuple(_stored(obj.prop(p), v) for p, v in changes.items()) + tuple(parts)
         where = " AND ".join(f"{qi(c)} = ?" for c in cols)
         return self.backend.run(f"UPDATE {qi(obj.table)} SET {sets} WHERE {where}", args)
 
@@ -225,39 +252,133 @@ class ActionService:
         roles = [self.studio.onto.roles[r] for r in actor.roles if r in self.studio.onto.roles]
         return any(r.can(verb, action) for r in roles)
 
+    def _scoped_roles(self, actor: Actor, verb: str, a) -> list:
+        """The roles an actor reaches this type through, or none where one of them reaches every row."""
+        roles = [self.studio.onto.roles[r] for r in actor.roles if r in self.studio.onto.roles]
+        allowed = [r for r in roles if r.can(verb, a.name)]
+        return allowed if allowed and all(a.target in r.scoped for r in allowed) else []
+
+    def _outside(self, actor: Actor, verb: str, a, key: str) -> str:
+        """Why this object is beyond the actor's scope, if it is."""
+        roles = self._scoped_roles(actor, verb, a)
+        why = f"{a.target} {key} is outside the scope of {actor.id}"
+        for r in roles:
+            try:
+                if in_scope(self.studio, r, a.target, key, actor.principal):
+                    return ""
+            except AccessDenied as e:
+                why = str(e)
+        return why if roles else ""
+
+    def _fill_scope(self, actor: Actor, a, params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+        """What a scoped actor does not choose: a parameter named after the scope's attribute, and any property a
+        write would set that holds it. Returns (params, fixed properties, problems)."""
+        params, fixed, problems = dict(params), {}, []
+        for r in self._scoped_roles(actor, "request", a):
+            attr = r.scope.get("attribute", "")
+            value = actor.principal.get(attr)
+            if value is None:
+                continue
+            if attr in a.parameters:
+                if params.get(attr) not in (None, "", value):
+                    problems.append(f"{attr}: {params[attr]!r} is not {actor.id}'s own")
+                params[attr] = value
+            where = (r.scope.get("types") or {}).get(a.target)
+            if isinstance(where, str):
+                fixed[where] = value
+        return params, fixed, problems
+
+    def _fill(self, value: Any, params: dict[str, Any], actor: Actor, checks: list[CheckResult]) -> Any:
+        """A value to write: `$parameter`, `$principal.attribute`, `$today`, `$now`, or the value as written."""
+        if not isinstance(value, str) or not value.startswith("$"):
+            return value
+        name = value[1:]
+        if name.startswith("principal."):
+            attr = name.split(".", 1)[1]
+            if actor.principal.get(attr) is None:
+                checks.append(CheckResult("principal", False, f"{actor.id} has no {attr}"))
+            return actor.principal.get(attr)
+        if name == "today" and name not in params:
+            return self.studio.now().date().isoformat()
+        if name == "now" and name not in params:
+            return self.studio.now().isoformat(timespec="seconds")
+        return params.get(name)
+
+    def _transition(self, a, current: dict[str, Any] | None):
+        """The transition an action would take from this row's state."""
+        if not a.transition_to or current is None:
+            return None
+        sm = self.studio.onto.obj(a.target).states
+        return sm.find(current.get(sm.property), a.transition_to, a.name)
+
+    def _reachable(self, call: dict[str, Any]) -> CheckResult:
+        url = str(call.get("url", ""))
+        ok = self.caller is not None and self.caller.allowed(url.split("$", 1)[0] if "$" in url else url)
+        return CheckResult("call", ok, url if ok else f"{url}: no allowed host is configured for it")
+
+    def _guard(self, t, key: str, current: dict[str, Any]) -> CheckResult:
+        name = t.guard.get("decision")
+        if name:
+            res = self.studio.decide(name, key)
+            outs = res.outputs if isinstance(res.outputs, dict) else {}
+            ok = all(outs.get(k) == v for k, v in (t.guard.get("expect") or {}).items())
+            return CheckResult(f"guard:{name}", ok, str(outs))
+        prop = t.guard["property"]
+        return CheckResult(f"guard:{prop}", current.get(prop) is True, f"{prop} is {current.get(prop)}")
+
+    def _standing(self, a, key: str, current: dict[str, Any]) -> list[CheckResult]:
+        """What has to hold for an action to go ahead, asked when it is requested and again right before it runs."""
+        obj = self.studio.onto.obj(a.target)
+        out = []
+        if a.transition_to:
+            state = current.get(obj.states.property)
+            out.append(CheckResult("state", obj.states.allows(state, a.transition_to), f"{state} -> {a.transition_to}"))
+            t = self._transition(a, current)
+            if t is not None and t.guard:
+                out.append(self._guard(t, key, current))
+        for c in a.criteria:
+            if c.decision:
+                res = self.studio.decide(c.decision, key)
+                outs = res.outputs if isinstance(res.outputs, dict) else {}
+                ok = all(outs.get(k) == v for k, v in c.expect.items())
+                out.append(CheckResult(f"decision:{c.decision}", ok, str(outs)))
+            if c.states:
+                state = current.get(obj.states.property) if obj.states else None
+                out.append(CheckResult("states", state in c.states, f"{state} in {c.states}"))
+        return out
+
     def request(self, action: str, key: str, params: dict | None = None, *, actor: Actor) -> Proposal:
         onto = self.studio.onto
         a = onto.actions.get(action)
         if a is None:
             raise KeyError(f"unknown action '{action}'")
-        params, problems = check_parameters(a.parameters, dict(params or {}))
+        filled, fixed, foreign = self._fill_scope(actor, a, dict(params or {}))
+        params, problems = check_parameters(a.parameters, filled)
+        problems += foreign
         checks = [CheckResult("role", self._allowed(actor, "request", action), f"{actor.id} roles {actor.roles}"),
                   CheckResult("parameters", not problems, "; ".join(problems))]
+        outside = self._outside(actor, "request", a, str(key))
+        if outside:  # nothing more is read, so an answer says nothing of a row beyond the scope
+            checks.append(CheckResult("scope", False, outside))
+            p = Proposal(f"P{next(self._ids)}", action, a.target, str(key), params, actor, "rejected", checks, {})
+            self.proposals[p.id] = p
+            self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
+            return p
         obj = onto.obj(a.target)
         current = self.studio.fetch(a.target, key)
         checks.append(CheckResult("target", current is not None, f"{a.target} {key}"))
         changes: dict[str, Any] = {}
-        for p, v in a.set.items():
-            changes[p] = params.get(v[1:]) if isinstance(v, str) and v.startswith("$") else v
+        t = self._transition(a, current)
+        for p, v in {**a.set, **(t.set if t else {})}.items():
+            changes[p] = self._fill(v, params, actor, checks)
+        changes.update({p: v for p, v in fixed.items() if p in changes})
         if a.transition_to and current is not None:
-            sm = obj.states
-            state = current.get(sm.property)
-            ok = sm.allows(state, a.transition_to)
-            checks.append(CheckResult("state", ok, f"{state} -> {a.transition_to}"))
-            changes[sm.property] = a.transition_to
-        for c in a.criteria:
-            if c.decision and current is not None:
-                res = self.studio.decide(c.decision, key)
-                outs = res.outputs if isinstance(res.outputs, dict) else {}
-                ok = all(outs.get(k) == v for k, v in c.expect.items())
-                checks.append(CheckResult(f"decision:{c.decision}", ok, str(outs)))
-            if c.states and current is not None:
-                state = current.get(obj.states.property) if obj.states else None
-                checks.append(CheckResult("states", state in c.states, f"{state} in {c.states}"))
-        if a.call:
-            url = str(a.call.get("url", ""))
-            ok = self.caller is not None and self.caller.allowed(url.split("$", 1)[0] if "$" in url else url)
-            checks.append(CheckResult("call", ok, url if ok else f"{url}: no allowed host is configured for it"))
+            changes[obj.states.property] = a.transition_to
+        if current is not None:
+            checks += self._standing(a, key, current)
+        call = a.call or (t.call if t else {})
+        if call:
+            checks.append(self._reachable(call))
         before = {p: current.get(p) for p in changes} if current else {}
         p = Proposal(f"P{next(self._ids)}", action, a.target, str(key), params, actor, "pending", checks, changes,
                      before)
@@ -267,7 +388,8 @@ class ActionService:
             p.status = "rejected"
             self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
             return p
-        auto = not a.approval and actor.kind == "human" and self._allowed(actor, "execute", action)
+        auto = not a.approval and actor.kind == "human" and self._allowed(actor, "execute", action) \
+            and not self._outside(actor, "execute", a, str(key))
         if auto:
             self._execute(p, actor)
         return p
@@ -280,6 +402,9 @@ class ActionService:
             raise PermissionError("only a person approves an action")
         if not self._allowed(approver, "execute", p.action):
             raise PermissionError(f"{approver.id} may not execute {p.action}")
+        outside = self._outside(approver, "execute", self.studio.onto.actions[p.action], p.key)
+        if outside:
+            raise PermissionError(outside)
         p.approved_by = approver.id
         self._log(approver, "approved", p)
         self._execute(p, approver)
@@ -299,13 +424,29 @@ class ActionService:
         if self.writeback is None:
             raise RuntimeError("no write-back configured for actions")
         a = self.studio.onto.actions[p.action]
-        current = self.studio.fetch(p.target, p.key) or {}
+        current = self.studio.fetch(p.target, p.key)
+        # time has passed since the request: what held then is asked again, against the row as it is now
+        p.revalidated = [CheckResult("target", current is not None, f"{p.target} {p.key}")]
+        if current is not None:
+            p.revalidated += self._standing(a, p.key, current)
+        outside = self._outside(p.requested_by, "request", a, p.key)
+        if outside:
+            p.revalidated.append(CheckResult("scope", False, outside))
+        failed = [c.name for c in p.revalidated if not c.passed]
+        if failed:
+            p.status = "stale"
+            self._log(actor, "stale", p, failed=failed)
+            return
+        t = self._transition(a, current)
+        self._write(p, actor, current, a.call or (t.call if t else {}))
+
+    def _write(self, p: Proposal, actor: Actor, current: dict[str, Any], call: dict[str, Any]) -> None:
         p.before = {k: current.get(k) for k in p.changes}  # what a rollback restores: the values just before
         n = self.writeback.apply(self.studio.onto, p.target, p.key, p.changes)
-        if a.call:
+        if call:
             self._log(actor, "written", p, before=p.before, after=p.changes, rows=n)
             try:
-                p.call = self.caller.send(a.call, self._context(p))
+                p.call = self.caller.send(call, self._context(p))
             except ActionError as e:
                 self.writeback.apply(self.studio.onto, p.target, p.key, p.before)
                 p.status, p.call = "failed", {"error": str(e)}
@@ -314,6 +455,53 @@ class ActionService:
             self._log(actor, "called", p, **p.call)
         p.status = "executed"
         self._log(actor, "executed", p, before=p.before, after=p.changes, rows=n)
+
+    def due(self) -> list[Due]:
+        """The rows whose time-based transitions have come due, by the studio's clock."""
+        onto, now, out = self.studio.onto, self.studio.now(), []
+        for t in onto.objects.values():
+            for tr in (t.states.transitions if t.states and t.table else []):
+                if not tr.after:
+                    continue
+                days = tr.after["days"]
+                days = onto.parameters[days[1:]].value if isinstance(days, str) else days
+                since = tr.after["since"]
+                cutoff = now - dt.timedelta(days=days)
+                stamp = cutoff.date().isoformat() if find_prop(onto, t.name, since).type == "date" \
+                    else cutoff.isoformat(timespec="seconds")
+                q = Query(nodes={"x": t.name}, where=And([Cmp(Ref("x", t.states.property), "eq", tr.source),
+                                                          Cmp(Ref("x", since), "lte", stamp)]),
+                          columns=[Column(Ref("x", t.key), "k")], order=[Order("k")])
+                out += [Due(t.name, str(r[0]), tr.source, tr.target, since, days) for r in self.studio.run(q).rows]
+        return out
+
+    def advance(self, *, actor: Actor | None = None) -> list[Proposal]:
+        """Take every transition that has come due; a guard that does not hold leaves the row for the next round."""
+        if self.writeback is None:
+            raise RuntimeError("no write-back configured for actions")
+        actor = actor or Actor("clock", "system")
+        out = []
+        for d in self.due():
+            obj = self.studio.onto.obj(d.type)
+            tr = next(t for t in obj.states.transitions if t.after and (t.source, t.target) == (d.source, d.target))
+            current = self.studio.fetch(d.type, d.key) or {}
+            checks = [CheckResult("time", True, f"{d.days} days since {d.since}")]
+            if tr.guard:
+                checks.append(self._guard(tr, d.key, current))
+            if tr.call:
+                checks.append(self._reachable(tr.call))
+            changes = {p: self._fill(v, {}, actor, checks) for p, v in tr.set.items()}
+            changes[obj.states.property] = d.target
+            p = Proposal(f"P{next(self._ids)}", f"{d.type}:{d.source}->{d.target}", d.type, d.key, {}, actor, "pending",
+                         checks, changes)
+            self.proposals[p.id] = p
+            out.append(p)
+            if all(c.passed for c in checks):
+                self._write(p, actor, current, tr.call)
+            else:
+                p.status = "rejected"
+                self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
+        return out
 
     def rollback(self, proposal_id: str, *, actor: Actor, reason: str = "") -> Proposal:
         """Put back the values an executed action replaced, if nothing has changed them since."""
@@ -326,8 +514,13 @@ class ActionService:
             raise PermissionError("only a person rolls back an action")
         if not self._allowed(actor, "execute", p.action):
             raise PermissionError(f"{actor.id} may not execute {p.action}")
-        a = self.studio.onto.actions[p.action]
-        if a.call and not a.undo:
+        a = self.studio.onto.actions.get(p.action)
+        if a is None:
+            raise ActionError(f"{p.action} was taken on the clock, and no action undoes it; put it back by hand")
+        outside = self._outside(actor, "execute", a, p.key)
+        if outside:
+            raise PermissionError(outside)
+        if (a.call or p.call) and not a.undo:
             raise ActionError(f"{p.action} sent an external request and declares no undo request, so it cannot "
                               "be rolled back here")
         obj = self.studio.onto.obj(p.target)

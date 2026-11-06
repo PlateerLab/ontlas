@@ -1,7 +1,9 @@
 """Consistency checks for an ontology definition."""
 from __future__ import annotations
 
-from xgen_space.model import CARDINALITIES, TYPES, Ontology, valid_name
+import re
+
+from xgen_space.model import CARDINALITIES, TEXT_SUFFIX, TYPES, Ontology, valid_name
 
 
 def validate_ontology(o: Ontology) -> list[str]:
@@ -40,11 +42,14 @@ def validate_ontology(o: Ontology) -> list[str]:
                     f"{sorted(set(p.labels) - {str(v) for v in p.values})}")
             if p.mask and p.mask not in MASKS:
                 add(f"{t.name}.{p.name}: mask '{p.mask}' is not one of {MASKS}")
-            if p.expr and p.column:
+            stored_text = p.name + TEXT_SUFFIX in t.properties  # a format makes the expression, over its column
+            if p.format:
+                issues.extend(f"{t.name}.{p.name}: {e}" for e in _format(p, stored_text))
+            if p.expr and p.column and not stored_text:
                 add(f"{t.name}.{p.name}: a computed property has no column; give expr or column, not both")
             if p.expr and p.name == t.key:
                 add(f"{t.name}: the key '{p.name}' cannot be computed")
-            if p.columns and (p.column or p.expr or len(p.columns) < 2):
+            if p.columns and (p.column or (p.expr and not stored_text) or len(p.columns) < 2):
                 add(f"{t.name}.{p.name}: columns takes two or more columns, in place of column or expr")
             seen = prop_types.get(p.name)
             if seen and seen[0] != p.type and {seen[0], p.type} != {"string", "enum"}:
@@ -66,12 +71,21 @@ def validate_ontology(o: Ontology) -> list[str]:
                 for s in (tr.source, tr.target):
                     if s not in sm.states:
                         add(f"{t.name}: transition uses unknown state '{s}'")
+                issues.extend(f"{t.name}: transition {tr.source} -> {tr.target}: {e}" for e in _transition(o, t, tr))
         if t.series:
-            tp = t.properties.get(t.series.get("time", ""))
+            tp = t.properties.get(t.series.get("time", "").removesuffix(TEXT_SUFFIX))
             if tp is None:
                 add(f"{t.name}: series needs time: a date or datetime property")
             elif tp.type not in ("date", "datetime"):
                 add(f"{t.name}: series time '{tp.name}' is {tp.type}, not a date or datetime")
+            elif tp.format and not _sorts(tp.format):
+                add(f"{t.name}: series time '{tp.name}' is text in a form that does not sort by time ({tp.format})")
+        if t.period:
+            issues.extend(f"{t.name}: period: {e}" for e in _period(o, t))
+        if t.view:
+            from xgen_space.decide.views import view_issues
+
+            issues.extend(f"{t.name}: view: {e}" for e in view_issues(o, t))
 
     for lk in o.links.values():
         if not valid_name(lk.name):
@@ -117,6 +131,7 @@ def validate_ontology(o: Ontology) -> list[str]:
             if n not in o.links:
                 add(f"exclusive pair uses unknown link '{n}'")
 
+    issues.extend(_parameters(o))
     issues.extend(_computed(o))
     for t in o.objects.values():
         of = t.series.get("of") if t.series else ""
@@ -131,10 +146,19 @@ def validate_ontology(o: Ontology) -> list[str]:
         for p in a.set:
             if p not in t.properties:
                 add(f"action {a.name}: sets unknown property '{p}'")
-            elif t.properties[p].expr:
+            elif t.properties[p].format and t.properties[p].columns:
+                add(f"action {a.name}: '{p}' is read from several columns and cannot be set")
+            elif t.properties[p].expr and not t.properties[p].format:
                 add(f"action {a.name}: '{p}' is computed and cannot be set")
         for name, spec in a.parameters.items():
             issues.extend(f"action {a.name}: parameter '{name}': {e}" for e in _parameter(spec))
+        written = [*a.set, *([t.states.property] if a.transition_to and t.states else [])]
+        if t.view and written and not any(i.startswith(f"{t.name}: view:") for i in issues):
+            from xgen_space.decide.views import write_issue
+
+            why = write_issue(o, t, [p for p in written if p in t.properties])
+            if why:
+                add(f"action {a.name}: {why}")
         if a.call:
             issues.extend(f"action {a.name}: call: {e}" for e in _call(a.call))
         if a.undo:
@@ -148,7 +172,7 @@ def validate_ontology(o: Ontology) -> list[str]:
             if c.decision and c.decision not in o.decisions:
                 add(f"action {a.name}: criterion uses unknown decision '{c.decision}'")
         for v in a.set.values():
-            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters:
+            if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters and not _fills_itself(v):
                 add(f"action {a.name}: '{v}' is not a parameter")
 
     for r in o.roles.values():
@@ -170,6 +194,8 @@ def validate_ontology(o: Ontology) -> list[str]:
                 continue
             if tn not in o.objects or not pn or (pn != "*" and _prop_of(o, tn, pn) is None):
                 add(f"role {r.name}: '{ref}' is not Type.property")
+        if r.scope:
+            issues.extend(f"role {r.name}: scope: {e}" for e in _scope(o, r))
     issues.extend(_identities(o))
 
     from xgen_space.check import check
@@ -186,6 +212,16 @@ def validate_ontology(o: Ontology) -> list[str]:
         for p in res.param_types:
             if p not in q.params:
                 add(f"query {q.name}: parameter '{p}' is not declared")
+    if o.metrics:
+        from xgen_space.decide.metrics import metric_issues
+
+        for m in o.metrics.values():
+            issues.extend(f"metric {m.name}: {e}" for e in metric_issues(o, m))
+    if o.conflicts:
+        from xgen_space.decide.conflicts import conflict_issues
+
+        for c in o.conflicts.values():
+            issues.extend(f"conflict {c.id}: {e}" for e in conflict_issues(o, c))
     for qs in o.questions:
         if bool(qs.query) == bool(qs.decision):
             add(f"question {qs.id}: give either a query or a decision")
@@ -197,6 +233,7 @@ def validate_ontology(o: Ontology) -> list[str]:
 
 
 MASKS = ("partial", "full")
+PARAMETER_TYPES = ("integer", "decimal", "string", "boolean")
 PARAM_KEYS = {"type", "label", "required", "min", "max", "values", "pattern", "max_length"}
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
@@ -205,6 +242,164 @@ def _prop_of(o: Ontology, type_name: str, name: str):
     from xgen_space.check import _find_prop
 
     return _find_prop(o, type_name, name)
+
+
+def _fills_itself(value: str) -> bool:
+    return value in ("$today", "$now") or value.startswith("$principal.")
+
+
+def _transition(o: Ontology, t, tr) -> list[str]:
+    out = []
+    g = tr.guard
+    if g:
+        unknown = set(g) - {"decision", "expect", "property"}
+        if unknown:
+            out.append(f"guard: unknown keys {sorted(unknown)}")
+        if bool(g.get("decision")) == bool(g.get("property")):
+            out.append("guard: give a decision or a property")
+        if g.get("decision") and g["decision"] not in o.decisions:
+            out.append(f"guard: unknown decision '{g['decision']}'")
+        if g.get("decision") and o.decisions.get(g["decision"]) and o.decisions[g["decision"]].target != t.name:
+            out.append(f"guard: decision '{g['decision']}' is not about {t.name}")
+        if g.get("property"):
+            p = _prop_of(o, t.name, g["property"])
+            if p is None:
+                out.append(f"guard: {t.name} has no property '{g['property']}'")
+            elif p.type != "boolean":
+                out.append(f"guard: property '{g['property']}' is {p.type}, not a true/false value")
+    action = o.actions.get(tr.action)
+    for name, v in tr.set.items():
+        p = _prop_of(o, t.name, name)
+        if p is None:
+            out.append(f"sets unknown property '{name}'")
+        elif p.expr and not p.format:
+            out.append(f"'{name}' is computed and cannot be set")
+        elif p.format and p.columns:
+            out.append(f"'{name}' is read from several columns and cannot be set")
+        if isinstance(v, str) and v.startswith("$") and not _fills_itself(v) and \
+                (action is None or v[1:] not in action.parameters):
+            out.append(f"'{v}' is not a parameter of {tr.action or 'any action'}")
+    if tr.call:
+        out.extend(f"call: {e}" for e in _call(tr.call))
+        if action is not None and action.call:
+            out.append(f"action {action.name} makes its own call; give one of them")
+    if tr.after:
+        out.extend(_after(o, t, tr))
+    return out
+
+
+def _after(o: Ontology, t, tr) -> list[str]:
+    out = [f"after: unknown keys {sorted(set(tr.after) - {'days', 'since'})}"] if set(tr.after) - {"days", "since"} else []
+    days = tr.after.get("days")
+    if isinstance(days, str) and days.startswith("@"):
+        p = o.parameters.get(days[1:])
+        if p is None:
+            out.append(f"after: unknown parameter '{days}'")
+        elif p.type != "integer":
+            out.append(f"after: parameter '{days}' is {p.type}, not a whole number")
+    elif isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        out.append("after: days takes a whole number or @parameter")
+    since = _prop_of(o, t.name, tr.after.get("since", ""))
+    if since is None:
+        out.append("after: since takes a date or datetime property")
+    elif since.type not in ("date", "datetime"):
+        out.append(f"after: since '{since.name}' is {since.type}, not a date or datetime")
+    if tr.action:
+        out.append("after: a transition on the clock is taken by no action")
+    return out
+
+
+def _scope(o: Ontology, r) -> list[str]:
+    from xgen_space.check import is_a
+
+    out = [f"unknown key '{k}'" for k in r.scope if k not in ("attribute", "types")]
+    if not r.scope.get("attribute"):
+        out.append("needs attribute: what the principal says it belongs to")
+    if not r.scope.get("types"):
+        out.append("needs types: the property that holds it on each type")
+    for name, where in (r.scope.get("types") or {}).items():
+        if name not in o.objects:
+            out.append(f"unknown type '{name}'")
+            continue
+        spec = {"property": where} if isinstance(where, str) else where if isinstance(where, dict) else {}
+        here = name
+        for step in spec.get("via") or []:
+            lk = o.links.get(step) or o.link_by_inverse(step)
+            if lk is None:
+                out.append(f"{name}: unknown link '{step}' in via")
+                here = ""
+                break
+            here = lk.target if lk.name == step else lk.source
+        if not spec.get("property"):
+            out.append(f"{name}: give a property, or {{via: [links], property}}")
+        elif here and _prop_of(o, here, spec["property"]) is None:
+            out.append(f"{name}: {here} has no property '{spec['property']}'")
+    for t in o.objects:  # a parent read in full would show the rows of its scoped subtypes
+        if t not in r.scoped and r.can_read(t) and any(is_a(o, s, t) for s in r.scoped):
+            out.append(f"it reads {t} in full, whose subtypes are scoped; scope {t} or do not read it")
+    return out
+
+
+def _format(p, stored_text: bool) -> list[str]:
+    from xgen_space.expr import TIME_PARTS, ExprError, date_format
+
+    try:
+        parts = date_format(p.format)
+    except ExprError as e:
+        return [str(e)]
+    if p.type not in ("date", "datetime"):
+        return [f"format reads text as a date; declare it date or datetime, not {p.type}"]
+    if p.type == "date" and set(parts) & set(TIME_PARTS):
+        return [f"format {p.format} carries a time; declare it datetime"]
+    return [] if stored_text else ["format reads a stored column and takes no expr"]
+
+
+def _sorts(fmt: str) -> bool:
+    from xgen_space.expr import DATE_PARTS, date_format
+
+    parts = list(date_format(fmt))
+    return parts == [x for x in DATE_PARTS if x in parts]
+
+
+def _period(o: Ontology, t) -> list[str]:
+    out = [f"unknown key '{k}'" for k in t.period if k not in ("start", "end", "of", "end_exclusive")]
+    if not t.period.get("start"):
+        out.append("needs start: a date or datetime property")
+    for k in ("start", "end"):
+        name = t.period.get(k)
+        if not name:
+            continue
+        p = _prop_of(o, t.name, name)
+        if p is None:
+            out.append(f"{k} '{name}' is not a property")
+        elif p.type not in ("date", "datetime"):
+            out.append(f"{k} '{name}' is {p.type}, not a date or datetime")
+    of = t.period.get("of")
+    if of and not (of in o.links and o.links[of].source == t.name):
+        out.append(f"of '{of}' is not a link from {t.name}")
+    return out
+
+
+def _parameters(o: Ontology) -> list[str]:
+    from xgen_space.values import accepts
+
+    issues = []
+    for p in o.parameters.values():
+        head = f"parameter {p.name}"
+        if not valid_name(p.name):
+            issues.append(f"{head}: the name is not an identifier")
+        if p.type not in PARAMETER_TYPES:
+            issues.append(f"{head}: type '{p.type}' is not one of {PARAMETER_TYPES}")
+        elif p.value is None:
+            issues.append(f"{head}: needs a value")
+        elif not accepts(p.type, p.value):
+            issues.append(f"{head}: {p.value!r} is not {p.type}")
+        elif p.type in ("integer", "decimal"):
+            if p.min is not None and p.value < p.min:
+                issues.append(f"{head}: {p.value} is below {p.min}")
+            if p.max is not None and p.value > p.max:
+                issues.append(f"{head}: {p.value} is above {p.max}")
+    return issues
 
 
 def _computed(o: Ontology) -> list[str]:
@@ -219,8 +414,6 @@ def _computed(o: Ontology) -> list[str]:
 
 
 def _parameter(spec) -> list[str]:
-    import re
-
     if isinstance(spec, str):
         spec = {"type": spec}
     if not isinstance(spec, dict):
@@ -285,15 +478,18 @@ def _identities(o: Ontology) -> list[str]:
 
 
 NORMALIZERS = ("none", "trim", "lower", "digits", "alnum")
+HIT_POLICIES = ("first", "collect", "unique", "priority")
+NAMED = re.compile(r"@[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _decisions(o: Ontology) -> list[str]:
-    from xgen_space.decide.cells import CellError, parse_test
+    from xgen_space.decide.cells import CellError, parse_test, resolve
+    from xgen_space.decide.checks import table_findings
 
     issues = []
     for d in o.decisions.values():
-        if d.hit_policy not in ("first", "collect", "unique"):
-            issues.append(f"decision {d.name}: hit policy '{d.hit_policy}' is not first/collect/unique")
+        if d.hit_policy not in HIT_POLICIES:
+            issues.append(f"decision {d.name}: hit policy '{d.hit_policy}' is not {'/'.join(HIT_POLICIES)}")
         target = o.objects.get(d.target) if d.target else None
         if d.target and target is None:
             issues.append(f"decision {d.name}: target '{d.target}' is unknown")
@@ -323,10 +519,21 @@ def _decisions(o: Ontology) -> list[str]:
                 if k not in d.inputs:
                     issues.append(f"decision {d.name} rule {r.id}: unknown input '{k}'")
                 try:
-                    parse_test(v)
+                    parse_test(v, d.named)
                 except CellError as e:
                     issues.append(f"decision {d.name} rule {r.id}: {k}: {e}")
-            for k in r.then:
+            for k, v in r.then.items():
                 if k not in d.outputs:
                     issues.append(f"decision {d.name} rule {r.id}: unknown output '{k}'")
+                # only where parameters are in use: without them, "@text" has always been plain text
+                if d.named and isinstance(v, str) and resolve(v, d.named) is v and NAMED.fullmatch(v):
+                    issues.append(f"decision {d.name} rule {r.id}: {k}: unknown parameter '{v}'")
+            if (d.hit_policy == "priority") != (r.priority is not None):
+                issues.append(f"decision {d.name} rule {r.id}: "
+                              + ("hit policy priority needs a priority on every rule" if d.hit_policy == "priority"
+                                 else "priority is read only under hit policy priority"))
+            elif r.priority is not None and (isinstance(r.priority, bool) or not isinstance(r.priority, int)):
+                issues.append(f"decision {d.name} rule {r.id}: priority must be a whole number")
+        if d.hit_policy == "priority" and all(isinstance(r.priority, int) for r in d.rules):
+            issues += [str(f) for f in table_findings(d, o) if f.kind == "tie"]
     return issues

@@ -13,9 +13,11 @@ from xgen_space.model import Ontology
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
 # data (the draft rules). Both plug in and out like the rest.
 KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
-SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities")
+SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities", "parameters",
+            "metrics", "conflicts")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
-            "actions": "action", "roles": "role", "queries": "query", "identities": "identity"}
+            "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
+            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -167,6 +169,8 @@ class Composition:
     rules_by: list[str] = field(default_factory=list)  # the modules that gave draft rules
     terms: list[dict] = field(default_factory=list)  # the dictionary modules' words
     messages: list[dict] = field(default_factory=list)  # the dictionary modules' messages
+    findings: list = field(default_factory=list)  # what the decision tables say twice or leave open (decide.checks)
+    conflicts: list = field(default_factory=list)  # where two sources answer one input differently (decide.conflicts)
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -237,7 +241,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
@@ -259,7 +263,8 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
                 pd.setdefault("type", "string")
             cur = {}
             origin[f"property:{name}.{p}"] = m.name
-        if "type" in pd and cur.get("type") and pd["type"] != cur["type"]:
+        text_date = cur.get("type") == "string" and pd.get("format")  # text a binding says holds a date
+        if "type" in pd and cur.get("type") and pd["type"] != cur["type"] and not text_date:
             raise ModuleError(f"{m.key} changes the type of {name}.{p} from {cur['type']} to {pd['type']}")
         add = pd.pop("values_add", [])
         names = pd.pop("labels", None)
@@ -348,6 +353,10 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
             r[k] = list(dict.fromkeys(list(r.get(k) or []) + list(patch[k])))
     if patch.get("row_filters"):
         r.setdefault("row_filters", {}).update(copy.deepcopy(patch["row_filters"]))
+    if patch.get("scope"):
+        scope = r.setdefault("scope", {})
+        scope.update({k: copy.deepcopy(v) for k, v in patch["scope"].items() if k != "types"})
+        scope.setdefault("types", {}).update(copy.deepcopy(patch["scope"].get("types") or {}))
     if patch.get("mask"):
         mask = patch["mask"]
         cur = r.get("mask") or {}
@@ -355,6 +364,27 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
         cur.update({x: "partial" for x in mask} if isinstance(mask, list) else mask)
         r["mask"] = cur
     touched.setdefault(f"role:{name}", []).append(m.name)
+
+
+def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict) -> None:
+    if name not in acc["parameters"]:
+        raise ModuleError(f"{m.key} extends parameter '{name}', which no attached module defines")
+    patch = dict(patch) if isinstance(patch, dict) else {"value": patch}  # return_window_days: 30 is enough
+    cur = acc["parameters"][name]
+    cur = dict(cur) if isinstance(cur, dict) else {"value": cur}
+    if "type" in patch and "type" in cur and patch["type"] != cur["type"]:
+        raise ModuleError(f"{m.key} changes the type of parameter {name} from {cur['type']} to {patch['type']}")
+    acc["parameters"][name] = {**cur, **copy.deepcopy(patch)}
+    touched.setdefault(f"parameter:{name}", []).append(m.name)
+
+
+def _extend_entry(acc: dict, m: Module, section: str, name: str, patch: dict, touched: dict) -> None:
+    """A metric or a conflict takes what the patch gives; a customer redefines one or picks in one."""
+    kind = SINGULAR[section]
+    if name not in acc[section]:
+        raise ModuleError(f"{m.key} extends {kind} '{name}', which no attached module defines")
+    acc[section][name].update(copy.deepcopy(patch))
+    touched.setdefault(f"{kind}:{name}", []).append(m.name)
 
 
 def compose(modules: list[Module], *, name: str = "", namespace: str = "", version: str = "",
@@ -394,8 +424,13 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_decision(acc, m, k, patch or {}, touched)
                 elif s == "roles":
                     _extend_role(acc, m, k, patch or {}, touched)
+                elif s == "parameters":
+                    _extend_parameter(acc, m, k, patch, touched)
+                elif s in ("metrics", "conflicts"):
+                    _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
-                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions or roles")
+                    raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, roles, "
+                                      "parameters, metrics or conflicts")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():
@@ -454,7 +489,8 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
     return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
-                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages])
+                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages],
+                       onto.findings(), onto.source_conflicts())
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:
@@ -463,6 +499,8 @@ def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:
         if type_name:
             r["read"] = [x for x in r.get("read") or [] if x != type_name]
             (r.get("row_filters") or {}).pop(type_name, None)
+            # a property that goes stays named: validate refuses it, where dropping it would open the rows
+            ((r.get("scope") or {}).get("types") or {}).pop(type_name, None)
         gone = (lambda ref: ref.startswith(f"{type_name}.")) if type_name else (lambda ref: ref == prop)
         if isinstance(r.get("mask"), dict):
             r["mask"] = {k: v for k, v in r["mask"].items() if not gone(k)}
@@ -485,7 +523,8 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
             head = issue.split(":", 1)[0]
             kind, _, ident = head.partition(" ")
             section = {"query": "queries", "question": "questions", "decision": "decisions", "action": "actions",
-                       "link": "links", "identity": "identities"}.get(kind)
+                       "link": "links", "identity": "identities", "metric": "metrics",
+                       "conflict": "conflicts"}.get(kind)
             if kind == "decision":
                 ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
             if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:

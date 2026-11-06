@@ -1,4 +1,7 @@
-"""Unary tests for decision-table cells: a small FEEL/ZEN subset, evaluated natively or rendered for ZEN."""
+"""Unary tests for decision-table cells: a small FEEL/ZEN subset, evaluated natively or rendered for ZEN.
+
+A cell reads a named parameter as `@name` wherever it takes a literal: `<= @return_window_days`, `[0..@limit]`.
+"""
 from __future__ import annotations
 
 import json
@@ -46,8 +49,12 @@ _RANGE = re.compile(r"^([\[(])\s*(.+?)\s*\.\.\s*(.+?)\s*([\])])$")
 _CMP = re.compile(r"^(<=|>=|<|>|!=|==|=)\s*(.+)$")
 
 
-def _literal(s: str) -> Any:
+def _literal(s: str, named: dict[str, Any] | None = None) -> Any:
     s = s.strip()
+    if s.startswith("@"):
+        if s[1:] not in (named or {}):
+            raise CellError(f"unknown parameter '{s}'")
+        return named[s[1:]]
     if s == "null":
         return None
     if s in ("true", "false"):
@@ -78,7 +85,14 @@ def _split_list(s: str) -> list[str]:
     return [x.strip() for x in out if x.strip()]
 
 
-def parse_test(text: Any) -> Any:
+def resolve(value: Any, named: dict[str, Any]) -> Any:
+    """A rule's output: `@name` gives the parameter's value, anything else stands as written."""
+    if isinstance(value, str) and value.startswith("@") and value[1:] in named:
+        return named[value[1:]]
+    return value
+
+
+def parse_test(text: Any, named: dict[str, Any] | None = None) -> Any:
     s = "" if text is None else str(text).strip()
     if s in ("", "-"):
         return Any_()
@@ -88,22 +102,22 @@ def parse_test(text: Any) -> Any:
         return IsNull(negate=True)
     m = _RANGE.match(s)
     if m:
-        return Range(_literal(m.group(2)), _literal(m.group(3)), m.group(1) == "[", m.group(4) == "]")
+        return Range(_literal(m.group(2), named), _literal(m.group(3), named), m.group(1) == "[", m.group(4) == "]")
     low = s.lower()
     for prefix, neg in (("not in", True), ("in", False)):
         if low.startswith(prefix + " ") or low.startswith(prefix + "["):
             body = s[len(prefix):].strip()
             if not (body.startswith("[") and body.endswith("]")):
                 raise CellError(f"'{s}': list goes in [ ]")
-            return OneOf(tuple(_literal(x) for x in _split_list(body[1:-1])), negate=neg)
+            return OneOf(tuple(_literal(x, named) for x in _split_list(body[1:-1])), negate=neg)
     m = _CMP.match(s)
     if m:
         op = {"=": "==", "==": "=="}.get(m.group(1), m.group(1))
-        return Compare(op, _literal(m.group(2)))
+        return Compare(op, _literal(m.group(2), named))
     parts = _split_list(s)
     if len(parts) > 1:
-        return OneOf(tuple(_literal(x) for x in parts))
-    return Compare("==", _literal(s))
+        return OneOf(tuple(_literal(x, named) for x in parts))
+    return Compare("==", _literal(s, named))
 
 
 def _num(v: Any) -> Any:

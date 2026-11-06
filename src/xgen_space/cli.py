@@ -42,6 +42,12 @@ def _text(arg: str) -> str:
     return p.read_text(encoding="utf-8") if p.exists() else arg
 
 
+def _conflicts(found: list) -> list[dict]:
+    from xgen_space.decide.conflicts import conflict_view
+
+    return [conflict_view(c) for c in found]
+
+
 def _ingested(files: list[str], adapters: list[str]):
     """Files of any format as one definitions object, or None without files."""
     from xgen_space.ingest import IngestError, ingest, load_adapters
@@ -324,6 +330,29 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("config")
     s.add_argument("--impact", help="module to check before detaching")
     s.add_argument("--cascade", action="store_true")
+    s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
+
+    s = sub.add_parser("views", help="the statements that make the views objects are defined by")
+    s.add_argument("config")
+    s.add_argument("--backend")
+    s.add_argument("--apply", action="store_true", help="run them on the source")
+
+    s = sub.add_parser("transitions", help="the rows whose time-based transitions have come due")
+    s.add_argument("config")
+    s.add_argument("--apply", action="store_true", help="take them, writing to the source")
+
+    s = sub.add_parser("metric", help="answer a metric with what it means; without a name, list the dictionary")
+    s.add_argument("config")
+    s.add_argument("name", nargs="?", default="")
+    s.add_argument("--from", dest="since", default="", help="start of the window, inclusive")
+    s.add_argument("--to", dest="until", default="", help="end of the window, exclusive")
+    s.add_argument("--param", action="append", default=[])
+    s.add_argument("--backend")
+    s.add_argument("--role")
+    s.add_argument("--principal", action="append", default=[])
+
+    s = sub.add_parser("periods", help="rows of one thing valid at the same time, where current() takes the highest")
+    s.add_argument("config")
 
     s = sub.add_parser("bindings", help="check the definition against the actual database")
     s.add_argument("config")
@@ -417,8 +446,10 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
 
     if a.cmd == "validate":
-        issues = Ontology.load(a.ontology).validate()
-        _out({"ok": not issues, "issues": issues})
+        onto = Ontology.load(a.ontology)
+        issues = onto.validate()
+        _out({"ok": not issues, "issues": issues, "findings": [f.to_dict() for f in onto.findings()],
+              "conflicts": _conflicts(onto.source_conflicts())})
         return 0 if not issues else 1
 
     if a.cmd == "translate":
@@ -517,7 +548,8 @@ def main(argv: list[str] | None = None) -> int:
             comp = compose(lib.resolve(a.modules), namespace=a.namespace)
             if a.output:
                 comp.ontology.dump(a.output)
-            _out({"modules": comp.summary(), "issues": comp.issues, "written": a.output})
+            _out({"modules": comp.summary(), "issues": comp.issues, "written": a.output,
+                  "findings": [f.to_dict() for f in comp.findings], "conflicts": _conflicts(comp.conflicts)})
             return 0 if not comp.issues else 1
         return 0
 
@@ -713,7 +745,41 @@ def main(argv: list[str] | None = None) -> int:
             imp = studio.detach_impact(a.impact, cascade=a.cascade)
             _out(imp.to_dict())
             return 0 if imp.ok else 1
+        if a.check:
+            comp = studio.composition
+            issues, found = (comp.issues, comp.findings) if comp else (studio.onto.validate(), studio.onto.findings())
+            _out({"issues": issues, "findings": [f.to_dict() for f in found],
+                  "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts())})
+            return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
+    elif a.cmd == "views":
+        from xgen_space.decide.views import create_views, view_statements
+
+        if a.apply:
+            _out({"ran": create_views(studio, a.backend)})
+        else:
+            _out(";\n".join(view_statements(studio.onto, studio.backend(a.backend))) + ";")
+    elif a.cmd == "transitions":
+        from dataclasses import asdict
+
+        if a.apply:
+            _out([p.to_dict() for p in studio.actions.advance()])
+        else:
+            _out([asdict(d) for d in studio.actions.due()])
+    elif a.cmd == "metric":
+        from xgen_space.decide.metrics import answer_metric, dictionary
+
+        if not a.name:
+            _out(dictionary(studio.onto))
+        else:
+            _out(answer_metric(studio, a.name, _params(a.param), since=a.since, until=a.until, backend=a.backend,
+                               role=a.role, principal=_params(a.principal)).to_dict())
+    elif a.cmd == "periods":
+        from xgen_space.decide.periods import overlapping_periods
+
+        found = overlapping_periods(studio)
+        _out(found)
+        return 0 if not found else 1
     elif a.cmd == "bindings":
         rep = studio.check_bindings(backend=a.backend, data=not a.no_data)
         _out(rep.to_dict())
