@@ -201,6 +201,11 @@ def validate_ontology(o: Ontology) -> list[str]:
         for p in res.param_types:
             if p not in q.params:
                 add(f"query {q.name}: parameter '{p}' is not declared")
+    if o.metrics:
+        from xgen_space.decide.metrics import metric_issues
+
+        for m in o.metrics.values():
+            issues.extend(f"metric {m.name}: {e}" for e in metric_issues(o, m))
     for qs in o.questions:
         if bool(qs.query) == bool(qs.decision):
             add(f"question {qs.id}: give either a query or a decision")

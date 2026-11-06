@@ -281,6 +281,23 @@ class RegisteredQuery:
 
 
 @dataclass
+class Metric:
+    """A named number with what it means (see decide.metrics)."""
+
+    name: str
+    formula: dict[str, Any]
+    owner: str = ""
+    time: dict[str, Any] = field(default_factory=dict)         # {property: alias.prop, basis: in words}
+    denominator: dict[str, Any] = field(default_factory=dict)  # left out for a plain total
+    label: str = ""
+    description: str = ""
+    unit: str = ""
+    scale: float = 1
+    cite: str = ""
+    params: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class Question:
     id: str
     text: str
@@ -308,6 +325,7 @@ class Ontology:
     exclusive: list[tuple[str, str]] = field(default_factory=list)
     identities: dict[str, Identity] = field(default_factory=dict)
     parameters: dict[str, Parameter] = field(default_factory=dict)
+    metrics: dict[str, Metric] = field(default_factory=dict)
     clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
@@ -474,6 +492,12 @@ def _parameter(name: str, d: Any) -> Parameter:
                      d.get("cite", ""), d.get("min"), d.get("max"))
 
 
+def _metric(name: str, d: dict) -> Metric:
+    return Metric(name, dict(d.get("formula") or {}), d.get("owner", ""), dict(d.get("time") or {}),
+                  dict(d.get("denominator") or {}), d.get("label", ""), d.get("description", ""), d.get("unit", ""),
+                  d.get("scale", 1), d.get("cite", ""), dict(d.get("params") or {}))
+
+
 def _action(name: str, d: dict) -> ActionType:
     crit = [Criterion(decision=c.get("decision", ""), expect=dict(c.get("expect", {})),
                       states=list(c.get("states", []))) for c in d.get("criteria", [])]
@@ -626,6 +650,7 @@ def _from_dict(d: dict) -> Ontology:
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
         identities=identities,
         parameters=parameters,
+        metrics={k: _metric(k, v) for k, v in (d.get("metrics") or {}).items()},
     )
     _period_values(onto)
     _role_scopes(onto)
@@ -693,6 +718,10 @@ def _to_dict(o: Ontology) -> dict:
                                   "cite": p.cite}) | {"value": p.value}
                   | {k: v for k, v in (("min", p.min), ("max", p.max)) if v is not None}
                   for p in o.parameters.values()}
+    metrics = {m.name: _clean({"label": m.label, "description": m.description, "unit": m.unit, "owner": m.owner,
+                               "formula": m.formula, "denominator": m.denominator, "time": m.time, "cite": m.cite,
+                               "params": m.params}) | ({} if m.scale == 1 else {"scale": m.scale})
+               for m in o.metrics.values()}
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
@@ -701,6 +730,7 @@ def _to_dict(o: Ontology) -> dict:
         "ontology": o.name, "namespace": o.namespace, "version": o.version, "label": o.label,
         "parameters": parameters, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
-        "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "questions": questions,
+        "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "metrics": metrics,
+        "questions": questions,
         "exclusive": [list(x) for x in o.exclusive], "identities": identities,
     })

@@ -315,6 +315,16 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--cascade", action="store_true")
     s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
 
+    s = sub.add_parser("metric", help="answer a metric with what it means; without a name, list the dictionary")
+    s.add_argument("config")
+    s.add_argument("name", nargs="?", default="")
+    s.add_argument("--from", dest="since", default="", help="start of the window, inclusive")
+    s.add_argument("--to", dest="until", default="", help="end of the window, exclusive")
+    s.add_argument("--param", action="append", default=[])
+    s.add_argument("--backend")
+    s.add_argument("--role")
+    s.add_argument("--principal", action="append", default=[])
+
     s = sub.add_parser("periods", help="rows of one thing valid at the same time, where current() takes the highest")
     s.add_argument("config")
 
@@ -652,6 +662,14 @@ def main(argv: list[str] | None = None) -> int:
             _out({"issues": issues, "findings": [f.to_dict() for f in found]})
             return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
+    elif a.cmd == "metric":
+        from xgen_space.decide.metrics import answer_metric, dictionary
+
+        if not a.name:
+            _out(dictionary(studio.onto))
+        else:
+            _out(answer_metric(studio, a.name, _params(a.param), since=a.since, until=a.until, backend=a.backend,
+                               role=a.role, principal=_params(a.principal)).to_dict())
     elif a.cmd == "periods":
         from xgen_space.decide.periods import overlapping_periods
 
