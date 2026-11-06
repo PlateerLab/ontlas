@@ -1,10 +1,10 @@
 """Render the README images: the studio screens from the example studio, and the architecture figure.
 
-    python tools/render_screens.py            # needs playwright with chromium installed
+    python tools/render_screens.py            # needs playwright with chromium installed, and the [all] and [embed] extras
 
 Writes assets/screens/{library,query,decision,map}.png from `xspace preview`,
-assets/screens/{monitor,ontology,catalog,manage,draft}.png from `xspace serve` with the example files, and assets/architecture.png, all
-at 2x.
+assets/screens/{monitor,ontology,catalog,manage,draft,space-map,documents,search,adapters}.png from `xspace serve` with the
+example files, and assets/architecture.png, all at 2x.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from xgen_space.web.server import serve  # noqa: E402
 
 
 def _serve(config: Path, samples: Path) -> str:
-    data = DataOptions(samples=samples)
+    data = DataOptions(samples=samples, embedder={"kind": "fastembed"})
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -76,6 +76,27 @@ def live_screens(page, base: str, out: Path) -> None:
     page.evaluate("document.fonts.ready")
     page.wait_for_timeout(400)
     page.locator("#draft").screenshot(path=str(out / "draft.png"))
+    page.goto(base + "/#map")
+    page.wait_for_selector("#mapgraph .kg-stage canvas", timeout=30000)
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(out / "space-map.png"))
+    page.goto(base + "/#docs")
+    page.wait_for_selector("#docgraph .kg-stage canvas", timeout=30000)
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(out / "documents.png"))
+    page.goto(base + "/#search")
+    page.wait_for_selector("[data-act=srex]", timeout=30000)
+    page.locator("[data-act=srex]").first.click()
+    page.wait_for_function("() => !document.querySelector('#main .spin') && document.querySelectorAll('#main .card').length > 1", timeout=30000)
+    page.wait_for_timeout(500)
+    page.screenshot(path=str(out / "search.png"))
+    page.goto(base + "/#adapters")
+    page.wait_for_selector("[data-act=adcheck]")
+    page.click("[data-act=adcheck]")
+    page.wait_for_function("() => !document.querySelector('[data-act=adcheck]').disabled", timeout=60000)
+    page.wait_for_function("() => document.getElementById('toast').hidden", timeout=8000)
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(out / "adapters.png"))
 
 
 def main() -> None:

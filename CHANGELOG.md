@@ -27,6 +27,7 @@
 - Conditional aggregates: `sum(link.prop where cond)` in computed properties and `{"sum": ..., "where": ...}` in query columns,
   on every language. Gremlin compiles optional links and computed properties. GQL and SQL/PGQ compile link aggregates and date
   functions; SQL/PGQ is verified on Oracle 23, GQL is checked as text only. A column named like its alias is valid SPARQL now.
+- Search orders what the store found by the model's score and the question's own words. Stores are still compared on the model alone.
 - Decisions: hit policy `priority` shows what it overrode, and `findings` report overlaps, unreachable rules and input gaps.
   `parameters` are one named value read as `@name` by rules and expressions, changed alone by a customer module. Dates kept as
   text read as dates with `format: YYYYMMDD`, and `period` with `current(link.prop)` gives the row valid now. Scoped roles limit

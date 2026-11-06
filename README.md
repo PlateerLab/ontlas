@@ -103,7 +103,7 @@ xspace draft --dsn "$XSPACE_DSN" --name shop -o my-studio                       
 xspace serve my-studio/studio.yaml
 ```
 
-A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`). A draft reads every table in full to
+A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
 **3. Check it.**
@@ -297,6 +297,10 @@ form for one says so before it runs.
 
 ## Swap anything: the ports
 
+<p align="center">
+  <img src="assets/screens/adapters.png" alt="Adapters screen: every swappable part, with the tests that say a swap changed nothing" width="100%">
+</p>
+
 Every part a deployment might want different is a port with a small interface, a registry, and a test that says the swap
 changed nothing.
 
@@ -331,6 +335,16 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 
 - **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one.
 - **Document ontology.** It becomes rows of document, section and concept. Concepts are the names the definitions give (objects, properties, allowed values, decisions, glossary terms) plus the words a document keeps returning to, found without a model. The rows run on the same engine as the domain ontology, so the same compilers and the same conformance apply.
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screens/documents.png" alt="Document ontology screen: documents, sections and concepts as a graph, tied to the definitions they mention"></td>
+    <td width="50%"><img src="assets/screens/search.png" alt="Search screen: passages found by meaning, with the definitions they name"></td>
+  </tr>
+</table>
+
+A search takes more passages from the store than it returns and orders them by the model's score and the question's own
+words, since the nearest passage to a model is not always the one that says it.
 
 Concepts tie the two together. `xspace search` returns the passages and the definitions a question names, the object screen
 shows the sections that mention an object, and the map shows which queries a document touches. Relations between concepts are
@@ -646,6 +660,22 @@ studio.run("myOrders", role="customer_agent", principal={"customer_id": "C001"})
 Decision tables export to GoRules JDM (`decide.zen.to_jdm`) and run on the ZEN engine when `use_zen=True`;
 the tests check that ZEN and the built-in engine agree on every case.
 
+Rules stay readable as they grow. All of this is in the module file, and the 규칙 · 지표 screen shows it:
+
+| In a module | What it does |
+|---|---|
+| `hit_policy: priority` | The highest rule wins, and the answer says which rules it overrode |
+| `parameters` | One named value, read as `@name` by rules and expressions; a customer module changes it alone |
+| `metrics` | A number with its formula, denominator, time basis and owner |
+| `conflicts` | Two sources that disagree stay open until a person picks one, and the pick is reviewed like any change |
+| transitions | A state change with a guard, side effects and `after`; an action is asked again right before it runs |
+| `view` | An object defined by a query, in the source, or carried along with `inline: true` where the source cannot be written |
+| `format: YYYYMMDD` | Dates kept as text read as dates |
+| `period`, `current(link.prop)` | The row valid now, out of rows valid for a period |
+| scoped roles | Reads and writes limited to the signed-in organisation, closed when the scope is missing |
+
+Each decision table is also read for what it leaves open: overlaps, rules that can never apply, and inputs no rule covers.
+
 Actions check what is given (`{type, required, min, max, values, pattern, max_length}` per parameter), and may send
 an external request after the change is written, only to hosts the studio file allows (`actions: {call_hosts:
 [...]}`); a failed request puts the row back. An executed action can be rolled back, if nothing has changed the row
@@ -765,6 +795,10 @@ change set.
 
 ## The data map
 
+<p align="center">
+  <img src="assets/screens/space-map.png" alt="Space map screen: files, tables, documents, vector stores, objects and queries as one graph, with a side panel for the picked node" width="100%">
+</p>
+
 ```python
 from xgen_space.catalog import from_ontology
 cat = from_ontology(studio.onto)                  # tables, columns, objects, properties, queries, decisions, roles
@@ -840,16 +874,27 @@ From a checkout (the package is not on PyPI yet):
 pip install -e .                 # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
 pip install -e ".[all]"          # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP, openpyxl
 pip install -e ".[postgres]"     # + psycopg      ("[neo4j]" for the Neo4j driver)
-pip install -e ".[mysql]"        # + PyMySQL, sqlglot      ("[oracle]" for oracledb)
+pip install -e ".[mysql]"        # + PyMySQL, sqlglot      ("[oracle]" for oracledb, "[mssql]" for SQL Server)
 pip install -e ".[pdf]"          # + pypdf, for reading PDF documents
 pip install -e ".[xlsx]"         # + openpyxl, for drafting from Excel workbooks
 pip install -e ".[gremlin]"      # + gremlinpython, for Gremlin Server
+pip install -e ".[embed]"        # + fastembed, a multilingual embedding model on this machine
+pip install -e ".[reasonable]"   # + reasonable, a fast OWL RL engine, off by default
 ```
+
+Qdrant and any OpenAI-shaped embedding service need no package: they are spoken to over HTTP.
 
 Run the demo from a checkout with only PyYAML and rdflib installed:
 
 ```bash
 python examples/commerce/demo.py
+```
+
+The tests need no server. With Docker, the same tests run against real ones, one at a time:
+
+```bash
+python tools/run_live.py                  # postgres, mysql, oracle, mssql, fuseki, neo4j, gremlin, qdrant, pgvector
+python tools/run_live.py pgvector qdrant  # some of them
 ```
 
 ## Command line

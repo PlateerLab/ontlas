@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from xgen_space.embed import Embedder, open_embedder
+from xgen_space.embed import Embedder, open_embedder, shared_wording
 from xgen_space.vectors import MemoryStore, Point, VectorError, VectorStore, open_vector_store
 
 CHUNK = 520  # characters: a paragraph or two, what a person reads as one passage
@@ -203,6 +203,10 @@ DOCUMENT_MODULE = {
 }
 
 
+WIDER = 4  # a model's nearest passage is not always the one that says it, so a search looks at more than it returns
+WORDING = 0.3  # the share of the question's own words in the order; the model keeps the rest
+
+
 class Space:
     """Documents, one embedder and any number of vector stores. Every store holds the same chunks, so one can replace another
     and a question can be asked of all of them at once."""
@@ -302,8 +306,15 @@ class Space:
         if name not in self.stores:
             raise LookupError(f"벡터 저장소 {name}")
         vector = self.embedder.embed([text])[0]
-        return [{"id": h.id, "score": round(h.score, 4), "document": h.payload.get("document", ""), "section": h.payload.get("section", ""),
-                 "text": h.payload.get("text", ""), "store": name} for h in self.stores[name].search(self.collection, vector, k, where)]
+        semantic = self.embedder.semantic  # a wording embedder has counted the words already
+        found = self.stores[name].search(self.collection, vector, max(k * WIDER, k) if semantic else k, where)
+        hits = [{"id": h.id, "score": round(h.score, 4), "document": h.payload.get("document", ""), "section": h.payload.get("section", ""),
+                 "text": h.payload.get("text", ""), "store": name} for h in found]
+        if semantic:
+            for h in hits:
+                h["score"] = round((1 - WORDING) * h["score"] + WORDING * shared_wording(text, h["text"]), 4)
+            hits.sort(key=lambda h: -h["score"])  # stable: a tie stays in the store's order
+        return hits[:k]
 
     def compare(self, text: str, k: int = 5) -> dict:
         """The same question to every store, each with its own answer and how long it took."""

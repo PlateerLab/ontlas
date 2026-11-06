@@ -25,6 +25,15 @@ class EmbedError(RuntimeError):
     """The model could not be reached or answered with something that is not vectors."""
 
 
+def shared_wording(question: str, passage: str) -> float:
+    """How much of a question's wording a passage has, from 0 to 1. Pieces of two letters, so 뜯은 meets 뜯어 and a particle does not hide a word."""
+    def pieces(text: str) -> set[str]:
+        return {w[i:i + 2] for w in _WORD.findall(text.lower()) for i in range(max(len(w) - 1, 1))}
+
+    asked = pieces(question)
+    return len(asked & pieces(passage)) / len(asked) if asked else 0.0
+
+
 class Embedder:
     kind = ""
     name = ""

@@ -410,7 +410,7 @@ window.SpaceGraph = (function () {
         nodeProgramClasses: { border: Border }, edgeProgramClasses: { curved: kit.createEdgeCurveProgram({ arrowHead: { extremity: 'target', lengthToThicknessRatio: 6.5, widenessToThicknessRatio: 4.6 } }) },
         renderEdgeLabels: true, labelFont: 'Pretendard, "Malgun Gothic", sans-serif', labelSize: 12, labelWeight: '600',
         labelColor: { color: '#1b2330' }, edgeLabelFont: 'Pretendard, "Malgun Gothic", sans-serif', edgeLabelSize: 10.5, edgeLabelWeight: '500',
-        edgeLabelColor: { color: '#5b6675' }, labelGridCellSize: 70, labelDensity: 1.4,
+        edgeLabelColor: { color: '#5b6675' }, labelGridCellSize: 110, labelDensity: 1,
         labelRenderedSizeThreshold: prefs.nodeLabels || graph.order <= LABELS_ALL ? 0 : 11,
         minCameraRatio: 0.06, maxCameraRatio: 4, ...reducers(st),
       });

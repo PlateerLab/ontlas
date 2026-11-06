@@ -118,7 +118,7 @@ window.SpaceScene = (() => {
       const word = (x, h, t) => { const [lx, ly] = P(x, 92, z + h + 8); return `<text x="${lx}" y="${ly}" text-anchor="middle" class="glabel">${esc(t)}</text>`; };
       let out = '';
       s.graphs.forEach((g, i) => { const x = 90 + i * 62; out += cyl(x, 92, z, 20, 40, C.teal) + word(x, 40, g); });
-      out += machine(280, 74, z, C.slate, 44) + word(313, 50, '임베딩');
+      out += machine(280, 74, z, C.slate, 32) + word(313, 38, '임베딩');
       s.vectors.forEach((g, i) => { const x = 430 + i * 62; out += cyl(x, 92, z, 20, 34, C.violet) + word(x, 34, g); });
       s.reasoners.forEach((g, i) => { const x = 620 + i * 66; out += box(x, 76, z, 42, 34, 30, C.amber) + word(x + 21, 32, g); });
       return out;

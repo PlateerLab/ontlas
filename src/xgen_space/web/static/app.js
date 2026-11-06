@@ -366,7 +366,15 @@
       return `<div class="ngroup"><button class="navg" data-act="navg" data-i="${i}" aria-expanded="${!shut}"><span>${no ? `<em>${no}</em> ` : ''}${h}${tag}</span>${ui('chevron')}</button>${shut ? '' : keys.map(link).join('')}</div>`;
     }).join('');
     const foot = `<div class="sfoot"><b>${esc(st.title)}</b><span>모듈 ${st.modules_on}개</span>${st.backends.map((b) => `<span class="be"><i class="dot"></i>${esc(b.name)} · ${esc(b.language.toUpperCase())}</span>`).join('')}</div>`;
+    const nav = $('#side .snav');
+    const kept = nav ? nav.scrollTop : 0;
     $('#side').innerHTML = `${BRAND}<div class="snav">${groups}</div>${foot}`;
+    $('#side .snav').scrollTop = kept;
+    if (S.tab !== renderSide.tab) {
+      renderSide.tab = S.tab;
+      const on = $('#side .nav.on');
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
     $('#app').classList.toggle('slim', S.slim);
   }
 

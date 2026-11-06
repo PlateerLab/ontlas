@@ -1257,7 +1257,7 @@ class StudioSession(SpaceMixin):
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
-                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql://, mssql:// "
+                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql:// "
                                  "주소 또는 SQLite 파일 경로를 입력해 주세요.")
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"

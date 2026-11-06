@@ -346,3 +346,28 @@ def test_live_space_on_a_real_store():
     assert s.compare("운송장 번호", 3)["same"]
     s.stores["qdrant"].drop(s.collection)
     assert urllib.request.urlopen(value + "/collections", timeout=5).status == 200
+
+
+def test_the_question_s_own_words_settle_what_a_model_found_close():
+    class Near(HashEmbedder):
+        semantic = True  # says it reads meaning, and puts the wrong passage first
+
+        def embed(self, texts):
+            return [[1.0, 0.0] if "숨김" in t or "돌려" in t else [0.9, 0.44] for t in texts]
+
+    near = Near(256)
+    near.dim = 2
+    s = Space(near)
+    s.add({"id": "a", "name": "상품평", "text": "욕설이 들어간 상품평은 숨김 처리합니다."})
+    s.add({"id": "b", "name": "반품", "text": "포장을 뜯은 속옷은 반품할 수 없습니다."})
+    hits = s.search("포장을 뜯은 속옷도 돌려보낼 수 있나요", k=2)
+    assert [h["document"] for h in hits] == ["반품", "상품평"]
+    assert hits[0]["score"] > hits[1]["score"] and all(0 <= h["score"] <= 1 for h in hits)
+    assert s.compare("포장을 뜯은 속옷도 돌려보낼 수 있나요", k=2)["same"]  # the stores are still compared on the model alone
+
+
+def test_a_search_returns_what_it_was_asked_for_however_far_it_looked():
+    s = Space(HashEmbedder(256))
+    for i in range(8):
+        s.add({"id": f"d{i}", "name": f"문서{i}", "text": f"반품 기간 {i}일 안내입니다."})
+    assert len(s.search("반품 기간", k=3)) == 3
