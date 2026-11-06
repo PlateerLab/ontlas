@@ -1325,7 +1325,7 @@ ${controls}${body}`;
     for (const k of Object.keys(a.parameters)) params[k] = d.params[k] ?? (k === 'reason' ? '사이즈가 맞지 않음' : '');
     try {
       const r = await api('request', { action, key: d.key, params, role: d.role });
-      d.proposal = r.proposal;
+      d.proposal = r.proposal; S.pa = null;
       d.audit = (await api('audit')).audit;
       render();
       toast(r.proposal.status === 'pending' ? '검사를 통과했습니다. 승인 대기 중입니다.' : '검사를 통과하지 못해 요청이 반려되었습니다.', r.proposal.status !== 'pending');
