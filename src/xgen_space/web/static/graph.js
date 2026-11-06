@@ -383,7 +383,11 @@ window.SpaceGraph = (function () {
   function kill() {
     if (!cur) return;
     if (cur.ro) cur.ro.disconnect();
+    // a browser keeps about sixteen WebGL contexts: give these back now rather than whenever it collects them
+    const canvases = cur.stage ? [...cur.stage.querySelectorAll('canvas')] : [];
+    const gls = canvases.map((c) => c.getContext('webgl2') || c.getContext('webgl')).filter(Boolean);
     if (cur.renderer) cur.renderer.kill();
+    gls.forEach((gl) => { const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); });
     cur = null;
   }
 
