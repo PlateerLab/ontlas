@@ -30,7 +30,7 @@ def test_five_floors_read_from_the_studio(session):
     t = tags(b)
     assert t["ontology.objects"]["value"] == str(st["objects"]) and t["ontology.links"]["value"] == str(st["links"])
     assert t["use.queries"]["value"] == str(st["queries"]) and t["verify.accuracy"]["value"] == "100%"
-    assert len(b["parts"]["use"]["targets"]) == 8 and 0 < len(b["parts"]["ontology"]["nodes"]) <= 8
+    assert len(b["parts"]["use"]["targets"]) == 9 and 0 < len(b["parts"]["ontology"]["nodes"]) <= 8
     ids = {n["id"] for n in b["parts"]["ontology"]["nodes"]}
     assert all(a in ids and c in ids for a, c in b["parts"]["ontology"]["edges"])
 

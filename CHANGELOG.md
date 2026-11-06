@@ -19,6 +19,10 @@
 - `.doc`, `.ppt` and `.xls` (Office 97 to 2003) are read with the standard library: a data sheet in `.xls` comes in as rows
   and a definition sheet as definitions, as `.xlsx` does. A file with a password, or from before 97, is refused with what to
   do. Tables of one name in two schemas are both kept, as `schema.table`.
+- SQL Server joins: `kind: mssql`, `mssql://` and `sqlserver://` in `xspace draft --dsn` and on the page, drafted from its
+  catalog with composite keys. Oracle now runs on a real server: identifiers follow the catalog's case, dates are ISO in the
+  session, an empty text literal asks for null. Both pass conformance on live servers (Oracle Free 23, SQL Server 2022); the
+  `[oracle]` and `[mssql]` extras need sqlglot 29. `fetch` works on an integer key.
 - The asset ontology is drawn as a map of files, tables, documents, stores, objects and queries, with what a change reaches.
 - Pipelines outlive a restart where repositories do. A connected database keeps its modules and asks to be connected again:
   no address or token is written.

@@ -12,7 +12,7 @@ from xgen_space.compile.base import CompileError
 from xgen_space.conformance import normalize_rows
 from xgen_space.studio import Studio
 
-TARGETS = [("sql:postgres", "PostgreSQL"), ("sql:mysql", "MySQL"), ("sql:oracle", "Oracle"),
+TARGETS = [("sql:postgres", "PostgreSQL"), ("sql:mysql", "MySQL"), ("sql:oracle", "Oracle"), ("sql:mssql", "SQL Server"),
            ("cypher", "Cypher 25"), ("gql", "GQL"), ("sparql", "SPARQL 1.1"), ("sqlpgq", "SQL/PGQ"),
            ("gremlin", "Gremlin")]
 MODULE_COLOR = {"core": "#7a5af8", "domain": "#1a73e8", "industry": "#0f9d8a", "customer": "#d9822b",

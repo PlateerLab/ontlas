@@ -1229,7 +1229,6 @@ class StudioSession(SpaceMixin):
     def connect(self, dsn: str, label: str = "", rules: dict | None = None) -> dict:
         if not self.data.allow_connect:
             raise PermissionError("공개 데모에서는 DB 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
-        from urllib.parse import unquote
 
         from xgen_space.config import open_backend
         from xgen_space.draft import draft
@@ -1257,7 +1256,7 @@ class StudioSession(SpaceMixin):
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
-                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql:// "
+                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql://, mssql:// "
                                  "주소 또는 SQLite 파일 경로를 입력해 주세요.")
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"

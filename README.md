@@ -295,7 +295,7 @@ changed nothing.
 
 | Port | In the package | Add your own | The test |
 |---|---|---|---|
-| Query backends | SQLite, PostgreSQL, MySQL, Oracle, any DB-API, rdflib, SPARQL endpoints, Neo4j, Gremlin, a query gateway | `kind: dbapi`, or a `Backend` | `xspace conformance`: the same rows on every store |
+| Query backends | SQLite, PostgreSQL, MySQL, Oracle, SQL Server, any DB-API, rdflib, SPARQL endpoints, Neo4j, Gremlin, a query gateway | `kind: dbapi`, or a `Backend` | `xspace conformance`: the same rows on every store |
 | Vector stores | memory (exact), Qdrant, pgvector | `register_vector_store` | `xspace vectors`: every store against exact search |
 | Embedders | hash (no model), any OpenAI-shaped service, fastembed (a local multilingual model) | `register_embedder` | Search checks in `space.checks`, a pass condition of the flow |
 | Reasoners | rules, owlrl, shacl, reasonable, any HTTP service that takes and returns turtle | `register_reasoner` | `xspace reasoners`: engines of one logic must derive the same facts |

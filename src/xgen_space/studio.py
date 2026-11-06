@@ -209,7 +209,14 @@ class Studio:
     def fetch(self, type_name: str, key: Any, *, backend: str | None = None) -> dict[str, Any] | None:
         obj = self.onto.obj(type_name)
         names = all_props(self.onto, type_name)
-        q = Query(nodes={"x": type_name}, where=Cmp(Ref("x", obj.key), "eq", str(key)),
+        kind = find_prop(self.onto, type_name, obj.key).type if obj.key else "string"
+        wanted: Any = str(key)
+        if kind == "integer":  # a number column is not equal to its digits on most stores
+            try:
+                wanted = int(wanted)
+            except ValueError:
+                return None
+        q = Query(nodes={"x": type_name}, where=Cmp(Ref("x", obj.key), "eq", wanted),
                   columns=[Column(Ref("x", p), p) for p in names])
         rows = self.run(q, backend=backend).rows
         if not rows:

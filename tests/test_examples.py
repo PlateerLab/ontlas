@@ -104,3 +104,18 @@ def test_the_graph_engine_is_served_apart_from_the_page():
         except OSError:
             time.sleep(0.1)
     pytest.fail("the page did not start")
+
+
+def test_an_integer_key_is_fetched_as_the_number_it_is():
+    from xgen_space.backends.sql import SqliteBackend
+    from xgen_space.modules import Module
+    from xgen_space.studio import Studio
+
+    m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
+        "Thing": {"key": "id", "table": "t", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}}})
+    st = Studio.from_modules([m], name="m")
+    src = SqliteBackend()
+    src.script("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO t VALUES (7, 'a');")
+    st.add_backend("source", src, source=True)
+    assert st.fetch("Thing", "7")["name"] == "a" and st.fetch("Thing", 7)["name"] == "a"
+    assert st.fetch("Thing", "x") is None

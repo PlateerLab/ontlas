@@ -90,7 +90,8 @@
       '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 삭제를 합니다.',
       '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
     ['db', '데이터베이스를 연결해 온톨로지 초안을 생성합니다.', [
-      'PostgreSQL, MySQL, Oracle 주소 또는 SQLite 파일 경로를 입력하고 [연결]을 선택합니다.',
+      'PostgreSQL, MySQL, Oracle, SQL Server 주소 또는 SQLite 파일 경로를 입력하고 [연결]을 선택합니다.',
+      '플랫폼이 관리하는 DB 연결을 쓰려면 플랫폼 연결에 쿼리 서비스 주소, 연결 번호, 접속 토큰을 입력합니다. DB 비밀번호는 필요하지 않습니다.',
       '데이터는 원본 DB에 그대로 유지됩니다.']],
     ['convert', '초안에 포함한 파일의 통합 JSON을 확인합니다.', [
       '파일별 변환 결과와 테이블, 코드, 용어, 메시지, 문서 수를 확인합니다.',
@@ -162,7 +163,7 @@
       '벡터 저장소가 둘 이상이면 저장소별 결과와 시간을 비교합니다.']],
     ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
       '등록 질의를 선택하면 바로 실행됩니다.',
-      '언어 탭에서 PostgreSQL, MySQL, Oracle, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
+      '언어 탭에서 PostgreSQL, MySQL, Oracle, SQL Server, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
       '[쿼리 입력]에서 SPARQL, Cypher 쿼리를 입력해 실행할 수 있습니다.',
       '실행 역할을 지정하면 해당 역할의 조회 범위만 표시됩니다.']],
     ['decide', '결정표 판정 결과와 근거를 확인하고 처리 요청을 승인합니다.', [
@@ -2203,9 +2204,9 @@ ${controls}${body}`;
 
   function viewDb() {
     const head = `<div class="head"><div><h1>DB 연결</h1><div class="sub">데이터베이스를 연결해 온톨로지 초안을 생성합니다</div></div></div>`;
-    if (!S.st.data.connect) return head + '<div class="hint">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, MySQL, Oracle, SQLite를 연결할 수 있습니다.</div>';
+    if (!S.st.data.connect) return head + '<div class="hint">공개 데모에서는 DB 연결을 지원하지 않습니다. 설치형에서 PostgreSQL, MySQL, Oracle, SQL Server, SQLite를 연결할 수 있습니다.</div>';
     return `${head}<div class="card" style="max-width:760px"><div class="ch">데이터베이스 연결</div><div class="cb">
-      <div class="field"><label for="ddsn">연결 주소</label><input type="text" id="ddsn" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://, mysql://, oracle:// 주소 또는 SQLite 파일 경로"></div>
+      <div class="field"><label for="ddsn">연결 주소</label><input type="text" id="ddsn" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://, mysql://, oracle://, mssql:// 주소 또는 SQLite 파일 경로"></div>
       <div class="field"><label for="dlabel">온톨로지 이름</label><input type="text" id="dlabel" data-in="dname" value="${esc(S.dr.label)}" placeholder="연결 데이터베이스"></div>
       <div style="display:flex;gap:8px;align-items:center"><button class="btn primary" data-act="connect"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '연결'}</button><span class="muted" style="font-size:12.5px">데이터는 원본 DB에 그대로 유지됩니다.</span></div></div></div>${gatewayCard()}`;
   }

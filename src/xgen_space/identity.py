@@ -152,12 +152,17 @@ def _write(studio, ident: Identity, clusters: list[Cluster]) -> None:
     if not b.capabilities.write or not hasattr(b, "run_many"):
         raise ValueError(f"backend {b.name} cannot be written; the crosswalk needs a writable SQL source")
     key = qi(ident.key)
-    stmts = [(f"CREATE TABLE IF NOT EXISTS {qi(ident.table)} ({key} VARCHAR(200) PRIMARY KEY, "
-              f"{qi('members')} INTEGER)", ()), (f"DELETE FROM {qi(ident.table)}", ())]
+
+    def create(table: str, columns: str) -> str:
+        if b.capabilities.dialect == "mssql":  # T-SQL has no IF NOT EXISTS on CREATE TABLE
+            return f"IF OBJECT_ID(N'{table}', N'U') IS NULL CREATE TABLE {qi(table)} ({columns})"
+        return f"CREATE TABLE IF NOT EXISTS {qi(table)} ({columns})"
+
+    stmts = [(create(ident.table, f"{key} VARCHAR(200) PRIMARY KEY, {qi('members')} INTEGER"), ()), (f"DELETE FROM {qi(ident.table)}", ())]
     tables = {m: ident.member_table(m) for m in ident.members}
     for t in tables.values():
-        stmts += [(f"CREATE TABLE IF NOT EXISTS {qi(t)} ({key} VARCHAR(200), {qi('member_key')} VARCHAR(200), "
-                   f"{qi('rule')} VARCHAR(200))", ()), (f"DELETE FROM {qi(t)}", ())]
+        stmts += [(create(t, f"{key} VARCHAR(200), {qi('member_key')} VARCHAR(200), {qi('rule')} VARCHAR(200)"), ()),
+                  (f"DELETE FROM {qi(t)}", ())]
     for cl in clusters:
         stmts.append((f"INSERT INTO {qi(ident.table)} VALUES (?, ?)", (cl.id, len(cl.members))))
         rule_of: dict[str, str] = {}
