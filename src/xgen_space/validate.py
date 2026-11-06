@@ -206,6 +206,11 @@ def validate_ontology(o: Ontology) -> list[str]:
 
         for m in o.metrics.values():
             issues.extend(f"metric {m.name}: {e}" for e in metric_issues(o, m))
+    if o.conflicts:
+        from xgen_space.decide.conflicts import conflict_issues
+
+        for c in o.conflicts.values():
+            issues.extend(f"conflict {c.id}: {e}" for e in conflict_issues(o, c))
     for qs in o.questions:
         if bool(qs.query) == bool(qs.decision):
             add(f"question {qs.id}: give either a query or a decision")

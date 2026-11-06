@@ -42,6 +42,12 @@ def _text(arg: str) -> str:
     return p.read_text(encoding="utf-8") if p.exists() else arg
 
 
+def _conflicts(found: list) -> list[dict]:
+    from xgen_space.decide.conflicts import conflict_view
+
+    return [conflict_view(c) for c in found]
+
+
 def _ingested(files: list[str], adapters: list[str]):
     """Files of any format as one definitions object, or None without files."""
     from xgen_space.ingest import IngestError, ingest, load_adapters
@@ -400,7 +406,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "validate":
         onto = Ontology.load(a.ontology)
         issues = onto.validate()
-        _out({"ok": not issues, "issues": issues, "findings": [f.to_dict() for f in onto.findings()]})
+        _out({"ok": not issues, "issues": issues, "findings": [f.to_dict() for f in onto.findings()],
+              "conflicts": _conflicts(onto.source_conflicts())})
         return 0 if not issues else 1
 
     if a.cmd == "translate":
@@ -500,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
             if a.output:
                 comp.ontology.dump(a.output)
             _out({"modules": comp.summary(), "issues": comp.issues, "written": a.output,
-                  "findings": [f.to_dict() for f in comp.findings]})
+                  "findings": [f.to_dict() for f in comp.findings], "conflicts": _conflicts(comp.conflicts)})
             return 0 if not comp.issues else 1
         return 0
 
@@ -659,7 +666,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.check:
             comp = studio.composition
             issues, found = (comp.issues, comp.findings) if comp else (studio.onto.validate(), studio.onto.findings())
-            _out({"issues": issues, "findings": [f.to_dict() for f in found]})
+            _out({"issues": issues, "findings": [f.to_dict() for f in found],
+                  "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts())})
             return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
     elif a.cmd == "metric":

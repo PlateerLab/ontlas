@@ -9,12 +9,23 @@ from xgen_space.decide.table import DecisionError, answer
 from xgen_space.model import DecisionTable
 
 
+def _in_order(table: DecisionTable) -> list:
+    """The rules as ZEN should try them: by priority, and a rule set aside by a pick after the rule it yields to."""
+    rules = sorted(table.rules, key=lambda r: r.priority) if table.hit_policy == "priority" else list(table.rules)
+    for r in [x for x in rules if x.overruled_by]:
+        after = max((i for i, x in enumerate(rules) if x.id in r.overruled_by), default=-1)
+        if rules.index(r) < after:
+            rules.remove(r)
+            rules.insert(after, r)
+    return rules
+
+
 def to_jdm(table: DecisionTable) -> dict:
     if table.hit_policy not in ("first", "collect", "priority"):
         raise DecisionError(f"ZEN decision tables take hit policy first, collect or priority, not "
                             f"'{table.hit_policy}'")
     # ZEN has no priority policy; the first match of the rules in priority order is the same answer
-    ordered = sorted(table.rules, key=lambda r: r.priority) if table.hit_policy == "priority" else table.rules
+    ordered = _in_order(table)
     inputs = [{"id": f"in_{n}", "name": n, "field": n} for n in table.inputs]
     outputs = [{"id": f"out_{n}", "name": n, "field": n} for n in table.outputs]
     rules = []

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
+from itertools import combinations
 from typing import Any
 
 from xgen_space.decide.cells import evaluate, parse_test, resolve
@@ -21,13 +22,14 @@ class DecisionError(ValueError):
 
 
 class Matched(list):
-    """The ids of the rules that matched, the winner first, carrying what the others would have said and the
-    named parameters they read."""
+    """The ids of the rules that matched, the winner first, carrying what the others would have said, the named
+    parameters they read, and where their sources disagree."""
 
     def __init__(self, ids=(), overridden=(), parameters=None):
         super().__init__(ids)
         self.overridden = list(overridden)
         self.parameters = dict(parameters or {})
+        self.conflicts: list[dict] = []
 
 
 @dataclass
@@ -53,10 +55,12 @@ class DecisionResult:
     key: str = ""
     overridden: list[dict] = field(default_factory=list)  # {rule, priority, by, would_give}, under hit policy priority
     parameters: dict[str, Any] = field(default_factory=dict)  # the named values the matched rules read
+    conflicts: list[dict] = field(default_factory=list)  # {rules, sources, says}: nobody has picked between them yet
 
     def __post_init__(self):
         self.overridden = self.overridden or getattr(self.matched, "overridden", [])
         self.parameters = self.parameters or getattr(self.matched, "parameters", {})
+        self.conflicts = self.conflicts or getattr(self.matched, "conflicts", [])
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -93,14 +97,34 @@ def _by_priority(table: DecisionTable, hits: list[DecisionRule]) -> tuple[Any, l
     return {k: answer(table, top).get(k) for k in table.outputs}, matched, notes
 
 
+def _disagreements(table: DecisionTable, hits: list[DecisionRule]) -> list[dict]:
+    if table.hit_policy == "collect":
+        return []
+    return [{"rules": [a.id, b.id], "sources": [a.source, b.source], "says": [answer(table, a), answer(table, b)]}
+            for a, b in combinations(hits, 2) if a.source and b.source and a.source != b.source and a.then != b.then]
+
+
 def evaluate_table(table: DecisionTable, inputs: dict[str, Any]) -> tuple[Any, list[str], list[str]]:
     """Return (outputs, matched rule ids, rule notes) under the table's hit policy."""
-    hits, named = [], table.named
-    for rule in table.rules:
-        if all(evaluate(parse_test(cell, named), inputs.get(name)) for name, cell in rule.when.items()):
-            hits.append(rule)
-            if table.hit_policy == "first":
-                break
+    named = table.named
+    matching = [r for r in table.rules
+                if all(evaluate(parse_test(cell, named), inputs.get(name)) for name, cell in r.when.items())]
+    ids = {r.id for r in matching}
+    aside = [r for r in matching if ids & set(r.overruled_by)]  # a person picked the other source here
+    hits = [r for r in matching if not ids & set(r.overruled_by)]
+    disagree = _disagreements(table, hits)
+    said = [f"{r.source or r.id} set aside here by conflict {r.overruled_by[k]}: {k} stands over {r.id}"
+            for r in aside for k in r.overruled_by if k in ids]
+    said += [f"sources disagree and nobody has picked: {d['sources'][0]} says {d['says'][0]}, "
+             f"{d['sources'][1]} says {d['says'][1]}" for d in disagree]
+    outputs, matched, notes = _outcome(table, hits)
+    matched.conflicts = disagree
+    return outputs, matched, notes + said
+
+
+def _outcome(table: DecisionTable, hits: list[DecisionRule]) -> tuple[Any, Matched, list[str]]:
+    if table.hit_policy == "first":
+        hits = hits[:1]
     if table.hit_policy == "unique" and len(hits) > 1:
         raise DecisionError(f"{table.name}: rules {[r.id for r in hits]} all match under hit policy 'unique'")
     if table.hit_policy == "priority" and hits:

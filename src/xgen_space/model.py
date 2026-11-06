@@ -170,6 +170,8 @@ class DecisionRule:
     note: str = ""
     cite: str = ""
     priority: int | None = None  # hit policy priority: the matching rule with the lowest number decides
+    source: str = ""  # where the rule came from: two sources that disagree are a conflict (see decide.conflicts)
+    overruled_by: dict[str, str] = field(default_factory=dict, repr=False, compare=False)  # rule id -> conflict, by a pick
 
 
 @dataclass
@@ -281,6 +283,35 @@ class RegisteredQuery:
 
 
 @dataclass
+class ConflictAnswer:
+    source: str
+    says: dict[str, Any]
+    rule: str = ""
+    cite: str = ""
+
+
+@dataclass
+class SourceConflict:
+    """One input answered differently by two sources, for a person to pick (see decide.conflicts)."""
+
+    id: str
+    decision: str = ""
+    input: dict[str, Any] = field(default_factory=dict)
+    answers: list[ConflictAnswer] = field(default_factory=list)
+    rules: list[str] = field(default_factory=list)  # short for answers: the rules that disagree
+    label: str = ""
+    picked: str = ""  # the source that stands; empty while the conflict is open
+    by: str = ""
+    at: str = ""
+    reason: str = ""
+    found: bool = False  # read off the rules, with no record in a module yet
+
+    @property
+    def open(self) -> bool:
+        return not self.picked
+
+
+@dataclass
 class Metric:
     """A named number with what it means (see decide.metrics)."""
 
@@ -326,6 +357,7 @@ class Ontology:
     identities: dict[str, Identity] = field(default_factory=dict)
     parameters: dict[str, Parameter] = field(default_factory=dict)
     metrics: dict[str, Metric] = field(default_factory=dict)
+    conflicts: dict[str, SourceConflict] = field(default_factory=dict)  # what is recorded; rules can show more
     clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
@@ -359,6 +391,12 @@ class Ontology:
         from xgen_space.decide.checks import decision_findings
 
         return decision_findings(self)
+
+    def source_conflicts(self) -> list[SourceConflict]:
+        """Where two sources answer one input differently, recorded or found in the rules."""
+        from xgen_space.decide.conflicts import source_conflicts
+
+        return source_conflicts(self)
 
     def check(self) -> Ontology:
         issues = self.validate()
@@ -476,7 +514,7 @@ def _decision(name: str, d: dict) -> DecisionTable:
         inputs[k] = DecisionInput(name=k, type=v.pop("type", "string"), source=v)
     rules = [DecisionRule(when={k: str(x) for k, x in (r.get("when") or {}).items()}, then=dict(r.get("then") or {}),
                           id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""),
-                          priority=r.get("priority"))
+                          priority=r.get("priority"), source=str(r.get("source", "") or ""))
              for i, r in enumerate(d.get("rules", []))]
     return DecisionTable(name=name, inputs=inputs, outputs=dict(d.get("outputs", {})), rules=rules,
                          target=d.get("target", ""), label=d.get("label", ""),
@@ -490,6 +528,32 @@ def _parameter(name: str, d: Any) -> Parameter:
     found = {bool: "boolean", int: "integer", float: "decimal", str: "string"}.get(type(value), "integer")
     return Parameter(name, value, d.get("type", found), d.get("label", ""), d.get("unit", ""), d.get("description", ""),
                      d.get("cite", ""), d.get("min"), d.get("max"))
+
+
+def _conflict(name: str, d: dict) -> SourceConflict:
+    answers = [ConflictAnswer(str(a.get("source", "")), dict(a.get("says") or {}), str(a.get("rule", "")),
+                              str(a.get("cite", ""))) for a in d.get("answers") or []]
+    return SourceConflict(name, d.get("decision", ""), dict(d.get("input") or {}), answers,
+                          [str(r) for r in d.get("rules") or []], d.get("label", ""), str(d.get("picked", "") or ""),
+                          str(d.get("by", "") or ""), str(d.get("at", "") or ""), str(d.get("reason", "") or ""))
+
+
+def _settle_conflicts(onto: Ontology) -> None:
+    """Fill in the answers of conflicts named by their rules, and give each pick its effect on the rules."""
+    for c in onto.conflicts.values():
+        table = onto.decisions.get(c.decision)
+        rules = {r.id: r for r in table.rules} if table else {}
+        for name in c.rules:
+            if name in rules:
+                r = rules[name]
+                says = {k: table.named.get(v[1:], v) if isinstance(v, str) and v.startswith("@") else v
+                        for k, v in r.then.items()}
+                c.answers.append(ConflictAnswer(r.source, says, r.id, r.cite))
+        if c.picked:
+            kept = [a.rule for a in c.answers if a.source == c.picked and a.rule in rules]
+            for a in c.answers:
+                if a.source != c.picked and a.rule in rules:
+                    rules[a.rule].overruled_by.update({k: c.id for k in kept})
 
 
 def _metric(name: str, d: dict) -> Metric:
@@ -651,9 +715,11 @@ def _from_dict(d: dict) -> Ontology:
         identities=identities,
         parameters=parameters,
         metrics={k: _metric(k, v) for k, v in (d.get("metrics") or {}).items()},
+        conflicts={k: _conflict(k, v) for k, v in (d.get("conflicts") or {}).items()},
     )
     _period_values(onto)
     _role_scopes(onto)
+    _settle_conflicts(onto)
     return onto
 
 
@@ -698,7 +764,8 @@ def _to_dict(o: Ontology) -> dict:
             "label": dt.label, "target": dt.target, "hit_policy": dt.hit_policy, "cite": dt.cite,
             "inputs": {i.name: {"type": i.type, **i.source} for i in dt.inputs.values()},
             "outputs": dt.outputs,
-            "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite})
+            "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite,
+                              "source": r.source})
                       | ({} if r.priority is None else {"priority": r.priority}) for r in dt.rules]})
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
                                "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states})
@@ -718,6 +785,11 @@ def _to_dict(o: Ontology) -> dict:
                                   "cite": p.cite}) | {"value": p.value}
                   | {k: v for k, v in (("min", p.min), ("max", p.max)) if v is not None}
                   for p in o.parameters.values()}
+    conflicts = {c.id: _clean({"label": c.label, "decision": c.decision, "input": c.input, "rules": c.rules,
+                               "answers": [_clean({"source": a.source, "says": a.says, "rule": a.rule, "cite": a.cite})
+                                           for a in c.answers if a.rule not in c.rules or not a.rule],
+                               "picked": c.picked, "by": c.by, "at": c.at, "reason": c.reason})
+                 for c in o.conflicts.values()}
     metrics = {m.name: _clean({"label": m.label, "description": m.description, "unit": m.unit, "owner": m.owner,
                                "formula": m.formula, "denominator": m.denominator, "time": m.time, "cite": m.cite,
                                "params": m.params}) | ({} if m.scale == 1 else {"scale": m.scale})
@@ -731,6 +803,6 @@ def _to_dict(o: Ontology) -> dict:
         "parameters": parameters, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
         "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "metrics": metrics,
-        "questions": questions,
+        "conflicts": conflicts, "questions": questions,
         "exclusive": [list(x) for x in o.exclusive], "identities": identities,
     })

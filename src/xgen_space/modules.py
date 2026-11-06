@@ -14,10 +14,10 @@ from xgen_space.model import Ontology
 # data (the draft rules). Both plug in and out like the rest.
 KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
 SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities", "parameters",
-            "metrics")
+            "metrics", "conflicts")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
             "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
-            "parameters": "parameter", "metrics": "metric"}
+            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -170,6 +170,7 @@ class Composition:
     terms: list[dict] = field(default_factory=list)  # the dictionary modules' words
     messages: list[dict] = field(default_factory=list)  # the dictionary modules' messages
     findings: list = field(default_factory=list)  # what the decision tables say twice or leave open (decide.checks)
+    conflicts: list = field(default_factory=list)  # where two sources answer one input differently (decide.conflicts)
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -377,11 +378,13 @@ def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict
     touched.setdefault(f"parameter:{name}", []).append(m.name)
 
 
-def _extend_metric(acc: dict, m: Module, name: str, patch: dict, touched: dict) -> None:
-    if name not in acc["metrics"]:
-        raise ModuleError(f"{m.key} extends metric '{name}', which no attached module defines")
-    acc["metrics"][name].update(copy.deepcopy(patch))
-    touched.setdefault(f"metric:{name}", []).append(m.name)
+def _extend_entry(acc: dict, m: Module, section: str, name: str, patch: dict, touched: dict) -> None:
+    """A metric or a conflict takes what the patch gives; a customer redefines one or picks in one."""
+    kind = SINGULAR[section]
+    if name not in acc[section]:
+        raise ModuleError(f"{m.key} extends {kind} '{name}', which no attached module defines")
+    acc[section][name].update(copy.deepcopy(patch))
+    touched.setdefault(f"{kind}:{name}", []).append(m.name)
 
 
 def compose(modules: list[Module], *, name: str = "", namespace: str = "", version: str = "",
@@ -423,11 +426,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_role(acc, m, k, patch or {}, touched)
                 elif s == "parameters":
                     _extend_parameter(acc, m, k, patch, touched)
-                elif s == "metrics":
-                    _extend_metric(acc, m, k, patch or {}, touched)
+                elif s in ("metrics", "conflicts"):
+                    _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
                     raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, roles, "
-                                      "parameters or metrics")
+                                      "parameters, metrics or conflicts")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():
@@ -487,7 +490,7 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
     gates, gate_by, rules, rules_by = _methods(ordered)
     return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
                        [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages],
-                       onto.findings())
+                       onto.findings(), onto.source_conflicts())
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:
@@ -520,7 +523,8 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
             head = issue.split(":", 1)[0]
             kind, _, ident = head.partition(" ")
             section = {"query": "queries", "question": "questions", "decision": "decisions", "action": "actions",
-                       "link": "links", "identity": "identities", "metric": "metrics"}.get(kind)
+                       "link": "links", "identity": "identities", "metric": "metrics",
+                       "conflict": "conflicts"}.get(kind)
             if kind == "decision":
                 ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
             if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:

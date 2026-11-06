@@ -214,11 +214,12 @@ def _say(where: dict[str, str]) -> str:
 
 
 def _ahead(table: DecisionTable, i: int) -> list[int]:
-    """The rules that decide before rule i does."""
+    """The rules that decide before rule i does; one set aside for it by a pick does not."""
+    me = table.rules[i]
     if table.hit_policy == "priority":
-        mine = table.rules[i].priority
-        return [j for j, r in enumerate(table.rules) if mine is not None and r.priority is not None and r.priority < mine]
-    return list(range(i))
+        return [j for j, r in enumerate(table.rules) if me.priority is not None and r.priority is not None
+                and r.priority < me.priority and me.id not in r.overruled_by]
+    return [j for j in range(i) if me.id not in table.rules[j].overruled_by]
 
 
 def _unreachable(table: DecisionTable, space: _Space, budget: list[int]) -> list[Finding]:
@@ -244,6 +245,8 @@ def _overlaps(table: DecisionTable, space: _Space) -> list[Finding]:
             both = _meet(space.boxes[i], space.boxes[j])
             if both is None or (policy != "unique" and a.then == b.then):
                 continue
+            if a.source and b.source and a.source != b.source:
+                continue  # two sources disagreeing is a conflict, for a person to pick (decide.conflicts)
             where, ids = space.where(both), [a.id, b.id]
             at = _say(where)
             if policy == "unique":
