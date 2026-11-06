@@ -143,6 +143,7 @@
       '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
     ['docs', '공간의 문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어로 이어집니다.', [
       '문서는 데이터 카탈로그에서 올립니다. 업로드하면 자동으로 구성합니다.',
+      '개념 사이의 함께 언급은 같은 절에 나온다는 뜻입니다. 언어 모델이 연결되어 있으면 [언어 모델로 관계 읽기]로 절의 뜻을 읽어 관계를 추가합니다. 본문에 없는 말은 버립니다.',
       '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. 객체 개념을 선택하면 온톨로지 화면으로 이동합니다.',
       '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
     ['vectors', '문서를 벡터로 바꾸는 임베딩 모델과 벡터를 담는 저장소를 확인합니다.', [
@@ -223,7 +224,7 @@
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     sp: null, sr: { text: '', store: '', res: null, busy: false, answer: null, answering: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
-    vs: { kind: 'qdrant', url: '' }, ad: null, adrep: null, adbusy: false, adr: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
+    vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adr: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
@@ -787,7 +788,8 @@
 
   function viewDocs() {
     const sp = S.sp;
-    const head = pageHead('문서 온톨로지', '공간의 문서를 문서, 절, 개념으로 자동 구성하고 도메인 온톨로지와 연결합니다', '<a class="btn" href="#catalog">문서 추가</a>');
+    const read = S.st.ask ? `<button class="btn" data-act="dread"${S.dread ? ' disabled' : ''}>${S.dread ? `<span class="spin"></span>${esc(S.dread)}` : '언어 모델로 관계 읽기'}</button>` : '';
+    const head = pageHead('문서 온톨로지', '공간의 문서를 문서, 절, 개념으로 자동 구성하고 도메인 온톨로지와 연결합니다', `${read}<a class="btn" href="#catalog">문서 추가</a>`);
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>문서를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const stats = [[sp.documents, '문서'], [sp.sections, '절'], [sp.concepts, '개념'], [sp.chunks, '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
@@ -2198,7 +2200,19 @@ ${controls}${body}`;
     return `${head}<div class="card" style="max-width:760px"><div class="ch">데이터베이스 연결</div><div class="cb">
       <div class="field"><label for="ddsn">연결 주소</label><input type="text" id="ddsn" data-in="dsn" value="${esc(S.dr.dsn)}" placeholder="postgresql://, mysql://, oracle:// 주소 또는 SQLite 파일 경로"></div>
       <div class="field"><label for="dlabel">온톨로지 이름</label><input type="text" id="dlabel" data-in="dname" value="${esc(S.dr.label)}" placeholder="연결 데이터베이스"></div>
-      <div style="display:flex;gap:8px;align-items:center"><button class="btn primary" data-act="connect"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '연결'}</button><span class="muted" style="font-size:12.5px">데이터는 원본 DB에 그대로 유지됩니다.</span></div></div></div>`;
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn primary" data-act="connect"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '연결'}</button><span class="muted" style="font-size:12.5px">데이터는 원본 DB에 그대로 유지됩니다.</span></div></div></div>${gatewayCard()}`;
+  }
+
+  function gatewayCard() {
+    const g = S.gw;
+    return `<div class="card" style="max-width:760px;margin-top:14px"><div class="ch">플랫폼 연결</div><div class="cb">
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 빌려 읽습니다. DB 비밀번호는 필요하지 않고, 읽기 전용과 허용 테이블은 플랫폼 정책을 따릅니다.</div>
+      <div class="field"><label for="gwurl">쿼리 서비스 주소</label><input type="text" id="gwurl" data-in="gwurl" value="${esc(g.url)}" placeholder="https://platform.example/query"></div>
+      <div class="rgrid two"><div class="field"><label for="gwconn">연결 번호</label><input type="text" id="gwconn" data-in="gwconn" value="${esc(g.connection)}" placeholder="12"></div>
+        <div class="field"><label for="gwdialect">DB 종류</label><select id="gwdialect" data-in="gwdialect">${[['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['oracle', 'Oracle']].map(([k, l]) => `<option value="${k}"${g.dialect === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>
+      <div class="field"><label for="gwtoken">접속 토큰</label><input type="password" id="gwtoken" data-in="gwtoken" value="${esc(g.token)}" autocomplete="off"></div>
+      <button class="btn primary" data-act="gwconnect"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '연결'}</button>
+      <div class="hint" style="margin-top:10px">토큰은 이 세션의 메모리에만 보관하고 파일에 저장하지 않습니다.</div></div></div>`;
   }
 
   // ---- management: data sources, objects, properties, relations, questions ---------------------------------------
@@ -2726,6 +2740,18 @@ ${controls}${body}`;
       S.sr.answering = false; render();
     },
     dsecclose: () => { S.dsec = null; S.dgsel = null; render(); },
+    dread: async () => {
+      for (let i = 0; i < 5; i += 1) {  // a few sections per press: each takes the model tens of seconds
+        S.dread = `읽는 중 ${i + 1} / 5`; render();
+        let r;
+        try { r = await api('space/read', {}); } catch (e) { r = { ok: false, error: e.message }; }
+        if (!r.ok) { toast(r.error, true); break; }
+        S.dg = null;
+        if (r.done) { toast(`모든 절을 읽었습니다. 관계 ${r.relations}개`); break; }
+        if (i === 4) toast(`${r.read}개 절을 읽었습니다. 관계 ${r.relations}개. 다시 선택하면 이어서 읽습니다.`);
+      }
+      S.dread = ''; render();
+    },
     vstoreadd: async () => {
       try { S.sp = await api('space/store', { op: 'add', kind: S.vs.kind, name: S.vs.kind, url: S.vs.url }); S.ad = null; toast('벡터 저장소를 추가하고 문서를 색인했습니다.'); render(); } catch (e) { fail(e); }
     },
@@ -2966,6 +2992,7 @@ ${controls}${body}`;
       filesCall('draft', { label: S.dr.label, rules: S.dr.rules, tables }, startDraft);
     },
     connect: () => filesCall('connect', { dsn: S.dr.dsn, label: S.dr.label, rules: S.dr.rules }, () => { startDraft(); location.hash = '#data'; }),
+    gwconnect: () => filesCall('connect/gateway', { ...S.gw, label: S.dr.label, rules: S.dr.rules }, () => { S.gw.token = ''; startDraft(); location.hash = '#data'; }),
     dview: (t) => { S.dr.view = t.dataset.view; refreshDraft(); },
     dsel: () => { S.dr.sel = null; refreshDraft(); },
     'drules-reset': () => { S.dr.rules = JSON.parse(JSON.stringify(S.files.defaults)); render(); },
@@ -3139,6 +3166,10 @@ ${controls}${body}`;
   };
 
   const INPUT = {
+    gwurl: (t) => { S.gw.url = t.value; },
+    gwconn: (t) => { S.gw.connection = t.value; },
+    gwdialect: (t) => { S.gw.dialect = t.value; },
+    gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
     srstore: (t) => { S.sr.store = t.value; },
     vkind: (t) => { S.vs.kind = t.value; render(); },

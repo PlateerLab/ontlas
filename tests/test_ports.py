@@ -1,5 +1,6 @@
 """The ways in and out: a platform's query service as a source, the REST API, the reasoner port, the space on the page."""
 import json
+import os
 import sqlite3
 import threading
 import urllib.error
@@ -362,3 +363,69 @@ def test_a_connected_pipeline_keeps_its_modules_and_no_secret(tmp_path):
     again = StudioSession(load_studio(CFG), data=data, repositories=Repositories(tmp_path))
     assert [p["id"] for p in again.pipelines] == ["p1"]  # it asks to be connected again rather than opening with nothing
     assert any("다시 연결" in e["text"] for e in again.events)
+
+
+def test_the_page_asks_for_what_a_platform_connection_needs(session):
+    with pytest.raises(PermissionError):
+        session.connect_gateway("http://x/q", 1, "t")
+    session.data.allow_connect = True
+    with pytest.raises(ValueError, match="주소와 연결 번호"):
+        session.connect_gateway("", "", "t")
+    with pytest.raises(ValueError) as e:
+        session.connect_gateway("http://127.0.0.1:9/q", 3, "s3cret-token")
+    assert "응답하지" in str(e.value) and "s3cret-token" not in str(e.value)
+
+
+def test_live_draft_through_a_query_service_over_postgres():
+    """A real PostgreSQL behind a service of the platform's shape: the whole way from the catalog queries to a compiled query."""
+    dsn = os.environ.get("XSPACE_LIVE_PG")
+    if not dsn:
+        pytest.skip("XSPACE_LIVE_PG not set")
+    psycopg = pytest.importorskip("psycopg")
+    from xgen_space.config import load_studio
+    from xgen_space.web import DataOptions, StudioSession
+
+    conn = psycopg.connect(dsn, autocommit=True)
+    conn.execute("DROP TABLE IF EXISTS gw_items, gw_orders")
+    conn.execute("CREATE TABLE gw_orders (order_id text PRIMARY KEY, status text, placed_at timestamp)")
+    conn.execute("CREATE TABLE gw_items (item_id text PRIMARY KEY, order_id text REFERENCES gw_orders, qty integer, price numeric(10,2))")
+    conn.execute("INSERT INTO gw_orders VALUES ('O1', 'PAID', '2026-10-01 10:00'), ('O''2', 'NEW', '2026-10-02 11:00')")
+    conn.execute("INSERT INTO gw_items VALUES ('I1', 'O1', 2, 1500.50), ('I2', 'O''2', 1, 300)")
+
+    class Service(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if not body["query"].lstrip().upper().startswith(("SELECT", "WITH")):
+                out = {"success": False, "error": "read only", "rows": [], "columns": []}
+            else:
+                cur = conn.execute(body["query"])
+                columns = [d[0] for d in cur.description]
+                rows = [dict(zip(columns, [str(v) if v is not None and not isinstance(v, (int, float, str, bool)) else v for v in r]))
+                        for r in cur.fetchmany(body["max_rows"])]
+                out = {"success": True, "columns": columns, "rows": rows, "row_count": len(rows), "error": None}
+            data = json.dumps(out).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Service)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        s = StudioSession(load_studio(CFG), data=DataOptions(allow_connect=True))
+        s.connect_gateway(f"http://127.0.0.1:{srv.server_port}/query", 7, "t", "postgres", "플랫폼 주문")
+        d = s.pending[0]
+        assert {o.table for o in d.objects} >= {"gw_orders", "gw_items"} and d.links
+        s.apply_draft()
+        assert s.origin["detail"].startswith("쿼리 서비스 127.0.0.1")
+        name = next(n for n, q in s.studio.onto.queries.items() if "gw_orders" in s.studio.translate(n, "sql:postgres").text.lower())
+        assert s.studio.run(name).rows
+        assert s.flow()["steps"][0]["rows"] == 4
+    finally:
+        srv.shutdown()
+        srv.server_close()
+        conn.execute("DROP TABLE IF EXISTS gw_items, gw_orders")
+        conn.close()

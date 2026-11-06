@@ -500,6 +500,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.adapters_check()
             if route == "reasoner":
                 return s.reasoner_run(a.get("name", ""))
+            if route == "space/read":
+                if not ask_limit.allow():
+                    return {"ok": False, "error": "요청이 많아 처리하지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
+                return s.space_read()
             if route == "space/answer":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
@@ -565,6 +569,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.suggest_mapping(a.get("standard") or [], a.get("edits"), a.get("tables"))
             if route == "draft/map/apply":
                 return s.apply_mapping(a.get("standard") or [], a.get("edits"), a.get("mapping"))
+            if route == "connect/gateway":
+                return s.connect_gateway(a.get("url", ""), a.get("connection", ""), a.get("token", ""), a.get("dialect", "postgres"),
+                                         str(a.get("label", "")), a.get("rules"))
             if route == "connect":
                 return s.connect(str(a.get("dsn", "")), str(a.get("label", "")), a.get("rules"))
             if route == "module/check":

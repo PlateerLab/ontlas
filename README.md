@@ -1,13 +1,17 @@
 # XGEN Space
 
-**Bring in files or a database, and get one domain ontology, executed wherever the data already lives.** Keep raw files
-in repositories, turn every format into one JSON, and draft an ontology from it. Or describe the business once (object
-types, properties, links, states, decisions, actions, roles) and bind it to the source tables yourself. A question
-then becomes *one* ontology query, and the studio compiles it for the store a deployment actually has:
-SQL in any dialect, Cypher, ISO GQL, SPARQL, SQL/PGQ or Gremlin. Computed properties (a line total, an order total
-over its items, the latest price of a series) are part of the definition and compile into each of those languages.
-SPARQL and Cypher written by people or agents are read back into the same query, so they run on any of those stores
-too. **Zero hard dependencies, zero infra to try it.**
+**One space for every kind of data an AI can use, tied to no store, no model, no domain and no platform.**
+
+- **Every kind of data in one place.** Files, databases, documents, embeddings, graphs and ontologies sit in one space and know about each other.
+- **Nothing is tied to a store.** Graph databases, vector databases, reasoners, embedding models and query languages are adapters, and a conformance test says whether a swap changed the answers.
+- **Knowledge plugs in and out.** A domain is a versioned module. Commerce is the first one in the examples, and another domain is one more package.
+- **So it fits anywhere.** MCP and a token REST API let any agent or platform use a space, and a space can read a platform's data through the connections that platform already manages.
+
+Describe the business once (object types, properties, links, states, decisions, actions, roles) and bind it to the source
+tables, or draft all of that from files. A question then becomes *one* ontology query, compiled for the store a deployment
+actually has: SQL in any dialect, Cypher, ISO GQL, SPARQL, SQL/PGQ or Gremlin. Documents are cut, embedded into every vector
+store the space has, and become a document ontology tied to the domain through the names both use, so a search can land on a
+passage and go on to the definition. **Zero hard dependencies, zero infra to try it.**
 
 ```python
 from xgen_space import Ontology
@@ -27,16 +31,23 @@ studio.run_cypher("MATCH (o:Order)-[:hasItem]->(i:OrderItem) RETURN o.order_id, 
 studio.decide("returnEligibility", "I1001")        # outputs, the rule that fired, the columns it read
 ```
 
+```bash
+xspace search examples/library/studio.yaml "포장을 뜯은 속옷도 돌려보낼 수 있나요"   # passages, and the definitions the question names
+xspace vectors examples/library/studio.yaml                                     # every vector store against exact search
+xspace serve examples/library/studio.yaml --embedder fastembed --api-token-env XSPACE_API_TOKEN   # the page and /v1
+```
+
 <p align="center">
   <img src="assets/architecture.png" alt="One ontology definition feeding execution adapters that compile one query IR to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin for the backends a deployment has" width="920">
 </p>
 
 ## What it is for
 
-The studio sits between the systems a business already runs and the people and agents that ask about them.
+The space sits between the systems a business already runs and the people and agents that ask about them.
 
 | Use | What it does |
 |---|---|
+| Search that goes on to the definition | Documents are searched by meaning on any vector store, each passage names the ontology elements it speaks of, and an object shows the documents that mention it |
 | One shared definition | Objects, properties, relations, states, rules and roles are defined once over the source tables, in versioned module files a person can read and review |
 | The same question on every store | One query compiles to SQL, Cypher, GQL, SPARQL, SQL/PGQ or Gremlin, and a conformance run compares the rows each store returns |
 | Decisions with their grounds | Decision tables decide, not a language model; each answer carries the rule, the clause it cites, the source columns and the module version |
@@ -276,6 +287,47 @@ rule everywhere (division by zero and an `if` on a null condition give null). Fu
 `round`, `floor`, `ceil`, `lower`, `upper`, `length`, `concat`, `year`, `month`, `day`, `days_between`; aggregates
 along a link path: `sum`, `avg`, `min`, `max`, `count`, and `latest` / `earliest` on a series. A language that has no
 form for one says so before it runs.
+
+## Swap anything: the ports
+
+Every part a deployment might want different is a port with a small interface, a registry, and a test that says the swap
+changed nothing.
+
+| Port | In the package | Add your own | The test |
+|---|---|---|---|
+| Query backends | SQLite, PostgreSQL, MySQL, Oracle, any DB-API, rdflib, SPARQL endpoints, Neo4j, Gremlin, a query gateway | `kind: dbapi`, or a `Backend` | `xspace conformance`: the same rows on every store |
+| Vector stores | memory (exact), Qdrant, pgvector | `register_vector_store` | `xspace vectors`: every store against exact search |
+| Embedders | hash (no model), any OpenAI-shaped service, fastembed (a local multilingual model) | `register_embedder` | Search checks in `space.checks`, a pass condition of the flow |
+| Reasoners | rules, owlrl, shacl, reasonable, any HTTP service that takes and returns turtle | `register_reasoner` | `xspace reasoners`: engines of one logic must derive the same facts |
+| Domains | modules in a library | a package | Validation questions and the flow's conditions |
+
+Two OWL 2 RL engines run side by side is how `reasonable` 0.4.4 was found to join every subject of an inverse functional
+property with `sameAs`. It stays available and off the default list. That is what the comparison is for.
+
+```yaml
+space:
+  embedder: {kind: openai, url: https://models.example/v1, model: bge-m3, key_env: EMBED_KEY}
+  vectors:
+    main: {kind: qdrant, url: http://localhost:6333}
+    pg:   {kind: pgvector, dsn: "${XSPACE_PG}"}      # every store holds the same chunks
+  documents: ["docs/*.md", "policies/*.pdf"]
+  checks:
+    - {text: 택배가 일주일째 안 와요, document: 배송안내}   # the flow's index stage: found in the top five?
+reasoners:
+  rl: {kind: owlrl}
+  theirs: {kind: http, url: https://reasoner.example/infer}
+```
+
+## Documents in the space
+
+A document that comes in, through the catalog or `space.documents`, goes two ways at once.
+
+- **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one.
+- **Document ontology.** It becomes rows of document, section and concept. Concepts are the names the definitions give (objects, properties, allowed values, decisions, glossary terms) plus the words a document keeps returning to, found without a model. The rows run on the same engine as the domain ontology, so the same compilers and the same conformance apply.
+
+Concepts tie the two together. `xspace search` returns the passages and the definitions a question names, the object screen
+shows the sections that mention an object, and the map shows which queries a document touches. Relations between concepts are
+co-mentions, not extracted meaning: they say two things appear together.
 
 ## Plug domains in and out
 
@@ -740,6 +792,29 @@ command is `xspace policy-draft studio.yaml policy.md --target OrderItem --llm-u
 minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
 [`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
 
+## Any platform: REST and a borrowed connection
+
+```bash
+export XSPACE_API_TOKEN=...
+xspace serve studio.yaml --api-token-env XSPACE_API_TOKEN --api-role support_agent
+curl localhost:7710/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \
+     -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'
+```
+
+`/v1/openapi.json` describes the API for whatever imports OpenAPI and `/v1/tools` lists it as function definitions; `xspace
+openapi` writes the same file. Search, queries in any language, translation and decisions run under the role of the token, with
+its row filters and masks. It is read-only unless started with `--api-write`, and then an action is only a request a person
+approves. `/v1` stays off unless a token is set.
+
+The other direction: a platform that manages database connections can lend one. `kind: gateway` sends SQL as text to its query
+service and reads the rows back, so the password never reaches the space and the platform's read-only rule and table allow-list
+stay in force. A space reads through it and never writes. An answer that comes back full is marked as possibly cut.
+
+```yaml
+backends:
+  source: {kind: gateway, url: https://platform.example/query, connection: 12, dialect: postgres, token_env: PLATFORM_TOKEN, source: true}
+```
+
 ## Agents over MCP
 
 ```bash
@@ -800,6 +875,11 @@ xspace sync examples/library/studio.yaml --every 60               # the graphs k
 xspace nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
 xspace policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
 xspace users add users.yaml kim --roles editor                    # a person of a team studio (xspace serve --users)
+xspace search examples/library/studio.yaml "반품 기간" -k 3          # passages by meaning, and the definitions named
+xspace documents examples/library/studio.yaml                     # what the space holds: documents, stores, embedder, reasoners
+xspace vectors examples/library/studio.yaml                       # every vector store against exact search
+xspace reasoners examples/library/studio.yaml                     # what each engine derives; engines of one logic must agree
+xspace openapi --server https://space.example > openapi.json      # the REST API, for a platform to import
 xspace library list examples/library                              # every package, its kind, versions and requirements
 xspace library create my-lib energy --kind domain --label "에너지 설비" --requires core
 xspace library import-owl my-lib schema-orders.ttl schema-orders --requires core
@@ -854,11 +934,14 @@ src/xgen_space/
   decide/ actions.py roles.py
   reason/                   # rules · shacl · owl_rl
   exchange/                 # owl · r2rml · importer
+  space.py embed.py vectors.py    # documents and their ontology, the embedding port, the vector store port
+  rest.py                   # the token API, its OpenAPI and tool definitions
   catalog.py repository.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
   web/                      # xspace serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus shop operations, fashion, food and a customer overlay
 examples/files/             # a fictional shop's CSV files, for drafting from data
+examples/documents/         # the shop's policies and guides, for search and the document ontology
 tools/                      # render_screens.py (the README images), make_commerce_seed.py (the shop), graph-kit/ (the graph engine bundle)
 ```
 

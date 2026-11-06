@@ -97,6 +97,24 @@ class SpaceMixin:
         self._sync_space()
         return self.space.graph(self.studio.onto, self._terms())
 
+    def space_read(self) -> dict:
+        """One section per request: a model takes tens of seconds, and the page shows each result as it comes."""
+        if self.llm is None:
+            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 관계를 추출하지 못했습니다."}
+        self._sync_space()
+        sp = self.space
+        key = sp.next_to_read(self.studio.onto, self._terms())
+        if key is None:
+            return {"ok": True, "done": True, "read": len(sp.relations), "relations": sum(len(v) for v in sp.relations.values())}
+        llm, _ = self._budgeted()
+        try:
+            rows = sp.read_section(llm, key)
+        except (TimeoutError, OSError, RuntimeError):
+            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 다시 시도해 주세요."}
+        left = sp.next_to_read(self.studio.onto, self._terms())
+        return {"ok": True, "done": left is None, "section": key[1], "document": key[0], "found": len(rows), "read": len(sp.relations),
+                "relations": sum(len(v) for v in sp.relations.values())}
+
     def space_section(self, document: str, section: str) -> dict:
         self._sync_space()
         rows = [c for c in self.space.chunks.values() if c.document == document and c.section == section]
@@ -153,6 +171,31 @@ class SpaceMixin:
             raise ValueError(f"{kind} 저장소에 쓰지 못했습니다. {err}")
         self.event("adapter", f"벡터 저장소 {name} 추가")
         return self.space_state()
+
+    def connect_gateway(self, url: str, connection: Any, token: str, dialect: str = "postgres", label: str = "",
+                        rules: dict | None = None) -> dict:
+        """A draft from a connection a platform lends: its query service reads, the token stays in this session's memory."""
+        from urllib.parse import urlparse
+
+        from xgen_space.backends.gateway import GatewayBackend, GatewayError
+        from xgen_space.draft import draft
+
+        if not self.data.allow_connect:
+            raise PermissionError("공개 데모에서는 플랫폼 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
+        url = str(url or "").strip()
+        if urlparse(url).scheme not in ("http", "https") or not str(connection or "").strip():
+            raise ValueError("쿼리 서비스 주소와 연결 번호가 없어 연결하지 못했습니다. 주소와 연결 번호를 입력해 주세요.")
+        wanted: Any = str(connection).strip()
+        b = GatewayBackend(url, connection=int(wanted) if wanted.isdigit() else wanted, dialect=dialect or "postgres", token=str(token or "").strip())
+        where = f"쿼리 서비스 {urlparse(url).hostname} · 연결 {wanted}"  # never the token
+        r = self._rules(rules)
+        try:
+            d = draft(b, name="my-db", label=(label or "플랫폼 연결")[:40], lang="ko", rules=r, definitions=self._defs(),
+                      origin={"kind": "database", "detail": where})
+        except GatewayError as e:
+            raise ValueError(f"{where}에 연결하지 못했습니다. {e}") from None
+        self.pending = (d, b, [], r)
+        return self.files_state()
 
     # ---- pipelines kept: what was applied is there after a restart, where repositories are ---------------------------------
 

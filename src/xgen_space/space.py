@@ -10,6 +10,7 @@ Nothing here depends on a store, a model or a domain: those arrive as adapters.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import threading
 import time
@@ -35,6 +36,9 @@ _ENDINGS = ("합니다", "습니다", "됩니다", "입니다", "있습니다", 
             "할", "된", "될")
 _STOP = {"경우", "대한", "관한", "위한", "따라", "다음", "해당", "이상", "이내", "이하", "미만", "각호", "사항", "내용", "기준", "가능", "모든", "또는",
          "그리고", "있는", "없는", "있다", "없다", "같은", "등의", "다시", "돌려", "보내", "받은", "받습", "the", "and", "for", "with", "that", "this", "from"}
+RELATIONS_PER_SECTION = 6
+EXTRACT_SYSTEM = ("문서의 한 절에서 개념 사이의 관계를 뽑습니다. JSON 배열만 답합니다. 항목은 {\"from\": 개념, \"to\": 개념, \"label\": 관계}이고, "
+                  "from과 to는 본문에 쓰인 말 그대로, label은 두세 단어로 씁니다. 관계가 없으면 []만 답합니다.")
 KIND_WORD = {"object": "객체", "property": "속성", "value": "허용값", "decision": "결정", "action": "Action", "term": "용어",
              "keyword": "키워드"}
 
@@ -217,6 +221,7 @@ class Space:
         self.took = 0
         self.lock = threading.RLock()
         self._made: dict[str, Any] = {}
+        self.relations: dict[tuple[str, str], list[dict]] = {}  # (document, section) -> what a model read there
 
     # ---- documents ---------------------------------------------------------------------------------------------
 
@@ -416,6 +421,31 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
         self._made[key] = st
         return st
 
+    def next_to_read(self, onto=None, terms: list[dict] | None = None) -> tuple[str, str] | None:
+        """The section with the most concepts that a model has not read yet."""
+        made = self.concepts(onto, terms)
+        left = [(k, len(found)) for k, found in made["sections"].items() if k not in self.relations]
+        return max(left, key=lambda x: (x[1], x[0]))[0] if left else None
+
+    def read_section(self, llm, key: tuple[str, str]) -> list[dict]:
+        """One section through a model. A relation stays only if both ends are words of that text: a model may read, not invent."""
+        text = "\n".join(c.text for c in sorted(self.chunks.values(), key=lambda c: c.ordinal) if (c.document, c.section) == key)
+        raw = llm(EXTRACT_SYSTEM, f"제목: {key[1]}\n\n{text}")
+        start, end = raw.find("["), raw.rfind("]")
+        try:
+            rows = json.loads(raw[start:end + 1]) if start >= 0 else []
+        except ValueError:
+            rows = []
+        kept = []
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict):
+                continue
+            a, b, label = (str(r.get(k, "")).strip() for k in ("from", "to", "label"))
+            if a and b and a != b and a in text and b in text and label:
+                kept.append({"from": a, "to": b, "label": label[:30], "document": key[0], "section": key[1]})
+        self.relations[key] = kept[:RELATIONS_PER_SECTION]
+        return self.relations[key]
+
     def graph(self, onto=None, terms: list[dict] | None = None) -> dict:
         """The picture of it, in the shape the page's graph takes."""
         made = self.concepts(onto, terms)
@@ -438,8 +468,18 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
                 seen.add((src, cid))
                 edges.append({"source": src, "target": cid, "label": "언급", "subtype": False})
         edges += [{"source": a, "target": b, "label": "함께 언급", "subtype": True} for a, b, _ in made["links"]]
+        by_label = {c.label: c.id for c in made["concepts"].values()}
+        for rows in self.relations.values():
+            for r in rows:
+                ends = []
+                for word in (r["from"], r["to"]):
+                    if word not in by_label:  # a phrase the definitions and the word count did not know
+                        by_label[word] = _id("read", word)
+                        nodes.append({"id": by_label[word], "label": word, "module": "read", "abstract": False, "table": "", "key": ""})
+                    ends.append(by_label[word])
+                edges.append({"source": ends[0], "target": ends[1], "label": r["label"], "subtype": False})
         kinds = {n["module"] for n in nodes}
-        words = {"document": "문서", "section": "절", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드"}
+        words = {"document": "문서", "section": "절", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드", "read": "모델이 읽은 개념"}
         return {"nodes": nodes, "edges": edges, "clusters": [{"id": k, "label": v} for k, v in words.items() if k in kinds],
                 "sections_shown": with_sections, "titles": title}
 

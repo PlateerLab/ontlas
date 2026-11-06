@@ -287,6 +287,26 @@ def test_a_space_comes_from_the_studio_file():
     assert s.state()["chunks"] > 10 and open_space(None).state()["documents"] == 0
 
 
+def test_a_model_may_read_relations_but_not_invent_them():
+    s = _space()
+    s.index()
+
+    def llm(system, user):
+        return '''설명입니다. [{"from": "주문상품", "to": "반품", "label": "대상"},
+                 {"from": "주문상품", "to": "우주선", "label": "지어냄"}, {"from": "속옷", "to": "속옷", "label": "자기"}, "엉뚱함"]'''
+
+    key = s.next_to_read(_Onto)
+    assert key is not None
+    rows = s.read_section(llm, ("반품", "반품 기간"))
+    assert [(r["from"], r["to"]) for r in rows] == [("주문상품", "반품")]
+    assert s.read_section(lambda a, b: "모르겠습니다", ("배송", "택배사")) == []
+    g = s.graph(_Onto)
+    assert any(e["label"] == "대상" for e in g["edges"])
+    while (k := s.next_to_read(_Onto)) is not None:
+        s.read_section(lambda a, b: "[]", k)
+    assert s.next_to_read(_Onto) is None
+
+
 LIVE = [("XSPACE_LIVE_QDRANT", lambda v: {"kind": "qdrant", "url": v, "prefix": "xspace_test_"}),
         ("XSPACE_LIVE_PGVECTOR", lambda v: {"kind": "pgvector", "dsn": v, "prefix": "xspace_test_"})]
 
