@@ -322,8 +322,11 @@ class SpaceMixin:
         self._sync_space()
         cat = from_space(self.studio, self.space, self.repositories.files(self.repo))
         self._map = cat
-        lonely = [a for a in cat.assets.values() if a.kind in ("table", "file", "document")
-                  and not any(r.kind != "contains" for r in cat._in[a.id])]  # nothing reads it: nothing breaks if it goes
+        def read(a) -> bool:  # a link table is read through its columns
+            return any(r.kind != "contains" for r in cat._in[a.id]) or any(
+                x.kind == "mapsTo" for r in cat._out[a.id] if r.kind == "contains" for x in cat._in[r.target])
+
+        lonely = [a for a in cat.assets.values() if a.kind in ("table", "file", "document") and not read(a)]
         return {**map_graph(cat), "unused": [{"id": a.id, "label": a.label or a.id, "kind": a.kind} for a in lonely][:20]}
 
     def space_map_node(self, node: str) -> dict:

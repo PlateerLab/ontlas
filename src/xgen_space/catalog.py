@@ -262,6 +262,7 @@ def from_space(studio, space, files: dict | None = None) -> Catalog:
                 cat.relate(f"reasoner:{r.name}", "uses", f"graph:{name}")
     if space is None:
         return cat
+    space.index()
     collection = f"collection:{space.collection}"
     cat.add(collection, "collection", f"문서 청크 {len(space.chunks)}개", chunks=len(space.chunks))
     cat.add("embedder", "embedder", space.embedder.name.rsplit("/", 1)[-1])

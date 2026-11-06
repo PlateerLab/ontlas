@@ -383,8 +383,8 @@
     if (S.tab === 'connect' && !S.conn) api('integrations').then((x) => { S.conn = x; render(); }).catch(fail);
     if (S.tab === 'map') {
       if (!S.amap) api('space/map').then((x) => { S.amap = x; render(); }).catch((e) => { S.amap = { error: e.message }; render(); });
-      else if (!S.amap.error) mountGraph($('#mapgraph'), S.amap, { key: 'map', pos: S.mappos, sel: () => S.mapsel, clear: () => { S.mapsel = null; S.mapn = null; render(); },
-        pick: async (id) => { S.mapsel = id; drawGraph(); try { S.mapn = await api('space/map/node?node=' + encodeURIComponent(id)); render(); } catch (e) { fail(e); } } });
+      else if (!S.amap.error) mountGraph($('#mapgraph'), S.amap, { key: 'map', pos: S.mappos, sel: () => S.mapsel, clear: () => { S.mapsel = null; S.mapn = null; const box = $('#mapside'); if (box) box.innerHTML = mapSide(); },
+        pick: async (id) => { S.mapsel = id; drawGraph(); try { S.mapn = await api('space/map/node?node=' + encodeURIComponent(id)); $('#mapside').innerHTML = mapSide(); } catch (e) { fail(e); } } });
     }
     if (S.tab === 'monitor') mountMonitor();
     if (S.tab === 'flow' && !S.fl) loadFlow();
@@ -793,12 +793,6 @@
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>문서를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const stats = [[sp.documents, '문서'], [sp.sections, '절'], [sp.concepts, '개념'], [sp.chunks, '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
-    const sel = S.dsec;
-    const detail = sel ? `<b style="font-size:15px">${esc(sel.section)}</b><div class="muted" style="font-size:12px;margin:2px 0 10px">${esc(sel.document)}</div>
-        <div class="hit-text" style="white-space:pre-wrap">${esc(sel.text)}</div>
-        ${sel.concepts.length ? `<div class="sec">이 절의 개념</div><div class="chips">${sel.concepts.map((c) => (c.element.startsWith('object:') ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)}</button>` : `<span class="chip">${esc(c.label)} · ${esc(KIND_LABEL[c.kind] || c.kind)}</span>`)).join('')}</div>` : ''}`
-      : `<table class="tight"><tr><th>문서</th><th>절</th><th>언급</th></tr>${sp.items.map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
-        <div class="hint" style="margin-top:10px">그래프에서 절을 선택하면 본문과 개념이 표시됩니다.</div>`;
     const qs = S.dq;
     const queries = !qs ? '' : `<div class="card" style="margin-top:14px"><div class="ch">문서 온톨로지 질의${qs.conformance ? `<div class="right"><span class="chip ${qs.conformance.agree === qs.conformance.queries ? 'ok' : 'bad'}">SQL · 그래프 결과 일치 ${qs.conformance.agree} / ${qs.conformance.queries}</span></div>` : ''}</div><div class="cb">
         ${qs.queries.map((q) => `<div class="sec" style="margin-top:6px">${esc(q.label)} <span class="mono muted">${esc(q.name)}</span></div>${q.error ? `<div class="hint warn">${esc(q.error)}</div>` : `<table class="tight"><tr>${q.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${q.rows.slice(0, 5).map((row) => `<tr>${row.map((v) => `<td>${esc(cellWord(v))}</td>`).join('')}</tr>`).join('')}</table><div class="muted" style="font-size:11.5px;margin-top:4px">전체 ${q.total}행</div>`}`).join('')}
@@ -806,8 +800,18 @@
     return `${head}<div class="stats">${stats}</div>
       <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr)">
         <div class="card"><div class="ch">문서 그래프</div><div class="cb" style="padding:0"><div class="kg" id="docgraph"></div></div></div>
-        <div class="card"><div class="ch">${sel ? '절 내용' : '문서 목록'}${sel ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${detail}</div></div>
+        <div class="card" id="docside">${docSide()}</div>
       </div>${queries}`;
+  }
+
+  function docSide() {
+    const sp = S.sp, sel = S.dsec;
+    const detail = sel ? `<b style="font-size:15px">${esc(sel.section)}</b><div class="muted" style="font-size:12px;margin:2px 0 10px">${esc(sel.document)}</div>
+        <div class="hit-text" style="white-space:pre-wrap">${esc(sel.text)}</div>
+        ${sel.concepts.length ? `<div class="sec">이 절의 개념</div><div class="chips">${sel.concepts.map((c) => (c.element.startsWith('object:') ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)}</button>` : `<span class="chip">${esc(c.label)} · ${esc(KIND_LABEL[c.kind] || c.kind)}</span>`)).join('')}</div>` : ''}`
+      : `<table class="tight"><tr><th>문서</th><th>절</th><th>언급</th></tr>${sp.items.map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
+        <div class="hint" style="margin-top:10px">그래프에서 절을 선택하면 본문과 개념이 표시됩니다.</div>`;
+    return `<div class="ch">${sel ? '절 내용' : '문서 목록'}${sel ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${detail}</div>`;
   }
 
   async function mountDocs() {
@@ -826,7 +830,7 @@
             S.dgsel = id;
             drawGraph();
             if (titles[id]) {
-              try { S.dsec = await api(`space/section?document=${encodeURIComponent(doc[parent[id]] || '')}&section=${encodeURIComponent(titles[id])}`); render(); } catch (e) { fail(e); }
+              try { S.dsec = await api(`space/section?document=${encodeURIComponent(doc[parent[id]] || '')}&section=${encodeURIComponent(titles[id])}`); $('#docside').innerHTML = docSide(); } catch (e) { fail(e); }
             }
           } });
       }
@@ -883,15 +887,18 @@
     const head = pageHead('데이터 지도', '파일, 테이블, 문서, 저장소, 객체, 질의가 서로 어떻게 이어져 있는지 확인합니다');
     if (!m) return `${head}<div class="empty"><span class="spin"></span>지도를 그리는 중입니다.</div>`;
     if (m.error) return `${head}<div class="banner no"><div class="why">${esc(m.error)}</div></div>`;
-    const n = S.amapn;
+    return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)">
+      <div class="card"><div class="ch">공간의 자산</div><div class="cb" style="padding:0"><div class="kg" id="mapgraph"></div></div></div>
+      <div class="card"><div class="ch">영향 범위</div><div class="cb scroll" style="max-height:600px" id="mapside">${mapSide()}</div></div></div>`;
+  }
+
+  function mapSide() {
+    const m = S.amap, n = S.mapn;
     const list = (rows) => rows.map((x) => `<span class="chip sm">${esc(x.label)}</span>`).join('');
-    const side = n ? `<b style="font-size:15px">${esc(n.label)}</b><div class="muted mono" style="font-size:12px;margin:2px 0 10px">${esc(n.kind)}</div>
+    return n ? `<b style="font-size:15px">${esc(n.label)}</b><div class="muted mono" style="font-size:12px;margin:2px 0 10px">${esc(n.kind)}</div>
         <div class="sec" style="margin-top:0">이것을 바꾸면 영향받는 항목 ${n.impact.length}개</div><div class="chips">${list(n.impact) || '<span class="muted" style="font-size:12.5px">없음</span>'}</div>
         <div class="sec">이것이 사용하는 항목</div><div class="chips">${list(n.uses) || '<span class="muted" style="font-size:12.5px">없음</span>'}</div>`
       : `<div class="muted" style="font-size:12.5px">Node를 선택하면 영향 범위가 표시됩니다.</div>${m.unused.length ? `<div class="sec">사용하지 않는 자산</div><div class="chips">${list(m.unused)}</div>` : ''}`;
-    return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)">
-      <div class="card"><div class="ch">공간의 자산</div><div class="cb" style="padding:0"><div class="kg" id="mapgraph"></div></div></div>
-      <div class="card"><div class="ch">영향 범위</div><div class="cb scroll" style="max-height:600px">${side}</div></div></div>`;
   }
 
   function viewConnect() {
@@ -2739,7 +2746,7 @@ ${controls}${body}`;
       try { S.sr.answer = await api('space/answer', { text: S.sr.text }); } catch (e) { S.sr.answer = { ok: false, error: e.message }; }
       S.sr.answering = false; render();
     },
-    dsecclose: () => { S.dsec = null; S.dgsel = null; render(); },
+    dsecclose: () => { S.dsec = null; S.dgsel = null; drawGraph(); $('#docside').innerHTML = docSide(); },
     dread: async () => {
       for (let i = 0; i < 5; i += 1) {  // a few sections per press: each takes the model tens of seconds
         S.dread = `읽는 중 ${i + 1} / 5`; render();
