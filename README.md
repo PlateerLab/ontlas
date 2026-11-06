@@ -133,33 +133,32 @@ xspace review examples/library/studio.yaml acme-1.1.0.yaml
 **6. Share it.** `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
 `xspace mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
 
-The page follows the data from raw files to checked answers. `Ctrl K` jumps to any screen:
+The sidebar follows the data from raw files to checked answers. A stage's screens are tabs on its page, and `Ctrl K` jumps to any screen:
 
 | Stage | Screen | Use it to |
 |---|---|---|
-| 시작 | 파이프라인 관제 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
-| | 사용 안내 | Read what each screen does, beside the demo video when there is one |
+| 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
 | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| | 데이터 지도 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
-| ① 원천 데이터 | 데이터 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
+| 데이터 지도 | | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
+| ① 원천 데이터 | 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
 | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
-| ② 변환 | 변환 결과 | See what each file came to, and the one JSON they roll up into |
+| ② 변환 | 결과 | See what each file came to, and the one JSON they roll up into |
 | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
 | ③ 온톨로지 구축 | 초안 생성 | Draft from the files in the catalog, step by step, and bind to a standard |
-| | 객체 관리 | Change an object's table, key and parent, or add one from a table |
-| | 속성 관리 | Change a property's type, column, allowed values and their names, required flag and mask |
-| | 관계 관리 | Change relations and their join columns, and add the ones foreign keys suggest |
-| | 온톨로지 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
-| | 온톨로지 | See objects and relations as a graph |
-| | 문서 온톨로지 | See documents as documents, sections and concepts, tied to the definitions they mention |
+| | 온톨로지 · 도메인 | See objects and relations as a graph |
+| | 온톨로지 · 문서 | See documents as documents, sections and concepts, tied to the definitions they mention |
+| | 정의 관리 · 객체 | Change an object's table, key and parent, or add one from a table |
+| | 정의 관리 · 속성 | Change a property's type, column, allowed values and their names, required flag and mask |
+| | 정의 관리 · 관계 | Change relations and their join columns, and add the ones foreign keys suggest |
+| | 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
 | ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores and whether questions find their documents |
-| | 어댑터 | See every swappable part, and run the tests that say a swap changed nothing |
+| | 구성 | See every swappable part, and run the tests that say a swap changed nothing |
 | ⑤ 활용 | 문서 검색 | Search documents by meaning and go on to the definitions they name |
 | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
-| | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
-| | 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
+| | 판정 · 규칙 · 판정 | Decide a case with its grounds, request an action, approve it, roll it back |
+| | 판정 · 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
 | | 외부 연동 | See how MCP, REST and a platform's connection plug the space in |
-| ⑥ 검증 | 검증 | Run the questions with known answers, and add, remove or import them |
+| ⑥ 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
 | | DB 대조 | Check the definition against the database |
 
 ## What it looks like

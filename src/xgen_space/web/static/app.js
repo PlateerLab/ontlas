@@ -28,7 +28,7 @@
   };
   const UI = {
     chevron: '<path d="M6 9l6 6 6-6"/>',
-    fold: '<path d="M4 6h16M4 12h10M4 18h16M20 9l-3 3 3 3"/>',
+    fold: '<path d="M14.5 6.5L9 12l5.5 5.5"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>',
     upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>',
@@ -44,8 +44,21 @@
     ['search', '문서 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
-  const NAV_GROUP = [['', '시작', ['monitor', 'guide', 'flow', 'map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
-    ['③', '온톨로지 구축', ['data', 'objects', 'props', 'links', 'library', 'onto', 'docs']], ['④', '저장소 어댑터', ['vectors', 'adapters']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
+  // the sidebar: the board, the map, then the six stages in the order data moves. A stage's screens are tabs on its page.
+  const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '데이터 지도', ['map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
+    ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']], ['', '사용 안내', ['guide']]];
+  // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
+  const TAB_WORD = { monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문' };
+  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
+  const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
+  const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
+    decision: '결정', action: 'Action', role: '역할', agent: 'Agent', workflow: '워크플로우', vector_store: '벡터 저장소', graph_store: '그래프 저장소', reasoner: '추론기', embedder: '임베딩 모델' };
+  const KIND_TAB = { database: 'db', table: 'sources', column: 'sources', folder: 'catalog', file: 'catalog', document: 'docs', collection: 'vectors', object: 'objects', property: 'props', link: 'links',
+    query: 'query', decision: 'decide', action: 'decide', vector_store: 'vectors', graph_store: 'adapters', reasoner: 'adapters', embedder: 'vectors' };
+  const MAP_ORDER = ['객체', '속성', '관계', '질의', '결정', 'Action', '역할', 'Agent', '문서', '문서 컬렉션', '테이블', '컬럼', '파일', '저장소 어댑터'];
+  const MAP_STORE = new Set(['vector_store', 'graph_store', 'reasoner', 'embedder']);
+  const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 객체'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
   const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
     question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
@@ -79,10 +92,10 @@
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 문서 검색 적중률, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
       '상단 정보에서 현재 데이터 출처를 확인합니다.',
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
-    ['map', '파일, 테이블, 문서, 저장소, 객체, 질의가 서로 어떻게 이어져 있는지 그래프로 확인합니다.', [
-      'Node를 선택하면 그 항목을 바꿀 때 영향받는 항목과 그 항목이 사용하는 항목이 표시됩니다.',
+    ['map', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계를 그래프로 확인합니다.', [
+      'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
       '범례를 선택하면 해당 묶음을 숨기거나 다시 표시합니다.',
-      '사용하지 않는 자산은 어떤 객체, 질의, 문서도 쓰지 않는 파일과 테이블입니다.']],
+      '미사용 자산은 객체, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
     ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
       '문서 파일을 올리면 벡터 저장소에 색인되고 문서 온톨로지에 추가됩니다. 초안 열의 선택을 해제하면 색인에서도 빠집니다.',
       '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
@@ -143,25 +156,25 @@
       '식별 통합 객체를 선택하면 묶인 기록과 근거를 확인하고, [다시 묶어 교차표 저장]으로 다시 묶습니다.',
       '관계를 선택하면 연결된 객체로 이동합니다.',
       '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
-    ['docs', '공간의 문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어로 이어집니다.', [
-      '문서는 데이터 카탈로그에서 올립니다. 업로드하면 자동으로 구성합니다.',
-      '개념 사이의 함께 언급은 같은 절에 나온다는 뜻입니다. 언어 모델이 연결되어 있으면 [언어 모델로 관계 읽기]로 절의 뜻을 읽어 관계를 추가합니다. 본문에 없는 말은 버립니다.',
+    ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어와 연결됩니다.', [
+      '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
+      '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 절의 관계를 추가합니다. 본문에 없는 내용은 추가하지 않습니다.',
       '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. 객체 개념을 선택하면 온톨로지 화면으로 이동합니다.',
       '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
-    ['vectors', '문서를 벡터로 바꾸는 임베딩 모델과 벡터를 담는 저장소를 확인합니다.', [
-      '임베딩이 글자 비교로 표시되면 모델 없이 동작하는 상태입니다. 의미 비교로 쓰려면 serve --embedder 옵션이나 studio.yaml의 space.embedder에서 모델을 지정합니다.',
-      '설치형에서는 Qdrant, pgvector 주소를 입력해 저장소를 추가합니다. 추가하면 공간의 문서가 그 저장소에도 색인됩니다.',
-      '문서 검색 검증은 질문마다 찾아야 할 문서를 정해 두고 상위 결과에 나오는지 확인합니다. 질문은 studio.yaml의 space.checks에 적습니다.']],
-    ['adapters', '교체할 수 있는 구성 요소를 한곳에서 확인합니다.', [
-      '그래프 · 원천 저장소, 벡터 저장소, 쿼리 언어, 임베딩 모델, 추론기, 도메인을 표시합니다. 카드 아래에 교체 방법이 있습니다.',
-      '[적합성 시험 실행]을 선택하면 같은 질의와 같은 검색을 저장소마다 실행해 결과가 같은지 확인합니다.',
+    ['vectors', '임베딩 모델과 벡터 저장소의 구성을 확인합니다.', [
+      '글자 비교는 모델 없이 동작하는 기본 방식입니다. 의미 비교는 serve --embedder 옵션 또는 studio.yaml의 space.embedder에서 모델을 지정합니다.',
+      '설치형에서는 Qdrant, pgvector 주소를 입력해 저장소를 추가합니다. 추가한 저장소에 문서를 색인합니다.',
+      '문서 검색 검증은 질문별 정답 문서가 상위 결과에 포함되는지 확인합니다. 질문은 studio.yaml의 space.checks에서 지정합니다.']],
+    ['adapters', '교체 가능한 구성 요소를 확인합니다.', [
+      '그래프 · 원천 저장소, 벡터 저장소, 쿼리 언어, 임베딩 모델, 추론기, 도메인을 표시합니다. 카드 하단에 변경 방법을 표시합니다.',
+      '[적합성 시험 실행]을 선택하면 같은 질의와 검색을 저장소별로 실행해 결과를 비교합니다.',
       '추론기의 [실행]을 선택하면 현재 데이터에서 유도한 사실 수와 발견 항목을 표시합니다.']],
-    ['search', '공간의 문서를 뜻으로 찾고, 문서가 가리키는 온톨로지 요소로 이어서 확인합니다.', [
-      '찾을 내용을 문장으로 입력하고 [검색]을 선택합니다. 예시를 선택해도 됩니다.',
-      '결과마다 문서, 절, 유사도, 본문과 그 안의 온톨로지 요소가 표시됩니다.',
-      '이어서 보기에서 질문이 가리키는 객체를 선택하면 온톨로지 화면으로 이동합니다.',
-      '언어 모델이 연결되어 있으면 [문서로 답변 만들기]로 찾은 문서 안에서만 답변을 만듭니다.',
-      '벡터 저장소가 둘 이상이면 저장소별 결과와 시간을 비교합니다.']],
+    ['search', '문서를 의미 기준으로 검색하고 관련 온톨로지 요소를 확인합니다.', [
+      '검색어를 입력하고 [검색]을 선택합니다.',
+      '결과별로 문서, 절, 유사도, 본문, 온톨로지 요소를 표시합니다.',
+      '관련 온톨로지 요소에서 객체를 선택하면 온톨로지 화면으로 이동합니다.',
+      '언어 모델이 연결된 경우 [답변 생성]으로 검색 결과 기준의 답변을 생성합니다.',
+      '벡터 저장소가 2개 이상인 경우 저장소별 결과와 응답 시간을 비교합니다.']],
     ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
       '등록 질의를 선택하면 바로 실행됩니다.',
       '언어 탭에서 PostgreSQL, MySQL, Oracle, SQL Server, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
@@ -172,15 +185,15 @@
       '처리를 요청하면 권한, Parameter 값 범위, 상태 전이, 판정 조건을 검사합니다.',
       '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
-    ['rules', '규칙이 읽는 값, 지표의 산식과 계산, 출처가 다른 답, 시간이 지나면 바뀌는 상태, 결정표의 빈틈을 확인합니다.', [
-      '이름 있는 값은 결정표와 계산 속성이 @이름으로 읽습니다. 고객사 모듈은 이 값만 바꿉니다.',
+    ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
+      '기준값은 결정표와 계산 속성이 @이름으로 참조합니다. 고객사 모듈은 기준값만 변경합니다.',
       '지표의 [계산]을 선택하면 값, 분자와 분모, 기준을 표시합니다.',
-      '출처가 다른 답에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인을 거쳐 반영됩니다.',
-      '결정표 점검은 겹치는 규칙, 닿지 않는 규칙, 입력의 빈 구간을 표시합니다.']],
-    ['connect', '다른 플랫폼과 Agent가 이 공간을 사용하는 방법을 확인합니다.', [
-      'MCP를 지원하는 Agent는 xspace mcp로 공간을 도구로 연결합니다.',
-      '그 밖의 플랫폼은 REST API를 토큰으로 호출합니다. OpenAPI 문서로 도구를 등록합니다.',
-      '플랫폼이 관리하는 DB 연결을 쿼리 서비스로 빌려 원천으로 사용합니다. 비밀번호는 공간으로 오지 않습니다.',
+      '출처 충돌에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인 후 반영됩니다.',
+      '결정표 점검은 중복 조건, 미적용 규칙, 누락 구간을 표시합니다.']],
+    ['connect', '외부 플랫폼과 Agent의 연동 방법을 확인합니다.', [
+      'MCP를 지원하는 Agent는 xspace mcp로 연결합니다.',
+      '그 밖의 플랫폼은 토큰으로 REST API를 호출합니다. OpenAPI 문서로 도구를 등록합니다.',
+      '플랫폼이 관리하는 DB 연결을 원천으로 사용합니다. 비밀번호는 공간에 저장하지 않습니다.',
       '역할을 지정하면 그 역할의 조회 범위와 가림이 외부 호출에도 적용됩니다.']],
     ['check', '검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다.', [
       '[다시 실행]으로 현재 상태를 다시 검증합니다.',
@@ -191,14 +204,14 @@
       '모듈 적용 상태를 바꾼 뒤 [다시 대조]를 선택합니다.',
       '식품 업종 모듈을 적용하면 원천 DB에 없는 컬럼이 오류로 표시됩니다.']],
   ];
-  const START = [['monitor', '상태 보기', '원천부터 검증까지 지금 상태를 확인합니다'], ['catalog', '데이터 넣기', '파일, 폴더, 문서를 업로드합니다'],
-    ['data', '온톨로지 만들기', '파일에서 초안을 만들어 적용합니다'], ['search', '찾고 묻기', '문서 검색, 질의, 판정을 실행합니다'],
-    ['connect', '밖에서 쓰기', 'MCP와 REST로 다른 플랫폼에 연결합니다']];
+  const START = [['monitor', '상태 확인', '원천부터 검증까지 단계별 상태를 확인합니다'], ['catalog', '데이터 업로드', '파일, 폴더, 문서를 업로드합니다'],
+    ['data', '온톨로지 구축', '파일 기준으로 초안을 생성하고 적용합니다'], ['search', '검색 · 질의', '문서 검색, 질의, 판정을 실행합니다'],
+    ['connect', '외부 연동', 'MCP와 REST로 외부 플랫폼과 연동합니다']];
   const GUIDE_USE = [
-    ['한 공간', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 종류가 달라도 한 공간에서 관리합니다.'],
-    ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어는 어댑터로 교체합니다. 교체해도 같은 답이 나오는지 적합성 시험으로 확인합니다.'],
-    ['도메인 교체', '이커머스는 첫 도메인입니다. 도메인 지식은 모듈로 적용하고 해제합니다.'],
-    ['어디든 연결', 'MCP와 REST로 어떤 플랫폼에서든 사용합니다. 플랫폼의 DB 연결을 빌려 읽고, 플랫폼의 데이터는 바꾸지 않습니다.'],
+    ['통합 관리', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 한 공간에서 관리합니다.'],
+    ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
+    ['도메인 교체', '도메인 지식을 모듈로 적용 · 해제합니다. 이커머스는 첫 도메인입니다.'],
+    ['외부 연동', 'MCP와 REST로 외부 플랫폼과 연동합니다. 플랫폼의 DB 연결은 읽기 전용으로 사용합니다.'],
     ['업무 정의 공유', '객체, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
     ['저장소 간 같은 질의', '하나의 질의를 SQL, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin으로 변환해 실행하고 저장소별 결과를 비교합니다.'],
     ['규칙 판정과 근거', '결정표로 판정하고 적용 규칙, 출처 조항, 원천 컬럼, 모듈 버전을 함께 표시합니다.'],
@@ -243,7 +256,7 @@
     pol: { open: false, text: '', target: '', busy: false, res: null },
     ind: { target: '', inputs: {} },
     mg: { st: null, busy: false, sel: '', form: null, q: '', obj: '', table: '', open: false, keep: false, qt: 0, review: null },
-    cat: null, conv: null, pick: false, menu: null, pal: null, closed: {}, slim: false,
+    cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false,
     mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
@@ -325,23 +338,22 @@
 
   const ROLE_WORD = { viewer: '조회', editor: '편집', approver: '승인', admin: '관리' };
 
+  try { S.slim = localStorage.getItem('xspace-slim') === '1'; } catch (e) { S.slim = false; }
   const groupOf = (tab) => NAV_GROUP.find((g) => g[2].includes(tab));
-  const BRAND = `<div class="sbrand"><div class="logo">X</div><div class="bname"><b>XGEN Space</b><span>Data to Ontology</span></div>
-    <button class="iconbtn" data-act="slim" aria-label="메뉴 접기" title="메뉴 접기">${ui('fold')}</button></div>`;
+  const BRAND = `<div class="sbrand"><div class="logo">X</div><div class="bname"><b>XGEN Space</b><span>Data to Ontology</span></div></div>`;
 
   function renderTop() {
     const st = S.st;
     const u = S.me && S.me.team && S.me.user;
     const who = u ? `<span class="chip b">${esc(u.name)} · ${esc(u.roles.map((r) => ROLE_WORD[r] || r).join(', '))}</span><button class="btn sm ghost" data-act="logout">로그아웃</button>` : '';
     const g = groupOf(S.tab);
-    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#monitor">홈</a><i>›</i>${g ? `<span>${esc((g[0] ? g[0] + ' ' : '') + g[1])}</span><i>›</i>` : ''}<b>${esc(navLabel(S.tab))}</b></nav>
+    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#monitor">홈</a><i>›</i>${g && g[1] !== tabWord(S.tab) ? `<span>${esc((g[0] ? g[0] + ' ' : '') + g[1])}</span><i>›</i>` : ''}<b>${esc(tabWord(S.tab))}</b></nav>
       <div class="grow"></div>
       ${originChip(st.origin)}
       <select class="pipesel" data-top="pipe" aria-label="파이프라인 선택">${st.pipelines.map((p) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
       <button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>
       <button class="pill quiet hide-sm" data-act="palette">${ui('search')}메뉴 검색<kbd>Ctrl K</kbd></button>
       ${GUIDE.some((x) => x[0] === S.tab) ? '<button class="btn sm" data-act="helpopen">이 화면 안내</button>' : ''}
-      ${S.tab === 'guide' ? '' : '<a class="btn sm hide-sm" href="#guide">사용 안내</a>'}
       ${who}${u && !u.roles.includes('admin') ? '' : '<button class="btn sm ghost" data-act="reset">초기화</button>'}`;
   }
 
@@ -352,23 +364,50 @@
     return o.notice ? `<span class="chip warn hide-sm">${esc(o.notice)}</span>` : '';
   }
 
-  function renderSide() {
+  function tabCounts() {
     const st = S.st;
-    const n = { catalog: st.data.files, library: st.changes || st.library.length, objects: st.stats.objects, links: st.stats.links,
+    return { catalog: st.data.files, library: st.changes || st.library.length, objects: st.stats.objects, links: st.stats.links,
       query: st.stats.queries, decide: st.stats.decisions + st.stats.actions, check: st.stats.questions,
       sources: S.mg.st && S.mg.st.sources ? S.mg.st.sources.source.tables.length : 0 };
+  }
+
+  function subTabs() {
+    const g = groupOf(S.tab);
+    if (!g || g[2].length < 2) return '';
+    const n = tabCounts();
+    const here = tabSet(S.tab);
+    if (here) S.seen[here[0]] = S.tab;
+    const tab = (k) => {
+      const set = tabSet(k);
+      if (set && set[1][0][0] !== k) return '';
+      const on = set ? set === here : S.tab === k;
+      const keys = set ? set[1].map((x) => x[0]) : [k];
+      const count = set ? 0 : n[k];
+      return `<a class="stab${on ? ' on' : ''}" href="#${(set && S.seen[set[0]]) || k}" data-tabs="${keys.join(' ')}"${on ? ' aria-current="page"' : ''}>${esc(set ? set[0] : tabWord(k))}${count ? `<span class="n">${count}</span>` : ''}</a>`;
+    };
+    const seg = here ? `<div class="sseg" role="group" aria-label="${esc(here[0])}">${here[1].map(([k, word]) => `<a class="sitem${S.tab === k ? ' on' : ''}" href="#${k}"${S.tab === k ? ' aria-current="true"' : ''}>${esc(word)}</a>`).join('')}</div>` : '';
+    return `<nav class="stabs" aria-label="${esc(g[1])}">${g[2].map(tab).join('')}${seg}</nav>`;
+  }
+
+  function renderSide() {
+    const st = S.st;
     const wait = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
-    const link = (k) => `<a class="nav${S.tab === k ? ' on' : ''}" href="#${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${navLabel(k)}` +
-      `${n[k] ? `<span class="n">${n[k]}</span>` : ''}</a>`;
-    const groups = NAV_GROUP.map(([no, h, keys], i) => {
-      const shut = S.closed[i] && !keys.includes(S.tab);
-      const tag = wait && keys.includes('objects') ? ' <span class="chip sm warn">변경 대기</span>' : '';
-      return `<div class="ngroup"><button class="navg" data-act="navg" data-i="${i}" aria-expanded="${!shut}"><span>${no ? `<em>${no}</em> ` : ''}${h}${tag}</span>${ui('chevron')}</button>${shut ? '' : keys.map(link).join('')}</div>`;
-    }).join('');
+    const place = (i) => {
+      const [no, label, keys] = NAV_GROUP[i];
+      const on = keys.includes(S.tab);
+      if (on) S.seen[i] = S.tab;
+      const waiting = wait && keys.includes('objects');
+      const mark = no ? `<span class="step${waiting ? ' warn' : ''}">${'①②③④⑤⑥'.indexOf(no) + 1}</span>` : `<svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg>`;
+      return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}>${mark}<span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}</a>`;
+    };
+    const at = (test) => NAV_GROUP.map((g, i) => (test(g, i) ? place(i) : '')).join('');
+    const last = NAV_GROUP.length - 1;
     const foot = `<div class="sfoot"><b>${esc(st.title)}</b><span>모듈 ${st.modules_on}개</span>${st.backends.map((b) => `<span class="be"><i class="dot"></i>${esc(b.name)} · ${esc(b.language.toUpperCase())}</span>`).join('')}</div>`;
+    const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    $('#side').innerHTML = `${BRAND}<div class="snav">${groups}</div>${foot}`;
+    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g, i) => !g[0] && i < last)}</div><div class="steps">${at((g) => g[0])}</div><div class="nend">${place(last)}</div></div>${foot}
+      <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
     $('#side .snav').scrollTop = kept;
     if (S.tab !== renderSide.tab) {
       renderSide.tab = S.tab;
@@ -385,7 +424,7 @@
     const views = { rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks };
     const main = $('#main');
-    main.innerHTML = (views[S.tab] || viewMonitor)();
+    main.innerHTML = subTabs() + (views[S.tab] || viewMonitor)();
     paintLayer();
     after();
   }
@@ -770,30 +809,30 @@
     const stores = sp ? sp.stores : [];
     const pick = stores.length > 1 ? `<select class="inline" data-in="srstore" aria-label="벡터 저장소"><option value="">기본 저장소</option>${stores.map((s) => `<option value="${esc(s.name)}"${r.store === s.name ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : '';
     const examples = sp && sp.check ? sp.check.results.slice(0, 4).map((c) => `<button class="chip" data-act="srex" data-text="${esc(c.text)}">${esc(c.text)}</button>`).join('') : '';
-    const form = `<div class="card"><div class="cb"><div class="srform"><input type="search" id="srtext" data-in="srtext" value="${esc(r.text)}" placeholder="찾을 내용을 문장으로 입력합니다" aria-label="검색어">${pick}<button class="btn primary" data-act="srgo"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>검색 중' : '검색'}</button></div>
+    const form = `<div class="card"><div class="cb"><div class="srform"><input type="search" id="srtext" data-in="srtext" value="${esc(r.text)}" placeholder="검색어를 입력해 주세요" aria-label="검색어">${pick}<button class="btn primary" data-act="srgo"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>검색 중' : '검색'}</button></div>
       ${examples ? `<div class="chips" style="margin-top:10px"><span class="muted" style="font-size:12px">예시</span>${examples}</div>` : ''}</div></div>`;
-    const warn = sp && sp.embedder && !sp.embedder.semantic ? '<div class="hint" style="margin:10px 0 0">현재 임베딩은 글자 조각을 비교합니다. 같은 뜻의 다른 표현은 찾지 못할 수 있습니다. 의미 검색은 벡터 · 임베딩 화면의 임베딩 모델 설정을 확인합니다.</div>' : '';
-    if (!r.res) return pageHead('문서 검색', '공간의 문서를 뜻으로 찾고, 문서가 가리키는 온톨로지 요소로 이어서 확인합니다') + form + warn;
-    if (r.res.error) return pageHead('문서 검색', '공간의 문서를 뜻으로 찾습니다') + form + `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.res.error)}</div></div>`;
+    const warn = sp && sp.embedder && !sp.embedder.semantic ? '<div class="hint" style="margin:10px 0 0">글자 기준으로 검색합니다. 표현이 다른 문장은 검색되지 않을 수 있습니다. 벡터 · 임베딩에서 임베딩 모델을 확인해 주세요.</div>' : '';
+    if (!r.res) return pageHead('문서 검색', '문서를 의미 기준으로 검색하고 관련 온톨로지 요소를 확인합니다') + form + warn;
+    if (r.res.error) return pageHead('문서 검색', '문서를 의미 기준으로 검색합니다') + form + `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.res.error)}</div></div>`;
     const res = r.res;
     const named = res.named.length ? res.named.map((c) => (c.element.startsWith('object:')
       ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)} · ${esc(c.kind_label)}</button>`
-      : `<span class="chip">${esc(c.label)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">질문에서 온톨로지 요소를 찾지 못했습니다.</span>';
+      : `<span class="chip">${esc(c.label)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">관련 온톨로지 요소가 없습니다.</span>';
     const cmp = res.compare ? `<div class="sec">저장소 비교</div><div class="${res.compare.same ? 'hint' : 'hint warn'}">${res.compare.same ? '모든 저장소의 결과 순서가 같습니다.' : '저장소별 결과 순서가 다릅니다. 근사 검색은 순서가 조금 다를 수 있습니다.'}</div>
       <table class="tight"><tr><th>저장소</th><th>종류</th><th>시간</th></tr>${Object.entries(res.compare.stores).map(([n, v]) => `<tr><td>${esc(n)}</td><td>${esc(v.kind)}</td><td>${v.error ? esc(v.error) : `${v.ms}ms`}</td></tr>`).join('')}</table>` : '';
     const answer = r.answer ? (r.answer.ok ? `<div class="banner ok" style="margin-top:12px"><div class="why" style="white-space:pre-wrap">${esc(r.answer.answer)}</div></div>` : `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.answer.error)}</div></div>`) : '';
-    const ask = res.can_answer ? `<button class="btn sm" data-act="sranswer"${r.answering ? ' disabled' : ''}>${r.answering ? '<span class="spin"></span>답변 작성 중' : '문서로 답변 만들기'}</button>` : '';
-    return `${pageHead('문서 검색', '공간의 문서를 뜻으로 찾고, 문서가 가리키는 온톨로지 요소로 이어서 확인합니다')}${form}${warn}${answer}
+    const ask = res.can_answer ? `<button class="btn sm" data-act="sranswer"${r.answering ? ' disabled' : ''}>${r.answering ? '<span class="spin"></span>답변 생성 중' : '답변 생성'}</button>` : '';
+    return `${pageHead('문서 검색', '문서를 의미 기준으로 검색하고 관련 온톨로지 요소를 확인합니다')}${form}${warn}${answer}
       <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);margin-top:14px;align-items:start">
-        <div class="card"><div class="ch">찾은 문서 ${res.hits.length}건<div class="right">${ask}</div></div><div class="cb">${res.hits.map(hitCard).join('') || '<div class="empty">찾은 문서가 없습니다.</div>'}</div></div>
-        <div class="card"><div class="ch">이어서 보기</div><div class="cb"><div class="sec" style="margin-top:0">질문이 가리키는 온톨로지 요소</div><div class="chips">${named}</div>
+        <div class="card"><div class="ch">검색 결과 ${res.hits.length}건<div class="right">${ask}</div></div><div class="cb">${res.hits.map(hitCard).join('') || '<div class="empty">검색 결과가 없습니다.</div>'}</div></div>
+        <div class="card"><div class="ch">관련 정보</div><div class="cb"><div class="sec" style="margin-top:0">관련 온톨로지 요소</div><div class="chips">${named}</div>
           <div class="sec">검색 방식</div><div class="muted" style="font-size:12.5px">임베딩 <span class="mono">${esc(res.embedder.name)}</span> · 저장소 <span class="mono">${esc(res.store)}</span></div>${cmp}</div></div>
       </div>`;
   }
 
   async function searchNow() {
     const r = S.sr;
-    if (!r.text.trim()) return toast('검색어가 없어 찾지 못했습니다. 찾을 내용을 입력해 주세요.', true);
+    if (!r.text.trim()) return toast('검색어가 없어 검색하지 못했습니다. 검색어를 입력해 주세요.', true);
     r.busy = true; r.answer = null;
     render();
     try { r.res = await api('space/search', { text: r.text, k: 6, store: r.store }); } catch (e) { r.res = { error: e.message }; }
@@ -804,8 +843,8 @@
 
   function viewDocs() {
     const sp = S.sp;
-    const read = S.st.ask ? `<button class="btn" data-act="dread"${S.dread ? ' disabled' : ''}>${S.dread ? `<span class="spin"></span>${esc(S.dread)}` : '언어 모델로 관계 읽기'}</button>` : '';
-    const head = pageHead('문서 온톨로지', '공간의 문서를 문서, 절, 개념으로 자동 구성하고 도메인 온톨로지와 연결합니다', `${read}<a class="btn" href="#catalog">문서 추가</a>`);
+    const read = S.st.ask ? `<button class="btn" data-act="dread"${S.dread ? ' disabled' : ''}>${S.dread ? `<span class="spin"></span>${esc(S.dread)}` : '관계 추출'}</button>` : '';
+    const head = pageHead('문서 온톨로지', '문서를 문서, 절, 개념으로 구성하고 도메인 온톨로지와 연결합니다', `${read}<a class="btn" href="#catalog">문서 추가</a>`);
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>문서를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const stats = [[sp.documents, '문서'], [sp.sections, '절'], [sp.concepts, '개념'], [sp.chunks, '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
@@ -856,20 +895,20 @@
 
   function viewVectors() {
     const sp = S.sp;
-    const head = pageHead('벡터 · 임베딩', '문서를 벡터로 바꾸는 모델과 벡터를 담는 저장소를 확인합니다', '<a class="btn" href="#search">문서 검색</a>');
+    const head = pageHead('벡터 · 임베딩', '임베딩 모델과 벡터 저장소의 구성을 확인합니다', '<a class="btn" href="#search">문서 검색</a>');
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>색인 상태를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const e = sp.embedder;
     const embed = `<div class="card"><div class="ch">임베딩 모델</div><div class="cb"><div style="font-size:15px"><b>${esc(e.name)}</b></div><div class="chips" style="margin:8px 0"><span class="chip">${esc(e.kind)}</span><span class="chip">${e.dim}차원</span><span class="chip ${e.semantic ? 'ok' : 'warn'}">${e.semantic ? '의미 비교' : '글자 비교'}</span></div>
-      <div class="muted" style="font-size:12.5px">${e.semantic ? '문장의 뜻으로 비교합니다. 표현이 달라도 같은 내용을 찾습니다.' : '글자 조각으로 비교합니다. 모델 없이 동작하지만 표현이 다르면 찾지 못할 수 있습니다.'}</div></div></div>`;
+      <div class="muted" style="font-size:12.5px">${e.semantic ? '문장 의미를 기준으로 검색합니다.' : '글자 기준으로 검색합니다. 표현이 다른 문장은 검색되지 않을 수 있습니다.'}</div></div></div>`;
     const rows = sp.stores.map((s) => `<tr><td><b>${esc(s.name)}</b>${s.primary ? ' <span class="chip sm b">기본</span>' : ''}</td><td class="mono">${esc(s.kind)}</td><td>${show(s.count)}</td><td>${s.exact ? '정확' : '근사'}</td><td>${s.persistent ? '유지' : '메모리'}</td><td>${s.error ? `<span class="chip sm bad">${esc(s.error)}</span>` : '<span class="chip sm ok">정상</span>'}</td>${sp.can_connect ? `<td>${sp.stores.length > 1 ? `<button class="btn sm ghost" data-act="vstoredel" data-name="${esc(s.name)}">제거</button>` : ''}</td>` : ''}</tr>`).join('');
     const add = sp.can_connect ? `<div class="srform" style="margin-top:12px"><select class="inline" data-in="vkind" aria-label="저장소 종류">${sp.kinds.filter((k) => k !== 'memory').map((k) => `<option value="${esc(k)}"${S.vs.kind === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select><input type="text" data-in="vurl" value="${esc(S.vs.url)}" placeholder="${S.vs.kind === 'pgvector' ? 'postgresql://...' : 'http://localhost:6333'}" aria-label="저장소 주소"><button class="btn" data-act="vstoreadd">저장소 추가</button></div>
-      <div class="hint" style="margin-top:8px">추가하면 공간의 문서가 그 저장소에도 색인됩니다. 문서 검색에서 저장소별 결과를 비교합니다.</div>`
+      <div class="hint" style="margin-top:8px">추가한 저장소에 문서를 색인합니다.</div>`
       : '<div class="hint" style="margin-top:10px">Qdrant, pgvector 같은 외부 저장소는 설치형에서 추가합니다. 공개 데모는 메모리 저장소만 사용합니다.</div>';
     const docs = sp.items.map((d) => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.fixed ? '기본 문서' : '업로드')}</td><td>${d.sections}</td><td>${d.chunks}</td></tr>`).join('');
     const c = sp.check;
-    const check = c ? `<div class="card" style="margin-top:14px"><div class="ch">문서 검색 검증<div class="right"><span class="chip ${c.found === c.questions ? 'ok' : 'warn'}">적중 ${c.found} / ${c.questions}</span></div></div><div class="cb"><div class="muted" style="font-size:12.5px;margin-bottom:8px">질문마다 찾아야 할 문서를 정해 두고, 상위 ${c.k}건 안에 나오는지 확인합니다.</div>
-      <table class="tight"><tr><th>질문</th><th>찾아야 할 문서</th><th>순위</th></tr>${c.results.map((x) => `<tr><td>${esc(x.text)}</td><td>${esc(x.document)}</td><td>${x.rank ? `${x.rank}위` : '<span class="chip sm bad">찾지 못함</span>'}</td></tr>`).join('')}</table></div></div>` : '';
+    const check = c ? `<div class="card" style="margin-top:14px"><div class="ch">문서 검색 검증<div class="right"><span class="chip ${c.found === c.questions ? 'ok' : 'warn'}">적중 ${c.found} / ${c.questions}</span></div></div><div class="cb"><div class="muted" style="font-size:12.5px;margin-bottom:8px">질문별 정답 문서가 상위 ${c.k}건에 포함되는지 확인합니다.</div>
+      <table class="tight"><tr><th>질문</th><th>정답 문서</th><th>순위</th></tr>${c.results.map((x) => `<tr><td>${esc(x.text)}</td><td>${esc(x.document)}</td><td>${x.rank ? `${x.rank}위` : '<span class="chip sm bad">미포함</span>'}</td></tr>`).join('')}</table></div></div>` : '';
     return `${head}<div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(0,2fr);align-items:start">${embed}
       <div class="card"><div class="ch">벡터 저장소<div class="right muted" style="font-size:12px;font-weight:600">컬렉션 ${esc(sp.collection)}</div></div><div class="cb"><table class="tight"><tr><th>이름</th><th>종류</th><th>청크</th><th>검색</th><th>보관</th><th>상태</th>${sp.can_connect ? '<th></th>' : ''}</tr>${rows}</table>${add}</div></div></div>
       <div class="card" style="margin-top:14px"><div class="ch">색인한 문서<div class="right"><a class="btn sm" href="#catalog">문서 추가</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>출처</th><th>절</th><th>청크</th></tr>${docs}</table></div></div>${check}`;
@@ -877,7 +916,7 @@
 
   function viewAdapters() {
     const a = S.ad;
-    const head = pageHead('어댑터', '저장소, 모델, 추론기, 도메인은 모두 교체할 수 있습니다. 교체해도 같은 답이 나오는지 시험합니다', `<button class="btn primary" data-act="adcheck"${S.adbusy ? ' disabled' : ''}>${S.adbusy ? '<span class="spin"></span>시험 중' : '적합성 시험 실행'}</button>`);
+    const head = pageHead('어댑터', '저장소, 임베딩 모델, 추론기, 도메인의 구성과 교체 적합성을 확인합니다', `<button class="btn primary" data-act="adcheck"${S.adbusy ? ' disabled' : ''}>${S.adbusy ? '<span class="spin"></span>시험 중' : '적합성 시험 실행'}</button>`);
     if (!a) return `${head}<div class="empty"><span class="spin"></span>구성을 읽는 중입니다.</div>`;
     const rep = S.adrep;
     const lane = (title, how, body) => `<div class="card"><div class="ch">${esc(title)}</div><div class="cb">${body}<div class="hint" style="margin-top:10px">${esc(how)}</div></div></div>`;
@@ -889,37 +928,61 @@
     const reas = `<table class="tight"><tr><th>이름</th><th>논리</th><th></th></tr>${a.reasoners.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="mono">${esc(r.logic)}</td><td>${r.missing ? `<span class="chip sm warn">${esc(r.missing)}</span>` : `<button class="btn sm" data-act="adreason" data-name="${esc(r.name)}">실행</button>`}</td></tr>`).join('')}</table>${S.adr ? `<div class="hint" style="margin-top:8px">${esc(S.adr.reasoner)}: ${S.adr.error ? esc(S.adr.error) : `유도한 사실 ${show(S.adr.count)}건, 발견 ${show(S.adr.findings.length)}건, ${S.adr.ms}ms`}</div>` : ''}`;
     const dom = `<div class="chips">${a.domains.map((d) => `<span class="chip${d.on ? ' b' : ''}">${esc(d.label)}${d.on ? '' : ' · 해제'}</span>`).join('')}</div>`;
     return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start">
-      ${lane('그래프 · 원천 저장소', 'studio.yaml의 backends에서 바꿉니다. 정의와 질의는 그대로 둡니다.', backends)}
-      ${lane('벡터 저장소', '벡터 · 임베딩 화면 또는 studio.yaml의 space.vectors에서 바꿉니다.', vec)}
-      ${lane('쿼리 언어', '같은 질의를 저장소마다 자동으로 변환합니다.', langs)}
-      ${lane('임베딩 모델', 'studio.yaml의 space.embedder 또는 serve --embedder 옵션으로 바꿉니다.', emb)}
-      ${lane('추론기', 'studio.yaml의 reasoners에서 바꿉니다. 외부 추론 서비스는 kind: http로 연결합니다.', reas)}
-      ${lane('도메인', '온톨로지 라이브러리에서 적용하고 해제합니다. 이커머스는 첫 도메인이며 다른 도메인도 같은 방식으로 추가합니다.', dom)}
+      ${lane('그래프 · 원천 저장소', 'studio.yaml의 backends에서 변경합니다.', backends)}
+      ${lane('벡터 저장소', '벡터 · 임베딩 또는 studio.yaml의 space.vectors에서 변경합니다.', vec)}
+      ${lane('쿼리 언어', '저장소별 쿼리로 자동 변환합니다.', langs)}
+      ${lane('임베딩 모델', 'studio.yaml의 space.embedder 또는 serve --embedder 옵션으로 변경합니다.', emb)}
+      ${lane('추론기', 'studio.yaml의 reasoners에서 변경합니다. 외부 추론 서비스는 kind: http로 연결합니다.', reas)}
+      ${lane('도메인', '온톨로지 라이브러리에서 적용 · 해제합니다.', dom)}
     </div>`;
   }
 
   function viewMap() {
     const m = S.amap;
-    const head = pageHead('데이터 지도', '파일, 테이블, 문서, 저장소, 객체, 질의가 서로 어떻게 이어져 있는지 확인합니다');
+    const head = pageHead('데이터 지도', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계와 영향 범위를 확인합니다');
     if (!m) return `${head}<div class="empty"><span class="spin"></span>지도를 그리는 중입니다.</div>`;
     if (m.error) return `${head}<div class="banner no"><div class="why">${esc(m.error)}</div></div>`;
     return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)">
-      <div class="card"><div class="ch">공간의 자산</div><div class="cb" style="padding:0"><div class="kg" id="mapgraph"></div></div></div>
-      <div class="card"><div class="ch">영향 범위</div><div class="cb scroll" style="max-height:600px" id="mapside">${mapSide()}</div></div></div>`;
+      <div class="card"><div class="ch">자산 그래프</div><div class="cb" style="padding:0"><div class="kg" id="mapgraph"></div></div></div>
+      <div class="card"><div class="ch">자산 정보</div><div class="cb scroll" style="max-height:600px" id="mapside">${mapSide()}</div></div></div>`;
+  }
+
+  function mapGroups(rows) {
+    const by = new Map();
+    rows.forEach((x) => {
+      const word = MAP_STORE.has(x.kind) ? '저장소 어댑터' : KIND[x.kind] || x.kind;
+      const list = by.get(word) || [];
+      if (!list.some((y) => y.label === x.label)) by.set(word, [...list, x]);
+    });
+    const rank = (w) => { const i = MAP_ORDER.indexOf(w); return i < 0 ? MAP_ORDER.length : i; };
+    return [...by].sort((a, b) => rank(a[0]) - rank(b[0]));
+  }
+
+  const mapCount = (rows) => mapGroups(rows).reduce((n, [, list]) => n + list.length, 0);
+
+  function mapRows(rows) {
+    if (!rows.length) return '<div class="muted" style="font-size:12.5px">없음</div>';
+    const shown = new Set(S.amap.nodes.map((x) => x.id));
+    return mapGroups(rows).map(([word, list]) => `<div class="mrow"><span class="mk">${esc(word)} ${list.length}</span><div class="chips">${list.map((x) => (shown.has(x.id)
+      ? `<button class="chip sm" data-act="mapgo" data-id="${esc(x.id)}">${esc(x.label)}</button>` : `<span class="chip sm">${esc(x.label)}</span>`)).join('')}</div></div>`).join('');
   }
 
   function mapSide() {
     const m = S.amap, n = S.mapn;
-    const list = (rows) => rows.map((x) => `<span class="chip sm">${esc(x.label)}</span>`).join('');
-    return n ? `<b style="font-size:15px">${esc(n.label)}</b><div class="muted mono" style="font-size:12px;margin:2px 0 10px">${esc(n.kind)}</div>
-        <div class="sec" style="margin-top:0">이것을 바꾸면 영향받는 항목 ${n.impact.length}개</div><div class="chips">${list(n.impact) || '<span class="muted" style="font-size:12.5px">없음</span>'}</div>
-        <div class="sec">이것이 사용하는 항목</div><div class="chips">${list(n.uses) || '<span class="muted" style="font-size:12.5px">없음</span>'}</div>`
-      : `<div class="muted" style="font-size:12.5px">Node를 선택하면 영향 범위가 표시됩니다.</div>${m.unused.length ? `<div class="sec">사용하지 않는 자산</div><div class="chips">${list(m.unused)}</div>` : ''}`;
+    if (n) {
+      const tab = KIND_TAB[n.kind];
+      return `<div class="mapnode"><div><span>${esc(KIND[n.kind] || n.kind)}</span><b>${esc(n.label)}</b></div>${tab ? `<a class="btn sm" href="#${tab}">${esc(navLabel(tab))} 열기</a>` : ''}</div>
+        <div class="sec">영향 범위<span class="n">${mapCount(n.impact)}건</span></div>${mapRows(n.impact)}
+        <div class="sec">참조 자산<span class="n">${mapCount(n.uses)}건</span></div>${mapRows(n.uses)}`;
+    }
+    return `<div class="sec" style="margin-top:0">요소</div><dl class="mparts">${MAP_PARTS.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join('')}</dl>
+      <div class="hint" style="margin-top:12px">Node를 선택하면 영향 범위와 참조 자산을 표시합니다.</div>
+      ${m.unused.length ? `<div class="sec">미사용 자산<span class="n">${m.unused.length}건</span></div><div class="chips">${m.unused.map((x) => `<span class="chip sm">${esc(x.label)}</span>`).join('')}</div>` : ''}`;
   }
 
   function viewConnect() {
     const i = S.conn;
-    const head = pageHead('외부 연동', '다른 플랫폼과 Agent가 이 공간을 사용하는 방법입니다');
+    const head = pageHead('외부 연동', '외부 플랫폼과 Agent의 연동 방법을 확인합니다');
     if (!i) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const base = location.origin;
     const code = (t) => `<pre class="code">${esc(t)}</pre>`;
@@ -929,17 +992,17 @@
       <div class="card"><div class="ch">REST API<div class="right"><span class="chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? '켜짐' : '이 서버는 꺼짐'}</span></div></div><div class="cb"><div class="gwhat">어떤 플랫폼에서든 토큰으로 호출합니다. OpenAPI 문서를 가져가면 도구로 등록할 수 있습니다.</div>
         ${code(`export XSPACE_API_TOKEN=...\nxspace serve studio.yaml --api-token-env XSPACE_API_TOKEN --api-role support_agent\n\ncurl ${base}/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \\\n  -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'`)}
         <div class="chips"><a class="btn sm" href="/v1/openapi.json" target="_blank" rel="noopener">OpenAPI</a><a class="btn sm" href="/v1/tools" target="_blank" rel="noopener">도구 목록</a></div></div></div>
-      <div class="card"><div class="ch">플랫폼의 DB 연결 사용</div><div class="cb"><div class="gwhat">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 빌려 씁니다. 비밀번호는 공간으로 오지 않고, 읽기 전용과 허용 테이블 정책은 플랫폼 기준을 따릅니다.</div>
-        ${code('backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true')}<div class="hint">공간은 읽기만 합니다. 온톨로지와 벡터는 공간에 두고 플랫폼의 데이터는 바꾸지 않습니다.</div></div></div>
+      <div class="card"><div class="ch">플랫폼 DB 연결</div><div class="cb"><div class="gwhat">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 사용합니다. 비밀번호는 공간에 저장하지 않으며, 읽기 전용과 허용 테이블 정책은 플랫폼 기준을 따릅니다.</div>
+        ${code('backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true')}<div class="hint">원천 데이터는 읽기 전용입니다. 온톨로지와 벡터는 공간에 저장합니다.</div></div></div>
       <div class="card" style="grid-column:1/-1"><div class="ch">REST 도구 ${i.tools.length}개</div><div class="cb"><table class="tight"><tr><th>도구</th><th>주소</th><th>설명</th></tr>${i.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td class="mono">${esc(t.method)} ${esc(t.path)}</td><td style="font-size:12.5px">${esc(t.description)}</td></tr>`).join('')}</table></div></div></div>`;
   }
 
   function viewRules() {
     const r = S.ru;
-    const head = pageHead('규칙 · 지표', '규칙이 읽는 값, 지표의 산식, 결정표의 빈틈, 출처가 다른 답을 확인합니다', '<a class="btn" href="#decide">판정 · 처리</a>');
+    const head = pageHead('규칙 · 지표', '기준값, 지표 산식, 출처 충돌, 결정표 점검 결과를 확인합니다');
     if (!r) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const empty = (t) => `<div class="muted" style="font-size:12.5px">${esc(t)}</div>`;
-    const params = r.parameters.length ? `<table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>바꾼 모듈</th></tr>${r.parameters.map((p) => `<tr><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${esc(show(p.value))}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td>${esc(p.touched.join(', ') || '-')}</td></tr>`).join('')}</table>` : empty('이름 있는 값이 없습니다. 모듈의 parameters에 정의합니다.');
+    const params = r.parameters.length ? `<table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>변경 모듈</th></tr>${r.parameters.map((p) => `<tr><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${esc(show(p.value))}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td>${esc(p.touched.join(', ') || '-')}</td></tr>`).join('')}</table>` : empty('기준값이 없습니다. 모듈의 parameters에 정의합니다.');
     const metric = (m) => {
       const a = S.met[m.metric];
       return `<div class="hit"><div class="hit-top"><b>${esc(m.label || m.metric)}</b><span class="muted">${esc(m.owner || '')}</span><span style="margin-left:auto"></span><button class="btn sm" data-act="rmetric" data-name="${esc(m.metric)}">계산</button></div>
@@ -948,25 +1011,33 @@
     };
     const metrics = r.metrics.length ? r.metrics.map(metric).join('') : empty('지표가 없습니다. 모듈의 metrics에 정의합니다.');
     const warn = r.findings.filter((f) => f.severity === 'warning'), info = r.findings.filter((f) => f.severity !== 'warning');
-    const WORD = { gap: '빈 구간', overlap: '겹침', unreachable: '닿지 않는 규칙', tie: '동률', unchecked: '점검 불가' };
+    const WORD = { gap: '누락 구간', overlap: '중복 조건', unreachable: '미적용 규칙', tie: '우선순위 동률', unchecked: '점검 불가' };
     const said = (f) => {
       const at = Object.entries(f.where || {}).map(([k, v]) => `${k} = ${v}`).join(', ');
       const names = (f.rules || []).join(', ');
-      return { gap: `${at} 입력에 맞는 규칙이 없습니다.`, overlap: `${names} 규칙이 ${at} 입력에서 겹칩니다. 앞의 규칙이 적용됩니다.`,
-        unreachable: `${names} 규칙은 앞선 규칙에 가려 적용되지 않습니다.`, tie: `${names} 규칙의 우선순위가 같고 답이 다릅니다.`,
+      return { gap: `${at} 입력에 맞는 규칙이 없습니다.`, overlap: `${names} 규칙이 ${at} 입력에서 중복됩니다. 앞선 규칙을 적용합니다.`,
+        unreachable: `${names} 규칙은 앞선 규칙에 가려 적용되지 않습니다.`, tie: `${names} 규칙의 우선순위가 같고 결과가 다릅니다.`,
         unchecked: '입력 조건을 자동으로 비교하지 못했습니다.' }[f.kind] || f.detail;
     };
-    const finding = (f) => `<tr><td><span class="chip sm ${f.severity === 'warning' ? 'warn' : ''}">${esc(WORD[f.kind] || f.kind)}</span></td><td class="mono">${esc(f.decision)}</td><td style="font-size:12.5px">${esc(said(f))}</td></tr>`;
-    const findings = r.findings.length ? `<table class="tight"><tr><th>종류</th><th>결정표</th><th>내용</th></tr>${[...warn, ...info].map(finding).join('')}</table>` : empty('결정표에서 찾은 항목이 없습니다.');
+    const tables = [...new Set(r.findings.map((f) => f.decision))];
+    const KINDS = ['gap', 'unreachable', 'tie', 'overlap'];
+    const cell = (list, k) => { const n = list.filter((f) => f.kind === k).length; return `<td>${n ? `<span class="chip sm ${k === 'overlap' ? '' : 'warn'}">${n}건</span>` : '<span class="muted">-</span>'}</td>`; };
+    const table = (d) => {
+      const list = r.findings.filter((f) => f.decision === d);
+      const open = S.ruopen === d;
+      const detail = open ? `<tr><td colspan="6"><div class="fdetail">${[...list].sort((a, b) => (a.severity === 'warning' ? 0 : 1) - (b.severity === 'warning' ? 0 : 1)).map((f) => `<div><span class="chip sm ${f.severity === 'warning' ? 'warn' : ''}">${esc(WORD[f.kind] || f.kind)}</span><span>${esc(said(f))}</span></div>`).join('')}</div></td></tr>` : '';
+      return `<tr><td><b>${esc(list[0].label || d)}</b><div class="muted mono">${esc(d)}</div></td>${KINDS.map((k) => cell(list, k)).join('')}<td style="text-align:right"><button class="btn sm" data-act="ruopen" data-d="${esc(d)}" aria-expanded="${open}">${open ? '접기' : '보기'}</button></td></tr>${detail}`;
+    };
+    const findings = tables.length ? `<table class="tight"><tr><th>결정표</th>${KINDS.map((k) => `<th>${esc(WORD[k])}</th>`).join('')}<th></th></tr>${tables.map(table).join('')}</table>` : empty('점검 결과 이상이 없습니다.');
     const conflict = (c) => `<div class="hit"><div class="hit-top"><b>${esc(c.label || c.id)}</b><span class="chip sm ${c.status === 'open' ? 'warn' : 'ok'}">${c.status === 'open' ? '미결정' : `${esc(c.picked)} 선택`}</span></div>
-      <table class="tight"><tr><th>출처</th><th>답</th><th></th></tr>${c.answers.map((x) => `<tr><td>${esc(x.source)}</td><td class="mono" style="font-size:12px">${esc(JSON.stringify(x.says))}</td><td>${c.status === 'open' ? `<button class="btn sm" data-act="rpick" data-id="${esc(c.id)}" data-source="${esc(x.source)}">이 출처 선택</button>` : ''}</td></tr>`).join('')}</table></div>`;
-    const conflicts = r.conflicts.length ? r.conflicts.map(conflict).join('') : empty('출처가 다른 답이 없습니다.');
+      <table class="tight"><tr><th>출처</th><th>값</th><th></th></tr>${c.answers.map((x) => `<tr><td>${esc(x.source)}</td><td>${esc(x.says && typeof x.says === 'object' ? Object.values(x.says).map(show).join(', ') : show(x.says))}</td><td>${c.status === 'open' ? `<button class="btn sm" data-act="rpick" data-id="${esc(c.id)}" data-source="${esc(x.source)}">이 출처 선택</button>` : ''}</td></tr>`).join('')}</table></div>`;
+    const conflicts = r.conflicts.length ? r.conflicts.map(conflict).join('') : empty('출처 충돌이 없습니다.');
     const due = r.due.length ? `<table class="tight"><tr><th>객체</th><th>대상</th><th>전이</th></tr>${r.due.map((d) => `<tr><td>${esc(d.type)}</td><td class="mono">${esc(d.key)}</td><td>${esc(d.source)} → ${esc(d.target)}</td></tr>`).join('')}</table><button class="btn sm" data-act="radvance" style="margin-top:8px">기한 지난 전이 처리</button>` : empty('기한이 지난 전이가 없습니다.');
     return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr));align-items:start">
-      <div class="card"><div class="ch">이름 있는 값</div><div class="cb">${params}</div></div>
+      <div class="card"><div class="ch">기준값</div><div class="cb">${params}</div></div>
       <div class="card"><div class="ch">지표</div><div class="cb">${metrics}</div></div>
-      <div class="card"><div class="ch">출처가 다른 답<div class="right"><span class="chip sm ${r.conflicts.some((c) => c.status === 'open') ? 'warn' : ''}">${r.conflicts.filter((c) => c.status === 'open').length}건 미결정</span></div></div><div class="cb">${conflicts}</div></div>
-      <div class="card"><div class="ch">시간이 지나면 바뀌는 상태</div><div class="cb">${due}</div></div>
+      <div class="card"><div class="ch">출처 충돌<div class="right"><span class="chip sm ${r.conflicts.some((c) => c.status === 'open') ? 'warn' : ''}">${r.conflicts.filter((c) => c.status === 'open').length}건 미결정</span></div></div><div class="cb">${conflicts}</div></div>
+      <div class="card"><div class="ch">기한 전이</div><div class="cb">${due}</div></div>
       <div class="card" style="grid-column:1/-1"><div class="ch">결정표 점검<div class="right"><span class="chip sm ${warn.length ? 'warn' : 'ok'}">주의 ${warn.length}건</span></div></div><div class="cb">${findings}</div></div></div>`;
   }
 
@@ -984,8 +1055,8 @@
     let done = false;
     try { done = localStorage.getItem('xspace-first') === '1'; } catch (e) { done = false; }
     if (done) return '';
-    return `<div class="card first"><div class="cb"><div class="first-top"><b>처음 사용하는 순서</b><button class="btn sm ghost" data-act="firstclose">닫기</button></div>
-      <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs"><span class="fno">${i + 1}</span><b>${esc(title)}</b><span class="muted">${esc(what)}</span></a>`).join('')}</div></div></div>`;
+    return `<div class="card first"><div class="cb"><b class="first-word">사용 순서</b>
+      <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs" title="${esc(what)}"><span class="fno">${i + 1}</span><b>${esc(title)}</b></a>`).join('')}</div><button class="btn sm ghost" data-act="firstclose">닫기</button></div></div>`;
   }
 
   // ---- queries -------------------------------------------------------------------------------------------------
@@ -2193,17 +2264,15 @@ ${controls}${body}`;
   function viewMonitor() {
     const m = S.mon.st;
     const now = new Date();
-    const head = `<div class="mhead"><div class="logo">X</div><div><h1>파이프라인 관제</h1><div class="sub">원천 데이터부터 검증까지 단계별 상태를 표시합니다</div></div>
-      <div class="mclock"><i class="dot mlive"></i><b id="mclock">${now.toTimeString().slice(0, 8)}</b><span class="muted">${now.toISOString().slice(0, 10).replaceAll('-', '.')}</span></div></div>`;
-    if (!m) return head + '<div class="empty"><span class="spin"></span>파이프라인을 점검하는 중입니다.</div>';
+    if (!m) return '<div class="empty"><span class="spin"></span>파이프라인을 점검하는 중입니다.</div>';
     const short = { source: '원천', convert: '변환', ontology: '구축', store: '저장소', use: '활용', verify: '검증' };
     const seg = [['', '전체'], ...m.floors.map((f) => [f.id, short[f.id] || f.label])].map(([k, l]) => `<button class="${S.mon.focus === k ? 'on' : ''}" data-act="mfocus" data-k="${k}"${k ? ` aria-label="${esc(m.floors.find((f) => f.id === k).label)}"` : ''}>${esc(l)}</button>`).join('');
     const active = m.faults.find((f) => f.on);
     const fault = m.faults.length ? `<select class="inline" data-in="mfault" aria-label="장애 테스트 항목"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
       <button class="btn sm ${active ? '' : 'mwarn'}" data-act="mfault"${S.mon.busy ? ' disabled' : ''}>${S.mon.busy ? '<span class="spin"></span>처리 중' : (active ? '복구' : '장애 테스트')}</button>` : '';
-    return `${head}${firstSteps()}<div class="card mcard"><div class="mtop"><b class="mtitle">파이프라인 현황</b><a class="btn sm" href="#catalog">새 파이프라인</a>${S.st.pipeline === 'p1' ? '' : '<button class="btn sm ghost" data-act="mpipedel">파이프라인 삭제</button>'}
+    return `${firstSteps()}<div class="card mcard"><div class="mtop"><b class="mtitle">파이프라인 현황</b><a class="btn sm" href="#catalog">새 파이프라인</a>${S.st.pipeline === 'p1' ? '' : '<button class="btn sm ghost" data-act="mpipedel">파이프라인 삭제</button>'}
         <div class="seg mseg">${seg}</div><div class="mctl">${fault}</div></div>
-      <div class="mstage"><div class="mlink"><i class="dot mlive"></i>2초마다 갱신</div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}
+      <div class="mstage"><div class="mlink"><i class="dot mlive"></i>2초마다 갱신 · <span id="mclock">${now.toTimeString().slice(0, 8)}</span></div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}
         <div id="mscene"></div>
         <div class="mlegend"><span><i style="background:#22a06b"></i>정상</span><span><i style="background:#e2a03f"></i>주의</span><span><i style="background:#e5484d"></i>장애</span></div><div class="mtick" id="mtick">${monitorTicker(m)}</div></div>
       <div class="mstrip" id="mstrip">${monitorStrip(m)}</div></div><div id="mbrief">${monitorBrief(m)}</div>`;
@@ -2810,7 +2879,7 @@ ${controls}${body}`;
     dsecclose: () => { S.dsec = null; S.dgsel = null; drawGraph(); $('#docside').innerHTML = docSide(); },
     dread: async () => {
       for (let i = 0; i < 5; i += 1) {  // a few sections per press: each takes the model tens of seconds
-        S.dread = `읽는 중 ${i + 1} / 5`; render();
+        S.dread = `추출 중 ${i + 1} / 5`; render();
         let r;
         try { r = await api('space/read', {}); } catch (e) { r = { ok: false, error: e.message }; }
         if (!r.ok) { toast(r.error, true); break; }
@@ -2977,8 +3046,18 @@ ${controls}${body}`;
     },
     fsample: () => catalogCall('files/sample', {}),
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
-    slim: () => { S.slim = !S.slim; render(); },
-    navg: (t) => { S.closed[t.dataset.i] = !S.closed[t.dataset.i]; renderSide(); },
+    ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
+    slim: () => {
+      S.slim = !S.slim;
+      try { localStorage.setItem('xspace-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
+      renderSide();
+    },
+    mapgo: async (t) => {
+      S.mapsel = t.dataset.id;
+      window.SpaceGraph.focus(t.dataset.id);
+      drawGraph();
+      try { S.mapn = await api('space/map/node?node=' + encodeURIComponent(t.dataset.id)); $('#mapside').innerHTML = mapSide(); } catch (e) { fail(e); }
+    },
     repopick: (t) => {
       const r = t.getBoundingClientRect();
       const was = S.pick;

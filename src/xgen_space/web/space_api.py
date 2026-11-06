@@ -286,7 +286,8 @@ class SpaceMixin:
             periods = []
         due = [asdict(d) for d in st.actions.due()] if st.source else []
         views = [{"name": t.name, "label": t.label or t.name, "view": t.view_name, "inline": bool(t.view.get("inline"))} for t in o.objects.values() if t.view]
-        return plain({"parameters": params, "metrics": dictionary(o), "findings": [f.to_dict() for f in decision_findings(o)],
+        findings = [{**f.to_dict(), "label": o.decisions[f.decision].label or f.decision} for f in decision_findings(o)]
+        return plain({"parameters": params, "metrics": dictionary(o), "findings": findings,
                       "conflicts": [conflict_view(c) for c in o.source_conflicts()], "periods": periods, "due": due, "views": views})
 
     def metric_run(self, name: str, since: str | None = None, until: str | None = None) -> dict:
@@ -389,10 +390,10 @@ class SpaceMixin:
         a = cat.assets.get(node)
         if a is None:
             raise LookupError(f"자산 {node}")
-        return {"id": a.id, "kind": a.kind, "label": a.label or a.id,
-                "impact": [{"id": x.id, "kind": x.kind, "label": x.label or x.id} for x in cat.impact(node)][:40],
-                "uses": [{"id": r.target, "kind": r.kind, "label": (cat.assets[r.target].label or r.target) if r.target in cat.assets else r.target}
-                         for r in cat.relations if r.source == node][:30]}
+        impact = cat.impact(node)
+        uses = [cat.assets[r.target] for r in cat.relations if r.source == node and r.target in cat.assets]
+        row = lambda x: {"id": x.id, "kind": x.kind, "label": x.label or x.id}  # noqa: E731
+        return {"id": a.id, "kind": a.kind, "label": a.label or a.id, "impact": [row(x) for x in impact[:300]], "uses": [row(x) for x in uses[:300]]}
 
     # ---- the way in from outside ---------------------------------------------------------------------------------------
 

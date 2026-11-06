@@ -27,6 +27,12 @@
 - Conditional aggregates: `sum(link.prop where cond)` in computed properties and `{"sum": ..., "where": ...}` in query columns,
   on every language. Gremlin compiles optional links and computed properties. GQL and SQL/PGQ compile link aggregates and date
   functions; SQL/PGQ is verified on Oracle 23, GQL is checked as text only. A column named like its alias is valid SPARQL now.
+- The sidebar is the board, the map and the six stages in order; a stage's screens are tabs on its page, and a stage opens on the
+  tab left last. The sidebar folds to a rail with a handle on its edge, with names on hover, and stays folded on the next visit.
+- A tab does not repeat its stage's word, and screens of one thing are one tab with a switch: ontology (domain, documents),
+  definitions (objects, properties, relations), decisions and rules. The board keeps to the window's height whatever its floors.
+- The data map's panel says what a node is, opens its screen, and groups what it reaches by kind. The rules screen leads with a
+  summary per decision table, details on request. Labels and help on the newest screens read in the product's terms.
 - Search orders what the store found by the model's score and the question's own words. Stores are still compared on the model alone.
 - Decisions: hit policy `priority` shows what it overrode, and `findings` report overlaps, unreachable rules and input gaps.
   `parameters` are one named value read as `@name` by rules and expressions, changed alone by a customer module. Dates kept as

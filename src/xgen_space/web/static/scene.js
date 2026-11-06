@@ -126,7 +126,7 @@ window.SpaceScene = (() => {
     use: (m, z) => {
       let cols = '';
       m.parts.use.targets.forEach((t, i) => {
-        const x = 772 - i * 56;
+        const x = 748 - i * 56;
         const h = 22 + (i % 3) * 6;
         const [lx, ly] = P(x, 88, z + h + 8);
         cols += cyl(x, 88, z, 13, h, [C.blue, C.teal, C.violet][i % 3]) + `<text x="${lx}" y="${ly}" text-anchor="middle" class="glabel">${esc(t)}</text>`;
@@ -218,7 +218,7 @@ window.SpaceScene = (() => {
     const lifts = m.floors.slice(1).map((_, i) => lift(i)).join('');
     const flows = m.floors.map((f, i) => packets(i)).join('');
     const tags = m.floors.flatMap((f) => f.tags.map(tag)).join('');
-    return `<svg viewBox="0 0 ${VIEW[0]} ${VIEW[1]}" role="img" aria-label="온톨로지 파이프라인 관제 그림" class="spacesvg" xmlns="${NS}">
+    return `<svg viewBox="0 52 ${VIEW[0]} ${VIEW[1] - 84}" role="img" aria-label="온톨로지 파이프라인 관제 그림" class="spacesvg" xmlns="${NS}">
       <defs>
         <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6f7f9"/><stop offset="1" stop-color="${C.back}"/></linearGradient>
         <radialGradient id="ball" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#c9c0ff"/><stop offset="1" stop-color="#6b5ce0"/></radialGradient>
