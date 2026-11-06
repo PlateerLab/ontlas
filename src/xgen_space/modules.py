@@ -167,6 +167,7 @@ class Composition:
     rules_by: list[str] = field(default_factory=list)  # the modules that gave draft rules
     terms: list[dict] = field(default_factory=list)  # the dictionary modules' words
     messages: list[dict] = field(default_factory=list)  # the dictionary modules' messages
+    findings: list = field(default_factory=list)  # what the decision tables say twice or leave open (decide.checks)
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -454,7 +455,8 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
     return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
-                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages])
+                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages],
+                       onto.findings())
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:

@@ -285,15 +285,17 @@ def _identities(o: Ontology) -> list[str]:
 
 
 NORMALIZERS = ("none", "trim", "lower", "digits", "alnum")
+HIT_POLICIES = ("first", "collect", "unique", "priority")
 
 
 def _decisions(o: Ontology) -> list[str]:
     from xgen_space.decide.cells import CellError, parse_test
+    from xgen_space.decide.checks import table_findings
 
     issues = []
     for d in o.decisions.values():
-        if d.hit_policy not in ("first", "collect", "unique"):
-            issues.append(f"decision {d.name}: hit policy '{d.hit_policy}' is not first/collect/unique")
+        if d.hit_policy not in HIT_POLICIES:
+            issues.append(f"decision {d.name}: hit policy '{d.hit_policy}' is not {'/'.join(HIT_POLICIES)}")
         target = o.objects.get(d.target) if d.target else None
         if d.target and target is None:
             issues.append(f"decision {d.name}: target '{d.target}' is unknown")
@@ -329,4 +331,12 @@ def _decisions(o: Ontology) -> list[str]:
             for k in r.then:
                 if k not in d.outputs:
                     issues.append(f"decision {d.name} rule {r.id}: unknown output '{k}'")
+            if (d.hit_policy == "priority") != (r.priority is not None):
+                issues.append(f"decision {d.name} rule {r.id}: "
+                              + ("hit policy priority needs a priority on every rule" if d.hit_policy == "priority"
+                                 else "priority is read only under hit policy priority"))
+            elif r.priority is not None and (isinstance(r.priority, bool) or not isinstance(r.priority, int)):
+                issues.append(f"decision {d.name} rule {r.id}: priority must be a whole number")
+        if d.hit_policy == "priority" and all(isinstance(r.priority, int) for r in d.rules):
+            issues += [str(f) for f in table_findings(d, o) if f.kind == "tie"]
     return issues

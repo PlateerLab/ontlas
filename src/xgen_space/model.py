@@ -149,6 +149,7 @@ class DecisionRule:
     id: str = ""
     note: str = ""
     cite: str = ""
+    priority: int | None = None  # hit policy priority: the matching rule with the lowest number decides
 
 
 @dataclass
@@ -303,6 +304,12 @@ class Ontology:
 
         return validate_ontology(self)
 
+    def findings(self) -> list:
+        """What the decision tables say twice or leave open: for a person to look at, nothing that stops them."""
+        from xgen_space.decide.checks import decision_findings
+
+        return decision_findings(self)
+
     def check(self) -> Ontology:
         issues = self.validate()
         if issues:
@@ -400,7 +407,8 @@ def _decision(name: str, d: dict) -> DecisionTable:
         v = dict(v)
         inputs[k] = DecisionInput(name=k, type=v.pop("type", "string"), source=v)
     rules = [DecisionRule(when={k: str(x) for k, x in (r.get("when") or {}).items()}, then=dict(r.get("then") or {}),
-                          id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""))
+                          id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""),
+                          priority=r.get("priority"))
              for i, r in enumerate(d.get("rules", []))]
     return DecisionTable(name=name, inputs=inputs, outputs=dict(d.get("outputs", {})), rules=rules,
                          target=d.get("target", ""), label=d.get("label", ""),
@@ -526,7 +534,7 @@ def _to_dict(o: Ontology) -> dict:
             "inputs": {i.name: {"type": i.type, **i.source} for i in dt.inputs.values()},
             "outputs": dt.outputs,
             "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite})
-                      for r in dt.rules]})
+                      | ({} if r.priority is None else {"priority": r.priority}) for r in dt.rules]})
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
                                "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states})
                                             for c in a.criteria],

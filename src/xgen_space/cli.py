@@ -313,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("config")
     s.add_argument("--impact", help="module to check before detaching")
     s.add_argument("--cascade", action="store_true")
+    s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
 
     s = sub.add_parser("bindings", help="check the definition against the actual database")
     s.add_argument("config")
@@ -384,8 +385,9 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
 
     if a.cmd == "validate":
-        issues = Ontology.load(a.ontology).validate()
-        _out({"ok": not issues, "issues": issues})
+        onto = Ontology.load(a.ontology)
+        issues = onto.validate()
+        _out({"ok": not issues, "issues": issues, "findings": [f.to_dict() for f in onto.findings()]})
         return 0 if not issues else 1
 
     if a.cmd == "translate":
@@ -484,7 +486,8 @@ def main(argv: list[str] | None = None) -> int:
             comp = compose(lib.resolve(a.modules), namespace=a.namespace)
             if a.output:
                 comp.ontology.dump(a.output)
-            _out({"modules": comp.summary(), "issues": comp.issues, "written": a.output})
+            _out({"modules": comp.summary(), "issues": comp.issues, "written": a.output,
+                  "findings": [f.to_dict() for f in comp.findings]})
             return 0 if not comp.issues else 1
         return 0
 
@@ -640,6 +643,11 @@ def main(argv: list[str] | None = None) -> int:
             imp = studio.detach_impact(a.impact, cascade=a.cascade)
             _out(imp.to_dict())
             return 0 if imp.ok else 1
+        if a.check:
+            comp = studio.composition
+            issues, found = (comp.issues, comp.findings) if comp else (studio.onto.validate(), studio.onto.findings())
+            _out({"issues": issues, "findings": [f.to_dict() for f in found]})
+            return 0 if not issues else 1
         _out(studio.composition.summary() if studio.composition else [])
     elif a.cmd == "bindings":
         rep = studio.check_bindings(backend=a.backend, data=not a.no_data)
