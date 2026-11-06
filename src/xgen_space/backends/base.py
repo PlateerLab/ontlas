@@ -33,6 +33,7 @@ class Result:
     backend: str = ""
     compiled: Compiled | None = None
     masked: dict[str, str] = field(default_factory=dict)
+    truncated: bool = False  # the service stopped at its row limit: there may be more than these
 
     def records(self) -> list[dict[str, Any]]:
         return [dict(zip(self.columns, r)) for r in self.rows]

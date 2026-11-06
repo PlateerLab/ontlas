@@ -24,7 +24,7 @@ def tags(board):
 
 def test_five_floors_read_from_the_studio(session):
     b = session.monitor()
-    assert [f["id"] for f in b["floors"]] == ["source", "convert", "ontology", "use", "verify"]
+    assert [f["id"] for f in b["floors"]] == ["source", "convert", "ontology", "store", "use", "verify"]
     assert b["status"] == "ok" and b["passed"] and b["alerts"] == [] and b["chain"] is None
     st = session.state()["stats"]
     t = tags(b)
@@ -95,7 +95,7 @@ def test_a_studio_without_a_library_has_a_board_too():
 
     s = StudioSession(load_studio(Path(__file__).parent.parent / "examples" / "commerce" / "studio.yaml"))
     b = s.monitor()
-    assert b["faults"] == [] and len(b["floors"]) == 5 and b["parts"]["ontology"]["modules"] == []
+    assert b["faults"] == [] and len(b["floors"]) == 6 and b["parts"]["ontology"]["modules"] == []
 
 
 CSV = "회원번호,이름\nM1,가\nM2,나\n".encode("utf-8")

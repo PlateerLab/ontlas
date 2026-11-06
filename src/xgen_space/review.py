@@ -17,9 +17,9 @@ from typing import Any
 from xgen_space.modules import Module, ModuleError
 from xgen_space.values import from_source, normalize, parse_datetime
 
-STAGES = ("source", "define", "bind", "project", "query", "decide", "check")
+STAGES = ("source", "define", "bind", "project", "index", "query", "decide", "check")
 REQUIRED = ("source", "define")
-GATES = {"bind": ("max_errors", "max_warnings"), "query": ("min_agree",), "decide": ("min_agreement",),
+GATES = {"bind": ("max_errors", "max_warnings"), "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
          "check": ("min_accuracy", "min_grounded")}
 DEFAULT_GATES = {"bind": {"max_errors": 0}, "query": {"min_agree": 1.0}}
 
@@ -172,6 +172,10 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
                        "errors": sum(f.severity == "error" for f in rep.findings),
                        "warnings": sum(f.severity == "warning" for f in rep.findings),
                        "findings": [asdict(f) for f in rep.findings]}
+    space = studio.space
+    if settings.on("index") and space is not None and space.documents():
+        rep = space.check()
+        out["index"] = {"found": rep["found"], "questions": rep["questions"], "share": rep["share"]} if rep else {}
     if settings.on("query") and studio.onto.queries and len(studio.backends) > 1:
         try:
             c = studio.conformance()
@@ -195,6 +199,7 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
 def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
     values = {("bind", "max_errors"): (measured.get("bind") or {}).get("errors"),
               ("bind", "max_warnings"): (measured.get("bind") or {}).get("warnings"),
+              ("index", "min_found"): (measured.get("index") or {}).get("share"),
               ("query", "min_agree"): (measured.get("query") or {}).get("share"),
               ("decide", "min_agreement"): (measured.get("decide") or {}).get("rate"),
               ("check", "min_accuracy"): (measured.get("check") or {}).get("accuracy"),

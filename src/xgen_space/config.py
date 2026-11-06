@@ -85,6 +85,12 @@ def open_backend(spec: dict, base: Path):
         from xgen_space.backends.gremlin import GremlinBackend
 
         return GremlinBackend(spec.get("url", "ws://localhost:8182/gremlin"), source=spec.get("source", "g"))
+    if kind == "gateway":
+        from xgen_space.backends.gateway import GatewayBackend
+
+        return GatewayBackend(spec["url"], connection=spec["connection"], dialect=spec.get("dialect", "postgres"),
+                              token=spec.get("token", ""), token_env=spec.get("token_env", ""),
+                              max_rows=spec.get("max_rows", 500), timeout=spec.get("timeout", 30), fields=spec.get("fields"))
     if kind == "neo4j":
         import neo4j
 
@@ -122,6 +128,11 @@ def load_studio(path: str | Path) -> Studio:
 
         studio.actions.caller = HttpCaller(list(calls), float((spec.get("actions") or {}).get("timeout", 10)))
     studio.settings = {k: spec[k] for k in ("flow", "sync", "notice", "monitor") if k in spec}
+    from xgen_space.reason.port import open_reasoners
+    from xgen_space.space import open_space
+
+    studio.space = open_space(spec.get("space"), base)
+    studio.reasoners = open_reasoners(spec.get("reasoners"))
     for name in spec.get("resolve") or []:  # written into the source only when the studio file asks for it
         studio.resolve_identity(str(name))
     if spec.get("project"):

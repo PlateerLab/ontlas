@@ -1,9 +1,9 @@
 'use strict';
-// The pipeline as a building seen from the front right: five floors, data climbing them along one belt.
+// The pipeline as a building seen from the front right: floor by floor, data climbing them along one belt.
 // Everything drawn comes from the board the server sends; nothing here knows a domain.
 window.SpaceScene = (() => {
   const W = 840, D = 170, H = 102, SLAB = 9;
-  const OX = 150, OY = 566, VIEW = [1180, 660];
+  const OX = 150, OY = 668, VIEW = [1180, 762];
   const BELT = 30;
   const NS = 'http://www.w3.org/2000/svg';
   const C = { floor: '#f5f6f8', slabF: '#dde1e7', slabR: '#cbd0d8', back: '#eef0f3', left: '#e2e5ea',
@@ -111,8 +111,17 @@ window.SpaceScene = (() => {
       const mods = m.parts.ontology.modules;
       let stack = '';
       mods.forEach((x, i) => { stack += box(44, 76, z + i * 7, 74, 54, 5.5, x.color); });
-      return stack + graph(160, 52, z, 430, 104, m.parts.ontology) + arch(622, 70, z, 76, 52, C.violet)
-        + cyl(770, 110, z, 24, 30, C.teal) + cyl(752, 72, z, 18, 22, shade(C.teal, 0.92));
+      return stack + graph(160, 52, z, 470, 104, m.parts.ontology) + arch(680, 70, z, 76, 52, C.violet);
+    },
+    store: (m, z) => {
+      const s = m.parts.store;
+      const word = (x, h, t) => { const [lx, ly] = P(x, 92, z + h + 8); return `<text x="${lx}" y="${ly}" text-anchor="middle" class="glabel">${esc(t)}</text>`; };
+      let out = '';
+      s.graphs.forEach((g, i) => { const x = 90 + i * 62; out += cyl(x, 92, z, 20, 40, C.teal) + word(x, 40, g); });
+      out += machine(280, 74, z, C.slate, 44) + word(313, 50, '임베딩');
+      s.vectors.forEach((g, i) => { const x = 430 + i * 62; out += cyl(x, 92, z, 20, 34, C.violet) + word(x, 34, g); });
+      s.reasoners.forEach((g, i) => { const x = 620 + i * 66; out += box(x, 76, z, 42, 34, 30, C.amber) + word(x + 21, 32, g); });
+      return out;
     },
     use: (m, z) => {
       let cols = '';
@@ -139,7 +148,8 @@ window.SpaceScene = (() => {
   const TAG_AT = {
     'source.tables': [112, 96, 76, -42], 'source.rows': [112, 96, 76, 40], 'source.data': [330, 96, 54], 'source.definition': [500, 96, 54], 'source.document': [670, 96, 54],
     'convert.sheet': [682, 100, 70], 'convert.schema': [532, 100, 70], 'convert.text': [382, 100, 70], 'convert.unread': [262, 96, 24], 'convert.json': [166, 96, 72],
-    'ontology.modules': [80, 100, 72], 'ontology.objects': [222, 46, 9], 'ontology.links': [318, 46, 9], 'ontology.findings': [660, 86, 72], 'ontology.nodes': [770, 96, 50],
+    'ontology.modules': [80, 100, 72], 'ontology.objects': [222, 46, 9], 'ontology.links': [318, 46, 9], 'ontology.findings': [718, 86, 72],
+    'store.nodes': [120, 46, 9], 'store.chunks': [430, 46, 9], 'store.found': [560, 46, 9], 'store.reasoners': [690, 46, 9],
     'use.queries': [520, 48, 10], 'use.agree': [640, 48, 10], 'use.rules': [172, 96, 58, -50], 'use.agreement': [172, 96, 58, 56], 'use.waiting': [62, 96, 34],
     'verify.questions': [86, 96, 64], 'verify.accuracy': [300, 96, 72], 'verify.grounded': [486, 96, 72], 'verify.gates': [760, 92, 76],
   };
@@ -151,7 +161,8 @@ window.SpaceScene = (() => {
       <rect rx="10" ry="10" height="20" class="tagbox"/><circle r="3" cy="10" class="tagdot" fill="${STATE[t.status]}"/>
       <text y="14" class="tagl">${esc(t.label)}</text><text y="14" class="tagv">${esc(t.value)}</text></a>`;
   }
-  const FLOOR_Z = { source: 0, convert: H, ontology: 2 * H, use: 3 * H, verify: 4 * H };
+  const FLOOR_Z = { source: 0, convert: H, ontology: 2 * H, store: 3 * H, use: 4 * H, verify: 5 * H };
+  let LAST = 5;
 
   function fit(g) {
     const l = g.querySelector('.tagl'), v = g.querySelector('.tagv');
@@ -169,7 +180,7 @@ window.SpaceScene = (() => {
     const leftToRight = i % 2 === 0;
     const from = leftToRight ? 44 : W - 44, to = leftToRight ? W - 44 : 44;
     const a = P(from, BELT, z), b = P(to, BELT, z), c = P(to, BELT, up);
-    return i === 4 ? `M${a} L${b}` : `M${a} L${b} L${c}`;
+    return i === LAST ? `M${a} L${b}` : `M${a} L${b} L${c}`;
   }
 
   function packets(i) {
@@ -188,11 +199,12 @@ window.SpaceScene = (() => {
   }
 
   function draw(m) {
+    LAST = m.floors.length - 1;
     const floors = m.floors.map((f, i) => {
       const z = i * H;
       return `<g class="floor" data-floor="${f.id}">${floorShell(i, f.status)}${(PLACE[f.id] || (() => ''))(m, z)}${belt(z)}</g>`;
     }).join('');
-    const top = 5 * H;
+    const top = m.floors.length * H;
     const roof = poly([[-8, -6, top], [W + 8, -6, top], [W + 8, D + 6, top], [-8, D + 6, top]], '#fafbfc')
       + poly([[-8, -6, top], [W + 8, -6, top], [W + 8, -6, top - SLAB], [-8, -6, top - SLAB]], C.slabF)
       + poly([[W + 8, -6, top], [W + 8, D + 6, top], [W + 8, D + 6, top - SLAB], [W + 8, -6, top - SLAB]], C.slabR);
@@ -203,7 +215,7 @@ window.SpaceScene = (() => {
       return `<a href="#${esc(f.tab)}" class="badge" data-badge="${f.id}"><rect x="${x - w - 10}" y="${y - 13}" width="${w}" height="26" rx="13"/><text x="${x - 10 - w / 2}" y="${y + 4.5}" text-anchor="middle">${esc(text)}</text></a>`;
     }).join('');
     const ground = `<ellipse cx="${OX + 470}" cy="${OY + 44}" rx="600" ry="46" fill="url(#ground)"/>`;
-    const lifts = [0, 1, 2, 3].map(lift).join('');
+    const lifts = m.floors.slice(1).map((_, i) => lift(i)).join('');
     const flows = m.floors.map((f, i) => packets(i)).join('');
     const tags = m.floors.flatMap((f) => f.tags.map(tag)).join('');
     return `<svg viewBox="0 0 ${VIEW[0]} ${VIEW[1]}" role="img" aria-label="온톨로지 파이프라인 관제 그림" class="spacesvg" xmlns="${NS}">
@@ -226,7 +238,7 @@ window.SpaceScene = (() => {
       if (g) g.querySelector('.edge').setAttribute('stroke', STATE[f.status] || STATE.ok);
       const flow = root.querySelector(`[data-flow="${i}"]`);
       if (flow) {
-        flow.style.color = firstBad >= 0 && i === firstBad ? STATE.bad : (f.status === 'warn' ? STATE.warn : ['#2563eb', '#0f9d8a', '#6b5ce0', '#2563eb', '#16a34a'][i]);
+        flow.style.color = firstBad >= 0 && i === firstBad ? STATE.bad : (f.status === 'warn' ? STATE.warn : ['#2563eb', '#0f9d8a', '#6b5ce0', '#cf6d17', '#2563eb', '#16a34a'][i]);
         flow.style.display = firstBad >= 0 && i > firstBad ? 'none' : '';
       }
       const b = root.querySelector(`[data-badge="${f.id}"]`);

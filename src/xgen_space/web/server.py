@@ -129,8 +129,11 @@ def guide(video: Path | None) -> dict:
     return {"video": f"{MEDIA}?v={int(video.stat().st_mtime)}", "chapters": chapters}
 
 
+REST_LOCK = threading.Lock()
+
+
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
-                 video: Path | None = None, logins=None):
+                 video: Path | None = None, logins=None, rest=None):
     from xgen_space.web.team import NEEDS
 
     body_html = page()
@@ -270,6 +273,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             url = urlparse(self.path)
             if url.path == "/healthz":
                 return self._send(200, b"ok", "text/plain; charset=utf-8")
+            if url.path.startswith("/v1/"):
+                return self._rest("GET", url.path, {})
             if url.path in ("/", "/index.html"):
                 sid, _, new = self._session()
                 return self._send(200, body_html, "text/html; charset=utf-8", sid=sid, new=new,
@@ -298,8 +303,31 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             self._api("GET", url.path[5:], q)
 
+        def _rest(self, method: str, path: str, body: dict) -> None:
+            """The API for other platforms: no session, a token. What it can do is described without one."""
+            from xgen_space import __version__
+            from xgen_space.rest import openapi, tool_list
+
+            if path == "/v1/openapi.json":
+                return self._json(200, openapi(__version__))
+            if path == "/v1/tools":
+                return self._json(200, {"tools": tool_list()})
+            if rest is None:
+                return self._json(404, {"error": "API is off on this server. Start it with --api-token-env."})
+            if not rest.allowed(self.headers.get("Authorization") or ""):
+                return self._json(401, {"error": "a valid bearer token is required"})
+            with REST_LOCK:
+                code, out = rest.answer(method, path, body)
+            self._json(code, out)
+
         def do_POST(self) -> None:
             url = urlparse(self.path)
+            if url.path.startswith("/v1/"):
+                try:
+                    body = self._body()
+                except (ValueError, json.JSONDecodeError) as e:
+                    return self._json(400, {"error": str(e)})
+                return self._rest("POST", url.path, body if isinstance(body, dict) else {})
             if not url.path.startswith("/api/"):
                 return self._json(404, {"error": "요청한 주소를 찾을 수 없습니다."})
             if team:
@@ -410,6 +438,22 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
+                if route == "space":
+                    return s.space_state()
+                if route == "space/graph":
+                    return s.space_graph()
+                if route == "space/queries":
+                    return s.space_queries()
+                if route == "space/section":
+                    return s.space_section(a["document"], a["section"])
+                if route == "space/map":
+                    return s.space_map()
+                if route == "space/map/node":
+                    return s.space_map_node(a["node"])
+                if route == "adapters":
+                    return s.adapters()
+                if route == "integrations":
+                    return s.integrations()
                 if route == "monitor":
                     return {**s.monitor(), "visitors": len(getattr(sessions, "items", {})) or 1}
                 if route == "manage":
@@ -448,6 +492,18 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "text":
                 return s.run_text(str(a.get("language", "sparql")), str(a.get("text", "")), role=role,
                                   principal=principal)
+            if route == "space/search":
+                return s.space_search(a.get("text", ""), a.get("k", 5), a.get("store", ""))
+            if route == "space/store":
+                return s.space_store(a.get("op", "add"), a.get("name", ""), a.get("kind", ""), a.get("url", ""))
+            if route == "adapters/check":
+                return s.adapters_check()
+            if route == "reasoner":
+                return s.reasoner_run(a.get("name", ""))
+            if route == "space/answer":
+                if not ask_limit.allow():
+                    return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
+                return s.space_answer(a.get("text", ""))
             if route == "ask":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "분당 질문 한도를 초과해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."}
@@ -545,15 +601,23 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
 
 def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: int = 7710, limit: int = 24,
           idle: float = 3600, ask_per_minute: int = 20, quiet: bool = False, data: DataOptions | None = None,
-          video: Path | None = None, users: Path | None = None, sync: float = 0) -> None:
+          video: Path | None = None, users: Path | None = None, sync: float = 0, api: dict | None = None) -> None:
     """Serve the page: a studio per visitor, or with `users` one shared studio for a team that signs in."""
     from xgen_space.web.team import Logins, Syncer, TeamSessions, Users
 
     logins = Logins(Users.load(users)) if users else None
     sessions = TeamSessions(build, logins) if logins else Sessions(build, limit=limit, idle=idle)
+    rest = None
+    if api and api.get("token"):  # one studio of its own, read-only unless told otherwise
+        from xgen_space.rest import Rest
+        from xgen_space.tools import StudioTools
+
+        tools = StudioTools(build().studio, role=api.get("role") or None, principal=api.get("principal"),
+                            actor_id="api", read_only=not api.get("write"))
+        rest = Rest(tools, api["token"])
     httpd = ThreadingHTTPServer((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
                                                            quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
-                                                           video=video, logins=logins))
+                                                           video=video, logins=logins, rest=rest))
     httpd.daemon_threads = True
     if sync:
         Syncer(sessions, sync).start()

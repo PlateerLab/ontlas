@@ -13,9 +13,11 @@ from typing import Any
 from xgen_space.preview import MODULE_COLOR, TARGETS
 
 FLOORS = [("source", "①", "원천 데이터", "catalog"), ("convert", "②", "변환", "convert"),
-          ("ontology", "③", "온톨로지 구축", "library"), ("use", "④", "활용", "query"), ("verify", "⑤", "검증", "check")]
+          ("ontology", "③", "온톨로지 구축", "library"), ("store", "④", "저장소 어댑터", "adapters"), ("use", "⑤", "활용", "search"),
+          ("verify", "⑥", "검증", "check")]
 STAGES = {"source": ("source", "원천 데이터", "sources"), "define": ("ontology", "온톨로지 정의", "library"),
-          "bind": ("ontology", "DB 대조", "bind"), "project": ("ontology", "그래프 저장소 반영", "onto"),
+          "bind": ("ontology", "DB 대조", "bind"), "project": ("store", "그래프 저장소 반영", "onto"),
+          "index": ("store", "문서 · 벡터 색인", "vectors"),
           "query": ("use", "질의", "query"), "decide": ("use", "판정 · 처리", "decide"), "check": ("verify", "검증", "check")}
 FINDING = {"table": "테이블 없음", "column": "컬럼 없음", "type": "타입 불일치", "key": "키 중복", "required": "필수 값 누락",
            "enum": "정의에 없는 값", "orphan": "끊긴 관계"}
@@ -143,11 +145,12 @@ def g_label(g: dict) -> str:
 
 
 def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings: list[dict], changes: int = 0,
-          actions: int = 0, dirty: bool = False, faults: list[dict] | None = None) -> dict:
+          actions: int = 0, dirty: bool = False, faults: list[dict] | None = None, reasoners: list[str] | None = None,
+          graphs: list[dict] | None = None) -> dict:
     """The floors, what is wrong on them, and the chain across them."""
     steps = {s["id"]: s for s in flow["steps"]}
     source, define, bind, project = steps["source"], steps["define"], steps["bind"], steps["project"]
-    query, decide, check = steps["query"], steps["decide"], steps["check"]
+    query, decide, check, index = steps["query"], steps["decide"], steps["check"], steps["index"]
     counts = _file_counts(files)
     one = _json_counts(files)
     alerts = _alerts(steps, files, counts, findings, changes=changes, actions=actions, dirty=dirty)
@@ -164,7 +167,7 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
                    _tag("source.rows", "행", source["rows"], tab="sources"),
                    _tag("source.data", "테이블 데이터", counts["data"], tab="catalog"),
                    _tag("source.definition", "정의서", counts["definition"], tab="catalog"),
-                   _tag("source.document", "문서", counts["document"], tab="catalog")],
+                   _tag("source.document", "문서", index["documents"], tab="docs")],
         "convert": [_tag("convert.sheet", "시트 변환", counts["data"], tab="catalog"),
                     _tag("convert.schema", "Schema 변환", counts["definition"], tab="catalog"),
                     _tag("convert.text", "문서 변환", counts["document"], tab="catalog"),
@@ -173,8 +176,12 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
         "ontology": [_tag("ontology.modules", "모듈", len(define["modules"]), tab="library"),
                      _tag("ontology.objects", "객체", define["objects"], tab="objects"),
                      _tag("ontology.links", "관계", define["links"], tab="links"),
-                     _tag("ontology.findings", "DB 대조 오류", bind.get("findings") or 0, state("bind"), "bind"),
-                     _tag("ontology.nodes", "그래프 Node", project.get("nodes") or 0, tab="onto")],
+                     _tag("ontology.findings", "DB 대조 오류", bind.get("findings") or 0, state("bind"), "bind")],
+        "store": [_tag("store.nodes", "그래프 Node", project.get("nodes") or 0, tab="onto"),
+                  _tag("store.chunks", "벡터 청크", index["chunks"], "bad" if any(s["error"] for s in index["stores"]) else "ok", "vectors"),
+                  _tag("store.found", "검색 적중", f"{index.get('found')} / {index.get('questions')}" if index.get("questions") else "-",
+                       state("index"), "vectors"),
+                  _tag("store.reasoners", "추론기", len(reasoners or []), tab="adapters")],
         "use": [_tag("use.queries", "등록 질의", query["queries"], tab="query"),
                 _tag("use.agree", "결과 일치", f"{conf.get('agree', 0)} / {conf.get('queries', 0)}" if conf else "-",
                      state("query"), "query"),
@@ -192,6 +199,8 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
         "ontology": {"modules": [{"label": m["label"], "color": MODULE_COLOR.get(m["kind"], "#8a96a5")}
                                  for m in define["modules"][:MODULES_MAX]],
                      "nodes": nodes, "edges": edges, "store": bool(project.get("backends"))},
+        "store": {"graphs": [g["name"] for g in graphs or []][:3], "vectors": [s["name"] for s in index["stores"]][:3],
+                  "embedder": index["embedder"]["name"], "reasoners": (reasoners or [])[:3]},
         "use": {"targets": [label for _, label in TARGETS]},
         "verify": {"gates": [{"label": g["label"], "passed": g["passed"]} for g in gates]},
     }

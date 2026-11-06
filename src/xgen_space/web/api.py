@@ -26,6 +26,7 @@ from xgen_space.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _
 from xgen_space.repository import Repositories, clean_path, is_litter
 from xgen_space.roles import apply_role
 from xgen_space.studio import Studio
+from xgen_space.web.space_api import SpaceMixin, attach
 
 KIND_ORDER = list(MODULE_KIND)
 CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이",
@@ -34,9 +35,10 @@ EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인"
                "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
                "rolled_back": "되돌림"}
 GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
+              ("index", "min_found"): "문서 검색 적중률 최소",
               ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
               ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소"}
-STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영",
+STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
 READ_ERROR = {
@@ -199,9 +201,11 @@ class DataOptions:
     allow_connect: bool = False
     policies: Path | None = None  # example policy texts (.md, .txt) for drafting rules
     repositories: Path | None = None  # where repositories outlive the server; otherwise they end with the visitor
+    embedder: dict | None = None  # the model every visitor's documents are embedded with, over what the studio file says
+    rest: bool = False  # /v1 is on: the page says so, and how to reach it
 
 
-class StudioSession:
+class StudioSession(SpaceMixin):
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
     def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
@@ -236,12 +240,14 @@ class StudioSession:
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
+        self.load_pipelines()
 
     def _adopt(self, studio: Studio) -> None:
         """Make a studio this session's: its change requests follow the session's approval and storage."""
         self.studio = studio
         studio.changes.self_approve = self.self_approve
         studio.changes.store = self.store
+        attach(self)
 
     # ---- helpers -------------------------------------------------------------------------------------------
 
@@ -392,7 +398,7 @@ class StudioSession:
                        "transitions": [{"from": x.source, "to": x.target} for x in t.states.transitions]}
             if t.states else None,
             "series": dict(t.series), "identity": name in o.identities,
-            "properties": props, "links": links,
+            "properties": props, "links": links, "documents": self._mentions(name),
         })
 
     # ---- modules ---------------------------------------------------------------------------------------------
@@ -939,6 +945,7 @@ class StudioSession:
         else:
             self.pipelines.append(entry)
         self.pipeline = pid
+        self.save_pipelines()
 
     def pipeline_use(self, pid: str) -> dict:
         target = next((p for p in self.pipelines if p["id"] == pid), None)
@@ -957,6 +964,7 @@ class StudioSession:
         if pid == self.pipeline:
             self.pipeline_use("p1")
         self.pipelines = [p for p in self.pipelines if p["id"] != pid]
+        self.save_pipelines()
         return {"ok": True}
 
     # ---- the control board: the pipeline measured, floor by floor ---------------------------------------------
@@ -966,7 +974,7 @@ class StudioSession:
         st = self.studio
         comp = st.composition
         return (id(st), tuple((m.name, m.version) for m in comp.modules) if comp else (), self.repo,
-                tuple(f["sha256"] for f in self.repositories.files(self.repo).values()),
+                tuple(f["sha256"] for f in self.repositories.files(self.repo).values()), tuple(self.space.stores),
                 id(self.log[0]) if self.log else 0, sum(c.status == "pending" for c in st.changes.requests.values()))
 
     def monitor(self) -> dict:
@@ -997,6 +1005,8 @@ class StudioSession:
             return self._label(comp.owner(element)) if comp else ""
 
         out = board(w["flow"], files=self.repositories.files(self.repo), onto=st.onto, owner_label=owner,
+                    reasoners=[r.name for r in st.reasoners.values()], graphs=[{"name": n, "language": b.capabilities.language}
+                                                                                for n, b in st.backends.items() if b.capabilities.load],
                     modules=[], findings=w["findings"], faults=faults,
                     changes=sum(c.status == "pending" for c in st.changes.requests.values()),
                     actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
@@ -1911,6 +1921,9 @@ class StudioSession:
         from xgen_space.compile.sql import qi
 
         st, o = self.studio, self.studio.onto
+        self._sync_space()
+        space = self.space
+        space.index()
         src = st.backends.get(st.source)
         tables = sorted({t.table for t in o.objects.values() if t.table} |
                         {lk.via.table for lk in o.links.values() if lk.via})
@@ -1945,6 +1958,11 @@ class StudioSession:
              "findings": len(bind["findings"]) if bind else 0},
             {"id": "project", "backends": [n for n, b in st.backends.items() if b.capabilities.load],
              "nodes": len(proj.nodes) if proj else 0, "edges": len(proj.edges) if proj else 0, "sync": st.last_sync},
+            {"id": "index", "documents": len(space.documents()), "chunks": len(space.chunks),
+             "sections": len({(c.document, c.section) for c in space.chunks.values()}),
+             "embedder": space.embedder.describe(),
+             "stores": [{"name": n, "kind": s.kind, "error": space.errors.get(n, "")} for n, s in space.stores.items()],
+             "found": (measured.get("index") or {}).get("found"), "questions": (measured.get("index") or {}).get("questions")},
             {"id": "query", "queries": len(o.queries), "targets": len(TARGETS),
              "conformance": {k: conf[k] for k in ("agree", "queries", "error") if k in conf} if conf else None},
             {"id": "decide", "decisions": len(o.decisions), "actions": len(o.actions),

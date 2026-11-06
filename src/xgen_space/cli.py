@@ -165,6 +165,17 @@ def _draft(a) -> int:
     return 0
 
 
+def _embedder(a) -> dict | None:
+    if not a.embedder:
+        return None
+    spec = {"kind": a.embedder}
+    if a.embedder_url:
+        spec["url"] = a.embedder_url
+    if a.embedder_model:
+        spec["model"] = a.embedder_model
+    return spec
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="xspace", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -355,7 +366,28 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-o", "--output", default="", help="write the JSON here and print the counts")
     s.add_argument("--adapter", action="append", default=[], help="a python file that registers another format")
 
+    s = sub.add_parser("search", help="search the space's documents by meaning")
+    s.add_argument("config")
+    s.add_argument("text")
+    s.add_argument("-k", type=int, default=5)
+    s.add_argument("--store", default="", help="a vector store by name; default the first that is up to date")
+    s = sub.add_parser("documents", help="what the space holds: documents, chunks, stores, embedder")
+    s.add_argument("config")
+    s = sub.add_parser("vectors", help="vector stores against exact search on the space's own documents")
+    s.add_argument("config")
+    s.add_argument("-k", type=int, default=5)
+    s = sub.add_parser("reasoners", help="the reasoners of a studio, and whether engines of one logic agree")
+    s.add_argument("config")
+    s = sub.add_parser("openapi", help="the REST API as OpenAPI, for a platform that imports it")
+    s.add_argument("--server", default="", help="the address it will be reached at")
     s = sub.add_parser("serve", help="serve the studio page; every visitor gets a studio of their own")
+    s.add_argument("--embedder", default="", help="hash, fastembed, or openai with --embedder-url and --embedder-model")
+    s.add_argument("--embedder-url", default="")
+    s.add_argument("--embedder-model", default="")
+    s.add_argument("--api-token-env", default="", help="turns /v1 on: the environment variable that holds its bearer token")
+    s.add_argument("--api-role", default="", help="the role /v1 runs as; with none it reads everything")
+    s.add_argument("--api-principal", action="append", default=[], help="key=value, for a role's row scope")
+    s.add_argument("--api-write", action="store_true", help="let /v1 request actions; a person still approves them")
     s.add_argument("config")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=7710)
@@ -502,6 +534,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "ingest":
         return _ingest(a)
 
+    if a.cmd == "openapi":
+        from xgen_space import __version__
+        from xgen_space.rest import openapi
+
+        _out(openapi(__version__, a.server))
+        return 0
+
     if a.cmd == "serve":
         from xgen_space.web import serve_config
 
@@ -517,10 +556,17 @@ def main(argv: list[str] | None = None) -> int:
                            total_bytes=a.total_mb << 20 if a.total_mb else max(4 << 20, a.file_kb << 12), rows=a.rows,
                            samples=Path(a.samples) if a.samples else None, allow_connect=a.allow_connect,
                            policies=Path(a.policies) if a.policies else None,
-                           repositories=Path(a.repositories) if a.repositories else None)
+                           repositories=Path(a.repositories) if a.repositories else None,
+                           embedder=_embedder(a), rest=bool(a.api_token_env))
+        api = None
+        if a.api_token_env:
+            token = os.environ.get(a.api_token_env, "")
+            if not token:
+                raise SystemExit(f"--api-token-env: {a.api_token_env} is empty")
+            api = {"token": token, "role": a.api_role, "principal": dict(x.split("=", 1) for x in a.api_principal), "write": a.api_write}
         serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
                      quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
-                     sync=a.sync, library_write=a.library_write)
+                     sync=a.sync, library_write=a.library_write, api=api)
         return 0
     if a.cmd == "users":
         from xgen_space.web.team import Users
@@ -559,6 +605,32 @@ def main(argv: list[str] | None = None) -> int:
         rep = studio.questions()
         _out(rep.to_dict())
         return 0 if rep.accuracy == 1.0 else 1
+    elif a.cmd == "search":
+        from xgen_space.tools import StudioTools
+
+        _out(StudioTools(studio).search_documents(a.text, a.k, a.store))
+    elif a.cmd == "documents":
+        from xgen_space.tools import StudioTools
+
+        _out(StudioTools(studio).describe_space())
+    elif a.cmd == "vectors":
+        from xgen_space.vectors import Point, conformance
+
+        sp = studio.space
+        sp.index()
+        chunks = list(sp.chunks.values())
+        vectors = sp.embedder.embed([c.text for c in chunks])
+        points = [Point(c.id, v, {"document": c.document}) for c, v in zip(chunks, vectors)]
+        rep = conformance(sp.stores, points, [(c.text[:80], v) for c, v in list(zip(chunks, vectors))[:: max(len(chunks) // 8, 1)]], k=a.k)
+        _out(rep.to_dict())
+        return 0 if all(s.get("agree") for s in rep.stores.values()) else 1
+    elif a.cmd == "reasoners":
+        from xgen_space.reason.port import agreement
+
+        rows = {n: r.run(studio.onto, studio.projection).to_dict(5) for n, r in studio.reasoners.items()} if studio.projection else {}
+        rep = {"reasoners": rows, "agreement": agreement(studio.reasoners, studio.onto, studio.projection) if studio.projection else {}}
+        _out(rep)
+        return 0 if all(g["same"] for g in rep["agreement"].values()) else 1
     elif a.cmd == "conformance":
         rep = studio.conformance(a.backends.split(",") if a.backends else None)
         _out(rep.to_dict())

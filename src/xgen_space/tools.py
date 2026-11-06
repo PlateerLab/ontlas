@@ -81,6 +81,38 @@ class StudioTools:
     def list_backends(self) -> dict:
         return {n: b.capabilities.to_dict() for n, b in self.studio.backends.items()}
 
+    def _space(self):
+        if self.studio.space is None:
+            raise ValueError("this studio has no space: documents and vectors are configured under `space:` in its file")
+        return self.studio.space
+
+    def describe_space(self) -> dict:
+        """Every kind of data here and what holds it: the four things a platform asks before plugging a space in."""
+        st, space = self.studio, self.studio.space
+        return {"name": st.onto.name, "label": st.onto.label,
+                "ontology": {"objects": len(st.onto.objects), "links": len(st.onto.links), "queries": len(st.onto.queries),
+                             "decisions": len(st.onto.decisions), "modules": [m["module"] for m in self.list_modules()]},
+                "backends": {n: {"language": b.capabilities.language, "dialect": b.capabilities.dialect}
+                             for n, b in st.backends.items()},
+                "space": space.state() if space is not None else None,
+                "reasoners": [r.describe() for r in st.reasoners.values()]}
+
+    def list_documents(self) -> dict:
+        space = self._space()
+        made = space.concepts(self.studio.onto)
+        sections: dict[str, list[str]] = {}
+        for doc, title in made["sections"]:
+            sections.setdefault(doc, []).append(title)
+        return {"documents": [{"name": n, "kind": d.get("kind", ""), "sections": sections.get(n, [])}
+                              for n, d in space.documents().items()],
+                "concepts": len(made["concepts"])}
+
+    def search_documents(self, text: str, k: int = 5, store: str = "", where: dict | None = None) -> dict:
+        space = self._space()
+        hits = space.search(str(text), max(1, min(int(k), 50)), store=store, where=where)
+        return {"embedder": space.embedder.describe(), "store": hits[0]["store"] if hits else space.primary(), "hits": hits,
+                "ontology": space.concepts_in(str(text), self.studio.onto)}
+
 
 def _query_arg(query: Any) -> Any:
     if isinstance(query, str) and query.strip().startswith("{"):

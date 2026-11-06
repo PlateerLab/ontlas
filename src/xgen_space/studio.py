@@ -50,6 +50,9 @@ class QuestionReport:
 
 
 class Studio:
+    space = None  # documents and vectors beside the ontology (space.py); load_studio sets it
+    reasoners: dict = {}  # the engines a studio file names (reason/port.py)
+
     def __init__(self, ontology: Ontology, *, now: Callable[[], datetime] | None = None, use_zen: bool = False):
         self.onto = ontology
         self.backends: dict[str, Backend] = {}

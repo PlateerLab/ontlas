@@ -7,6 +7,7 @@ modules: [core, commerce, commerce-bindings, commerce-operations, commerce-opera
 flow:
   gates:
     bind: {max_errors: 0}
+    index: {min_found: 0.8}
     query: {min_agree: 1.0}
     decide: {min_agreement: 0.8}
     check: {min_accuracy: 0.9}
@@ -19,6 +20,15 @@ flow:
 monitor:
   faults:
     - {label: 식품 업종 모듈 적용, attach: food}
+space:
+  documents: ["../documents/*.md", "../policies/*.md"]
+  checks:
+    - {text: 포장을 뜯은 속옷도 돌려보낼 수 있나요, document: 반품정책서}
+    - {text: 택배가 일주일째 안 와요, document: 배송안내}
+    - {text: 가상계좌 입금을 안 하면 어떻게 되나요, document: 결제환불안내}
+    - {text: 쿠폰 두 장을 같이 쓸 수 있나요, document: 쿠폰약관}
+    - {text: 판매 수수료는 얼마인가요, document: 판매자운영기준}
+    - {text: 나쁜 후기를 판매자가 지울 수 있나요, document: 상품평운영기준}
 backends:
   source: {kind: sqlite, path: ":memory:", seed: [../commerce/seed.sql, seed_operations.sql], source: true}
   graph: {kind: rdflib}

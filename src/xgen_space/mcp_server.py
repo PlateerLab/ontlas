@@ -111,6 +111,22 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
             return tools.request_action(action, key, params)
 
     @server.tool()
+    def describe_space() -> dict:
+        """What this space holds: documents, vector stores, embedder, graph stores, reasoners, ontology size."""
+        return tools.describe_space()
+
+    @server.tool()
+    def list_documents() -> dict:
+        """Documents in the space with their sections."""
+        return tools.list_documents()
+
+    @server.tool()
+    def search_documents(text: str, k: int = 5, store: str = "") -> dict:
+        """Search the space's documents by meaning: passages with their document and section, and the ontology elements
+        the question names, so an answer can go on to run_query or decide."""
+        return tools.search_documents(text, k, store)
+
+    @server.tool()
     def list_proposals() -> list[dict]:
         """Action requests and their status (pending, rejected, executed)."""
         return tools.list_proposals()

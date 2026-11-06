@@ -53,6 +53,10 @@ mcp = ["mcp>=1.2"]
 xlsx = ["openpyxl>=3.1"]
 # Reading PDF documents.
 pdf = ["pypdf>=4"]
+# A small multilingual embedding model on the CPU. The hash embedder needs nothing; an OpenAI-shaped service needs nothing here.
+embed = ["fastembed==0.7.3"]
+# A second OWL 2 RL engine, compared with owlrl by `xspace reasoners`.
+reasonable = ["reasonable==0.4.4", "rdflib>=7"]
 all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4"]
 # The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
 live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]

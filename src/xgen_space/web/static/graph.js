@@ -24,7 +24,7 @@ window.SpaceGraph = (function () {
   const hash = (s) => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
   let kit = null, loading = null, cur = null, ticket = 0;
-  const colors = new Map();  // a group keeps its color while the page lives, so a module applied later moves nothing
+  const palettes = new Map();  // per graph: a group keeps its color while the page lives, so a module applied later moves nothing
   const prefs = { colorBy: 'auto', nodeLabels: false, edgeLabels: false };
 
   function load() {
@@ -41,8 +41,10 @@ window.SpaceGraph = (function () {
     return loading;
   }
 
-  function colorOf(group) {
+  function colorOf(graph, group) {
     if (group === ALONE) return '#AEB7C2';
+    if (!palettes.has(graph)) palettes.set(graph, new Map());
+    const colors = palettes.get(graph);
     if (!colors.has(group)) colors.set(group, PALETTE[colors.size % PALETTE.length]);
     return colors.get(group);
   }
@@ -106,7 +108,7 @@ window.SpaceGraph = (function () {
   function paint(st) {
     st.groups = groupsOf(st.data, st.graph);
     st.groupOf = {};
-    st.groups.forEach((g) => { g.color = colorOf(g.key); g.nodes.forEach((id) => { st.groupOf[id] = g; }); });
+    st.groups.forEach((g) => { g.color = colorOf(st.key, g.key); g.nodes.forEach((id) => { st.groupOf[id] = g; }); });
     st.graph.forEachNode((id, a) => {
       const color = st.groupOf[id].color;
       st.graph.mergeNodeAttributes(id, a.raw.abstract ? { color: RING, borderColor: color, ring: 0.3 } : { color, borderColor: RING, ring: 0.14 });
@@ -135,12 +137,12 @@ window.SpaceGraph = (function () {
   function atlas(g, iterations) {
     const inferred = kit.layouts.forceAtlas2.inferSettings(g);
     const big = g.order > 120;  // LinLog pulls a community together; a small graph reads better evenly spread
-    return kit.layouts.forceAtlas2(g, { iterations, settings: { ...inferred, gravity: big ? 0.5 : 1.2, scalingRatio: big ? 6 : 14, slowDown: 2, linLogMode: big, adjustSizes: false, barnesHutOptimize: g.order > 250 } });
+    return kit.layouts.forceAtlas2(g, { iterations, settings: { ...inferred, gravity: big ? 0.5 : 1.2, scalingRatio: big ? 6 : 14 + g.order / 2, slowDown: 2, linLogMode: big, adjustSizes: false, barnesHutOptimize: g.order > 250 } });
   }
 
   function spaced(g, positions) {
     if (positions) Object.entries(positions).forEach(([id, p]) => g.mergeNodeAttributes(id, p));
-    return kit.layouts.noverlap(g, { maxIterations: 120, settings: { margin: 7, ratio: 1.15, gridSize: 24 } });
+    return kit.layouts.noverlap(g, { maxIterations: 160, settings: { margin: g.order > 40 ? 16 : 7, ratio: 1.15, gridSize: 24 } });
   }
 
   function settle(st, pos) {
@@ -424,10 +426,11 @@ window.SpaceGraph = (function () {
     if (cur && cur.el === el && cur.sig === signature(data)) { cur.opt = opt; refresh(); return; }
     const mine = ++ticket;
     if (!el.firstChild) el.innerHTML = '<div class="kg-none big">그래프를 불러오는 중입니다.</div>';
-    load().then(() => {
-      if (mine === ticket && document.body.contains(el)) start(el, data, opt);
-    }).catch(() => {
+    load().catch(() => {
       if (document.body.contains(el)) el.innerHTML = '<div class="kg-none big">그래프 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해 주세요.</div>';
+      return false;
+    }).then((ok) => {
+      if (ok !== false && mine === ticket && document.body.contains(el)) start(el, data, opt);
     });
   }
 

@@ -9,7 +9,12 @@ from xgen_space.ir import Agg, Query, Ref, filter_refs
 from xgen_space.model import Ontology
 
 KINDS = ("database", "table", "column", "folder", "file", "collection", "dataset", "object", "property", "link",
-         "query", "decision", "action", "role", "agent", "tool", "workflow")
+         "query", "decision", "action", "role", "agent", "tool", "workflow", "document", "vector_store", "graph_store",
+         "reasoner", "embedder")
+MAP_GROUPS = {"database": "source", "table": "source", "folder": "source", "file": "source", "document": "document",
+              "collection": "document", "object": "ontology", "query": "use", "decision": "use", "action": "use", "role": "use",
+              "vector_store": "store", "graph_store": "store", "reasoner": "store", "embedder": "store"}
+MAP_WORDS = {"source": "원천 데이터", "document": "문서", "ontology": "온톨로지", "store": "저장소 어댑터", "use": "활용"}
 DEPENDS = ("uses", "mapsTo", "hasProperty", "canRead", "hasRole", "embeddedIn", "contains")
 
 
@@ -237,3 +242,81 @@ def from_ontology(onto: Ontology, *, database: str = "source", catalog: Catalog 
                 kind = "query" if n in onto.queries else "decision" if n in onto.decisions else "action"
                 cat.relate(rid, "uses", f"{kind}:{n}")
     return cat
+
+
+def from_space(studio, space, files: dict | None = None) -> Catalog:
+    """Everything in one map: the ontology's assets, the files that came in, the documents they became, the stores that hold
+    them. Read an edge as depends on: taking away what it points at touches what it comes from."""
+    cat = from_ontology(studio.onto, database=studio.source or "source")
+    for name, b in studio.backends.items():
+        if b.capabilities.load:
+            gid = f"graph:{name}"
+            cat.add(gid, "graph_store", name, language=b.capabilities.language)
+            for o in studio.onto.objects.values():
+                if o.table:
+                    cat.relate(gid, "uses", f"object:{o.name}")
+    for r in studio.reasoners.values():
+        cat.add(f"reasoner:{r.name}", "reasoner", r.name)
+        for name, b in studio.backends.items():
+            if b.capabilities.load:
+                cat.relate(f"reasoner:{r.name}", "uses", f"graph:{name}")
+    if space is None:
+        return cat
+    collection = f"collection:{space.collection}"
+    cat.add(collection, "collection", f"문서 청크 {len(space.chunks)}개", chunks=len(space.chunks))
+    cat.add("embedder", "embedder", space.embedder.name.rsplit("/", 1)[-1])
+    cat.relate(collection, "uses", "embedder")
+    for name, s in space.stores.items():
+        vid = f"vector:{name}"
+        cat.add(vid, "vector_store", f"{name} ({s.kind})")
+        cat.relate(vid, "uses", collection)
+    held = {c.document for c in space.chunks.values()}
+    for path, f in (files or {}).items():
+        cat.add(f"file:{path}", "file", path.rsplit("/", 1)[-1], bytes=f.get("bytes"))
+    for name in space.documents():
+        did = f"document:{name}"
+        cat.add(did, "document", name)
+        if name in held:
+            cat.relate(collection, "uses", did)
+        for path in files or {}:
+            if path.rsplit("/", 1)[-1].rsplit(".", 1)[0] == name:
+                cat.relate(did, "uses", f"file:{path}")
+    made = space.concepts(studio.onto)
+    for (doc, _), found in made["sections"].items():
+        for cid in found:
+            element = made["concepts"][cid].element if cid in made["concepts"] else ""
+            if element.startswith("object:") and element in cat.assets:
+                cat.relate(f"document:{doc}", "mentions", element)
+    return cat
+
+
+def map_graph(cat: Catalog) -> dict:
+    """The map as the page's graph takes it. Columns and properties stay out: a table or an object stands for them, and a link
+    between objects is drawn as the edge it is."""
+    nodes = [{"id": a.id, "label": a.label or a.id, "module": MAP_GROUPS[a.kind], "abstract": False, "table": a.kind, "key": ""}
+             for a in cat.assets.values() if a.kind in MAP_GROUPS]
+    shown = {n["id"] for n in nodes}
+    edges, seen = [], set()
+
+    def add(s: str, t: str, label: str) -> None:
+        if s in shown and t in shown and s != t and (s, t, label) not in seen:
+            seen.add((s, t, label))
+            edges.append({"source": s, "target": t, "label": label, "subtype": False})
+
+    words = {"mapsTo": "원천", "uses": "사용", "contains": "포함", "canRead": "조회", "mentions": "언급", "embeddedIn": "색인"}
+    for r in cat.relations:
+        if r.source.startswith("link:"):
+            continue
+        target = r.target
+        if target.startswith("property:"):
+            target = next((x.source for x in cat._in[target] if x.kind == "hasProperty"), target)
+        elif target.startswith("link:"):
+            continue
+        add(r.source, target, words.get(r.kind, r.kind))
+    for a in cat.assets.values():
+        if a.kind == "link":
+            ends = [r.target for r in cat._out[a.id] if r.kind == "uses" and r.target.startswith("object:")]
+            if len(ends) == 2:
+                add(ends[0], ends[1], a.label or a.id)
+    groups = {n["module"] for n in nodes}
+    return {"nodes": nodes, "edges": edges, "clusters": [{"id": k, "label": v} for k, v in MAP_WORDS.items() if k in groups]}
