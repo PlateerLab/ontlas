@@ -84,7 +84,7 @@ window.SpaceGraph = (function () {
     return [...out.values()].sort((a, b) => b.nodes.length - a.nodes.length);
   }
 
-  function build(data) {
+  function build(data, width) {
     const graph = new kit.Graph({ multi: true, type: 'directed', allowSelfLoops: false });
     data.nodes.forEach((n) => graph.addNode(n.id, { raw: n, x: 0, y: 0, size: 8, label: n.label }));
     const loops = [];
@@ -101,7 +101,8 @@ window.SpaceGraph = (function () {
     const degrees = graph.nodes().map((n) => graph.degree(n));
     const lo = Math.min(...degrees, 0), span = Math.max(Math.max(...degrees, 1) - lo, 1);
     const big = data.nodes.length > 120;
-    graph.forEachNode((n) => graph.setNodeAttribute(n, 'size', (big ? 4 : 7) + (big ? 12 : 13) * Math.sqrt((graph.degree(n) - lo) / span)));
+    const fit = Math.max(0.45, Math.min(1, width / 760));  // a narrow stage holds the same nodes in less room
+    graph.forEachNode((n) => graph.setNodeAttribute(n, 'size', fit * ((big ? 4 : 7) + (big ? 12 : 13) * Math.sqrt((graph.degree(n) - lo) / span))));
     return { graph, loops };
   }
 
@@ -396,7 +397,7 @@ window.SpaceGraph = (function () {
     const off = cur && cur.key === opt.key ? cur.off : new Set();
     kill();
     frame(el);
-    const { graph, loops } = build(data);
+    const { graph, loops } = build(data, el.clientWidth || 760);
     const st = { el, data, opt, graph, loops, key: opt.key, off, sig: signature(data), hover: null, drag: null, layout: 'forceatlas',
       stage: el.querySelector('.kg-stage'), loopCanvas: el.querySelector('.kg-loops') };
     paint(st);
