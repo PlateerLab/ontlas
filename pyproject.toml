@@ -45,7 +45,10 @@ owl = ["owlrl>=7", "rdflib>=7"]
 zen = ["zen-engine>=2"]
 postgres = ["psycopg[binary]>=3"]
 mysql = ["pymysql>=1.1", "sqlglot>=25"]
-oracle = ["oracledb>=2", "sqlglot>=25"]
+# sqlglot before 29 leaves functions of PostgreSQL in the Oracle and SQL Server text (STRPOS, CEIL).
+oracle = ["oracledb>=2", "sqlglot>=29"]
+# SQL Server: pymssql ships wheels with FreeTDS inside for Windows, glibc and musl, so nothing else to install.
+mssql = ["pymssql==2.4.6", "sqlglot>=29"]
 neo4j = ["neo4j>=5"]
 gremlin = ["gremlinpython>=3.7"]
 mcp = ["mcp>=1.2"]

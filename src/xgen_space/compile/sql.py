@@ -11,6 +11,9 @@ from xgen_space.model import KEY_SEP
 
 NATIVE = ("postgres", "sqlite")
 _OP = {"eq": "=", "ne": "<>", "lt": "<", "lte": "<=", "gt": ">", "gte": ">="}
+_NAMES = {"mssql": "tsql", "sqlserver": "tsql"}
+_TESTS = ("=", "!=", "<", ">", "<=", ">=")
+_BINARY = "Latin1_General_100_BIN2"  # compares code points, whatever the database's collation says
 
 
 def joined(prefix: str, cols: list[str]) -> str:
@@ -22,6 +25,40 @@ def joined(prefix: str, cols: list[str]) -> str:
 
 def qi(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
+
+
+class _NoBooleans(ex.SqlRenderer):
+    """SQL where a condition is not a value (SQL Server, Oracle before 23ai): a condition read as a value becomes
+    1 or 0 and stays null when it cannot be told, and a true/false column read as a condition is compared to 1."""
+
+    def render(self, node) -> str:
+        if isinstance(node, ex.Call) and node.fn == "if":
+            c, a, b = self.condition(node.args[0]), self.render(node.args[1]), self.render(node.args[2])
+            return f"(CASE WHEN {c} THEN {a} WHEN NOT {c} THEN {b} END)"
+        if (isinstance(node, ex.Bin) and node.op in (*_TESTS, "and", "or")) or (
+                isinstance(node, ex.Unary) and node.op == "not"):
+            c = self.condition(node)
+            return f"(CASE WHEN {c} THEN 1 WHEN NOT {c} THEN 0 END)"
+        return super().render(node)
+
+    def condition(self, node) -> str:
+        if isinstance(node, ex.Unary) and node.op == "not":
+            return f"(NOT {self.condition(node.arg)})"
+        if isinstance(node, ex.Bin) and node.op in ("and", "or"):
+            return f"({self.condition(node.left)} {node.op.upper()} {self.condition(node.right)})"
+        if isinstance(node, ex.Bin) and node.op in _TESTS:
+            return super().render(node)
+        return f"({self.render(node)} = 1)"
+
+    def lit(self, node) -> str:
+        return str(int(node.value)) if node.type == "boolean" else super().lit(node)
+
+
+class _Oracle(_NoBooleans):
+    def call(self, fn: str, args: list[str], nodes: tuple) -> str:
+        if fn == "concat":  # || passes over a null here; the rule everywhere is that a null operand gives null
+            return f"(CASE WHEN {' OR '.join(f'{a} IS NULL' for a in args)} THEN NULL ELSE {' || '.join(args)} END)"
+        return super().call(fn, args, nodes)
 
 
 @dataclass
@@ -36,8 +73,8 @@ class SqlCompiler(Compiler):
 
     def __init__(self, onto, dialect: str = "postgres"):
         super().__init__(onto)
-        self.dialect = dialect
-        self.native = dialect if dialect in NATIVE else "postgres"
+        self.dialect = _NAMES.get(dialect, dialect)
+        self.native = self.dialect if self.dialect in NATIVE else "postgres"
 
     def compile(self, q: Query | dict) -> Compiled:
         chk = self.checked(q)
@@ -47,8 +84,8 @@ class SqlCompiler(Compiler):
         self._ctes: list[str] = []
         self._n = 0
         sql = self._select(q)
-        if self._ctes:
-            sql = "WITH RECURSIVE " + ",\n".join(self._ctes) + "\n" + sql
+        if self._ctes:  # Oracle refuses the word: a WITH that names itself is recursive there
+            sql = ("WITH " if self.dialect == "oracle" else "WITH RECURSIVE ") + ",\n".join(self._ctes) + "\n" + sql
         if self.dialect not in NATIVE:
             sql = _transpile(sql, self.dialect)
         return Compiled("sql", self.dialect, sql, "positional", list(self._params.order), self._params.types,
@@ -78,7 +115,8 @@ class SqlCompiler(Compiler):
         return joined(f"t_{ref.alias}.", columns_of(self.onto, t, ref.prop))
 
     def _computed(self, alias: str, text: str) -> str:
-        r = ex.SqlRenderer(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
+        kind = {"oracle": _Oracle, "tsql": _NoBooleans}.get(self.dialect, ex.SqlRenderer)
+        r = kind(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
         try:
             return r.render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
         except ex.ExprError as e:
@@ -105,11 +143,13 @@ class SqlCompiler(Compiler):
             conds.append(f"{time} IS NOT NULL")
             return (f"(SELECT {self._col(Ref(prev, prop))} {' '.join(body)} WHERE {' AND '.join(conds)} "
                     f"ORDER BY {time} {way}, CAST({key} AS VARCHAR) {way} LIMIT 1)")
-        if a.fn == "count":
-            val = f"COUNT({self._col(Ref(prev, prop))})" if prop else "COUNT(*)"
-        else:
-            val = f"{a.fn.upper()}({self._col(Ref(prev, prop))})"
-        return f"(SELECT {val} {' '.join(body)} WHERE {' AND '.join(conds)})"
+        if a.fn == "count" and not prop:
+            return f"(SELECT COUNT(*) {' '.join(body)} WHERE {' AND '.join(conds)})"
+        val = self._col(Ref(prev, prop))
+        if self.dialect == "tsql" and "(SELECT" in val:  # it takes no aggregate over a subquery, only over a named value
+            return f"(SELECT {a.fn.upper()}(t_v.v) FROM (SELECT {val} AS v {' '.join(body)} " \
+                   f"WHERE {' AND '.join(conds)}) t_v)"
+        return f"(SELECT {a.fn.upper()}({val}) {' '.join(body)} WHERE {' AND '.join(conds)})"
 
     def _key(self, alias: str) -> str:
         obj = self.onto.obj(self._types[alias])
@@ -189,34 +229,62 @@ class SqlCompiler(Compiler):
         for s, opt in steps:
             sql.append(f"{'LEFT JOIN' if opt else 'JOIN'} {s.table} {s.alias} ON {s.cond}")
         conds = extra + ([self._filter(q.where)] if q.where is not None else [])
-        cols, group = [], []
+        cols, group, read = [], [], []
         for c in q.columns:
             if isinstance(c.expr, Ref):
                 expr = self._col(c.expr)
                 group.append(expr)
+                read.append(expr)
             else:
-                expr = self._agg(c.expr)
+                read.append(self._agg_arg(c.expr))
+                expr = self._agg(c.expr, read[-1])
             cols.append(f"{expr} AS {qi(c.name)}")
         head = "SELECT " + ("DISTINCT " if q.distinct else "") + ", ".join(cols)
         out = [head, *sql]
         if conds:
             out.append("WHERE " + " AND ".join(conds))
-        if q.aggregated and group:
-            out.append("GROUP BY " + ", ".join(group))
+        if q.aggregated:
+            if any("(SELECT" in x for x in {"tsql": read, "oracle": group}.get(self.dialect, ())):
+                out = self._group_outside(q, out[1:], read)
+            elif group:
+                out.append("GROUP BY " + ", ".join(group))
         if q.order:
-            out.append("ORDER BY " + ", ".join(f"{qi(o.name)} {'DESC' if o.desc else 'ASC'} NULLS LAST"
+            outer = ""
+            if self.dialect == "tsql":  # NULLS LAST becomes a CASE there, and a CASE cannot see the names of a SELECT
+                outer = "t_out."
+                out = ["SELECT * FROM (" + "\n".join(out) + ") t_out"]
+            out.append("ORDER BY " + ", ".join(f"{outer}{qi(o.name)} {'DESC' if o.desc else 'ASC'} NULLS LAST"
                                               for o in q.order))
         if q.limit is not None:
             out.append(f"LIMIT {int(q.limit)}")
         return "\n".join(out)
 
-    def _agg(self, a: Agg) -> str:
-        if a.func in ("count", "count_distinct"):
-            arg = self._col(a.ref) if a.ref is not None else (self._key(a.node) if a.node else "*")
-            if a.func == "count_distinct":
-                return f"COUNT(DISTINCT {arg})"
-            return f"COUNT({arg})"
-        return f"{a.func.upper()}({self._col(a.ref)})"
+    def _group_outside(self, q: Query, body: list[str], read: list[str]) -> list[str]:
+        """Oracle and SQL Server cannot group by a subquery, nor SQL Server aggregate one, and a computed property that
+        follows a link is one: give the values names in a SELECT of their own, and work on those."""
+        inner, outer, names = [], [], []
+        for i, (c, text) in enumerate(zip(q.columns, read)):
+            name = qi(c.name if isinstance(c.expr, Ref) else f"__v{i}")
+            if text != "*":
+                inner.append(f"{text} AS {name}")
+            if isinstance(c.expr, Ref):
+                names.append(f"t_in.{name}")
+                outer.append(f"t_in.{name} AS {name}")
+            else:
+                outer.append(f"{self._agg(c.expr, text if text == '*' else f't_in.{name}')} AS {qi(c.name)}")
+        return ["SELECT " + ("DISTINCT " if q.distinct else "") + ", ".join(outer),
+                "FROM (SELECT " + ", ".join(inner) + "\n" + "\n".join(body) + ") t_in",
+                *(["GROUP BY " + ", ".join(names)] if names else [])]
+
+    def _agg_arg(self, a: Agg) -> str:
+        if a.func in ("count", "count_distinct") and a.ref is None:
+            return self._key(a.node) if a.node else "*"
+        return self._col(a.ref)
+
+    def _agg(self, a: Agg, arg: str) -> str:
+        if a.func == "count_distinct":
+            return f"COUNT(DISTINCT {arg})"
+        return f"{a.func.upper()}({arg})"
 
     def _ph(self, value, ref: Ref) -> str:
         p = find_prop(self.onto, self._types[ref.alias], ref.prop)
@@ -225,17 +293,27 @@ class SqlCompiler(Compiler):
 
     def _filter(self, f) -> str:
         if isinstance(f, Cmp):
+            if self.dialect == "oracle" and f.op in ("eq", "ne") and f.value == "":  # Oracle stores no empty text
+                return self._filter(IsNull(f.ref, negate=f.op == "ne"))
             rhs = self._col(f.value) if isinstance(f.value, Ref) else self._ph(f.value, f.ref)
             return f"{self._col(f.ref)} {_OP[f.op]} {rhs}"
         if isinstance(f, In):
             if not f.values:
                 return "1 = 1" if f.negate else "1 = 0"
+            if self.dialect == "oracle" and "" in f.values:  # NOT IN with a null in the list would refuse every row
+                rest = self._filter(In(f.ref, [v for v in f.values if v != ""], f.negate))
+                return f"({rest} {'AND' if f.negate else 'OR'} {self._filter(IsNull(f.ref, negate=f.negate))})"
             marks = ", ".join(self._ph(v, f.ref) for v in f.values)
             return f"{self._col(f.ref)} {'NOT IN' if f.negate else 'IN'} ({marks})"
         if isinstance(f, Contains):
-            col, ph = self._col(f.ref), self._ph(f.value, f.ref)
+            col = self._col(f.ref)
+            if self.dialect in ("oracle", "tsql") and f.value == "":  # INSTR gives null there, CHARINDEX 0
+                return f"{col} IS NOT NULL"
+            ph = self._ph(f.value, f.ref)
             if self.native == "sqlite":
                 return f"instr({col}, {ph}) > 0"
+            if self.dialect == "tsql":  # the usual collation ignores case, and the search does not elsewhere
+                col = f"{col} COLLATE {_BINARY}"
             return f"strpos({col}, {ph}) > 0"
         if isinstance(f, IsNull):
             return f"{self._col(f.ref)} IS {'NOT ' if f.negate else ''}NULL"
@@ -265,15 +343,52 @@ class SqlCompiler(Compiler):
         return f"{'NOT ' if f.negate else ''}EXISTS ({' '.join(parts)})"
 
 
+def _sized(exp, tree) -> None:
+    """Text needs a stated size: a bare VARCHAR is an error on Oracle and 30 letters on SQL Server."""
+    for c in tree.find_all(exp.Cast):
+        if c.to.is_type("varchar") and not c.to.expressions:
+            c.set("to", exp.DataType.build("VARCHAR(4000)"))
+
+
+def _tsql(exp, tree) -> None:
+    """What the writer leaves as PostgreSQL has it, and SQL Server takes otherwise or not at all."""
+    for n in list(tree.find_all(exp.DPipe)):  # older writers keep ||
+        n.replace(exp.Add(this=n.this, expression=n.expression))
+    for n in list(tree.find_all(exp.Length)):  # LEN leaves out trailing spaces, unless something follows them
+        ended = exp.Add(this=exp.cast(n.this, "VARCHAR"), expression=exp.Literal.string("."))
+        n.replace(exp.Paren(this=exp.Sub(this=exp.Length(this=ended), expression=exp.Literal.number(1))))
+    for n in list(tree.find_all(exp.Sub)):
+        days = [x for x in (n.this, n.expression) if isinstance(x, exp.Cast) and x.to.is_type("date")]
+        if len(days) == 2:  # dates do not subtract
+            n.replace(exp.Anonymous(this="DATEDIFF", expressions=[exp.var("DAY"), n.expression, n.this]))
+    for n in list(tree.find_all(exp.Avg)):  # the average of whole numbers is cut to a whole number
+        n.set("this", exp.cast(n.this, "FLOAT"))
+    _sized(exp, tree)
+    for n in list(tree.find_all(exp.Cast)):
+        if n.to.is_type("varchar"):  # style 126 is ISO for every date type; a plain cast of DATETIME gives 'Oct 25 2026'
+            size = exp.DataType.build("NVARCHAR(4000)", dialect="tsql")
+            n.replace(exp.Anonymous(this="CONVERT", expressions=[size, n.this, exp.Literal.number(126)]))
+        elif n.to.is_type("decimal") and not n.to.expressions:  # a bare DECIMAL has no places here
+            n.set("to", exp.DataType.build("DECIMAL(38, 10)"))
+    for n in list(tree.find_all(exp.Literal)):
+        if n.is_string:  # text without N is read in the database's code page, and Korean comes back as ?
+            n.replace(exp.National(this=n.this))
+
+
 def _transpile(sql: str, dialect: str) -> str:
     try:
         import sqlglot
+        from sqlglot import exp
         from sqlglot.errors import ErrorLevel
     except ImportError as e:
         raise CompileError(f"SQL dialect '{dialect}' needs the [sql] extra (sqlglot)") from e
     try:
-        return sqlglot.transpile(sql, read="postgres", write=dialect, unsupported_level=ErrorLevel.RAISE,
-                                 pretty=True)[0]
+        tree = sqlglot.parse_one(sql, read="postgres")
+        if dialect == "oracle":
+            _sized(exp, tree)
+        elif dialect == "tsql":
+            _tsql(exp, tree)
+        return tree.sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE, pretty=True)
     except sqlglot.errors.SqlglotError as e:
         raise CompileError(f"cannot translate to {dialect}: {e}") from e
     except ValueError as e:

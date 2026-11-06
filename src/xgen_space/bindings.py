@@ -97,8 +97,10 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int]) -
         if not o.table:
             continue
         t, key = qi(o.table), ", ".join(qi(c) for c in o.key_prop.cols)
-        first = f"FETCH FIRST {limit} ROWS ONLY" if backend.capabilities.dialect == "oracle" else f"LIMIT {limit}"
-        dup = backend.fetch(f"SELECT {key}, COUNT(*) FROM {t} GROUP BY {key} HAVING COUNT(*) > 1 {first}")
+        dialect = backend.capabilities.dialect
+        top = f"TOP {limit} " if dialect == "tsql" else ""
+        first = {"oracle": f" FETCH FIRST {limit} ROWS ONLY", "tsql": ""}.get(dialect, f" LIMIT {limit}")
+        dup = backend.fetch(f"SELECT {top}{key}, COUNT(*) FROM {t} GROUP BY {key} HAVING COUNT(*) > 1{first}")
         checked["data_checks"] += 1
         if dup:
             shown = [KEY_SEP.join(str(v) for v in r[:-1]) for r in dup]

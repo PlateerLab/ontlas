@@ -62,7 +62,21 @@ def open_backend(spec: dict, base: Path):
         u = urlparse(spec["dsn"])
         conn = oracledb.connect(user=unquote(u.username or ""), password=unquote(u.password or ""),
                                 dsn=f"{u.hostname or 'localhost'}:{u.port or 1521}{u.path}", tcp_connect_timeout=10)
+        with conn.cursor() as cur:  # dates read as text, and ISO text bound to a date column, are ISO as elsewhere
+            cur.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS' "
+                        "NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD\"T\"HH24:MI:SS' NLS_NUMERIC_CHARACTERS = '.,' "
+                        "NLS_SORT = BINARY NLS_COMP = BINARY")
         return DbApiBackend(conn, "oracle", paramstyle="numeric")
+    if kind == "mssql":
+        import pymssql
+
+        from xgen_space.backends.sql import DbApiBackend
+
+        u = urlparse(spec["dsn"])
+        conn = pymssql.connect(server=u.hostname or "localhost", port=u.port or 1433, user=unquote(u.username or ""),
+                               password=unquote(u.password or ""), database=u.path.lstrip("/"), charset="UTF-8",
+                               login_timeout=15)
+        return DbApiBackend(conn, "tsql", paramstyle="pymssql")
     if kind == "dbapi":
         import importlib
 

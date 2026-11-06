@@ -1229,14 +1229,24 @@ class StudioSession(SpaceMixin):
     def connect(self, dsn: str, label: str = "", rules: dict | None = None) -> dict:
         if not self.data.allow_connect:
             raise PermissionError("공개 데모에서는 DB 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
+        from urllib.parse import unquote
+
         from xgen_space.config import open_backend
         from xgen_space.draft import draft
 
         dsn = dsn.strip()
         u = urlparse(dsn)
-        if u.scheme in ("postgres", "postgresql", "mysql", "oracle"):
-            kind = u.scheme if u.scheme in ("mysql", "oracle") else "postgres"
-            word = {"mysql": "MySQL", "oracle": "Oracle", "postgres": "PostgreSQL"}[kind]
+        if u.scheme in ("postgres", "postgresql", "mysql", "oracle", "mssql", "sqlserver"):
+            kind = {"postgresql": "postgres", "sqlserver": "mssql"}.get(u.scheme, u.scheme)
+            try:  # a / ? or # in the password ends the host early, and the rest would come back as a bad port or host
+                u.port  # noqa: B018
+                cut = "@" in dsn[len(u.scheme) + 3 + len(u.netloc):]
+            except ValueError:
+                cut = True
+            if cut:
+                raise ValueError("연결 주소의 사용자 정보를 확인할 수 없어 연결하지 못했습니다. 비밀번호의 /, ?, #, @ 는 "
+                                 "%2F 처럼 인코딩해 입력해 주세요.")
+            word = {"mysql": "MySQL", "oracle": "Oracle", "postgres": "PostgreSQL", "mssql": "SQL Server"}[kind]
             where = f"{word} {u.hostname or 'localhost'}{u.path}"  # never the user or the password
             try:
                 b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
@@ -1247,7 +1257,7 @@ class StudioSession(SpaceMixin):
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
-                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle:// "
+                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql:// "
                                  "주소 또는 SQLite 파일 경로를 입력해 주세요.")
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"

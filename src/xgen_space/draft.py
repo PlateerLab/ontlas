@@ -300,7 +300,7 @@ def convert(v: str | None, type_: str) -> Any:
 
 def declared_type(sql_type: str) -> str:
     u = (sql_type or "").upper()
-    if "INT" in u:
+    if "INT" in u and "INTERVAL" not in u:
         return "integer"
     if "BOOL" in u:
         return "boolean"
@@ -414,10 +414,10 @@ def _catalog(backend) -> list[tuple[str, list[tuple[str, str]], list[str], list[
             out.append((t, [(r[1], r[2] or "") for r in info], pk, [(r[3], r[2], r[4] or "") for r in fk
                                                                     if r[0] in single]))
         return out
-    if dialect in ("mysql", "oracle"):
+    if dialect in ("mysql", "oracle", "tsql"):
         return _catalog_of(backend, dialect)
     if dialect != "postgres":
-        raise ValueError(f"drafting reads the catalog of SQLite, PostgreSQL, MySQL or Oracle, not {dialect}")
+        raise ValueError(f"drafting reads the catalog of SQLite, PostgreSQL, MySQL, Oracle or SQL Server, not {dialect}")
     names = [r[0] for r in backend.fetch(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() "
         "AND table_type = 'BASE TABLE' ORDER BY table_name")]
@@ -440,7 +440,7 @@ def _catalog(backend) -> list[tuple[str, list[tuple[str, str]], list[str], list[
 
 
 def _catalog_of(backend, dialect: str) -> list:
-    """Tables, columns, primary keys and single-column foreign keys from MySQL's or Oracle's own catalog."""
+    """Tables, columns, primary keys and single-column foreign keys from MySQL's, Oracle's or SQL Server's catalog."""
     out = []
     for t in _table_names(backend, dialect):
         if dialect == "mysql":
@@ -449,9 +449,22 @@ def _catalog_of(backend, dialect: str) -> list:
             pk = [r[0] for r in backend.fetch(
                 "SELECT column_name FROM information_schema.key_column_usage WHERE table_schema = DATABASE() "
                 "AND table_name = ? AND constraint_name = 'PRIMARY' ORDER BY ordinal_position", (t,))]
+        elif dialect == "tsql":  # capital catalog names: a case-sensitive database knows them no other way
+            cols = backend.fetch(
+                "SELECT COLUMN_NAME, CASE DATA_TYPE WHEN 'bit' THEN 'BOOLEAN' WHEN 'timestamp' THEN 'BINARY' "
+                "WHEN 'text' THEN 'NTEXT' ELSE DATA_TYPE END FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = "
+                "SCHEMA_NAME() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", (t,))
+            # a timestamp there is a row version with no time in it; old text compares and sorts like nothing else
+            pk = [r[0] for r in backend.fetch(
+                "SELECT k.COLUMN_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS c "
+                "JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k ON k.CONSTRAINT_NAME = c.CONSTRAINT_NAME "
+                "AND k.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA WHERE c.CONSTRAINT_TYPE = 'PRIMARY KEY' "
+                "AND c.TABLE_SCHEMA = SCHEMA_NAME() AND c.TABLE_NAME = ? ORDER BY k.ORDINAL_POSITION", (t,))]
         else:
-            cols = backend.fetch("SELECT column_name, data_type FROM user_tab_columns WHERE table_name = ? "
-                                 "ORDER BY column_id", (t,))
+            # NUMBER with no places is Oracle's whole number, and its DATE holds a time as well
+            cols = backend.fetch("SELECT column_name, CASE WHEN data_type = 'NUMBER' AND data_scale = 0 THEN 'INTEGER' "
+                                 "WHEN data_type = 'DATE' THEN 'TIMESTAMP' ELSE data_type END "
+                                 "FROM user_tab_columns WHERE table_name = ? ORDER BY column_id", (t,))
             pk = [r[0] for r in backend.fetch(
                 "SELECT cc.column_name FROM user_constraints c JOIN user_cons_columns cc ON cc.constraint_name = "
                 "c.constraint_name WHERE c.table_name = ? AND c.constraint_type = 'P' ORDER BY cc.position", (t,))]
@@ -465,16 +478,25 @@ def _table_names(backend, dialect: str) -> list[str]:
     if dialect == "mysql":
         return [r[0] for r in backend.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = "
                                             "DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name")]
+    if dialect == "tsql":
+        return [r[0] for r in backend.fetch("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = "
+                                            "SCHEMA_NAME() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME")]
     return [r[0] for r in backend.fetch("SELECT table_name FROM user_tables ORDER BY table_name")]
 
 
 def _foreign_keys(backend, dialect: str, table: str) -> dict[Any, list[tuple]]:
-    """constraint -> (position, column, referenced table, referenced column), for MySQL and Oracle."""
+    """constraint -> (position, column, referenced table, referenced column), for MySQL, Oracle and SQL Server."""
     if dialect == "mysql":
         rows = backend.fetch(
             "SELECT constraint_name, ordinal_position, column_name, referenced_table_name, referenced_column_name "
             "FROM information_schema.key_column_usage WHERE table_schema = DATABASE() AND table_name = ? "
             "AND referenced_table_name IS NOT NULL", (table,))
+    elif dialect == "tsql":  # the information schema does not pair the columns of a key across two tables
+        rows = backend.fetch(
+            "SELECT OBJECT_NAME(f.constraint_object_id), f.constraint_column_id, COL_NAME(f.parent_object_id, "
+            "f.parent_column_id), OBJECT_NAME(f.referenced_object_id), COL_NAME(f.referenced_object_id, "
+            "f.referenced_column_id) FROM sys.foreign_key_columns f "
+            "WHERE f.parent_object_id = OBJECT_ID(QUOTENAME(SCHEMA_NAME()) + '.' + QUOTENAME(?))", (table,))
     else:
         rows = backend.fetch(
             "SELECT c.constraint_name, a.position, a.column_name, b.table_name, b.column_name FROM user_constraints c "
@@ -488,7 +510,8 @@ def _foreign_keys(backend, dialect: str, table: str) -> dict[Any, list[tuple]]:
 
 
 def _opaque(declared: str) -> bool:
-    return any(x in declared.upper() for x in ("LOB", "JSON", "XML"))  # no order, so never a list of allowed values
+    # no order, so never a list of allowed values
+    return any(x in declared.upper() for x in ("LOB", "JSON", "XML", "NTEXT", "BINARY", "IMAGE", "GEO"))
 
 
 def _as_text(dialect: str, col: str, declared: str) -> str:
@@ -499,9 +522,15 @@ def _as_text(dialect: str, col: str, declared: str) -> str:
     if dialect == "mysql":
         return f"CAST({q} AS CHAR)"
     if dialect == "oracle":
-        if "BLOB" in u or "RAW" in u or u == "LONG":
-            return "NULL"
-        return f"DBMS_LOB.SUBSTR({q}, 400, 1)" if "LOB" in u else f"TO_CHAR({q})"
+        if u in ("CLOB", "NCLOB"):
+            return f"DBMS_LOB.SUBSTR({q}, 400, 1)"
+        # TO_CHAR refuses the rest (ROWID, XMLTYPE, VECTOR, object types and whatever comes next)
+        plain = ("NUMBER", "INTEGER", "FLOAT", "BINARY_", "VARCHAR", "NVARCHAR", "CHAR", "NCHAR", "TIMESTAMP", "INTERVAL")
+        return f"TO_CHAR({q})" if u.startswith(plain) else "NULL"
+    if dialect == "tsql":
+        if any(x in u for x in ("BINARY", "IMAGE", "GEO")):
+            return "CAST(NULL AS NVARCHAR(1))"
+        return f"CAST({q} AS NVARCHAR(4000))"
     return f"CAST({q} AS TEXT)"
 
 
@@ -509,7 +538,7 @@ def _wide_keys(backend, table: str) -> list[tuple[list[str], str, list[str]]]:
     """The foreign keys of a table that span several columns: (columns, referenced table, referenced columns)."""
     dialect = backend.capabilities.dialect
     groups: dict[Any, list[tuple]] = {}
-    if dialect in ("mysql", "oracle"):
+    if dialect in ("mysql", "oracle", "tsql"):
         return [([p[1] for p in parts], parts[0][2], [p[3] for p in parts])
                 for parts in _foreign_keys(backend, dialect, table).values() if len(parts) > 1]
     if dialect == "sqlite":
@@ -545,11 +574,13 @@ def profile(backend, tables: list[str] | None = None, rules: DraftRules | None =
         t = qi(name)
         parts = ["COUNT(*)"]
         dialect = backend.capabilities.dialect
-        length = "CHAR_LENGTH" if dialect == "mysql" else "LENGTH"
+        length = {"mysql": "CHAR_LENGTH", "tsql": "LEN"}.get(dialect, "LENGTH")
         for c, declared in cols:
             text = _as_text(dialect, c, declared)
             size = f"CAST({qi(c)} AS TEXT)" if dialect == "sqlite" else text
-            present = f"COUNT(CASE WHEN {qi(c)} IS NOT NULL THEN 1 END)" if dialect == "oracle" else f"COUNT({qi(c)})"
+            present = f"COUNT({qi(c)})"
+            if dialect in ("oracle", "tsql"):  # neither counts every type it stores
+                present = f"COUNT(CASE WHEN {qi(c)} IS NOT NULL THEN 1 END)"
             parts += [present, f"COUNT(DISTINCT {text})", f"MAX({length}({size}))"]
         stats = backend.fetch(f"SELECT {', '.join(parts)} FROM {t}")[0]
         rows = int(stats[0])
@@ -1030,7 +1061,7 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
         declared = {r[0] for r in refs[t.name]}
         for c in t.columns if rules.infer_links else ():
             if c.name in declared or c.name in t.primary_key or c.name == row_keys.get(t.name) \
-                    or not (t.rows - c.nulls):
+                    or not (t.rows - c.nulls) or _opaque(c.declared):  # such a column has no equality to test
                 continue
             for other in profs:
                 if other.name not in keys or other.name in wide:
