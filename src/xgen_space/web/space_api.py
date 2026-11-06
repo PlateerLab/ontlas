@@ -71,7 +71,8 @@ class SpaceMixin:
             st["error"] = _human(e)
         onto = self.studio.onto
         decided = [q.text for q in onto.questions if q.decision][:2]
-        named = [q.label for q in onto.queries.values() if q.label and not q.params][:1]
+        totals = [q.label for q in onto.queries.values() if q.label and not q.params and "sum" in str(q.query.get("return"))]  # a query that adds up says most
+        named = (totals or [q.label for q in onto.queries.values() if q.label and not q.params])[:1]
         return {**st, "items": docs, "concepts": len(made["concepts"]), "check": check, "can_connect": self.data.allow_connect,
                 "kinds": known_kinds(), "examples": decided + named + [c["text"] for c in (check or {}).get("results", [])[:2]]}
 
