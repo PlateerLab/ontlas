@@ -93,6 +93,10 @@ class SqlCompiler(Compiler):
 
     def _table(self, alias: str) -> str:
         obj = self.onto.obj(self._types[alias])
+        if obj.view.get("inline"):  # a source that may not be written to holds no view: the query goes along
+            from xgen_space.decide.views import view_query
+
+            return "(" + type(self)(self.onto, self.dialect).compile(view_query(obj)).preview() + ")"
         if obj.table:
             return qi(obj.table)
         subs = concrete_subtypes(self.onto, obj.name)

@@ -29,7 +29,7 @@ NEEDS = {
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
     "draft/map/apply": "editor", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
-    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/read": "editor",
+    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/read": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "manage/discard": "editor", "manage/propose": "editor",
     "change/decide": "approver", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",

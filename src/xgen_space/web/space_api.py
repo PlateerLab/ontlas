@@ -263,6 +263,58 @@ class SpaceMixin:
             self.pipelines.append({"id": e["id"], "label": e["label"], "studio": st, "origin": e.get("origin") or {},
                                    "rows": st.library.list(), "log": []})
 
+    # ---- rules: what a table does beyond one answer -----------------------------------------------------------------------
+
+    def rules_state(self) -> dict:
+        """Parameters, metrics, what a table leaves open, sources that disagree, what the clock has made due."""
+        from dataclasses import asdict
+
+        from xgen_space.decide.checks import decision_findings
+        from xgen_space.decide.conflicts import conflict_view
+        from xgen_space.decide.metrics import dictionary
+        from xgen_space.decide.periods import overlapping_periods
+        from xgen_space.web.api import plain
+
+        st, o = self.studio, self.studio.onto
+        comp = st.composition
+        params = [{"name": p.name, "label": p.label or p.name, "value": p.value, "unit": p.unit, "type": p.type, "min": p.min, "max": p.max,
+                   "cite": p.cite, "touched": [self._label(m) for m in (comp.touched.get(f"parameter:{p.name}", []) if comp else [])]}
+                  for p in o.parameters.values()]
+        try:
+            periods = overlapping_periods(st)
+        except Exception:  # a source that holds no such table yet: DB 대조 says so
+            periods = []
+        due = [asdict(d) for d in st.actions.due()] if st.source else []
+        views = [{"name": t.name, "label": t.label or t.name, "view": t.view_name, "inline": bool(t.view.get("inline"))} for t in o.objects.values() if t.view]
+        return plain({"parameters": params, "metrics": dictionary(o), "findings": [f.to_dict() for f in decision_findings(o)],
+                      "conflicts": [conflict_view(c) for c in o.source_conflicts()], "periods": periods, "due": due, "views": views})
+
+    def metric_run(self, name: str, since: str | None = None, until: str | None = None) -> dict:
+        from xgen_space.decide.metrics import MetricError, answer_metric
+        from xgen_space.web.api import plain
+
+        try:
+            out = plain(answer_metric(self.studio, name, since=since, until=until).to_dict())
+            out["notes"] = ["기간을 지정하지 않아 전체 기간 기준입니다." if "no window" in n else n for n in out["notes"]]
+            return out
+        except MetricError as e:
+            raise ValueError(f"지표를 계산하지 못했습니다. {e}") from None
+
+    def conflict_pick(self, cid: str, source: str, reason: str = "") -> dict:
+        """A person's pick is a change like any other: it waits in the pending edits and goes through review."""
+        from xgen_space.decide.conflicts import record_pick
+
+        c = next((x for x in self.studio.onto.source_conflicts() if x.id == cid), None)
+        if c is None:
+            raise LookupError(f"출처 충돌 {cid}")
+        ws = self._ws()
+        record_pick(ws.module, c, source, by=self.who, reason=str(reason or "")[:200])
+        return {"ok": True, "pending": True}
+
+    def transitions_advance(self) -> dict:
+        moved = self.studio.actions.advance()
+        return {"ok": True, "moved": len(moved)}
+
     # ---- ports: every kind of thing that can be swapped, and whether it agrees ---------------------------------------
 
     def adapters(self) -> dict:

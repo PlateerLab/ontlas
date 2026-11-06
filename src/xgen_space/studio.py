@@ -55,6 +55,7 @@ class Studio:
 
     def __init__(self, ontology: Ontology, *, now: Callable[[], datetime] | None = None, use_zen: bool = False):
         self.onto = ontology
+        ontology.clock = now  # today() and now() in a computed property read the studio's clock, not the machine's
         self.backends: dict[str, Backend] = {}
         self.source: str = ""
         self.now = now or datetime.now

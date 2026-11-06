@@ -688,6 +688,7 @@ class StudioSession(SpaceMixin):
             "name": name, "label": table.label or name, "target": table.target,
             "target_label": self._obj_label(table.target), "key": key, "hit_policy": table.hit_policy,
             "inputs": list(table.inputs), "outputs": list(table.outputs), "result": outs,
+            "overridden": res.overridden, "parameters": res.parameters, "conflicts": res.conflicts,
             "yes": bool(picked) if collected else (bool(outs.get(first)) if first else False),
             "reason": " · ".join(str(x.get("name") or x.get("code") or x) if isinstance(x, dict) else str(x) for x in picked)
             if collected else next((v for v in outs.values() if isinstance(v, str)), ""),
@@ -732,9 +733,9 @@ class StudioSession(SpaceMixin):
                       "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
                           not (a and a.call) or bool(a and a.undo))})
 
-    def request(self, action: str, key: str, params: dict, role: str) -> dict:
+    def request(self, action: str, key: str, params: dict, role: str, principal: dict | None = None) -> dict:
         actor = Actor(self.studio.onto.roles[role].label or role if role else "Agent", "agent",
-                      [role] if role else [])
+                      [role] if role else [], principal=principal or {})
         p = self.studio.actions.request(action, key, params, actor=actor)
         state = "승인 대기 중입니다." if p.status == "pending" else "검사를 통과하지 못해 반려되었습니다."
         self._note("request", f"요청 접수: {actor.id}, {self._obj_label(p.target)} {key} {self._proposal(p)['label']}. "

@@ -6,6 +6,7 @@
     vectors: '<path d="M4 20l7-7M4 20h6M4 20v-6"/><path d="M12 12l8-8M20 4h-6M20 4v6"/>',
     adapters: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/><path d="M8 11h6"/>',
+    rules: '<path d="M4 6h10M4 12h16M4 18h7"/><circle cx="18" cy="6" r="2"/><circle cx="15" cy="18" r="2"/>',
     connect: '<path d="M10 14l4-4"/><path d="M9 7l1.5-1.5a4 4 0 0 1 5.7 5.7L15 12.5"/><path d="M15 17l-1.5 1.5a4 4 0 0 1-5.7-5.7L9 11.5"/>',
     guide: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9.2v5.6l4.8-2.8z"/>',
     flow: '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7.5 12h4M11.5 12V5h5M11.5 12v7h5"/>',
@@ -39,17 +40,17 @@
     catalog2: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
-  const NAV = [['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
+  const NAV = [['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '문서 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   const NAV_GROUP = [['', '시작', ['monitor', 'guide', 'flow', 'map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
-    ['③', '온톨로지 구축', ['data', 'objects', 'props', 'links', 'library', 'onto', 'docs']], ['④', '저장소 어댑터', ['vectors', 'adapters']], ['⑤', '활용', ['search', 'query', 'decide', 'connect']], ['⑥', '검증', ['check', 'bind']]];
+    ['③', '온톨로지 구축', ['data', 'objects', 'props', 'links', 'library', 'onto', 'docs']], ['④', '저장소 어댑터', ['vectors', 'adapters']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
   const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
     question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
-  const STATUS = { pending: ['warn', '승인 대기'], rejected: ['bad', '반려'], executed: ['ok', '원천 반영'],
+  const STATUS = { pending: ['warn', '승인 대기'], stale: ['warn', '실행 전 재검사 실패'], rejected: ['bad', '반려'], executed: ['ok', '원천 반영'],
     failed: ['bad', '외부 호출 실패 · 원천 복원'], rolled_back: ['b', '되돌림'] };
   const CHANGE_STATUS = { pending: 'warn', approved: 'ok', rejected: 'bad' };
   const TEXT_LANG = [['sparql', 'SPARQL 1.1'], ['cypher', 'Cypher'], ['ir', '온톨로지 질의 IR (JSON)']];
@@ -171,6 +172,11 @@
       '처리를 요청하면 권한, Parameter 값 범위, 상태 전이, 판정 조건을 검사합니다.',
       '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
+    ['rules', '규칙이 읽는 값, 지표의 산식과 계산, 출처가 다른 답, 시간이 지나면 바뀌는 상태, 결정표의 빈틈을 확인합니다.', [
+      '이름 있는 값은 결정표와 계산 속성이 @이름으로 읽습니다. 고객사 모듈은 이 값만 바꿉니다.',
+      '지표의 [계산]을 선택하면 값, 분자와 분모, 기준을 표시합니다.',
+      '출처가 다른 답에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인을 거쳐 반영됩니다.',
+      '결정표 점검은 겹치는 규칙, 닿지 않는 규칙, 입력의 빈 구간을 표시합니다.']],
     ['connect', '다른 플랫폼과 Agent가 이 공간을 사용하는 방법을 확인합니다.', [
       'MCP를 지원하는 Agent는 xspace mcp로 공간을 도구로 연결합니다.',
       '그 밖의 플랫폼은 REST API를 토큰으로 호출합니다. OpenAPI 문서로 도구를 등록합니다.',
@@ -224,7 +230,7 @@
 
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
-    sp: null, sr: { text: '', store: '', res: null, busy: false, answer: null, answering: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
+    ru: null, met: {}, sp: null, sr: { text: '', store: '', res: null, busy: false, answer: null, answering: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adr: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
@@ -368,7 +374,7 @@
     if (!S.st) return;
     renderTop();
     renderSide();
-    const views = { map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
+    const views = { rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks };
     const main = $('#main');
     main.innerHTML = (views[S.tab] || viewMonitor)();
@@ -379,6 +385,7 @@
   function after() {
     if (S.tab === 'guide') mountGuide();
     if (S.tab === 'docs') mountDocs();
+    if (S.tab === 'rules' && !S.ru) api('rules').then((x) => { S.ru = x; render(); }).catch(fail);
     if ((S.tab === 'vectors' || S.tab === 'search') && !S.sp) loadSpace();
     if (S.tab === 'adapters' && !S.ad) api('adapters').then((x) => { S.ad = x; render(); }).catch(fail);
     if (S.tab === 'connect' && !S.conn) api('integrations').then((x) => { S.conn = x; render(); }).catch(fail);
@@ -917,6 +924,42 @@
       <div class="card"><div class="ch">플랫폼의 DB 연결 사용</div><div class="cb"><div class="gwhat">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 빌려 씁니다. 비밀번호는 공간으로 오지 않고, 읽기 전용과 허용 테이블 정책은 플랫폼 기준을 따릅니다.</div>
         ${code('backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true')}<div class="hint">공간은 읽기만 합니다. 온톨로지와 벡터는 공간에 두고 플랫폼의 데이터는 바꾸지 않습니다.</div></div></div>
       <div class="card" style="grid-column:1/-1"><div class="ch">REST 도구 ${i.tools.length}개</div><div class="cb"><table class="tight"><tr><th>도구</th><th>주소</th><th>설명</th></tr>${i.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td class="mono">${esc(t.method)} ${esc(t.path)}</td><td style="font-size:12.5px">${esc(t.description)}</td></tr>`).join('')}</table></div></div></div>`;
+  }
+
+  function viewRules() {
+    const r = S.ru;
+    const head = pageHead('규칙 · 지표', '규칙이 읽는 값, 지표의 산식, 결정표의 빈틈, 출처가 다른 답을 확인합니다', '<a class="btn" href="#decide">판정 · 처리</a>');
+    if (!r) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
+    const empty = (t) => `<div class="muted" style="font-size:12.5px">${esc(t)}</div>`;
+    const params = r.parameters.length ? `<table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>바꾼 모듈</th></tr>${r.parameters.map((p) => `<tr><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${esc(show(p.value))}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td>${esc(p.touched.join(', ') || '-')}</td></tr>`).join('')}</table>` : empty('이름 있는 값이 없습니다. 모듈의 parameters에 정의합니다.');
+    const metric = (m) => {
+      const a = S.met[m.metric];
+      return `<div class="hit"><div class="hit-top"><b>${esc(m.label || m.metric)}</b><span class="muted">${esc(m.owner || '')}</span><span style="margin-left:auto"></span><button class="btn sm" data-act="rmetric" data-name="${esc(m.metric)}">계산</button></div>
+        <div class="muted" style="font-size:12.5px">${esc(m.description || m.formula)}${m.denominator ? ` · 분모 ${esc(m.denominator)}` : ''}${m.time_basis ? ` · 기준 ${esc(m.time_basis)}` : ''}</div>
+        ${a ? `<div style="font-size:15px"><b>${esc(show(a.value))}${esc(a.unit || '')}</b> <span class="muted" style="font-size:12.5px">${a.numerator !== null ? `${esc(show(a.numerator))} / ${esc(show(a.denominator))}` : ''}</span></div>${(a.notes || []).map((x) => `<div class="hint warn">${esc(x)}</div>`).join('')}` : ''}</div>`;
+    };
+    const metrics = r.metrics.length ? r.metrics.map(metric).join('') : empty('지표가 없습니다. 모듈의 metrics에 정의합니다.');
+    const warn = r.findings.filter((f) => f.severity === 'warning'), info = r.findings.filter((f) => f.severity !== 'warning');
+    const WORD = { gap: '빈 구간', overlap: '겹침', unreachable: '닿지 않는 규칙', tie: '동률', unchecked: '점검 불가' };
+    const said = (f) => {
+      const at = Object.entries(f.where || {}).map(([k, v]) => `${k} = ${v}`).join(', ');
+      const names = (f.rules || []).join(', ');
+      return { gap: `${at} 입력에 맞는 규칙이 없습니다.`, overlap: `${names} 규칙이 ${at} 입력에서 겹칩니다. 앞의 규칙이 적용됩니다.`,
+        unreachable: `${names} 규칙은 앞선 규칙에 가려 적용되지 않습니다.`, tie: `${names} 규칙의 우선순위가 같고 답이 다릅니다.`,
+        unchecked: '입력 조건을 자동으로 비교하지 못했습니다.' }[f.kind] || f.detail;
+    };
+    const finding = (f) => `<tr><td><span class="chip sm ${f.severity === 'warning' ? 'warn' : ''}">${esc(WORD[f.kind] || f.kind)}</span></td><td class="mono">${esc(f.decision)}</td><td style="font-size:12.5px">${esc(said(f))}</td></tr>`;
+    const findings = r.findings.length ? `<table class="tight"><tr><th>종류</th><th>결정표</th><th>내용</th></tr>${[...warn, ...info].map(finding).join('')}</table>` : empty('결정표에서 찾은 항목이 없습니다.');
+    const conflict = (c) => `<div class="hit"><div class="hit-top"><b>${esc(c.label || c.id)}</b><span class="chip sm ${c.status === 'open' ? 'warn' : 'ok'}">${c.status === 'open' ? '미결정' : `${esc(c.picked)} 선택`}</span></div>
+      <table class="tight"><tr><th>출처</th><th>답</th><th></th></tr>${c.answers.map((x) => `<tr><td>${esc(x.source)}</td><td class="mono" style="font-size:12px">${esc(JSON.stringify(x.says))}</td><td>${c.status === 'open' ? `<button class="btn sm" data-act="rpick" data-id="${esc(c.id)}" data-source="${esc(x.source)}">이 출처 선택</button>` : ''}</td></tr>`).join('')}</table></div>`;
+    const conflicts = r.conflicts.length ? r.conflicts.map(conflict).join('') : empty('출처가 다른 답이 없습니다.');
+    const due = r.due.length ? `<table class="tight"><tr><th>객체</th><th>대상</th><th>전이</th></tr>${r.due.map((d) => `<tr><td>${esc(d.type)}</td><td class="mono">${esc(d.key)}</td><td>${esc(d.source)} → ${esc(d.target)}</td></tr>`).join('')}</table><button class="btn sm" data-act="radvance" style="margin-top:8px">기한 지난 전이 처리</button>` : empty('기한이 지난 전이가 없습니다.');
+    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr));align-items:start">
+      <div class="card"><div class="ch">이름 있는 값</div><div class="cb">${params}</div></div>
+      <div class="card"><div class="ch">지표</div><div class="cb">${metrics}</div></div>
+      <div class="card"><div class="ch">출처가 다른 답<div class="right"><span class="chip sm ${r.conflicts.some((c) => c.status === 'open') ? 'warn' : ''}">${r.conflicts.filter((c) => c.status === 'open').length}건 미결정</span></div></div><div class="cb">${conflicts}</div></div>
+      <div class="card"><div class="ch">시간이 지나면 바뀌는 상태</div><div class="cb">${due}</div></div>
+      <div class="card" style="grid-column:1/-1"><div class="ch">결정표 점검<div class="right"><span class="chip sm ${warn.length ? 'warn' : 'ok'}">주의 ${warn.length}건</span></div></div><div class="cb">${findings}</div></div></div>`;
   }
 
   // ---- help where the work is: the steps of the screen on screen ---------------------------------------------------------------
@@ -2734,11 +2777,20 @@ ${controls}${body}`;
     } catch (e) { fail(e); }
   }
 
-  const spaceChanged = () => { Object.assign(S, { sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null }); };
+  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null }); };
   const ACT = {
     helpopen: () => { S.help = true; paintLayer(); },
     helpclose: () => { S.help = false; paintLayer(); },
     firstclose: () => { try { localStorage.setItem('xspace-first', '1'); } catch (e) { /* the strip comes back next visit */ } render(); },
+    rmetric: async (t) => {
+      try { S.met[t.dataset.name] = await api('metric?name=' + encodeURIComponent(t.dataset.name)); render(); } catch (e) { fail(e); }
+    },
+    rpick: async (t) => {
+      try { await api('conflict/pick', { id: t.dataset.id, source: t.dataset.source }); S.ru = null; toast('선택을 대기 중인 변경에 추가했습니다. 객체 관리에서 변경 요청으로 반영합니다.'); render(); } catch (e) { fail(e); }
+    },
+    radvance: async () => {
+      try { const r = await api('transitions/advance', {}); S.ru = null; toast(`기한이 지난 전이 ${r.moved}건을 처리했습니다.`); render(); } catch (e) { fail(e); }
+    },
     srgo: () => searchNow(),
     srex: (t) => { S.sr.text = t.dataset.text; searchNow(); },
     srobj: (t) => { location.hash = '#onto'; selectObject(t.dataset.obj); },

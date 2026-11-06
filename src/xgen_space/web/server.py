@@ -438,6 +438,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
+                if route == "rules":
+                    return s.rules_state()
+                if route == "metric":
+                    return s.metric_run(a["name"], a.get("since") or None, a.get("until") or None)
                 if route == "space":
                     return s.space_state()
                 if route == "space/graph":
@@ -492,6 +496,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "text":
                 return s.run_text(str(a.get("language", "sparql")), str(a.get("text", "")), role=role,
                                   principal=principal)
+            if route == "conflict/pick":
+                return s.conflict_pick(a.get("id", ""), a.get("source", ""), a.get("reason", ""))
+            if route == "transitions/advance":
+                return s.transitions_advance()
             if route == "space/search":
                 return s.space_search(a.get("text", ""), a.get("k", 5), a.get("store", ""))
             if route == "space/store":
@@ -526,7 +534,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 s.event("decide", f"판정 · {a['name']} {a['key']}")
                 return s.decide(a["name"], str(a["key"]))
             if route == "request":
-                return s.request(a["action"], str(a["key"]), a.get("params") or {}, role)
+                return s.request(a["action"], str(a["key"]), a.get("params") or {}, role, principal)
             if route == "approve":
                 return s.approve(str(a["id"]), bool(a.get("approve", True)))
             if route == "questions":

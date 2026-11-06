@@ -27,6 +27,13 @@
 - Conditional aggregates: `sum(link.prop where cond)` in computed properties and `{"sum": ..., "where": ...}` in query columns,
   on every language. Gremlin compiles optional links and computed properties. GQL and SQL/PGQ compile link aggregates and date
   functions; SQL/PGQ is verified on Oracle 23, GQL is checked as text only. A column named like its alias is valid SPARQL now.
+- Decisions: hit policy `priority` shows what it overrode, and `findings` report overlaps, unreachable rules and input gaps.
+  `parameters` are one named value read as `@name` by rules and expressions, changed alone by a customer module. Dates kept as
+  text read as dates with `format: YYYYMMDD`, and `period` with `current(link.prop)` gives the row valid now. Scoped roles limit
+  reads and writes to the signed-in organisation and fail closed. `metrics` return a number with its formula, denominator, time
+  basis and owner. `conflicts` hold rules of two sources that disagree until a person picks. Transitions take a guard, side
+  effects and `after`, and an action is asked again right before it runs. `view` defines an object by a query, in the source or
+  carried along with `inline: true` where the source cannot be written. A rules screen shows all of it.
 - The asset ontology is drawn as a map of files, tables, documents, stores, objects and queries, with what a change reaches.
 - Pipelines outlive a restart where repositories do. A connected database keeps its modules and asks to be connected again:
   no address or token is written.

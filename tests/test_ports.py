@@ -429,3 +429,62 @@ def test_live_draft_through_a_query_service_over_postgres():
         srv.server_close()
         conn.execute("DROP TABLE IF EXISTS gw_items, gw_orders")
         conn.close()
+
+
+def test_the_rules_screen_reads_what_the_modules_say(session):
+    r = session.rules_state()
+    assert {p["name"] for p in r["parameters"]} == {"free_shipping_amount", "base_shipping_fee"}
+    assert r["metrics"][0]["metric"] == "returnRate" and r["conflicts"][0]["status"] == "open"
+    assert any(f["decision"] == "returnEligibility" for f in r["findings"])
+    m = session.metric_run("returnRate")
+    assert m["denominator"] > m["numerator"] > 0 and m["value"] == pytest.approx(100 * m["numerator"] / m["denominator"])
+    assert m["notes"] == ["기간을 지정하지 않아 전체 기간 기준입니다."]
+    d = session.decide("shippingFee", "O16")
+    assert d["result"]["fee"] == 3000 and d["parameters"] == {"base_shipping_fee": 3000}
+
+
+def test_a_pick_between_sources_waits_for_review_like_any_change(session):
+    assert session.conflict_pick("vipExchangeWindow", "교환 정책서 2조", "정책서가 우선")["pending"]
+    assert session.workspace.dirty
+    assert next(c for c in session.studio.onto.source_conflicts() if c.id == "vipExchangeWindow").open  # not yet applied
+    with pytest.raises(ValueError):
+        session.conflict_pick("vipExchangeWindow", "없는 출처")
+    with pytest.raises(LookupError):
+        session.conflict_pick("없음", "x")
+
+
+def test_a_view_rides_along_with_the_query_where_the_source_cannot_hold_one():
+    from xgen_space.backends.sql import SqliteBackend
+    from xgen_space.modules import Module
+    from xgen_space.studio import Studio
+
+    m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
+        "Entry": {"key": "id", "table": "ledger", "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "units": {"type": "integer"}}},
+        "Refund": {"key": "id", "view": {"name": "refunds_v", "inline": True, "query": {
+            "match": {"e": "Entry"}, "where": {"eq": ["e.kind", "REFUND"]}, "return": ["e.id", {"col": "e.units", "as": "refunded"}]}},
+            "properties": {"id": {"type": "string"}, "refunded": {"type": "integer"}}}},
+        "queries": {"refunds": {"query": {"match": {"r": "Refund"}, "return": ["r.id", "r.refunded"], "order": ["id"]}}}})
+    st = Studio.from_modules([m], name="m")
+    src = SqliteBackend()
+    src.script("CREATE TABLE ledger (id TEXT PRIMARY KEY, kind TEXT, units INTEGER);"
+               "INSERT INTO ledger VALUES ('a', 'SALE', 2), ('b', 'REFUND', 1);")
+    st.add_backend("source", src, source=True)
+    assert st.run("refunds").rows == [("b", 1)]  # no view was created in the source
+
+
+def test_an_agent_carries_its_scope_and_the_studio_its_clock():
+    from datetime import datetime
+
+    from xgen_space.backends.sql import SqliteBackend
+    from xgen_space.modules import Module
+    from xgen_space.studio import Studio
+    from xgen_space.tools import StudioTools
+
+    m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
+        "T": {"key": "id", "table": "t", "properties": {"id": {"type": "string"}, "d": {"type": "integer", "expr": "days_between(today(), today())"}}}}})
+    st = Studio.from_modules([m], name="m", now=lambda: datetime(2020, 1, 2))
+    assert st.onto.clock().year == 2020
+    src = SqliteBackend()
+    src.script("CREATE TABLE t (id TEXT PRIMARY KEY);")
+    st.add_backend("source", src, source=True)
+    assert StudioTools(st, principal={"seller_id": "S1"}).actor.principal == {"seller_id": "S1"}

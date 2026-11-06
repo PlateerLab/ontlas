@@ -103,7 +103,7 @@ def in_order(onto: Ontology) -> list[ObjectType]:
 
 
 def view_issues(onto: Ontology, t: ObjectType) -> list[str]:
-    out = [f"unknown key '{k}'" for k in t.view if k not in ("name", "query")]
+    out = [f"unknown key '{k}'" for k in t.view if k not in ("name", "query", "inline")]
     if t.table != t.view_name:
         out.append("give a view or a source table, not both")
     try:

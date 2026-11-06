@@ -5,6 +5,28 @@ label: 이커머스 운영 온톨로지
 description: 판매자, 결제, 환불, 배송, 택배사, 쿠폰, 상품평과 배송비 판정을 정의합니다
 requires: [commerce]
 
+parameters:
+  free_shipping_amount: {type: integer, value: 50000, min: 0, unit: 원, label: 무료 배송 기준 금액, cite: 배송비 정책서 v1.0 2조}
+  base_shipping_fee: {type: integer, value: 3000, min: 0, unit: 원, label: 기본 배송비, cite: 배송비 정책서 v1.0 2조}
+
+metrics:
+  returnRate:
+    label: 반품률
+    owner: 고객경험팀
+    unit: "%"
+    scale: 100
+    description: 배송을 마친 주문상품 가운데 반품을 마친 비율
+    formula: {match: {i: OrderItem}, where: {eq: [i.item_status, RETURNED]}, value: {count: i}}
+    denominator: {where: {not_null: i.delivered_at}, value: {count: i}, label: 배송 완료 주문상품}
+    time: {property: i.delivered_at, basis: 배송 완료 시각}
+
+conflicts:
+  vipExchangeWindow:
+    label: VIP 교환 기간
+    answers:
+      - {source: 교환 정책서 2조, says: {days: 30}}
+      - {source: 고객센터 안내문, says: {days: 14}}
+
 objects:
   Seller:
     label: 판매자
@@ -120,8 +142,8 @@ decisions:
     outputs: {fee: decimal, reason: string}
     rules:
       - {id: cancelled, when: {order_status: '= "CANCELLED"'}, then: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
-      - {id: free, when: {order_total: ">= 50000"}, then: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
-      - {id: basic, when: {}, then: {fee: 3000, reason: 기본 배송비 3천원입니다}}
+      - {id: free, when: {order_total: ">= @free_shipping_amount"}, then: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
+      - {id: basic, when: {}, then: {fee: "@base_shipping_fee", reason: 기본 배송비 3천원입니다}}
 
 queries:
   paymentsByMethod:

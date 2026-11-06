@@ -17,7 +17,7 @@ class StudioTools:
     def __init__(self, studio: Studio, *, role: str | None = None, principal: dict | None = None,
                  actor_id: str = "agent", read_only: bool = False):
         self.studio, self.role, self.principal = studio, role, dict(principal or {})
-        self.actor = Actor(actor_id, "agent", [role] if role else [])
+        self.actor = Actor(actor_id, "agent", [role] if role else [], principal=self.principal)
         self.read_only = read_only
 
     def describe(self) -> dict:
