@@ -26,16 +26,21 @@ class GremlinBackend(Backend):
             client = gremlin_client.Client(url, source)
         self.client = client
         self.name = name
-        self.capabilities = Capabilities("gremlin", "tinkerpop", optional=False, load=True, computed="none")
+        self.capabilities = Capabilities("gremlin", "tinkerpop", load=True)
 
     def run(self, text: str, bindings: dict | None = None) -> list:
         return self.client.submit(text, bindings or {}).all().result()
 
     def execute(self, compiled: Compiled, values: dict[str, Any] | None = None) -> Result:
         text, args = compiled.bind(values)
-        rows = self.run(text, args)
-        return Result(compiled.columns, [tuple(r.get(c) for c in compiled.columns) for r in rows], self.name,
-                      compiled)
+
+        def cell(row: dict, column: str) -> Any:
+            v = row.get(column)  # math() gives doubles, also for a whole number
+            whole = isinstance(v, float) and v.is_integer() and compiled.column_types.get(column) == "integer"
+            return int(v) if whole else v
+
+        rows = [tuple(cell(r, c) for c in compiled.columns) for r in self.run(text, args)]
+        return Result(compiled.columns, rows, self.name, compiled)
 
     def close(self) -> None:
         self.client.close()

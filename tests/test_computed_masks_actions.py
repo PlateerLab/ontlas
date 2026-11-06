@@ -71,17 +71,28 @@ def test_expressions_are_checked_against_the_definition(onto):
                                                    ("Order", "status")}
 
 
-def test_languages_without_a_form_say_so(onto):
+def test_every_language_compiles_every_computed_property(onto):
     pytest.importorskip("sqlglot")  # the Oracle form at the end
     q = {"match": {"o": "Order"}, "return": ["o.order_id", "o.total"]}
-    with pytest.raises(CompileError, match="GQL"):
-        compiler_for(onto, "gql").compile(q)
-    with pytest.raises(CompileError, match="SQL/PGQ"):
-        compiler_for(onto, "sqlpgq").compile(q)
     simple = {"match": {"i": "OrderItem"}, "return": ["i.item_id", "i.line_total"]}
-    assert "unit_price" in compiler_for(onto, "gql").compile(simple).text
-    assert "unit_price" in compiler_for(onto, "sqlpgq").compile(simple).text
-    assert "unit_price" in compiler_for(onto, "sql:oracle").compile(q).text
+    for lang in ("gql", "sqlpgq", "gremlin", "cypher", "sparql", "sql:oracle"):
+        assert "unit_price" in compiler_for(onto, lang).compile(q).text, lang
+        assert "unit_price" in compiler_for(onto, lang).compile(simple).text, lang
+
+
+def test_languages_without_a_form_say_so(onto):
+    optional = {"match": {"c": "Customer", "o": "Order"}, "edges": [{"from": "c", "link": "placed", "to": "o", "optional": True}],
+                "return": ["c.name"]}
+    with pytest.raises(CompileError, match="SQL/PGQ GRAPH_TABLE has no OPTIONAL MATCH"):
+        compiler_for(onto, "sqlpgq").compile(optional)
+    with pytest.raises(CompileError, match="SQL/PGQ GRAPH_TABLE has no EXISTS"):
+        compiler_for(onto, "sqlpgq").compile(onto.queries["deliveredWithoutClaim"].query)
+    with pytest.raises(CompileError, match="substring"):
+        compiler_for(onto, "gql").compile(onto.queries["searchProducts"].query)
+    d = onto.to_dict()
+    d["objects"]["Customer"]["properties"]["phone"] = {"type": "string", "columns": ["phone", "name"]}
+    with pytest.raises(CompileError, match="one column per property"):
+        compiler_for(Ontology.from_dict(d), "sqlpgq").compile({"match": {"c": "Customer"}, "return": ["c.phone"]})
 
 
 def test_masked_properties_and_what_a_role_may_ask(studio):

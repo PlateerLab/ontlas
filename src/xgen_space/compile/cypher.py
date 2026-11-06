@@ -76,17 +76,31 @@ class CypherCompiler(Compiler):
             return self._computed(ref.alias, p.expr)
         return f"{ref.alias}.{bq(ref.prop)}"
 
+    def _renderer(self, alias: str) -> ex.CypherRenderer:
+        return ex.CypherRenderer(lambda n: self._prop(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.gql)
+
     def _computed(self, alias: str, text: str) -> str:
-        r = ex.CypherRenderer(lambda n: self._prop(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.gql)
         try:
-            return r.render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
+            return self._renderer(alias).render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
         except ex.ExprError as e:
             raise CompileError(str(e)) from None
 
+    def _value_query(self, pattern: str, prev: str, a: ex.Agg, prop: str, cond: str) -> str:
+        """ISO GQL has no list comprehension; a VALUE subquery gives one value, and it reads the outer row's aliases."""
+        value = self._prop(Ref(prev, prop)) if prop else ""
+        wheres = [cond] if cond else []
+        if a.fn in ("latest", "earliest"):
+            obj = self.onto.obj(self._types[prev])
+            time, key = f"{prev}.{bq(obj.series['time'])}", f"{prev}.{bq(obj.key)}"
+            way = "DESC" if a.fn == "latest" else "ASC"
+            test = " AND ".join([f"{time} IS NOT NULL", *wheres])
+            pick = f"ORDER BY {time} {way}, {key} {way} LIMIT 1"
+            return f"VALUE {{ MATCH {pattern} WHERE {test} {pick} RETURN {value} AS v }}"
+        match = f"MATCH {pattern}" + (f" WHERE {cond}" if cond else "")
+        return f"VALUE {{ {match} RETURN {a.fn.upper()}({value or '*'}) AS v }}"
+
     def _aggregate(self, alias: str, a: ex.Agg) -> str:
         """A pattern comprehension along the aggregate's links, folded with reduce."""
-        if self.gql:
-            raise CompileError(f"ISO GQL has no list comprehension for {a.fn}() over links; use another backend")
         steps, prop = ex.resolve_agg(self.onto, self._types[alias], a)
         pattern, prev = f"({alias})", alias
         for st in steps:
@@ -97,6 +111,10 @@ class CypherCompiler(Compiler):
             node = f"({nxt}:{bq(st.type)})"
             pattern += f"-{rel}->{node}" if st.forward else f"<-{rel}-{node}"
             prev = nxt
+        cond = self._renderer(prev).render(a.where) if a.where is not None else ""
+        if self.gql:
+            return self._value_query(pattern, prev, a, prop, cond)
+        keep = f" WHERE {cond}" if cond else ""
         n = self._n
         # head([l IN [list] | f(l)]) evaluates the list once and names it, so nesting stays linear in size
         if a.fn in ("latest", "earliest"):
@@ -105,15 +123,15 @@ class CypherCompiler(Compiler):
             b, h, best = f"_b{n}", f"_h{n}", f"_n{n}"
             later = ">" if a.fn == "latest" else "<"
             stamp = "toString({0}.{1}) + '|' + toString({0}.{2})"
-            nodes = f"[{pattern} WHERE {prev}.{time} IS NOT NULL | {prev}]"
+            nodes = f"[{pattern} WHERE {prev}.{time} IS NOT NULL{f' AND {cond}' if cond else ''} | {prev}]"
             pick = (f"reduce({b} = null, {h} IN {nodes} | CASE WHEN {b} IS NULL OR "
                     f"{stamp.format(h, time, key)} {later} {stamp.format(b, time, key)} THEN {h} ELSE {b} END)")
             self._types[best] = self._types[prev]
             return f"head([{best} IN [{pick}] | {self._prop(Ref(best, prop))}])"
         if a.fn == "count" and not prop:
-            return f"size([{pattern} | {prev}])"
+            return f"size([{pattern}{keep} | {prev}])"
         y, lst, s, x = f"_y{n}", f"_l{n}", f"_s{n}", f"_x{n}"
-        items = f"[{y} IN [{pattern} | {self._prop(Ref(prev, prop))}] WHERE {y} IS NOT NULL]"
+        items = f"[{y} IN [{pattern}{keep} | {self._prop(Ref(prev, prop))}] WHERE {y} IS NOT NULL]"
         if a.fn == "count":
             return f"size({items})"
         if a.fn in ("sum", "avg"):
@@ -157,10 +175,18 @@ class CypherCompiler(Compiler):
         raise CompileError(f"cannot compile filter {f!r}")
 
     def _agg(self, a: Agg) -> str:
+        cond = self._filter(a.where) if a.where is not None else ""
+
+        def kept(arg: str) -> str:
+            return f"CASE WHEN {cond} THEN {arg} END" if cond else arg
+
         if a.func in ("count", "count_distinct"):
-            arg = self._prop(a.ref) if a.ref is not None else (a.node or "*")
-            return f"count(DISTINCT {arg})" if a.func == "count_distinct" else f"count({arg})"
-        return f"{a.func}({self._prop(a.ref)})"
+            arg = self._prop(a.ref) if a.ref is not None else (a.node or ("1" if cond else "*"))
+            return f"count(DISTINCT {kept(arg)})" if a.func == "count_distinct" else f"count({kept(arg)})"
+        value = kept(self._prop(a.ref))
+        if a.func == "sum" and cond and not self.gql:  # Cypher's sum of no rows is 0, where SQL and GQL give null
+            return f"CASE WHEN count({value}) = 0 THEN null ELSE sum({value}) END"
+        return f"{a.func}({value})"
 
     def _return(self, q: Query) -> list[str]:
         items, keys = [], []

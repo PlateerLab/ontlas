@@ -5,7 +5,7 @@
     XSPACE_LIVE_NEO4J=bolt://host:7687                   (+ XSPACE_LIVE_NEO4J_AUTH=user:pw; the database is cleared)
     XSPACE_LIVE_GREMLIN=ws://host:8182/gremlin           (the graph is cleared)
     XSPACE_LIVE_MYSQL=mysql://user:pw@host:port/db       (tables xspace_ord, xspace_line, xspace_ship are dropped and made again)
-    XSPACE_LIVE_ORACLE=oracle://user:pw@host:port/service (the same tables and the example's, so give it an empty user)
+    XSPACE_LIVE_ORACLE=oracle://user:pw@host:port/service (the same tables and the example's, so give it an empty user; also SQL/PGQ)
     XSPACE_LIVE_MSSQL=mssql://user:pw@host:port/db       (the same tables and the example's, so give it an empty database)
 """
 import os
@@ -508,17 +508,8 @@ def test_gremlin_server_answers_like_sqlite():
         st.project()
         rep = st.conformance()
         assert rep.passed, rep.summary()
-        from xgen_space.compile.base import CompileError, compiler_for
-
-        def takes(q) -> bool:  # the rest use what Gremlin here declares it does not do (optional, computed)
-            try:
-                compiler_for(st.onto, "gremlin").compile(q)
-                return True
-            except CompileError:
-                return False
-
-        ran = {q.name for q in rep.queries if q.outcomes["gremlin"].rows is not None}
-        assert ran == {n for n, (q, _) in st.registered().items() if takes(q)} and len(ran) >= 7
+        assert all(q.outcomes["gremlin"].rows is not None for q in rep.queries)  # optional and computed included
+        assert st.run("orderTotals", backend="gremlin").rows == st.run("orderTotals").rows
         assert st.run("categoryAncestors", {"category": "K3"}, backend="gremlin").rows == [("상의",), ("의류",)]
         from xgen_space.ir import Query
 
@@ -541,6 +532,118 @@ def test_gremlin_server_answers_like_sqlite():
         assert extra.passed and all(r.outcomes["gremlin"].rows is not None for r in extra.queries), extra.summary()
     finally:
         g.close()
+
+
+def _agrees_on_every_case(backend, name: str) -> None:
+    """The cases with their null values and missing objects, on this server beside SQLite."""
+    from xgen_space.ir import Query
+
+    from .compile_cases import all_cases, studio_with_cases
+
+    st = studio_with_cases(Ontology.load(EXAMPLE / "ontology.yaml"), _sqlite(), lambda: NOW)
+    st.add_backend(name, backend)
+    st.project()
+    rep = st.conformance(queries={n: (Query.from_dict(q), p) for n, (q, p) in all_cases().items()})
+    assert rep.passed, rep.summary()
+    assert all(r.outcomes[name].rows is not None for r in rep.queries)
+
+
+def test_gremlin_server_agrees_on_optional_links_and_computed_properties():
+    pytest.importorskip("gremlin_python")
+    from xgen_space.backends.gremlin import GremlinBackend
+
+    g = GremlinBackend(_need("XSPACE_LIVE_GREMLIN"))
+    try:
+        _agrees_on_every_case(g, "gremlin")
+    finally:
+        g.close()
+
+
+def test_neo4j_agrees_on_conditional_aggregates():
+    pytest.importorskip("neo4j")
+    import neo4j
+
+    from xgen_space.backends.graph import Neo4jBackend
+
+    uri = _need("XSPACE_LIVE_NEO4J")
+    user, _, pw = os.environ.get("XSPACE_LIVE_NEO4J_AUTH", "neo4j:").partition(":")
+    driver = neo4j.GraphDatabase.driver(uri, auth=(user, pw))
+    try:
+        _agrees_on_every_case(Neo4jBackend(driver), "neo")
+    finally:
+        driver.close()
+
+
+def test_fuseki_agrees_on_conditional_aggregates():
+    from xgen_space.backends.rdf import SparqlEndpointBackend
+
+    url = _need("XSPACE_LIVE_FUSEKI").rstrip("/")
+    user, _, pw = os.environ.get("XSPACE_LIVE_FUSEKI_AUTH", ":").partition(":")
+    _agrees_on_every_case(SparqlEndpointBackend(f"{url}/query", update_url=f"{url}/update", gsp_url=f"{url}/data",
+                                                user=user, password=pw), "fuseki")
+
+
+def test_oracle_runs_sql_pgq_like_sqlite():
+    """Oracle 23 has GRAPH_TABLE, so the compiled text and CREATE PROPERTY GRAPH run as they are; dates are real
+    TIMESTAMP columns here, where SQLite keeps text."""
+    from collections import Counter
+    from datetime import datetime as dt
+    from urllib.parse import urlsplit
+
+    u = urlsplit(_need("XSPACE_LIVE_ORACLE"))
+    oracledb = pytest.importorskip("oracledb")
+
+    from xgen_space.compile.base import CompileError, compiler_for
+    from xgen_space.compile.pgq import graph_ddl
+    from xgen_space.conformance import normalize_rows
+    from xgen_space.ir import Query
+
+    from .compile_cases import OPTIONALS, all_cases, studio_with_cases
+
+    source = _sqlite()
+    st = studio_with_cases(Ontology.load(EXAMPLE / "ontology.yaml"), source, lambda: NOW)
+    conn = oracledb.connect(user=u.username, password=u.password, dsn=f"{u.hostname}:{u.port}{u.path}")
+    cur = conn.cursor()
+    tables = [o.table for o in st.onto.objects.values() if o.table] + [lk.via.table for lk in st.onto.links.values() if lk.via]
+    for drop in ['PROPERTY GRAPH "commerce_sample"', *(f'TABLE "{t}" CASCADE CONSTRAINTS' for t in tables)]:
+        try:
+            cur.execute(f"DROP {drop}")
+        except oracledb.Error:  # not there yet
+            pass
+    for t in tables:
+        cols = source.conn.execute(f'pragma table_info("{t}")').fetchall()
+        when = {c[1] for c in cols if c[1].endswith("_at")}
+        kinds = {"INTEGER": "NUMBER", "REAL": "NUMBER", "TEXT": "VARCHAR2(400)"}
+        cur.execute(f'CREATE TABLE "{t}" (' + ", ".join(
+            f'"{c[1]}" {"TIMESTAMP" if c[1] in when else kinds[c[2]]}' for c in cols) + ")")
+        rows = [tuple(dt.fromisoformat(v) if c[1] in when and v else v for c, v in zip(cols, r))
+                for r in source.conn.execute(f'SELECT * FROM "{t}"').fetchall()]
+        if rows:
+            cur.executemany(f'INSERT INTO "{t}" VALUES ({", ".join(f":{i + 1}" for i in range(len(cols)))})', rows)
+    conn.commit()
+    cur.execute(graph_ddl(st.onto))
+    ran = 0
+    try:
+        for name, (d, params) in all_cases().items():
+            q = Query.from_dict(d)
+            try:
+                c = compiler_for(st.onto, "sqlpgq").compile(q)
+            except CompileError:
+                assert name in OPTIONALS, name  # no OPTIONAL MATCH in GRAPH_TABLE
+                continue
+            parts = c.text.split("?")
+            text = parts[0] + "".join(f":{i}{p}" for i, p in enumerate(parts[1:], 1))
+            cur.execute(text, list(c.bind(params)[1]))
+            got = Counter(normalize_rows(cur.fetchall(), c.columns, c.column_types))
+            want = Counter(normalize_rows(st.run(q, params).rows, c.columns, c.column_types))
+            assert got == want, (name, list((got - want))[:3], list((want - got))[:3])
+            ran += 1
+        assert ran >= 20
+    finally:
+        cur.execute('DROP PROPERTY GRAPH "commerce_sample"')
+        for t in tables:
+            cur.execute(f'DROP TABLE "{t}" CASCADE CONSTRAINTS')
+        conn.close()
 
 
 @pytest.mark.parametrize(("kind", "var", "driver"), [("postgres", "XSPACE_LIVE_PG", "psycopg"),

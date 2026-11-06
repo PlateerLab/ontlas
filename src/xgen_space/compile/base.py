@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from xgen_space.check import Checked, check
-from xgen_space.ir import Param, Query
+from xgen_space.ir import Agg, Exists, Param, Query, filter_refs, walk_filters
 from xgen_space.model import Ontology
 from xgen_space.values import coerce
 
@@ -117,10 +117,35 @@ class Compiler:
     def checked(self, q: Query | dict) -> Checked:
         if isinstance(q, dict):
             q = Query.from_dict(q)
-        return check(q, self.onto).raise_for_issues()
+        chk = check(q, self.onto)
+        _check_column_filters(chk, self.onto)
+        return chk.raise_for_issues()
 
     def compile(self, q: Query | dict) -> Compiled:
         raise NotImplementedError
+
+
+def _check_column_filters(chk: Checked, onto: Ontology) -> None:
+    """Check each aggregate's own where. Roles scope and mask the query's where and not this one, so it may not leave
+    the row (exists) or read a property a role sees masked: counting by it would tell the masked value."""
+    from xgen_space.check import _Checker
+    from xgen_space.roles import mask_style
+
+    checker = _Checker(onto)
+    checker.issues, checker.params = chk.issues, chk.param_types
+    scope = dict(chk.query.nodes)
+    for c in chk.query.columns:
+        f = c.expr.where if isinstance(c.expr, Agg) else None
+        if f is None:
+            continue
+        checker.filt(f, scope)
+        if any(isinstance(x, Exists) for x in walk_filters(f)):
+            checker.issue(f"column '{c.name}': exists belongs in the query's where, an aggregate's where reads its row")
+        for r in filter_refs(f, deep=False):
+            who = sorted(role.name for role in onto.roles.values() if mask_style(onto, role, scope.get(r.alias), r.prop))
+            if who:
+                checker.issue(f"column '{c.name}': {r} is masked for {', '.join(who)}, so it cannot decide what a "
+                              "column counts; filter on it in the query's where, which checks the role")
 
 
 def compiler_for(onto: Ontology, language: str, dialect: str = "") -> Compiler:

@@ -3,16 +3,23 @@
 The pattern walks from the first alias, labelling each node with as() and returning to a known one with select()
 before the next edge; filters are where() traversals over the labels; returned columns are project(); aggregates
 group by the returned properties. A property that is not there gives null, as a NULL column does in SQL, and
-comparisons on it are not true, also inside not().
+comparisons on it are not true, also inside not(). An optional edge that finds nothing labels a null, as LEFT JOIN
+does; a step on a vertex stops the traversal on a null, so an alias that may be null is tested before any such step.
+A computed property is a traversal too, giving one value: see expr.GremlinRenderer.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
+from xgen_space import expr as ex
 from xgen_space.check import aliases_of, concrete_subtypes, find_prop
 from xgen_space.compile.base import Compiled, CompileError, Compiler, Params
-from xgen_space.ir import Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref, filter_refs
+from xgen_space.ir import OPS, Agg, And, Cmp, Contains, Edge, Exists, In, IsNull, Not, Or, Query, Ref
 
 _P = {"eq": "eq", "ne": "neq", "lt": "lt", "lte": "lte", "gt": "gt", "gte": "gte"}
 _FLIP = {"eq": "eq", "ne": "neq", "lt": "gt", "lte": "gte", "gt": "lt", "gte": "lte"}
+_OPPOSITE = {"eq": "ne", "ne": "eq", "lt": "gte", "lte": "gt", "gt": "lte", "gte": "lt"}
+_NULL = "__.constant(null)"
 
 
 def gs(text: str) -> str:
@@ -27,14 +34,11 @@ class GremlinCompiler(Compiler):
     def compile(self, q: Query | dict) -> Compiled:
         chk = self.checked(q)
         q = chk.query
-        if any(e.optional for e in q.edges):
-            raise CompileError("Gremlin here has no optional edge; drop 'optional' or use another backend")
         self._types = aliases_of(q)
-        for r in [*filter_refs(q.where), *(c.expr if isinstance(c.expr, Ref) else c.expr.ref for c in q.columns)]:
-            if r is not None and find_prop(self.onto, self._types[r.alias], r.prop).expr:
-                raise CompileError(f"{r} is a computed property; Gremlin computes no expressions here")
         self._params = Params(chk.param_types)
         self._n = 0
+        self._maybe: set[str] = set()  # aliases an optional edge can leave null
+        self._held: dict = {}  # one binding per distinct literal of a computed property: servers cap them at 16
         root = next(iter(q.nodes))
         parts = ["g.V()", self._label(root), f".as({gs(root)})"]
         parts += self._walk(q.edges, {root})
@@ -81,23 +85,41 @@ class GremlinCompiler(Compiler):
             if e.source in bound and e.target in bound:
                 raise CompileError(f"a cycle through '{e.link}' is not compiled to Gremlin here")
             known, new = (e.source, e.target) if e.source in bound else (e.target, e.source)
-            out += [f".select({gs(known)})", self._step(e, known), self._label(new), f".as({gs(new)})"]
+            guard = ".is(P.neq(null))" if known in self._maybe else ""
+            hop = self._step(e, known) + self._label(new)
+            if e.optional:
+                out += [f".select({gs(known)})", f".coalesce(__{guard}{hop}, {_NULL})", f".as({gs(new)})"]
+                self._maybe.add(new)
+            else:
+                out += [f".select({gs(known)})", guard, hop, f".as({gs(new)})"]
             bound.add(new)
         return out
+
+    def _at(self, alias: str) -> str:
+        """Back at an alias, and nowhere if it is null."""
+        return f"__.select({gs(alias)})" + (".is(P.neq(null))" if alias in self._maybe else "")
+
+    def _plain(self, ref: Ref) -> bool:
+        """A stored property of an alias that is always there, which has() can read."""
+        return ref.alias not in self._maybe and not find_prop(self.onto, self._types[ref.alias], ref.prop).expr
 
     def _ph(self, value, ref: Ref) -> str:
         p = find_prop(self.onto, self._types[ref.alias], ref.prop)
         return self._params.add(value, p.type)
 
     def _has(self, ref: Ref, pred: str) -> str:
-        return f"__.select({gs(ref.alias)}).has({gs(ref.prop)}, {pred})"
-
-    def _present(self, f) -> list[str]:
-        return [f"__.select({gs(r.alias)}).has({gs(r.prop)})" for r in filter_refs(f, deep=False)]
+        if self._plain(ref):
+            return f"__.select({gs(ref.alias)}).has({gs(ref.prop)}, {pred})"
+        return f"{self._value(ref)}.is(P.neq(null)).is({pred})"  # neq and without alone would let a null pass
 
     def _filter(self, f) -> str:
+        """Passes where the filter is true."""
         if isinstance(f, Cmp):
-            if isinstance(f.value, Ref):  # a.p op b.q  <=>  b.q flip(op) a.p, the left value held under a label
+            if isinstance(f.value, Ref):
+                if not (self._plain(f.ref) and self._plain(f.value)):
+                    text = self._renderer(f.ref.alias).binary(OPS[f.op], self._value(f.ref), self._value(f.value))
+                    return f"{text}.is(P.eq(true))"
+                # a.p op b.q  <=>  b.q flip(op) a.p, the left value held under a label
                 self._n += 1
                 hold = gs(f"_l{self._n}")
                 return (f"__.select({gs(f.ref.alias)}).values({gs(f.ref.prop)}).as({hold})"
@@ -110,15 +132,15 @@ class GremlinCompiler(Compiler):
         if isinstance(f, Contains):
             return self._has(f.ref, f"TextP.containing({self._ph(f.value, f.ref)})")
         if isinstance(f, IsNull):
-            return f"__.select({gs(f.ref.alias)}).{'has' if f.negate else 'hasNot'}({gs(f.ref.prop)})"
+            if self._plain(f.ref):
+                return f"__.select({gs(f.ref.alias)}).{'has' if f.negate else 'hasNot'}({gs(f.ref.prop)})"
+            return f"{self._value(f.ref)}.is(P.{'neq' if f.negate else 'eq'}(null))"
         if isinstance(f, And):
             return "__.and(" + ", ".join(self._filter(x) for x in f.items) + ")"
         if isinstance(f, Or):
             return "__.or(" + ", ".join(self._filter(x) for x in f.items) + ")"
         if isinstance(f, Not):
-            inner = self._filter(f.item)
-            need = self._present(f.item) if not isinstance(f.item, (IsNull, Exists)) else []
-            return "__.and(" + ", ".join([*need, f"__.not({inner})"]) + ")" if need else f"__.not({inner})"
+            return self._false(f.item)
         if isinstance(f, Exists):
             outer = set(self._types) - set(f.nodes)
             first = next((a for e in f.edges for a in (e.source, e.target) if a in outer), None)
@@ -133,20 +155,89 @@ class GremlinCompiler(Compiler):
             return f"__.not({text})" if f.negate else text
         raise CompileError(f"cannot compile filter {f!r}")
 
+    def _false(self, f) -> str:
+        """Passes where the filter is false, which null is not: NOT keeps neither, and false beats null in an and."""
+        if isinstance(f, Cmp):
+            return self._filter(replace(f, op=_OPPOSITE[f.op]))
+        if isinstance(f, (In, IsNull, Exists)):
+            return self._filter(replace(f, negate=not f.negate))
+        if isinstance(f, Contains):
+            return f"__.and({self._filter(IsNull(f.ref, negate=True))}, __.not({self._filter(f)}))"
+        if isinstance(f, And):
+            return "__.or(" + ", ".join(self._false(x) for x in f.items) + ")"
+        if isinstance(f, Or):
+            return "__.and(" + ", ".join(self._false(x) for x in f.items) + ")"
+        if isinstance(f, Not):
+            return self._filter(f.item)
+        raise CompileError(f"cannot compile filter {f!r}")
+
     def _value(self, ref: Ref) -> str:
-        return f"__.select({gs(ref.alias)}).coalesce(__.values({gs(ref.prop)}), __.constant(null))"
+        p = find_prop(self.onto, self._types[ref.alias], ref.prop)
+        if p.expr:
+            return self._computed(ref.alias, p.expr)
+        if ref.alias in self._maybe:
+            return f"__.coalesce({self._at(ref.alias)}.values({gs(ref.prop)}), {_NULL})"
+        return f"__.select({gs(ref.alias)}).coalesce(__.values({gs(ref.prop)}), {_NULL})"
+
+    def _renderer(self, alias: str) -> ex.GremlinRenderer:
+        return ex.GremlinRenderer(lambda n: self._value(Ref(alias, n.name)), lambda a: self._aggregate(alias, a),
+                                  self._literal)
+
+    def _computed(self, alias: str, text: str) -> str:
+        try:
+            return self._renderer(alias).render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
+        except ex.ExprError as e:
+            raise CompileError(str(e)) from None
+
+    def _literal(self, node: ex.Lit) -> str:
+        key = (node.type, node.value)
+        if key not in self._held:
+            self._held[key] = self._params.add(node.value, node.type)
+        return self._held[key]
+
+    def _aggregate(self, alias: str, a: ex.Agg) -> str:
+        """A walk along the aggregate's links from the alias, each row labelled so that its value can be read."""
+        steps, prop = ex.resolve_agg(self.onto, self._types[alias], a)
+        walk, prev = [self._at(alias)], alias
+        for st in steps:
+            self._n += 1
+            nxt = f"g{self._n}"
+            self._types[nxt] = st.type
+            walk += [f".{'out' if st.forward else 'in'}({gs(st.link)})", self._label(nxt), f".as({gs(nxt)})"]
+            prev = nxt
+        if a.where is not None:
+            walk.append(f".where({self._renderer(prev).render(a.where)}.is(P.eq(true)))")
+        rows = "".join(walk)
+        if a.fn in ("latest", "earliest"):
+            obj = self.onto.obj(self._types[prev])
+            way = "desc" if a.fn == "latest" else "asc"
+            pick = (f".has({gs(obj.series['time'])}).order().by({gs(obj.series['time'])}, {way})"
+                    f".by(__.values({gs(obj.key)}).asString(), {way}).limit(1)")
+            return f"__.coalesce({rows}{pick}{self._value(Ref(prev, prop))[2:]}, {_NULL})"
+        if a.fn == "count" and not prop:
+            return f"{rows}.count()"
+        present = f"{rows}{self._value(Ref(prev, prop))[2:]}.is(P.neq(null))"
+        if a.fn == "count":
+            return f"{present}.count()"
+        fn = {"avg": "mean"}.get(a.fn, a.fn)
+        return f"{present}.fold().choose(__.count(local).is(0), {_NULL}, __.unfold().{fn}())"
 
     def _arg(self, a: Agg) -> str | None:
-        """What a row carries into the group for one aggregate: a value, or the node itself to count."""
+        """What a row carries into the group for one aggregate: a value, the node to count, or null to be left out."""
         if a.ref is not None:
-            return self._value(a.ref)
-        if a.node:
-            return f"__.select({gs(a.node)}).id()"
-        return None
+            value = self._value(a.ref)
+        elif a.node:
+            node = f"{self._at(a.node)}.id()"
+            value = f"__.coalesce({node}, {_NULL})" if a.node in self._maybe else node
+        elif a.where is not None:
+            value = "__.constant(1)"
+        else:
+            return None
+        return f"__.choose({self._filter(a.where)}, {value}, {_NULL})" if a.where is not None else value
 
     @staticmethod
     def _agg(a: Agg, slot: str) -> str:
-        if a.func == "count" and a.ref is None and not a.node:
+        if a.func == "count" and a.ref is None and not a.node and a.where is None:
             return "__.count(local)"
         present = f"__.unfold().select({gs(slot)}).is(P.neq(null))"
         if a.func == "count":

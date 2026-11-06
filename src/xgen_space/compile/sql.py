@@ -114,11 +114,13 @@ class SqlCompiler(Compiler):
             return f"t_{ref.alias}.{qi(ref.prop)}"
         return joined(f"t_{ref.alias}.", columns_of(self.onto, t, ref.prop))
 
-    def _computed(self, alias: str, text: str) -> str:
+    def _renderer(self, alias: str) -> ex.SqlRenderer:
         kind = {"oracle": _Oracle, "tsql": _NoBooleans}.get(self.dialect, ex.SqlRenderer)
-        r = kind(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
+        return kind(lambda n: self._col(Ref(alias, n.name)), lambda a: self._aggregate(alias, a), self.native)
+
+    def _computed(self, alias: str, text: str) -> str:
         try:
-            return r.render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
+            return self._renderer(alias).render(ex.prepare(self.onto, self._types[alias], ex.parse_expr(text)))
         except ex.ExprError as e:
             raise CompileError(str(e)) from None
 
@@ -136,6 +138,8 @@ class SqlCompiler(Compiler):
         first, rest = path[0][0], path[1:]
         body = [f"FROM {first.table} {first.alias}", *(f"JOIN {s.table} {s.alias} ON {s.cond}" for s, _ in rest)]
         conds = [first.cond, *extra]
+        if a.where is not None:
+            conds.append(self._renderer(prev).render(a.where))
         if a.fn in ("latest", "earliest"):
             obj = self.onto.obj(self._types[prev])
             time, key = self._col(Ref(prev, obj.series["time"])), self._key(prev)
@@ -228,7 +232,6 @@ class SqlCompiler(Compiler):
         sql = [f"FROM {self._table(root)} t_{root}"]
         for s, opt in steps:
             sql.append(f"{'LEFT JOIN' if opt else 'JOIN'} {s.table} {s.alias} ON {s.cond}")
-        conds = extra + ([self._filter(q.where)] if q.where is not None else [])
         cols, group, read = [], [], []
         for c in q.columns:
             if isinstance(c.expr, Ref):
@@ -239,6 +242,8 @@ class SqlCompiler(Compiler):
                 read.append(self._agg_arg(c.expr))
                 expr = self._agg(c.expr, read[-1])
             cols.append(f"{expr} AS {qi(c.name)}")
+        # after the columns: parameters bind by position, and an aggregate's where stands before the query's
+        conds = extra + ([self._filter(q.where)] if q.where is not None else [])
         head = "SELECT " + ("DISTINCT " if q.distinct else "") + ", ".join(cols)
         out = [head, *sql]
         if conds:
@@ -277,9 +282,12 @@ class SqlCompiler(Compiler):
                 *(["GROUP BY " + ", ".join(names)] if names else [])]
 
     def _agg_arg(self, a: Agg) -> str:
+        cond = self._filter(a.where) if a.where is not None else ""
         if a.func in ("count", "count_distinct") and a.ref is None:
-            return self._key(a.node) if a.node else "*"
-        return self._col(a.ref)
+            arg = self._key(a.node) if a.node else ("1" if cond else "*")
+        else:
+            arg = self._col(a.ref)
+        return f"CASE WHEN {cond} THEN {arg} END" if cond else arg  # CASE, not FILTER (WHERE ...): every dialect reads it
 
     def _agg(self, a: Agg, arg: str) -> str:
         if a.func == "count_distinct":

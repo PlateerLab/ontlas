@@ -3,14 +3,16 @@
     net_price: {type: decimal, expr: "unit_price * quantity"}
     total:     {type: decimal, expr: "coalesce(sum(hasItem.net_price), 0)"}
     last_price: {type: decimal, expr: "latest(priceChanges.price)"}
+    returned:  {type: integer, expr: "count(hasItem where item_status = 'RETURNED')"}
 
 Nulls follow one rule everywhere: a null operand gives null, division by zero gives null, and an `if` whose
 condition is null gives null. Aggregates follow a path of links from the object and ignore null values, like SQL.
+An aggregate's `where` is read on the last object of the path and keeps the rows where it is true, not null or false.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 
@@ -63,6 +65,7 @@ class Agg:
     fn: str
     path: tuple[str, ...]
     prop: str = ""
+    where: Any = None
 
 
 def _tokens(text: str) -> list[tuple[str, str]]:
@@ -181,12 +184,16 @@ class _Parser:
                 while self.peek("op", "."):
                     self.take()
                     path.append(self.take("name"))
+                where = None
+                if self.peek("name", "where"):
+                    self.take()
+                    where = self.or_()
                 self.take("op", ")")
                 if low == "count":
-                    return Agg(low, tuple(path))
+                    return Agg(low, tuple(path), where=where)
                 if len(path) < 2:
                     raise ExprError(f"{low}() takes link.property, e.g. {low}(hasItem.quantity)")
-                return Agg(low, tuple(path[:-1]), path[-1])
+                return Agg(low, tuple(path[:-1]), path[-1], where)
             if low not in FUNCTIONS:
                 raise ExprError(f"unknown function '{name}'; functions are: "
                                 f"{', '.join(sorted([*FUNCTIONS, *AGGREGATES]))}")
@@ -215,6 +222,7 @@ def parse_expr(text: str):
 
 
 def walk(node):
+    """Every node read on the same object; an aggregate's where is read on another, so it stops there."""
     yield node
     if isinstance(node, Unary):
         yield from walk(node.arg)
@@ -280,10 +288,10 @@ _ISO = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?")
 
 
 def _as_time(node: Lit, kind: str) -> Lit:
-    from xgen_space.values import coerce
+    from xgen_space.values import coerce, parse_datetime
 
-    try:
-        return Lit(coerce(node.value, kind), kind)
+    try:  # whole, seconds and all: "2026-10-20"^^xsd:dateTime is no dateTime, and a strict engine drops what meets it
+        return Lit(coerce(parse_datetime(node.value), kind), kind)
     except ValueError:
         raise ExprError(f"{node.value!r} is not a {kind}") from None
 
@@ -292,6 +300,9 @@ def prepare(onto, type_name: str, node):
     """Give date-like text literals the type of what they meet: a date or datetime operand, a date function."""
     if isinstance(node, Unary):
         return Unary(node.op, prepare(onto, type_name, node.arg))
+    if isinstance(node, Agg) and node.where is not None:
+        last = resolve_agg(onto, type_name, node)[0][-1].type
+        return replace(node, where=prepare(onto, last, node.where))
     if isinstance(node, Call):
         args = tuple(prepare(onto, type_name, a) for a in node.args)
         if node.fn in DATE_FUNCTIONS:
@@ -330,7 +341,7 @@ class _Typer:
             if key in stack:
                 raise ExprError("computed properties refer to each other in a loop: "
                                 + " -> ".join(f"{t}.{n}" for t, n in (*stack, key)))
-            self.type_of(parse_expr(p.expr), type_name, (*stack, key))
+            self.type_of(prepare(self.onto, type_name, parse_expr(p.expr)), type_name, (*stack, key))
         return p.type
 
     def type_of(self, node, type_name: str, stack: tuple | None = None) -> str:
@@ -387,6 +398,8 @@ class _Typer:
         if isinstance(node, Agg):
             steps, prop = resolve_agg(self.onto, type_name, node)
             last = steps[-1].type
+            if node.where is not None:
+                self._bool(self.type_of(node.where, last, stack), "where")
             if node.fn == "count":
                 if prop:
                     self.prop_type(last, prop, stack)
@@ -448,8 +461,12 @@ def dependencies(onto, type_name: str, name: str, seen: set | None = None) -> se
     seen.add((type_name, name))
     if not p.expr:
         return {(type_name, name)}
+    return _reads(onto, type_name, parse_expr(p.expr), seen)
+
+
+def _reads(onto, type_name: str, tree, seen: set) -> set[tuple[str, str]]:
     out: set[tuple[str, str]] = set()
-    for node in walk(parse_expr(p.expr)):
+    for node in walk(tree):
         if isinstance(node, Prop):
             out |= dependencies(onto, type_name, node.name, seen)
         elif isinstance(node, Agg):
@@ -457,6 +474,8 @@ def dependencies(onto, type_name: str, name: str, seen: set | None = None) -> se
             last = steps[-1].type
             if prop:
                 out |= dependencies(onto, last, prop, seen)
+            if node.where is not None:  # a condition shapes the answer, so masking must see what it reads
+                out |= _reads(onto, last, node.where, seen)
             series = onto.objects[last].series
             if node.fn in ("latest", "earliest") and series:
                 out.add((last, series["time"]))
@@ -484,7 +503,7 @@ class Renderer:
             return self.aggregate(node)
         if isinstance(node, Unary):
             arg = self.render(node.arg)
-            return f"(-{arg})" if node.op == "-" else self.not_(arg)
+            return self.neg(arg) if node.op == "-" else self.not_(arg)
         if isinstance(node, Bin):
             a, b = self.render(node.left), self.render(node.right)
             if node.op == "/":
@@ -500,6 +519,9 @@ class Renderer:
     def not_(self, a: str) -> str:
         return f"(NOT {a})"
 
+    def neg(self, a: str) -> str:
+        return f"(-{a})"
+
     def lit(self, node: Lit) -> str:
         raise NotImplementedError
 
@@ -512,6 +534,16 @@ class Renderer:
 
 def _places(nodes: tuple) -> int:
     return int(nodes[1].value) if len(nodes) > 1 else 0
+
+
+def day_number(y: str, m: str, d: str, floor: str = "FLOOR") -> str:
+    """Julian day number from a date's parts. Each language here has this arithmetic, not all have date subtraction;
+    all the divisions are of positive numbers, so a language that truncates agrees with one that does not."""
+    k = f"{floor}((14 - {m}) / 12)"
+    yy = f"({y} + 4800 - {k})"
+    mm = f"({m} + 12 * {k} - 3)"
+    return (f"({d} + {floor}((153 * {mm} + 2) / 5) + 365 * {yy} + {floor}({yy} / 4) - {floor}({yy} / 100) "
+            f"+ {floor}({yy} / 400) - 32045)")
 
 
 class SqlRenderer(Renderer):
@@ -560,8 +592,8 @@ class SqlRenderer(Renderer):
             return f"{fn.upper()}({args[0]})"
         if fn in ("lower", "upper", "length"):
             return f"{fn.upper()}({args[0]})"
-        if fn == "concat":
-            return "(" + " || ".join(args) + ")"
+        if fn == "concat":  # the test is for Oracle, whose || reads a null as empty text
+            return f"(CASE WHEN {' OR '.join(f'{a} IS NULL' for a in args)} THEN NULL ELSE {' || '.join(args)} END)"
         if fn in ("year", "month", "day"):
             start, n = {"year": (1, 4), "month": (6, 2), "day": (9, 2)}[fn]
             return f"CAST(SUBSTR(CAST({args[0]} AS VARCHAR), {start}, {n}) AS INTEGER)"
@@ -571,6 +603,34 @@ class SqlRenderer(Renderer):
                 return f"CAST(julianday({b}) - julianday({a}) AS INTEGER)"
             return f"(CAST({b} AS DATE) - CAST({a} AS DATE))"
         raise ExprError(f"SQL has no rendering for {fn}()")
+
+
+class PgqRenderer(SqlRenderer):
+    """ISO SQL around and inside GRAPH_TABLE. A date is read with EXTRACT, not by its text: Oracle casts a date to text
+    by session settings, so cutting the text could give a wrong number where EXTRACT stops with an error."""
+
+    language = "sqlpgq"
+
+    def lit(self, node: Lit) -> str:
+        if node.type == "date":
+            return f"DATE '{node.value}'"
+        if node.type == "datetime":
+            return f"TIMESTAMP '{str(node.value).replace('T', ' ')}'"
+        return super().lit(node)
+
+    @staticmethod
+    def _part(a: str, fn: str) -> str:
+        return f"EXTRACT({fn.upper()} FROM CAST({a} AS TIMESTAMP))"
+
+    def call(self, fn: str, args: list[str], nodes: tuple) -> str:
+        if fn in ("year", "month", "day"):
+            return self._part(args[0], fn)
+        if fn == "days_between":
+            a, b = (day_number(*(self._part(x, p) for p in ("year", "month", "day"))) for x in args)
+            return f"({b} - {a})"
+        if fn == "round":  # a NUMERIC with no scale is a whole number on Oracle, which would round to 0 places first
+            return f"ROUND(CAST({args[0]} AS DECIMAL(38, 18)), {_places(nodes)})"
+        return super().call(fn, args, nodes)
 
 
 class SparqlRenderer(Renderer):
@@ -603,13 +663,7 @@ class SparqlRenderer(Renderer):
         return f"<http://www.w3.org/2001/XMLSchema#integer>(SUBSTR(STR({a}), {start}, {n}))"
 
     def _day_number(self, a: str) -> str:
-        # Julian day number from the date's digits: integer arithmetic every SPARQL 1.1 engine has
-        y, m, d = self._part(a, 1, 4), self._part(a, 6, 2), self._part(a, 9, 2)
-        k = f"FLOOR((14 - {m}) / 12)"
-        yy = f"({y} + 4800 - {k})"
-        mm = f"({m} + 12 * {k} - 3)"
-        return (f"({d} + FLOOR((153 * {mm} + 2) / 5) + 365 * {yy} + FLOOR({yy} / 4) - FLOOR({yy} / 100) "
-                f"+ FLOOR({yy} / 400) - 32045)")
+        return day_number(self._part(a, 1, 4), self._part(a, 6, 2), self._part(a, 9, 2))
 
     def call(self, fn: str, args: list[str], nodes: tuple) -> str:
         if fn == "coalesce":
@@ -662,9 +716,20 @@ class CypherRenderer(Renderer):
         num = f"CAST({a} AS FLOAT)" if self.gql else f"toFloat({a})"
         return f"(CASE WHEN {b} = 0 THEN null ELSE {num} / {b} END)"
 
+    @staticmethod
+    def _gql_part(a: str, fn: str) -> str:
+        """ISO GQL names no field of a date, so read it from the text; LEFT and RIGHT are its only substrings."""
+        text = f"CAST({a} AS STRING)"
+        if fn == "year":
+            return f"CAST(LEFT({text}, 4) AS INT)"
+        return f"CAST(RIGHT(LEFT({text}, {7 if fn == 'month' else 10}), 2) AS INT)"
+
     def call(self, fn: str, args: list[str], nodes: tuple) -> str:
-        if self.gql and fn in DATE_FUNCTIONS:
-            raise ExprError(f"ISO GQL has no portable form of {fn}() over text dates; register a backend query for it")
+        if self.gql and fn in ("year", "month", "day"):
+            return self._gql_part(args[0], fn)
+        if self.gql and fn == "days_between":
+            a, b = (day_number(*(self._gql_part(x, p) for p in ("year", "month", "day"))) for x in args)
+            return f"({b} - {a})"
         if fn == "coalesce":
             return f"coalesce({', '.join(args)})"
         if fn == "if":
@@ -691,3 +756,91 @@ class CypherRenderer(Renderer):
             a, b = (f"date(substring(toString({x}), 0, 10))" for x in args)
             return f"duration.inDays({a}, {b}).days"
         raise ExprError(f"Cypher has no rendering for {fn}()")
+
+
+_NULL = "__.constant(null)"
+_ANY_NULL = "__.select(values).unfold().is(P.eq(null))"
+_PRED = {"=": "eq", "!=": "neq", "<": "lt", "<=": "lte", ">": "gt", ">=": "gte"}
+
+
+class GremlinRenderer(Renderer):
+    """Every expression is a traversal giving exactly one value, null included, whatever the traverser it starts from.
+
+    Gremlin's own null rules are not SQL's: math() and asString() stop on a null, neq and without let one pass, and
+    concat() leaves one out, so each of those is guarded here. Operands are held in a map under x0, x1, ... for math()
+    and where() to read; only steps that read no alias follow, since a map key would win over a label of that name.
+    """
+
+    language = "gremlin"
+
+    def __init__(self, prop, aggregate, literal):
+        super().__init__(prop, aggregate)
+        self.literal = literal  # (Lit node) -> the name of its binding
+
+    def lit(self, node: Lit) -> str:
+        return _NULL if node.type == "null" else f"__.constant({self.literal(node)})"
+
+    @staticmethod
+    def _hold(items: list[str]) -> str:
+        keys = ", ".join(f"'x{i}'" for i in range(len(items)))
+        return f"__.project({keys})" + "".join(f".by({t})" for t in items)
+
+    def _strict(self, items: list[str], then: str) -> str:
+        return f"{self._hold(items)}.choose({_ANY_NULL}, {_NULL}, {then})"
+
+    @staticmethod
+    def _unless_null(a: str, then: str) -> str:
+        return f"{a}.choose(__.is(P.eq(null)), {_NULL}, {then})"
+
+    def binary(self, op: str, a: str, b: str) -> str:
+        if op in ("+", "-", "*"):
+            return self._strict([a, b], f"__.math('x0 {op} x1')")
+        if op in ("and", "or"):  # false decides an and, true an or, even beside a null
+            decides, other = ("false", "true") if op == "and" else ("true", "false")
+            either = f"__.select(values).unfold().is(P.eq({decides}))"
+            return (f"{self._hold([a, b])}.choose({either}, __.constant({decides}), "
+                    f"__.choose({_ANY_NULL}, {_NULL}, __.constant({other})))")
+        test = f"__.where('x0', P.{_PRED[op]}('x1'))"
+        return self._strict([a, b], f"__.choose({test}, __.constant(true), __.constant(false))")
+
+    def not_(self, a: str) -> str:
+        return (f"{a}.choose(__.is(P.eq(true)), __.constant(false), "
+                f"__.choose(__.is(P.eq(false)), __.constant(true), {_NULL}))")
+
+    def neg(self, a: str) -> str:
+        return self._unless_null(a, "__.math('0 - _')")
+
+    def divide(self, a: str, b: str) -> str:
+        return self._strict([a, b], f"__.choose(__.select('x1').is(P.eq(0)), {_NULL}, __.math('x0 / x1'))")
+
+    def _date_part(self, a: str, fn: str) -> str:
+        start, end = {"year": (0, 4), "month": (5, 7), "day": (8, 10)}[fn]
+        return f"{a}.asString().substring({start}, {end}).asNumber()"
+
+    def call(self, fn: str, args: list[str], nodes: tuple) -> str:
+        if fn == "coalesce":
+            return "__.coalesce(" + ", ".join(f"{a}.is(P.neq(null))" for a in args) + f", {_NULL})"
+        if fn == "if":
+            c, a, b = args
+            return f"__.choose({c}.is(P.eq(true)), {a}, __.choose({c}.is(P.eq(false)), {b}, {_NULL}))"
+        if fn in ("abs", "floor", "ceil"):
+            return self._unless_null(args[0], f"__.math('{fn}(_)')")
+        if fn == "round":  # half away from zero, as SQL does; math() has no round
+            scale = 10 ** _places(nodes)
+            return self._unless_null(args[0], f"__.math('signum(_) * floor(abs(_) * {scale} + 0.5) / {scale}')")
+        if fn in ("lower", "upper"):  # these two pass a null along
+            return f"{args[0]}.to{fn.title()}()"
+        if fn == "length":
+            return f"{args[0]}.length()"
+        if fn == "concat":
+            return self._strict(args, "__.select(values).conjoin('')")
+        if fn in ("year", "month", "day"):
+            return self._unless_null(args[0], f"__{self._date_part('', fn)}")
+        if fn == "days_between":  # dateDiff() changed its unit between releases, so count days by the calendar
+            names = [f"{p}{i}" for i in (0, 1) for p in "ymd"]
+            parts = [self._date_part(f"__.select('x{i}')", p) for i in (0, 1) for p in ("year", "month", "day")]
+            days = f"{day_number('y1', 'm1', 'd1', 'floor')} - {day_number('y0', 'm0', 'd0', 'floor')}"
+            read = (f"__.project({', '.join(repr(n) for n in names)})" + "".join(f".by({t})" for t in parts)
+                    + f".math('{days}')")
+            return self._strict(args, read)
+        raise ExprError(f"Gremlin has no rendering for {fn}()")

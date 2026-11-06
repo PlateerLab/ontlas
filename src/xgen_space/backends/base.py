@@ -51,14 +51,15 @@ class Backend:
 
     def unsupported(self, query, onto: Ontology | None = None) -> list[str]:
         """Features the query uses that this backend does not declare."""
-        from xgen_space.ir import Contains, Exists, walk_filters
+        from xgen_space.ir import Agg, Contains, Exists, walk_filters
 
         caps, out = self.capabilities, []
         if not caps.optional and any(e.optional for e in query.edges):
             out.append("optional")
         if not caps.hops and any(e.hops for e in query.edges):
             out.append("hops")
-        kinds = {type(f) for f in walk_filters(query.where)}
+        filters = [query.where, *(c.expr.where for c in query.columns if isinstance(c.expr, Agg))]
+        kinds = {type(f) for w in filters for f in walk_filters(w)}
         if not caps.exists and Exists in kinds:
             out.append("exists")
         if not caps.contains and Contains in kinds:
@@ -84,6 +85,8 @@ def _computed_kinds(onto: Ontology, query) -> set[str]:
         r = e if isinstance(e, Ref) else (e.ref if isinstance(e, Agg) else None)
         if r is not None:
             refs.append(r)
+        if isinstance(e, Agg):
+            refs += filter_refs(e.where)
     out = set()
     for r in refs:
         p = _find_prop(onto, types.get(r.alias), r.prop) if r.alias in types else None

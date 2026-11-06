@@ -99,6 +99,7 @@ class Agg:
     func: str
     ref: Ref | None = None
     node: str = ""
+    where: Any = None  # keeps the rows this column aggregates; the query's own where keeps the rows of every column
 
 
 @dataclass
@@ -216,13 +217,14 @@ def _column(c: Any, nodes: dict[str, str]) -> tuple[Ref | Agg, str | None]:
     for f in AGGS:
         if f in c:
             arg = c[f]
+            where = parse_filter(c.get("where"))
             if arg == "*":
-                return Agg(f), c.get("as")
+                return Agg(f, where=where), c.get("as")
             if isinstance(arg, str) and "." not in arg:
                 if arg not in nodes:
                     raise IRError(f"{f}: unknown alias '{arg}'")
-                return Agg(f, node=arg), c.get("as")
-            return Agg(f, parse_ref(arg)), c.get("as")
+                return Agg(f, node=arg, where=where), c.get("as")
+            return Agg(f, parse_ref(arg), where=where), c.get("as")
     raise IRError(f"unknown column form {c!r}")
 
 
@@ -315,7 +317,10 @@ def _dump_column(c: Column) -> Any:
     if isinstance(e, Ref):
         return {"col": str(e), "as": c.name}
     arg = str(e.ref) if e.ref is not None else (e.node or "*")
-    return {e.func: arg, "as": c.name}
+    out = {e.func: arg, "as": c.name}
+    if e.where is not None:
+        out["where"] = dump_filter(e.where)
+    return out
 
 
 def _dump_query(q: Query) -> dict:
