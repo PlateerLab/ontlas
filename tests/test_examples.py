@@ -119,3 +119,25 @@ def test_an_integer_key_is_fetched_as_the_number_it_is():
     st.add_backend("source", src, source=True)
     assert st.fetch("Thing", "7")["name"] == "a" and st.fetch("Thing", 7)["name"] == "a"
     assert st.fetch("Thing", "x") is None
+
+
+def test_a_column_named_like_its_alias_is_valid_sparql():
+    pytest.importorskip("rdflib")
+    from xgen_space.backends.rdf import RdflibBackend
+    from xgen_space.backends.sql import SqliteBackend
+    from xgen_space.modules import Module
+    from xgen_space.studio import Studio
+
+    m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
+        "X": {"key": "id", "table": "t", "properties": {"id": {"type": "string"}, "x": {"type": "string"}}}},
+        "queries": {"listX": {"query": {"match": {"x": "X"}, "return": ["x.id", "x.x"], "order": ["id"]}},
+                    "countX": {"query": {"match": {"x": "X"}, "return": [{"count": "x", "as": "x"}]}}}})
+    st = Studio.from_modules([m], name="m")
+    src = SqliteBackend()
+    src.script("CREATE TABLE t (id TEXT PRIMARY KEY, x TEXT); INSERT INTO t VALUES ('a', '1'), ('b', '2');")
+    st.add_backend("source", src, source=True)
+    st.add_backend("graph", RdflibBackend())
+    st.project()
+    text = st.translate("listX", "sparql").text
+    assert "AS ?x)" in text and "?x <" not in text and "?node_x <" in text
+    assert st.conformance().summary()["agree"] == 2

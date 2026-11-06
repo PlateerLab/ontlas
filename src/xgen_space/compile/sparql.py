@@ -1,6 +1,7 @@
 """IR -> SPARQL 1.1 over the projected graph (same IRIs as the projection and R2RML export)."""
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 from xgen_space import expr as ex
@@ -50,12 +51,21 @@ class SparqlCompiler(Compiler):
         picked: dict[str, str] = {}
         if any(isinstance(c.expr, Agg) and c.expr.where is not None for c in q.columns):
             body, picked = self._branches(q, body, group)
+        # `?x AS ?x` is refused by the standard: a column named like an alias keeps its name, and the alias steps aside
+        clash = {c.name for c in q.columns} & set(q.nodes)
+
+        def aside(text: str) -> str:
+            for a in clash:
+                text = re.sub(rf"\?{re.escape(a)}\b", f"?node_{a}", text)
+            return text
+
+        body = [aside(x) for x in body]
         cols = []
         for c in q.columns:
             if isinstance(c.expr, Ref):
                 cols.append(f"({var(c.expr)} AS ?{c.name})")
             else:
-                cols.append(f"({picked.get(c.name) or self._agg(c.expr)} AS ?{c.name})")
+                cols.append(f"({aside(picked.get(c.name) or self._agg(c.expr))} AS ?{c.name})")
         lines = ["SELECT " + ("DISTINCT " if q.distinct else "") + " ".join(cols), "WHERE {", *body, "}"]
         if q.aggregated and group:
             lines.append("GROUP BY " + " ".join(group))
