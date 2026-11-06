@@ -45,8 +45,8 @@
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: the board, the map, then the six stages in the order data moves. A stage's screens are tabs on its page.
-  const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '데이터 지도', ['map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
-    ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']], ['', '사용 안내', ['guide']]];
+  const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '사용 안내', ['guide']], ['', '데이터 지도', ['map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
+    ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
   const TAB_WORD = { monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문' };
   const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
@@ -353,7 +353,7 @@
       <select class="pipesel" data-top="pipe" aria-label="파이프라인 선택">${st.pipelines.map((p) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
       <button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>
       <button class="pill quiet hide-sm" data-act="palette">${ui('search')}메뉴 검색<kbd>Ctrl K</kbd></button>
-      ${GUIDE.some((x) => x[0] === S.tab) ? '<button class="btn sm" data-act="helpopen">이 화면 안내</button>' : ''}
+      ${GUIDE.some((x) => x[0] === S.tab) ? '<button class="btn sm" data-act="helpopen">도움말</button>' : ''}
       ${who}${u && !u.roles.includes('admin') ? '' : '<button class="btn sm ghost" data-act="reset">초기화</button>'}`;
   }
 
@@ -401,12 +401,11 @@
       return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}>${mark}<span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}</a>`;
     };
     const at = (test) => NAV_GROUP.map((g, i) => (test(g, i) ? place(i) : '')).join('');
-    const last = NAV_GROUP.length - 1;
     const foot = `<div class="sfoot"><b>${esc(st.title)}</b><span>모듈 ${st.modules_on}개</span>${st.backends.map((b) => `<span class="be"><i class="dot"></i>${esc(b.name)} · ${esc(b.language.toUpperCase())}</span>`).join('')}</div>`;
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g, i) => !g[0] && i < last)}</div><div class="steps">${at((g) => g[0])}</div><div class="nend">${place(last)}</div></div>${foot}
+    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g) => !g[0])}</div><div class="steps">${at((g) => g[0])}</div></div>${foot}
       <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
     $('#side .snav').scrollTop = kept;
     if (S.tab !== renderSide.tab) {
@@ -1046,7 +1045,7 @@
   function helpPanel() {
     const g = GUIDE.find((x) => x[0] === S.tab);
     if (!g) return '';
-    return `<div class="drawer help" role="dialog" aria-label="이 화면 안내"><div class="dhead"><b>${esc(navLabel(S.tab))}</b><button class="btn sm ghost" data-act="helpclose">닫기</button></div>
+    return `<div class="drawer help" role="dialog" aria-label="도움말"><div class="dhead"><b>${esc(navLabel(S.tab))}</b><button class="btn sm ghost" data-act="helpclose">닫기</button></div>
       <div class="dbody"><div class="gwhat">${esc(g[1])}</div><ol class="gsteps" style="margin-top:12px">${g[2].map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
       <div class="chips" style="margin-top:14px"><a class="btn sm" href="#guide" data-act="helpclose">전체 사용 안내</a></div></div></div>`;
   }
@@ -1056,7 +1055,7 @@
     try { done = localStorage.getItem('xspace-first') === '1'; } catch (e) { done = false; }
     if (done) return '';
     return `<div class="card first"><div class="cb"><b class="first-word">사용 순서</b>
-      <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs" title="${esc(what)}"><span class="fno">${i + 1}</span><b>${esc(title)}</b></a>`).join('')}</div><button class="btn sm ghost" data-act="firstclose">닫기</button></div></div>`;
+      <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs" title="${esc(what)}"><span class="fno">${i + 1}</span><b>${esc(title)}</b></a>`).join('')}</div><a class="btn sm" href="#guide">사용 안내 영상</a><button class="btn sm ghost" data-act="firstclose">닫기</button></div></div>`;
   }
 
   // ---- queries -------------------------------------------------------------------------------------------------
