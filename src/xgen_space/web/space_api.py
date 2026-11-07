@@ -392,25 +392,39 @@ class SpaceMixin:
     # ---- ports: every kind of thing that can be swapped, and whether it agrees ---------------------------------------
 
     def adapters(self) -> dict:
+        from xgen_space.compile.base import CompileError
+        from xgen_space.compile.sql import _NAMES as SQL_NAMES
         from xgen_space.embed import _KINDS as EMBEDDERS
         from xgen_space.preview import TARGETS
 
         self._sync_space()
         st = self.studio
         sp = self.space.state()
+
+        def target(lang: str, dialect: str) -> str:  # the language a store reads, named as the compilers are
+            return f"sql:{SQL_NAMES.get(dialect, dialect) or 'postgres'}" if lang == "sql" else lang
+
         backends = [{"name": n, "language": b.capabilities.language, "dialect": b.capabilities.dialect, "source": n == st.source,
-                     "write": b.capabilities.write, "load": b.capabilities.load} for n, b in st.backends.items()]
-        return {"backends": backends, "languages": [label for _, label in TARGETS], "vectors": sp["stores"],
+                     "write": b.capabilities.write, "load": b.capabilities.load,
+                     "target": target(b.capabilities.language, b.capabilities.dialect)} for n, b in st.backends.items()]
+        # every registered query compiled now, so a language shows what it can carry, not only that it is known
+        labels = {target(*t.split(":", 1)) if t.startswith("sql:") else t: label for t, label in TARGETS}
+        order = list(labels) + [b["target"] for b in backends if b["target"] not in labels]
+        languages = []
+        for t in dict.fromkeys(order):
+            refused = []
+            for q in st.onto.queries:
+                try:
+                    st.translate(q, t)
+                except CompileError as e:
+                    refused.append({"query": q, "error": str(e)})
+            label = labels.get(t) or (f"SQL · {t.split(':', 1)[1]}" if t.startswith("sql:") else t)
+            languages.append({"id": t, "label": label, "compiled": len(st.onto.queries) - len(refused),
+                              "refused": refused, "backends": [b["name"] for b in backends if b["target"] == t]})
+        return {"backends": backends, "languages": languages, "queries": len(st.onto.queries), "vectors": sp["stores"],
                 "vector_kinds": known_kinds(), "embedder": sp["embedder"], "embedder_kinds": sorted(EMBEDDERS),
                 "retriever": self.space.knowledge(st.onto, self._terms()).describe(),
-                "reasoners": [r.describe() for r in st.reasoners.values()], "domains": self._domains(),
-                "can_connect": self.data.allow_connect}
-
-    def _domains(self) -> list[dict]:
-        comp = self.studio.composition
-        on = {m.name for m in comp.modules} if comp else set()
-        return [{"name": r["name"], "label": r.get("label") or r["name"], "kind": r["kind"], "on": r["name"] in on}
-                for r in self._library_rows if r["kind"] in ("domain", "industry", "customer")]
+                "reasoners": [r.describe() for r in st.reasoners.values()], "can_connect": self.data.allow_connect}
 
     def adapters_check(self) -> dict:
         """The tests that make swapping safe, run now on what this space holds."""
@@ -429,8 +443,12 @@ class SpaceMixin:
         rep = conformance(sp.stores, points, queries).to_dict() if points else {"stores": {}, "cases": []}
         started = time.perf_counter()
         graph = st.conformance().summary() if len(st.backends) > 1 else None
-        return {"vectors": rep["stores"], "graph": graph, "graph_ms": round((time.perf_counter() - started) * 1000),
-                "reasoners": agreement(st.reasoners, st.onto, st.projection) if st.projection is not None else {}}
+        graph_ms = round((time.perf_counter() - started) * 1000)
+        runs = {n: r.run(st.onto, st.projection) for n, r in st.reasoners.items()
+                if not r.available()} if st.projection is not None else {}
+        return {"vectors": rep["stores"], "graph": graph, "graph_ms": graph_ms,
+                "runs": {n: {"count": len(i.derived), "found": len(i.findings), "ms": i.ms, "error": i.error} for n, i in runs.items()},
+                "reasoners": agreement(st.reasoners, st.onto, st.projection, runs) if st.projection is not None else {}}
 
     def reasoner_run(self, name: str) -> dict:
         st = self.studio

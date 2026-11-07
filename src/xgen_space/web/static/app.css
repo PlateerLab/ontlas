@@ -377,6 +377,11 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 .plink:hover { background:var(--blue-soft); }
 .cbulk { display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--blue-soft); border:1px solid var(--blue-line); border-radius:9px; font-size:12.5px; flex-wrap:wrap; }
 .cwrap { overflow-x:auto; }
+/* adapters: two columns only where both tables fit whole, one column below */
+.adgrid { display:grid; grid-template-columns:minmax(0, 1fr); gap:14px; align-items:start; flex:none; }
+@media (min-width: 1600px) { .adgrid { grid-template-columns:minmax(0, 1.1fr) minmax(0, 1fr); } }
+.adcol { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.adcol .cwrap > table { min-width:560px; }
 .ctable { font-size:12.5px; min-width:880px; }
 .ctable th { background:var(--panel); color:#475467; font-size:12px; letter-spacing:0; padding:8px 8px; white-space:nowrap; }
 .ctable th.sort { cursor:pointer; user-select:none; }

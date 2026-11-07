@@ -28,6 +28,9 @@
   `/v1/record` one object by key; MCP gains `get_record`, and `list_proposals` gives an agent with a role only its own requests.
 - A role can list the documents it reads (`documents:`); search, answers and the document list keep to them. The role form has them.
 - The audit trail names the module versions and the matched rules, and an agent's decisions, answers and functions go into it.
+- The adapters screen shows what was measured, not what is known: every registered query compiled for each language (with the reason
+  for any that cannot be), the stores' agreement, each reasoner's run, and the modules the current pipeline is built from instead of
+  the example library's names. The tests run once when the screen opens; the configuration notes moved to help.
 - `{@name}` inside a rule's output text puts the named value in force there.
 - Fixed: a decision table read a database amount as a Decimal, which the ZEN engine refused, so the page always said ZEN failed for it.
 - The page: requests that ran stay listed with their rollback after the page is left; a request names who made it, a person or an

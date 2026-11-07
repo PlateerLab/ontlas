@@ -266,9 +266,12 @@ def test_the_page_reads_one_space_across_pipelines(session):
 def test_the_page_shows_ports_map_and_document_ontology(session):
     a = session.adapters()
     assert {b["name"] for b in a["backends"]} == {"source", "graph"} and "qdrant" in a["vector_kinds"]
-    assert any(d["name"] == "commerce" and d["on"] for d in a["domains"])
+    langs = {x["id"]: x for x in a["languages"]}  # every registered query compiled for every language, measured now
+    assert langs["sparql"]["backends"] == ["graph"] and langs["sql:sqlite"]["backends"] == ["source"]
+    assert all(x["compiled"] + len(x["refused"]) == a["queries"] for x in a["languages"]) and "sql:tsql" in langs
     rep = session.adapters_check()
     assert rep["vectors"]["memory"]["agree"] and rep["graph"]["agree"] == rep["graph"]["queries"]
+    assert rep["runs"]["rules"]["count"] > 0 and set(rep["runs"]) == {r["name"] for r in a["reasoners"] if not r["missing"]}
     assert session.reasoner_run("rules")["count"] > 0
     with pytest.raises(LookupError):
         session.reasoner_run("nothing")

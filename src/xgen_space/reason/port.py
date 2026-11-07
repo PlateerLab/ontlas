@@ -196,12 +196,14 @@ def open_reasoners(spec: dict | None) -> dict[str, Reasoner]:
     return {k: open_reasoner({"kind": k}) for k in ("rules", "owlrl", "shacl")}
 
 
-def agreement(reasoners: dict[str, Reasoner], onto: Ontology, projection: Projection) -> dict[str, Any]:
-    """Engines of one logic on the same data: the same facts, or what each found that the other did not."""
+def agreement(reasoners: dict[str, Reasoner], onto: Ontology, projection: Projection,
+              ran: dict[str, Inference] | None = None) -> dict[str, Any]:
+    """Engines of one logic on the same data: the same facts, or what each found that the other did not.
+    `ran` holds inferences already made on this data, so an engine is not run twice."""
     groups: dict[str, dict[str, Inference]] = {}
     for n, r in reasoners.items():
         if r.logic and r.logic not in ("rules", "shapes", "external") and not r.available():
-            groups.setdefault(r.logic, {})[n] = r.run(onto, projection)
+            groups.setdefault(r.logic, {})[n] = (ran or {}).get(n) or r.run(onto, projection)
     out = {}
     for logic, runs in groups.items():
         ok = {n: set(i.derived) for n, i in runs.items() if not i.error}

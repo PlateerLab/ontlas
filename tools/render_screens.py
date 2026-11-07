@@ -90,11 +90,12 @@ def live_screens(page, base: str, out: Path) -> None:
     page.wait_for_function("() => !document.querySelector('#main .spin') && document.querySelectorAll('#main .card').length > 1", timeout=30000)
     page.wait_for_timeout(500)
     page.screenshot(path=str(out / "search.png"))
-    page.goto(base + "/#adapters")
-    page.wait_for_selector("[data-act=adcheck]")
-    page.click("[data-act=adcheck]")
-    page.wait_for_function("() => !document.querySelector('[data-act=adcheck]').disabled", timeout=60000)
-    page.wait_for_function("() => document.getElementById('toast').hidden", timeout=8000)
+    adapters_screen(page, base, out)
+
+
+def adapters_screen(page, base: str, out: Path) -> None:
+    page.goto(base + "/#adapters")  # the page runs the conformance tests once on opening
+    page.wait_for_function("() => document.querySelector('#main .stats') && !document.querySelector('#main .spin')", timeout=90000)
     page.wait_for_timeout(400)
     page.screenshot(path=str(out / "adapters.png"))
 

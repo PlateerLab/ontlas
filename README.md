@@ -156,7 +156,7 @@ The sidebar follows the data from raw files to checked answers. A stage's screen
 | | 정의 관리 · 권한 | Change what each role reads, runs and requests, and which properties it sees masked |
 | | 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
 | ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores and whether questions find their documents |
-| | 구성 | See every swappable part, and run the tests that say a swap changed nothing |
+| | 구성 | See every swappable part as measured on opening: the registered queries each language compiles, whether the stores return the same rows, what each reasoner derives, and the modules the pipeline is built from |
 | ⑤ 활용 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause |
 | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 판정 · 규칙 · 판정 | Decide a case with its grounds, request an action, approve it, roll it back |

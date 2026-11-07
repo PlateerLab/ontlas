@@ -72,6 +72,7 @@
   const findingText = (f) => `${FIX[f.kind] ? `<div style="font-size:12.5px">${esc(FIX[f.kind])}</div>` : ''}<div class="mono muted" style="font-size:12px">${esc(f.detail)}</div>`;
   const STATUS = { pending: ['warn', '승인 대기'], stale: ['warn', '실행 전 재검사 실패'], rejected: ['bad', '반려'], executed: ['ok', '원천 반영'],
     failed: ['bad', '외부 호출 실패 · 원천 복원'], rolled_back: ['b', '되돌림'] };
+  const BACKEND_KIND = { sqlite: 'SQLite', postgres: 'PostgreSQL', mysql: 'MySQL', oracle: 'Oracle', mssql: 'SQL Server', dbapi: 'DB-API', rdflib: 'RDF', sparql: 'SPARQL 엔드포인트', neo4j: 'Neo4j', gremlin: 'Gremlin Server', gateway: '플랫폼 연결' };  // the kinds config.open_backend opens
   const CHANGE_STATUS = { pending: 'warn', approved: 'ok', rejected: 'bad' };
   const TEXT_LANG = [['sparql', 'SPARQL 1.1'], ['cypher', 'Cypher'], ['ir', '온톨로지 질의 IR (JSON)']];
   const STEP = {
@@ -176,7 +177,9 @@
       '설치형에서는 Qdrant, pgvector 주소를 입력해 저장소를 추가합니다. 추가한 저장소에 문서를 색인합니다.',
       '문서 검색 검증은 질문별 정답 문서가 상위 결과에 포함되는지 확인합니다. 질문은 구성 파일의 space.checks 항목에서 지정합니다.']],
     ['adapters', '교체 가능한 구성 요소를 확인합니다.', [
-      '그래프 · 원천 저장소, 벡터 저장소, 쿼리 언어, 임베딩 모델, 추론기, 도메인을 표시합니다. 카드 하단에 변경 방법을 표시합니다.',
+      '저장소, 쿼리 언어, 적용한 모듈, 임베딩 모델 · 검색 엔진, 추론기를 표시합니다.',
+      '쿼리 언어는 등록 질의를 언어별로 변환한 결과를 표시합니다. 변환하지 못한 질의는 사유를 함께 표시합니다.',
+      '저장소, 임베딩 모델, 검색 엔진, 추론기는 구성 파일의 backends, space, reasoners 항목에서 변경합니다. 모듈은 [라이브러리]에서 적용 · 해제합니다.',
       '[적합성 시험 실행]을 선택하면 같은 질의와 검색을 저장소별로 실행해 결과를 비교합니다.',
       '추론기의 [실행]을 선택하면 현재 데이터에서 유도한 사실 수와 발견 항목을 표시합니다.']],
     ['search', '판정, 데이터, 문서를 한 번에 찾고 근거를 확인합니다.', [
@@ -310,7 +313,7 @@
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
-    vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adr: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
+    vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
@@ -500,7 +503,8 @@
     if (S.tab === 'docs') mountDocs();
     if (S.tab === 'rules' && !S.ru) api('rules').then((x) => { S.ru = x; render(); }).catch(fail);
     if ((S.tab === 'vectors' || S.tab === 'search') && !S.sp) loadSpace();
-    if (S.tab === 'adapters' && !S.ad) api('adapters').then((x) => { S.ad = x; render(); }).catch(fail);
+    if (S.tab === 'adapters' && S.ad) balanceAdapters();
+    if (S.tab === 'adapters' && !S.ad) api('adapters').then((x) => { S.ad = x; render(); if (!S.adrep && !S.adbusy) adCheck(false); }).catch(fail);
     if (S.tab === 'connect' && !S.conn) api('integrations').then((x) => { S.conn = x; render(); }).catch(fail);
     if (S.tab === 'map') {
       if (!S.amap) api('space/map').then((x) => { S.amap = x; render(); }).catch((e) => { S.amap = { error: e.message }; render(); });
@@ -1022,29 +1026,86 @@
       <div class="card" style="margin-top:14px"><div class="ch">색인한 문서<div class="right"><a class="btn sm" href="#catalog">문서 추가</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>출처</th><th>절</th><th>청크</th></tr>${docs}</table></div></div>${check}`;
   }
 
+  async function adCheck(say) {  // the page runs it once on opening; the button runs it again
+    S.adbusy = true; render();
+    try { S.adrep = await api('adapters/check', {}); S.adrs = null; if (say) toast('적합성 시험을 마쳤습니다.'); } catch (e) { fail(e); }
+    S.adbusy = false; render();
+  }
+
+  function balanceAdapters() {  // the reasoners card joins whichever column is shorter as drawn, when the two sit side by side
+    const cols = [...document.querySelectorAll('.adcol')], card = $('#adreas');
+    if (cols.length !== 2 || !card || cols[0].offsetTop !== cols[1].offsetTop) return;
+    card.remove();
+    (cols[0].offsetHeight <= cols[1].offsetHeight ? cols[0] : cols[1]).appendChild(card);
+  }
+
   function viewAdapters() {
     const a = S.ad;
-    const head = pageHead('어댑터', '저장소, 임베딩 모델, 추론기, 도메인의 구성과 교체 적합성을 확인합니다', `<button class="btn primary" data-act="adcheck"${S.adbusy ? ' disabled' : ''}>${S.adbusy ? '<span class="spin"></span>시험 중' : '적합성 시험 실행'}</button>`);
+    const head = pageHead('어댑터', '저장소, 쿼리 언어, 임베딩 모델, 추론기, 모듈의 구성과 교체 적합성을 확인합니다', `<button class="btn primary" data-act="adcheck"${S.adbusy ? ' disabled' : ''}>${S.adbusy ? '<span class="spin"></span>시험 중' : '적합성 시험 실행'}</button>`);
     if (!a) return `${head}<div class="empty"><span class="spin"></span>구성을 읽는 중입니다.</div>`;
     const rep = S.adrep;
-    const lane = (title, how, body) => `<div class="card"><div class="ch">${esc(title)}</div><div class="cb">${body}<div class="hint" style="margin-top:10px">${esc(how)}</div></div></div>`;
-    const graphRep = rep && rep.graph ? `<span class="chip ${rep.graph.agree === rep.graph.queries ? 'ok' : 'bad'}">결과 일치 ${rep.graph.agree} / ${rep.graph.queries}</span>` : '';
-    const backends = `<table class="tight"><tr><th>이름</th><th>언어</th><th>역할</th></tr>${a.backends.map((b) => `<tr><td><b>${esc(b.name)}</b></td><td class="mono">${esc(b.language)}${b.dialect ? ` · ${esc(b.dialect)}` : ''}</td><td>${b.source ? '원천' : '그래프 저장소'}</td></tr>`).join('')}</table>${graphRep ? `<div class="chips" style="margin-top:8px">${graphRep}</div>` : ''}`;
-    const langs = `<div class="chips">${a.languages.map((l) => `<span class="chip">${esc(l)}</span>`).join('')}</div>`;
-    const vec = `<table class="tight"><tr><th>이름</th><th>종류</th><th>청크</th>${rep ? '<th>일치</th>' : ''}</tr>${a.vectors.map((v) => { const r = rep && rep.vectors[v.name]; return `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.kind)}</td><td>${show(v.count)}</td>${rep ? `<td>${r ? (r.error ? `<span class="chip sm bad">${esc(r.error)}</span>` : `<span class="chip sm ${r.agree ? 'ok' : 'bad'}">${Math.round(r.overlap * 100)}%</span>`) : '-'}</td>` : ''}</tr>`; }).join('')}</table><div class="muted" style="font-size:12px;margin-top:6px">지원 종류 ${esc(a.vector_kinds.join(', '))}</div>`;
-    const emb = `<div><b>${esc(a.embedder.name)}</b> <span class="chip sm">${esc(a.embedder.kind)}</span></div><div class="muted" style="font-size:12px;margin-top:6px">지원 종류 ${esc(a.embedder_kinds.join(', '))}</div>`;
-    const reas = `<table class="tight"><tr><th>이름</th><th>논리</th><th></th></tr>${a.reasoners.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="mono">${esc(r.logic)}</td><td>${r.missing ? `<span class="chip sm warn">${esc(r.missing)}</span>` : `<button class="btn sm" data-act="adreason" data-name="${esc(r.name)}">실행</button>`}</td></tr>`).join('')}</table>${S.adr ? `<div class="hint" style="margin-top:8px">${esc(S.adr.reasoner)}: ${S.adr.error ? esc(S.adr.error) : `유도한 사실 ${show(S.adr.count)}건, 발견 ${show(S.adr.findings.length)}건, ${S.adr.ms}ms`}</div>` : ''}`;
-    const find = `<div><b class="mono">${esc(a.retriever.kind)}</b> <span class="chip sm">항목 ${esc(count(a.retriever.entries))}</span> <span class="chip sm">연결 ${esc(count(a.retriever.links))}</span></div><div class="chips" style="margin-top:8px">${Object.entries(a.retriever.by_kind).map(([k, n]) => `<span class="chip sm">${esc(k)} ${esc(count(n))}</span>`).join('')}</div><div class="muted" style="font-size:12px;margin-top:6px">지원 종류 ${esc(a.retriever.kinds.join(', '))}</div>`;
-    const dom = `<div class="chips">${a.domains.map((d) => `<span class="chip${d.on ? ' b' : ''}">${esc(d.label)}${d.on ? '' : ' · 해제'}</span>`).join('')}</div>`;
-    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start">
-      ${lane('그래프 · 원천 저장소', '구성 파일의 backends 항목에서 변경합니다.', backends)}
-      ${lane('벡터 저장소', '벡터 · 임베딩 화면 또는 구성 파일의 space.vectors 항목에서 변경합니다.', vec)}
-      ${lane('쿼리 언어', '저장소별 쿼리로 자동 변환합니다.', langs)}
-      ${lane('임베딩 모델', '구성 파일의 space.embedder 항목에서 변경합니다.', emb)}
-      ${lane('검색 엔진', '구성 파일의 space.retriever 항목에서 변경합니다.', find)}
-      ${lane('추론기', '구성 파일의 reasoners 항목에서 변경합니다. 외부 추론 서비스는 kind: http로 연결합니다.', reas)}
-      ${lane('도메인', '라이브러리에서 적용 · 해제합니다.', dom)}
-    </div>`;
+    const lib = (S.st && S.st.library) || [];
+    const applied = lib.filter((r) => r.on);
+    const none = '<span class="muted">-</span>';
+    const wait = '<span class="muted"><span class="spin"></span>시험 중</span>';
+    const pending = (html) => (rep ? html : S.adbusy ? wait : none);  // a result cell: measured, being measured, or not yet
+    const kinds = (list) => `<div class="muted" style="font-size:11.5px;margin-top:2px">지원 종류 ${esc(list.join(' · '))}</div>`;
+    const card = (title, right, body, id = '') => `<div class="card"${id ? ` id="${id}"` : ''}><div class="ch">${esc(title)}${right ? `<div class="right muted" style="font-size:12px;font-weight:600">${right}</div>` : ''}</div><div class="cb"><div class="cwrap">${body}</div></div></div>`;
+    const origin = (S.st && S.st.origin && S.st.origin.backends) || {};
+    // the stores: where the source rows are, where the graph is projected, where the passages are indexed
+    const graphAgree = rep && rep.graph ? `<span class="chip sm ${rep.graph.agree === rep.graph.queries ? 'ok' : 'bad'}">질의 결과 일치 ${rep.graph.agree} / ${rep.graph.queries}</span>` : none;
+    const storeRows = a.backends.map((b) => `<tr><td><b>${esc(b.name)}</b></td><td>${b.source ? '원천 저장소' : '그래프 저장소'}</td>
+        <td>${origin[b.name] ? `${esc(BACKEND_KIND[origin[b.name]] || origin[b.name])} · ` : ''}<span class="mono">${esc(b.language)}${b.dialect && b.dialect !== origin[b.name] ? ` ${esc(b.dialect)}` : ''}</span></td>
+        <td>${b.source ? `원천 데이터${b.write ? ' · Action 원천 반영' : ''}` : (b.load ? '원천 변경분 반영' : '조회')}</td>
+        <td>${b.source ? '<span class="muted">비교 기준</span>' : pending(graphAgree)}</td></tr>`)
+      .concat(a.vectors.map((v) => {
+        const r = rep && rep.vectors[v.name];
+        const res = !r ? none : r.error ? `<span class="chip sm bad">${esc(r.error)}</span>` : `<span class="chip sm ${r.agree ? 'ok' : 'bad'}">검색 결과 일치 ${Math.round(r.overlap * 100)}%</span>`;
+        return `<tr><td><b>${esc(v.name)}</b></td><td>벡터 저장소</td><td><span class="mono">${esc(v.kind)} · ${esc(v.metric)}</span>${kinds(a.vector_kinds)}</td>
+          <td>${v.error ? `<span class="chip sm bad">${esc(v.error)}</span>` : `문서 청크 ${count(v.count)}개`}</td><td>${pending(res)}</td></tr>`;
+      })).join('');
+    const stores = card('저장소', rep ? `시험 ${esc(String(rep.graph_ms))}ms` : '', `<table class="tight"><tr><th>이름</th><th>구분</th><th>종류</th><th>역할</th><th>결과 비교</th></tr>${storeRows}</table>`);
+    // the languages: every registered query compiled now; a language a store reads also runs there
+    const langRows = a.languages.filter((l) => l.backends.length).concat(a.languages.filter((l) => !l.backends.length)).map((l) => {
+      const all = l.compiled === a.queries;
+      const why = l.refused.length ? `<div class="muted" style="font-size:11.5px;margin-top:2px">${l.refused.slice(0, 3).map((x) => `${esc(x.query)}: ${esc(x.error)}`).join('<br>')}</div>` : '';
+      const ran = l.backends.length ? `${l.backends.map((n) => `<span class="chip sm b">${esc(n)}</span>`).join(' ')} ${pending(graphAgree)}` : '<span class="muted">변환만</span>';
+      return `<tr><td><b>${esc(l.label)}</b></td><td><span class="chip sm ${all ? 'ok' : 'warn'}">${l.compiled} / ${a.queries}</span>${why}</td><td>${ran}</td></tr>`;
+    }).join('');
+    const langs = card('쿼리 언어', `등록 질의 ${count(a.queries)}개 기준`, `<table class="tight"><tr><th>언어</th><th>변환한 질의</th><th>실행 저장소</th></tr>${langRows}</table>`);
+    // the reasoners: each run on the projected graph; engines of one logic are compared by the test
+    const reasRows = a.reasoners.map((r) => {
+      const x = (S.adrs || {})[r.name] || (rep && rep.runs && rep.runs[r.name]);
+      const found = x && (x.found !== undefined ? x.found : (x.findings || []).length);
+      const last = x ? (x.error ? `<span class="chip sm bad">${esc(x.error)}</span>` : `유도한 사실 ${count(x.count)}건 · 발견 ${count(found)}건 · ${esc(String(x.ms))}ms`) : pending(none);
+      const g = rep && rep.reasoners && rep.reasoners[r.logic];  // engines of one logic, compared only when there are two or more
+      const same = g && Object.keys(g.engines).length > 1 ? ` <span class="chip sm ${g.same ? 'ok' : 'bad'}">${g.same ? '같은 논리 엔진과 결과 일치' : '같은 논리 엔진과 결과 다름'}</span>` : '';
+      return `<tr><td><b>${esc(r.name)}</b></td><td class="mono">${esc(r.logic)}</td><td style="font-size:12.5px">${last}${same}</td>
+        <td style="text-align:right">${r.missing ? `<span class="chip sm warn">${esc(r.missing)}</span>` : `<button class="btn sm" data-act="adreason" data-name="${esc(r.name)}">실행</button>`}</td></tr>`;
+    }).join('');
+    const reas = card('추론기', '', `<table class="tight"><tr><th>이름</th><th>논리</th><th>최근 실행</th><th></th></tr>${reasRows}</table>`, 'adreas');
+    // the modules this pipeline is built from, read from the same state as the library
+    const modRows = applied.map((r) => `<tr><td><b>${esc(r.label || r.name)}</b><div class="muted mono" style="font-size:11.5px">${esc(r.name)}</div></td>
+        <td style="white-space:nowrap"><span class="kind"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</span></td>
+        <td class="mono" style="white-space:nowrap">${esc(r.version)}</td><td class="muted" style="font-size:12.5px">${esc(counts(r.counts))}</td></tr>`).join('');
+    const idle = lib.length - applied.length;
+    const mods = card('적용한 모듈', `${idle ? `적용하지 않은 모듈 ${idle}개 · ` : ''}<a href="#library">라이브러리</a>`,
+      applied.length ? `<table class="tight"><tr><th>모듈</th><th>종류</th><th>판본</th><th>담은 요소</th></tr>${modRows}</table>` : '<div class="empty">적용한 모듈이 없습니다.</div>');
+    // the embedding model and the engine that finds definitions, documents and rules for a question
+    const ret = a.retriever;
+    const findRows = `<tr><td style="white-space:nowrap">임베딩 모델</td><td><b>${esc(a.embedder.name)}</b></td><td><span class="mono">${esc(a.embedder.kind)}</span>${kinds(a.embedder_kinds)}</td>
+        <td style="white-space:nowrap">${a.embedder.dim ? `${count(a.embedder.dim)}차원` : none}</td></tr>
+      <tr><td style="white-space:nowrap">검색 엔진</td><td><b class="mono">${esc(ret.kind)}</b></td><td>${kinds(ret.kinds)}</td>
+        <td><div class="chips">${Object.entries(ret.by_kind).map(([k, n]) => `<span class="chip sm">${esc(k)} ${esc(count(n))}</span>`).join('')}<span class="chip sm">연결 ${esc(count(ret.links))}</span></div></td></tr>`;
+    const find = card('임베딩 · 검색', '', `<table class="tight"><tr><th>구분</th><th>이름</th><th>종류</th><th>규모</th></tr>${findRows}</table>`);
+    const langsOk = a.languages.filter((l) => l.compiled === a.queries).length;
+    const tile = (n, l) => `<div class="stat"><b>${n}</b><span>${esc(l)}</span></div>`;
+    const stats = [tile(count(a.backends.length + a.vectors.length), '저장소'), tile(`${langsOk} / ${a.languages.length}`, '전체 질의 변환 언어'),
+      tile(a.embedder.dim ? `${count(a.embedder.dim)}차원` : '-', '임베딩'), tile(count(a.reasoners.length), '추론기'), tile(count(applied.length), '적용한 모듈'),
+      tile(rep && rep.graph ? `${rep.graph.agree} / ${rep.graph.queries}` : S.adbusy ? '<span class="spin"></span>' : '-', '저장소 간 질의 결과 일치')].join('');
+    return `${head}<div class="stats">${stats}</div>
+      <div class="adgrid">
+        <div class="adcol">${stores}${langs}${reas}</div><div class="adcol">${mods}${find}</div></div>`;
   }
 
   function viewMap() {
@@ -1661,8 +1722,7 @@ ${controls}${body}`;
     if (o.kind === 'files') return [item('데이터 출처', '업로드 파일'), item('파일', esc(o.files.join(', ')))].join('');
     if (o.kind === 'database') return item('데이터 출처', esc(o.detail));
     const out = [item('데이터 출처', '예시 스페이스'), item('구성 파일', `<span class="mono">${esc(o.config || '')}</span>`)];
-    const kind = { sqlite: 'SQLite', postgres: 'PostgreSQL', dbapi: 'DB-API', rdflib: 'RDF', sparql: 'SPARQL 엔드포인트', neo4j: 'Neo4j' };
-    for (const [n, k] of Object.entries(o.backends || {})) out.push(item(esc(n), esc(kind[k] || k)));
+    for (const [n, k] of Object.entries(o.backends || {})) out.push(item(esc(n), esc(BACKEND_KIND[k] || k)));
     if ((o.seeds || []).length) out.push(item('Seed', esc(o.seeds.join(', '))));
     if (o.notice) out.push(`<span class="chip warn">${esc(o.notice)}</span>`);
     return out.join('');
@@ -3590,7 +3650,7 @@ ${controls}${body}`;
     } catch (e) { fail(e); }
   }
 
-  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null }); };
+  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); };
   const ACT = {
     helpopen: () => { S.help = true; paintLayer(); },
     helpclose: () => { S.help = false; paintLayer(); },
@@ -3622,18 +3682,14 @@ ${controls}${body}`;
       S.dread = ''; render();
     },
     vstoreadd: async () => {
-      try { S.sp = await api('space/store', { op: 'add', kind: S.vs.kind, name: S.vs.kind, url: S.vs.url }); S.ad = null; toast('벡터 저장소를 추가하고 문서를 색인했습니다.'); render(); } catch (e) { fail(e); }
+      try { S.sp = await api('space/store', { op: 'add', kind: S.vs.kind, name: S.vs.kind, url: S.vs.url }); S.ad = null; S.adrep = null; toast('벡터 저장소를 추가하고 문서를 색인했습니다.'); render(); } catch (e) { fail(e); }
     },
     vstoredel: async (t) => {
-      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); S.ad = null; toast('벡터 저장소를 제거했습니다.'); render(); } catch (e) { fail(e); }
+      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); S.ad = null; S.adrep = null; toast('벡터 저장소를 제거했습니다.'); render(); } catch (e) { fail(e); }
     },
-    adcheck: async () => {
-      S.adbusy = true; render();
-      try { S.adrep = await api('adapters/check', {}); toast('적합성 시험을 마쳤습니다.'); } catch (e) { fail(e); }
-      S.adbusy = false; render();
-    },
+    adcheck: () => adCheck(true),
     adreason: async (t) => {
-      try { S.adr = await api('reasoner', { name: t.dataset.name }); render(); } catch (e) { fail(e); }
+      try { S.adrs = { ...(S.adrs || {}), [t.dataset.name]: await api('reasoner', { name: t.dataset.name }) }; render(); } catch (e) { fail(e); }
     },
     reset: async () => {
       if (!window.confirm(S.st.data.kept ? '변경 내용을 삭제하고 예시 스페이스로 초기화합니다. 레포지토리의 파일은 유지됩니다.' : '업로드한 데이터와 변경 내용을 모두 삭제하고 예시 스페이스로 초기화합니다.')) return;
