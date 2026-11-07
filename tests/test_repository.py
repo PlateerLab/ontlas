@@ -59,6 +59,9 @@ def test_folders_hold_what_is_in_them_and_go_with_it(tmp_path):
         r.folder("r1", "a/y.csv/z")
     assert sorted(r.remove("r1", ["a"])) == ["a/c/x.csv", "a/y.csv"]
     assert r.files("r1") == {} and r.listing("r1") == ([], [])
+    assert [(t["path"], t["kind"], t["files"]) for t in r.trash("r1")] == [("a", "folder", 2)]  # a folder goes as one item
+    assert len(list((tmp_path / "blobs").iterdir())) == 2  # what is in the trash keeps its bytes
+    assert r.purge("r1") == 1 and r.trash("r1") == []
     assert list((tmp_path / "blobs").iterdir()) == []
 
 
@@ -70,7 +73,35 @@ def test_bytes_stay_while_another_file_or_repository_uses_them(tmp_path):
     r.remove("r1", ["x.csv"])
     assert r.read(other, "y.csv") == b"same"
     r.put(other, "y.csv", b"changed")
-    assert r.read(other, "y.csv") == b"changed" and len(list((tmp_path / "blobs").iterdir())) == 1
+    assert r.read(other, "y.csv") == b"changed" and len(list((tmp_path / "blobs").iterdir())) == 2  # x.csv is in the trash
+    r.purge("r1")
+    assert len(list((tmp_path / "blobs").iterdir())) == 1
+
+
+def test_the_trash_gives_back_what_went_and_the_record_says_what_happened(tmp_path):
+    r = Repositories(tmp_path)
+    r.put("r1", "a/x.csv", b"1")
+    r.put("r1", "a/b/y.csv", b"22")
+    r.put("r1", "z.csv", b"3")
+    assert sorted(r.remove("r1", ["a", "a/b"])) == ["a/b/y.csv", "a/x.csv"]  # a/b is inside a: one item, not two
+    trashed = r.trash("r1")
+    assert [(t["path"], t["files"], t["bytes"]) for t in trashed] == [("a", 2, 3)]
+    assert r.usage() == (3, 4)  # the trash still holds its bytes, so it counts against the limits
+    r.put("r1", "a", b"taken")
+    with pytest.raises(ValueError):
+        r.restore("r1", [trashed[0]["id"]])  # a file now stands where the folder was
+    r.remove("r1", ["a"])
+    t = next(x for x in r.trash("r1") if x["kind"] == "folder")
+    assert sorted(r.restore("r1", [t["id"]])) == ["a/b/y.csv", "a/x.csv"]
+    assert r.read("r1", "a/b/y.csv") == b"22" and "a/b" in r.items["r1"]["folders"]
+    with pytest.raises(ValueError):
+        r.move("r1", "a", "a/b/a")  # a folder into itself
+    r.move("r1", "z.csv", "a/z.csv")
+    r.include("r1", ["a/z.csv"], False)
+    acts = [(e["action"], e["path"]) for e in r.history("r1")]
+    assert acts[:3] == [("exclude", "a/z.csv"), ("move", "z.csv"), ("restore", "a")]
+    assert ("trash", "a") in acts and ("upload", "a/x.csv") in acts
+    assert Repositories(tmp_path).history("r1") == r.history("r1")  # the record outlives the server too
 
 
 def test_repositories_in_a_folder_outlive_the_server(tmp_path):

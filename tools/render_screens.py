@@ -3,7 +3,7 @@
     python tools/render_screens.py            # needs playwright with chromium installed, and the [all] and [embed] extras
 
 Writes assets/screens/{library,query,decision,map}.png from `xspace preview`,
-assets/screens/{monitor,ontology,catalog,manage,draft,space-map,documents,search,adapters}.png from `xspace serve` with the
+assets/screens/{monitor,ontology,catalog,manage,draft,space-map,documents,search,adapters,explorer}.png from `xspace serve` with the
 example files, and assets/architecture.png, all at 2x.
 """
 from __future__ import annotations
@@ -91,6 +91,16 @@ def live_screens(page, base: str, out: Path) -> None:
     page.wait_for_timeout(500)
     page.screenshot(path=str(out / "search.png"))
     adapters_screen(page, base, out)
+    explorer_screen(page, base, out)
+
+
+def explorer_screen(page, base: str, out: Path) -> None:
+    page.goto(base + "/#explorer")  # the sample files are in the repository by now: the catalog step loaded them
+    page.wait_for_selector(".exbody", timeout=60000)
+    page.wait_for_function("() => !document.querySelector('#main .spin')", timeout=60000)
+    page.evaluate("document.fonts.ready")
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(out / "explorer.png"))
 
 
 def adapters_screen(page, base: str, out: Path) -> None:

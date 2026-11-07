@@ -13,11 +13,19 @@ from pathlib import Path
 from typing import Any
 
 from xgen_space.embed import EmbedError
+from xgen_space.preview import KIND_LABEL
 from xgen_space.values import normalize
 from xgen_space.vectors import VectorError, conformance, known_kinds
 
 SEARCH_MAX = 300  # characters of a question
 K_MAX = 20
+SEARCH_ROWS = 200  # hits the explorer's search returns
+STORE_KINDS = ("vector_store", "graph_store", "embedder", "reasoner")
+USE_KINDS = ("query", "decision", "action", "role", "agent")
+GROUP_WORDS = {"group:repos": "레포지토리", "group:source": "데이터베이스", "group:document": "문서", "group:ontology": "온톨로지",
+               "group:store": "저장소 어댑터", "group:use": "활용"}
+GROUP_KINDS = {"group:repos": ("folder", "file"), "group:source": ("database", "table", "column"),
+               "group:document": ("collection", "document"), "group:ontology": ("object", "property", "link"), "group:store": STORE_KINDS}
 ROUTE_SYSTEM = ("질문을 분류합니다. 데이터베이스 값을 조회, 집계, 목록으로 답해야 하면 data, 규정이나 정책이나 설명을 묻는 것이면 documents 를 "
                 "한 단어로만 답합니다.")
 ANSWER_SYSTEM = ("당신은 문서 근거로만 답하는 안내자입니다. 주어진 [번호] 근거 안의 내용으로만 한국어 합니다체 두세 문장으로 답하고, "
@@ -487,6 +495,232 @@ class SpaceMixin:
         row = lambda x: {"id": x.id, "kind": x.kind, "label": x.label or x.id}  # noqa: E731
         return {"id": a.id, "kind": a.kind, "label": a.label or a.id, "impact": [row(x) for x in impact[:300]], "uses": [row(x) for x in uses[:300]]}
 
+    # ---- the explorer: everything the space holds as folders, with what each part went through ------------------------
+
+    def _explorer_parts(self) -> dict:
+        """The asset ontology of the space and the repository it reads: the one source the explorer shows."""
+        from collections import Counter
+
+        from xgen_space.catalog import from_space
+
+        self._sync_space()
+        files = self.repositories.files(self.repo)
+        cat = from_space(self.studio, self.space, files)
+        return {"cat": cat, "files": files, "kinds": Counter(a.kind for a in cat.assets.values()),
+                "chunks": Counter(c.document for c in self.space.chunks.values()),
+                "made": {p: [d["name"] for d in (getattr(defs, "documents", None) or [])] for p, defs in self.definitions.items()},
+                "folders": sorted(self.repositories.items[self.repo]["folders"])}
+
+    def _explorer_tree(self, x: dict) -> list[dict]:
+        cat, kinds, files = x["cat"], x["kinds"], x["files"]
+        count = {"group:repos": sum(r["files"] for r in self.repositories.rows()), "group:source": kinds["table"],
+                 "group:document": kinds["document"], "group:ontology": kinds["object"] + kinds["link"],
+                 "group:store": sum(kinds[k] for k in STORE_KINDS), "group:use": sum(kinds[k] for k in USE_KINDS)}
+        tree = [{"id": g, "label": label, "parent": "", "count": count[g]} for g, label in GROUP_WORDS.items()]
+        tree += [{"id": f"repo:{r['id']}", "label": r["label"], "parent": "group:repos", "count": r["files"],
+                  "current": r["id"] == self.repo} for r in self.repositories.rows()]
+        for d in x["folders"]:
+            up = d.rsplit("/", 1)[0] if "/" in d else ""
+            tree.append({"id": f"dir:{d}", "label": d.rsplit("/", 1)[-1], "parent": f"dir:{up}" if up else f"repo:{self.repo}",
+                         "count": sum(1 for p in files if p.startswith(d + "/"))})
+        for a in cat.assets.values():
+            if a.kind == "database":
+                tree.append({"id": a.id, "label": a.label, "parent": "group:source", "count": len(_children(cat, a.id, "table"))})
+            elif a.kind == "collection":
+                tree.append({"id": a.id, "label": "문서 컬렉션", "parent": "group:document", "count": kinds["document"]})
+        for group, keys in (("group:ontology", ("object", "link")), ("group:use", USE_KINDS)):
+            tree += [{"id": f"kind:{k}", "label": KIND_LABEL[k], "parent": group, "count": kinds[k]} for k in keys if kinds[k]]
+        return tree
+
+    def explorer(self) -> dict:
+        x = self._explorer_parts()
+        k = x["kinds"]
+        summary = {"files": len(x["files"]), "folders": len(x["folders"]), "tables": k["table"], "columns": k["column"],
+                   "documents": k["document"], "chunks": sum(x["chunks"].values()), "objects": k["object"],
+                   "properties": k["property"], "links": k["link"], "uses": sum(k[n] for n in USE_KINDS),
+                   "trash": len(self.repositories.items[self.repo].get("trash", []))}
+        return {"tree": self._explorer_tree(x), "repo": self.repo, "summary": summary}
+
+    def explorer_items(self, node: str) -> dict:
+        """What a node of the tree holds, each row with what it is and what it went through."""
+        x = self._explorer_parts()
+        cat = x["cat"]
+        row = lambda a: self._explorer_row(x, a)  # noqa: E731
+        if node.startswith("repo:") and node[5:] != self.repo:
+            raise LookupError("사용 중인 레포지토리가 아니어서 열지 못했습니다. 레포지토리를 전환한 뒤 열어 주세요.")
+        if node.startswith(("repo:", "dir:")):
+            folder = node[4:] if node.startswith("dir:") else ""
+            subs, here = self.repositories.listing(self.repo, folder)
+            items = [self._folder_row(x, s["path"]) for s in subs] + [row(cat.assets[f"file:{f['path']}"]) for f in here]
+        elif node == "group:store":
+            items = [row(a) for a in cat.assets.values() if a.kind in STORE_KINDS]
+        elif node.startswith("group:"):
+            items = [{"id": t["id"], "kind": "group", "label": t["label"], "facts": [f"{t['count']:,}개"], "status": [],
+                      "current": t.get("current", False)} for t in self._explorer_tree(x) if t["parent"] == node]
+        elif node.startswith("kind:"):
+            items = [row(a) for a in cat.assets.values() if a.kind == node[5:]]
+        elif node in cat.assets:
+            kind = cat.assets[node].kind
+            if kind == "collection":
+                items = [row(a) for a in cat.assets.values() if a.kind == "document"]
+            else:
+                inner = {"database": "table", "table": "column", "object": "property"}.get(kind)
+                items = [row(cat.assets[i]) for i in _children(cat, node, inner)] if inner else []
+        else:
+            raise LookupError(f"항목 {node}")
+        tree = {t["id"]: t["label"] for t in self._explorer_tree(x)}
+        label = tree.get(node) or (cat.assets[node].label if node in cat.assets else node.split(":", 1)[-1].rsplit("/", 1)[-1])
+        return {"node": node, "label": label, "trail": self._explorer_trail(x, node), "items": items}
+
+    def _folder_row(self, x: dict, path: str) -> dict:
+        files, chunks, made = x["files"], x["chunks"], x["made"]
+        inside = [p for p in files if p.startswith(path + "/")]
+        indexed = sum(1 for p in inside if any(chunks[d] for d in made.get(p, [])))
+        included = sum(1 for p in inside if files[p].get("included"))
+        failed = sum(1 for p in inside if files[p].get("error"))
+        status = [{"text": f"문서 색인 {indexed}/{len(inside)}", "tone": "ok" if indexed else ""},
+                  {"text": f"초안 포함 {included}/{len(inside)}", "tone": "b" if included else ""}]
+        if failed:
+            status.append({"text": f"읽기 실패 {failed}", "tone": "bad"})
+        return {"id": f"dir:{path}", "kind": "folder", "label": path.rsplit("/", 1)[-1], "path": path, "manage": True,
+                "bytes": sum(files[p]["bytes"] for p in inside), "facts": [f"파일 {len(inside):,}개"], "status": status}
+
+    def _explorer_row(self, x: dict, a) -> dict:
+        cat, files, chunks, made = x["cat"], x["files"], x["chunks"], x["made"]
+        out = {"id": a.id, "kind": a.kind, "label": a.label, "facts": [], "status": []}
+        say, mark = out["facts"].append, out["status"].append
+        into = lambda kind: [cat.assets[r.target].label for r in cat._out[a.id] if r.kind == kind and r.target in cat.assets]  # noqa: E731
+        came = lambda kind: [cat.assets[r.source].label for r in cat._in[a.id] if r.kind == kind and r.source in cat.assets]  # noqa: E731
+        if a.kind == "file":
+            path = a.id[5:]
+            f = files.get(path, {})
+            fx = f.get("facts") or {}
+            out.update(path=path, manage=True, bytes=f.get("bytes", 0))
+            say({"data": f"표 {fx.get('tables', 0)}개 · {fx.get('rows', 0):,}행", "document": f"문서 · 절 {fx.get('sections', 0)}개",
+                 "definition": "정의서", "raw": "원본 보관", "empty": "내용 없음"}.get(fx.get("kind"), "-"))
+            if f.get("error"):
+                mark({"text": "읽기 실패", "tone": "bad", "why": f["error"]})
+            n = sum(chunks[d] for d in made.get(path, []))
+            if n:
+                mark({"text": f"문서 색인 · 청크 {n}", "tone": "ok"})
+            if fx.get("kind") not in ("raw", None) and not f.get("error"):
+                mark({"text": "초안 포함" if f.get("included") else "초안 제외", "tone": "b" if f.get("included") else ""})
+        elif a.kind == "document":
+            n = chunks[a.label]
+            say(f"청크 {n}")
+            upload = any(r.kind == "uses" and r.target.startswith("file:") for r in cat._out[a.id])
+            mark({"text": "업로드 파일" if upload else "예시 문서", "tone": "b" if upload else ""})
+            seen = into("mentions")
+            if seen:
+                say(f"언급한 객체 {len(seen)}개")
+            mark({"text": "문서 색인" if n else "색인 전", "tone": "ok" if n else "warn"})
+        elif a.kind in ("database", "table"):
+            inner = "table" if a.kind == "database" else "column"
+            say(f"{KIND_LABEL[inner]} {len(_children(cat, a.id, inner))}개")
+            if a.kind == "table":
+                users = came("mapsTo")
+                mark({"text": f"객체 · {', '.join(users[:3])}", "tone": "ok"} if users else {"text": "사용하지 않는 테이블", "tone": "warn"})
+        elif a.kind == "column":
+            props = came("mapsTo")
+            if props:
+                mark({"text": f"속성 · {', '.join(props[:3])}", "tone": "ok"})
+        elif a.kind == "object":
+            say(f"속성 {len(_children(cat, a.id, 'property'))}개")
+            tables = into("mapsTo")
+            mark({"text": f"테이블 · {tables[0]}", "tone": "ok"} if tables else {"text": "원천 연결 없음", "tone": "warn"})
+            docs = came("mentions")
+            if docs:
+                say(f"언급 문서 {len(docs)}개")
+        elif a.kind == "property":
+            if a.attrs.get("type"):
+                say(str(a.attrs["type"]))
+            cols = into("mapsTo")
+            if cols:
+                mark({"text": f"컬럼 · {cols[0]}", "tone": "ok"})
+        else:
+            uses, used = into("uses") + into("canRead"), came("uses") + came("canRead")
+            if uses:
+                say(f"사용 {len(uses)}개")
+            if used:
+                say(f"이 항목을 쓰는 곳 {len(used)}개")
+        return out
+
+    def _explorer_trail(self, x: dict, node: str) -> list[dict]:
+        """What a node sits in, from its group down to what holds it (the node itself not included), for the path bar."""
+        cat = x["cat"]
+        if node.startswith("group:") or not node:
+            return []
+        if node.startswith("repo:"):
+            return [{"id": "group:repos", "label": GROUP_WORDS["group:repos"]}]
+        if node.startswith(("dir:", "file:")):
+            out = [{"id": "group:repos", "label": GROUP_WORDS["group:repos"]},
+                   {"id": f"repo:{self.repo}", "label": self.repositories.items[self.repo]["label"]}]
+            parts = node.split(":", 1)[1].split("/")
+            out += [{"id": "dir:" + "/".join(parts[:i + 1]), "label": parts[i]} for i in range(len(parts) - 1)]
+            return out
+        kind = node[5:] if node.startswith("kind:") else cat.assets[node].kind if node in cat.assets else ""
+        group = next((g for g, ks in GROUP_KINDS.items() if kind in ks), "group:use")
+        out = [{"id": group, "label": GROUP_WORDS[group]}]
+        if node.startswith("kind:"):
+            return out
+        holder = next((r.source for r in cat._in[node] if r.kind in ("contains", "hasProperty") and r.source in cat.assets), "")
+        if holder:
+            out = self._explorer_trail(x, holder) + [{"id": holder, "label": cat.assets[holder].label}]
+        elif kind in ("object", "link") + USE_KINDS:
+            out.append({"id": f"kind:{kind}", "label": KIND_LABEL[kind]})
+        elif kind == "document" and f"collection:{self.space.collection}" in cat.assets:
+            out.append({"id": f"collection:{self.space.collection}", "label": "문서 컬렉션"})
+        return out
+
+    def explorer_search(self, q: str, kind: str = "") -> dict:
+        """One search over everything: names and paths, the definitions a question names, and the documents by their words and
+        by meaning. Each hit says which of these found it."""
+        from xgen_space.embed import shared_wording
+
+        q = str(q or "").strip()[:SEARCH_MAX]
+        if not q:
+            raise ValueError("검색어가 없어 찾지 못했습니다. 찾을 내용을 입력해 주세요.")
+        x = self._explorer_parts()
+        cat = x["cat"]
+        hits: dict[str, dict] = {}
+
+        def hit(row: dict | None, how: str, *, snippet: str = "", score: float = 0.0) -> None:
+            if row is None or (kind and row["kind"] != kind):
+                return
+            h = hits.setdefault(row["id"], {**row, "found": [], "score": 0.0, "snippet": ""})
+            if how not in h["found"]:
+                h["found"].append(how)
+            h["score"], h["snippet"] = max(h["score"], score), h["snippet"] or snippet
+
+        low = q.lower()
+        for a in cat.assets.values():
+            label, key = a.label.lower(), a.id.split(":", 1)[-1].lower()
+            if low in label or low in key:
+                hit(self._explorer_row(x, a), "경로" if a.kind == "file" and low not in label else "이름",
+                    score=1.0 if low == label else 0.6)
+        for d in x["folders"]:
+            if low in d.rsplit("/", 1)[-1].lower():
+                hit(self._folder_row(x, d), "이름", score=1.0 if low == d.rsplit("/", 1)[-1].lower() else 0.6)
+        for c in self.space.concepts_in(q, self.studio.onto, self._terms()):
+            if c.get("element") in cat.assets:
+                hit(self._explorer_row(x, cat.assets[c["element"]]), "정의", score=0.8)
+        try:
+            found = self.space.search(q, K_MAX)
+        except (VectorError, OSError, EmbedError):  # a store that cannot be reached leaves names and definitions to answer
+            found = []
+        meaning = self.space.embedder.semantic  # a wording embedder finds words, so it does not say meaning
+        for h in found:
+            a = cat.assets.get(f"document:{h['document']}")
+            if a is not None:
+                words = not meaning or shared_wording(q, h["text"]) > 0
+                hit(self._explorer_row(x, a), "단어 일치" if words else "의미 유사",
+                    snippet=f"{h['section']} · {h['text'][:160]}", score=float(h["score"]))
+        layer = {"이름": "name", "경로": "name", "정의": "definition", "단어 일치": "text", "의미 유사": "text"}
+        rows = sorted(hits.values(), key=lambda h: (-len({layer[f] for f in h["found"]}), -h["score"], h["label"]))
+        for h in rows[:SEARCH_ROWS]:
+            h["trail"] = self._explorer_trail(x, h["id"])
+        return {"q": q, "hits": rows[:SEARCH_ROWS], "total": len(rows)}
+
     # ---- the way in from outside ---------------------------------------------------------------------------------------
 
     def integrations(self) -> dict:
@@ -511,3 +745,9 @@ def attach(session: Any) -> None:
     st.space = held
     if not st.reasoners:
         st.reasoners = open_reasoners(None)
+
+
+def _children(cat, asset: str, kind: str) -> list[str]:
+    """What an asset holds of one kind: a database's tables, a table's columns, an object's properties."""
+    return [r.target for r in cat._out[asset]
+            if r.kind in ("contains", "hasProperty") and r.target in cat.assets and cat.assets[r.target].kind == kind]

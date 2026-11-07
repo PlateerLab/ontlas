@@ -1,6 +1,7 @@
 'use strict';
 (() => {
   const ICON = {
+    explorer: '<path d="M3 6.5a1.5 1.5 0 011.5-1.5H9l2 2h8.5A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z"/><path d="M7 11h6M7 14.5h9"/>',
     map: '<path d="M9 4L3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/>',
     docs: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><circle cx="10" cy="13" r="1.4"/><circle cx="15" cy="16" r="1.4"/><path d="M11.2 13.8l2.6 1.4"/>',
     vectors: '<path d="M4 20l7-7M4 20h6M4 20v-6"/><path d="M12 12l8-8M20 4h-6M20 4v6"/>',
@@ -40,15 +41,15 @@
     catalog2: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
-  const NAV = [['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
+  const NAV = [['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['explorer', '데이터 탐색기'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '통합 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: the board, the map, then the six stages in the order data moves. A stage's screens are tabs on its page.
-  const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '사용 안내', ['guide']], ['', '데이터 지도', ['map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
+  const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '사용 안내', ['guide']], ['', '데이터 지도', ['explorer', 'map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
     ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문' };
+  const TAB_WORD = { monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '탐색기', map: '자산 그래프' };
   const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
@@ -101,6 +102,11 @@
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 문서 검색 적중률, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
       '상단 정보에서 현재 데이터 출처를 확인합니다.',
       '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
+    ['explorer', '레포지토리의 파일과 폴더, DB 테이블과 컬럼, 문서, 온톨로지, 저장소, 질의와 결정을 한곳에서 찾고 관리합니다.', [
+      '왼쪽 탐색기에서 항목을 선택하면 그 안의 항목과 처리 상태를 표시합니다. 폴더는 문서 색인과 초안 포함 수를, 파일은 변환 결과, 문서 색인 청크, 초안 포함 여부를 표시합니다.',
+      '검색은 이름과 경로, 온톨로지 정의, 문서 내용을 함께 찾고, 결과마다 찾은 곳(이름, 경로, 정의, 단어 일치, 의미 유사)을 표시합니다.',
+      '레포지토리의 파일과 폴더는 새 폴더, 업로드, 이름 변경, 이동, 삭제를 할 수 있습니다. 삭제한 항목은 휴지통으로 이동하고 [휴지통]에서 복원하거나 영구 삭제합니다.',
+      '[작업 기록]에서 업로드, 이동, 삭제, 복원, 초안 포함 변경을 시각 순으로 확인합니다.']],
     ['map', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계를 그래프로 확인합니다.', [
       'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
       '범례를 선택하면 해당 그룹을 숨기거나 다시 표시합니다.',
@@ -246,6 +252,7 @@
   const WHY = {
     monitor: '앞 단계가 통과 조건을 충족하지 못하면 뒤 단계의 결과도 신뢰할 수 없습니다. 중단된 단계와 원인 경로를 먼저 확인합니다.',
     flow: '여기서 지정한 통과 조건은 변경 요청을 검토할 때도 같은 기준으로 적용됩니다.',
+    explorer: '파일만이 아니라 스페이스가 담은 모든 데이터를 같은 탐색기와 같은 검색으로 다뤄, 무엇이 어디에 있고 어떤 처리를 거쳤는지 한 화면에서 확인합니다.',
     map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 객체, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
     catalog: '초안과 검색은 레포지토리의 파일을 기준으로 만듭니다. 초안에서 제외한 파일은 정의와 색인에 반영되지 않습니다.',
     db: '데이터를 복사하지 않고 원본 DB를 읽으므로, 정의와 판정이 운영 데이터와 같은 값을 기준으로 합니다.',
@@ -313,7 +320,8 @@
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
-    vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
+    vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
+    ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
@@ -490,7 +498,7 @@
     if (!S.st) return;
     renderTop();
     renderSide();
-    const views = { rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
+    const views = { rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
     const main = $('#main');
     main.innerHTML = subTabs() + (views[S.tab] || viewMonitor)();
@@ -503,6 +511,7 @@
     if (S.tab === 'docs') mountDocs();
     if (S.tab === 'rules' && !S.ru) api('rules').then((x) => { S.ru = x; render(); }).catch(fail);
     if ((S.tab === 'vectors' || S.tab === 'search') && !S.sp) loadSpace();
+    if (S.tab === 'explorer' && !S.ex.tree && !S.ex.loading) { S.ex.loading = true; loadExplorer().finally(() => { S.ex.loading = false; }); }
     if (S.tab === 'adapters' && S.ad) balanceAdapters();
     if (S.tab === 'adapters' && !S.ad) api('adapters').then((x) => { S.ad = x; render(); if (!S.adrep && !S.adbusy) adCheck(false); }).catch(fail);
     if (S.tab === 'connect' && !S.conn) api('integrations').then((x) => { S.conn = x; render(); }).catch(fail);
@@ -1106,6 +1115,141 @@
     return `${head}<div class="stats">${stats}</div>
       <div class="adgrid">
         <div class="adcol">${stores}${langs}${reas}</div><div class="adcol">${mods}${find}</div></div>`;
+  }
+
+  // ---- data explorer: every asset of the space as folders, searched and managed in one place ------------------------
+
+  const EX_ACTION = { upload: '업로드', replace: '교체', folder: '폴더 생성', rename: '이름 변경', move: '이동', trash: '휴지통으로 이동',
+    restore: '복원', purge: '영구 삭제', include: '초안 포함', exclude: '초안 제외' };
+  const EX_NODE = { group: '분류', repo: '레포지토리', dir: '폴더', kind: '분류' };
+  const EX_FOUND = { 이름: 'b', 경로: 'b', 정의: 'ok', '단어 일치': '', '의미 유사': '' };
+  const exHolds = (id) => /^(group|repo|dir|kind|database|collection|table|object):/.test(id);  // what opens into a list
+  const exInRepo = (id) => /^(repo|dir):/.test(id);
+  const exFolder = (id) => (id.startsWith('dir:') ? id.slice(4) : '');
+
+  async function loadExplorer(node) {
+    const x = S.ex;
+    if (node !== undefined) Object.assign(x, { node, sel: {}, edit: null, moving: null });
+    try {
+      x.tree = await api('explorer');
+      x.node = x.node || `repo:${x.tree.repo}`;
+      try { x.items = await api('explorer/items?node=' + encodeURIComponent(x.node)); } catch (e) {  // a node that went from under the page
+        x.node = `repo:${x.tree.repo}`;
+        x.items = await api('explorer/items?node=' + encodeURIComponent(x.node));
+      }
+      for (const t of x.items.trail) x.open[t.id] = true;
+      if (x.tab === 'log') x.log = (await api('catalog/history')).items;
+      if (x.tab === 'trash') x.trash = (await api('catalog/trash')).items;
+      if (x.q && x.hits) x.hits = await api(`explorer/search?q=${encodeURIComponent(x.q)}&kind=${encodeURIComponent(x.kind)}`);
+    } catch (e) { x.error = e.message; }
+    if (S.tab === 'explorer') render();
+  }
+
+  async function explorerChanged(node) {  // a change to files touches the catalog, the drafts and the space as well
+    spaceChanged();
+    S.files = null; S.conv = null; S.cat.sel = {}; S.cat.st = null;
+    S.st = await api('state');
+    await loadExplorer(node);
+  }
+
+  function exTree() {
+    const x = S.ex, t = x.tree.tree;
+    const kids = (id) => t.filter((n) => n.parent === id);
+    const row = (n, depth) => {
+      const sub = kids(n.id), open = x.open[n.id];
+      return `<div class="exn${x.node === n.id ? ' on' : ''}" style="padding-left:${4 + depth * 14}px">
+        ${sub.length ? `<button class="exc${open ? ' open' : ''}" data-act="extoggle" data-id="${esc(n.id)}" aria-label="${open ? '접기' : '펼치기'}">${ui('chevron')}</button>` : '<span class="exc"></span>'}
+        <button class="exl" data-act="exgo" data-id="${esc(n.id)}"${n.id.startsWith('repo:') && !n.current ? ' data-switch="1"' : ''}>${esc(n.label)}</button>
+        ${n.current ? '<span class="chip sm b">사용 중</span>' : ''}<span class="exk">${count(n.count)}</span></div>${open ? sub.map((c) => row(c, depth + 1)).join('') : ''}`;
+    };
+    return kids('').map((n) => row(n, 0)).join('');
+  }
+
+  function exKind(r) {
+    return r.kind === 'group' ? (KIND[r.id.split(':')[0]] || EX_NODE[r.id.split(':')[0]] || '분류') : (KIND[r.kind] || r.kind);
+  }
+
+  function exRow(r, search) {
+    const x = S.ex;
+    const status = r.status.map((s) => `<span class="chip sm ${esc(s.tone || '')}"${s.why ? ` title="${esc(s.why)}"` : ''}>${esc(s.text)}</span>`).join('');
+    const holds = exHolds(r.id) || r.kind === 'folder';
+    const name = x.edit && x.edit.id === r.id
+      ? `<input type="text" id="exedit" data-in="exedit" value="${esc(x.edit.value)}" aria-label="새 이름">`
+      : `<button class="fname" data-act="exopen" data-id="${esc(r.id)}" data-kind="${esc(r.kind)}"${r.current === false && r.id.startsWith('repo:') ? ' data-switch="1"' : ''}>${holds ? ui('catalog2') : ''}<span>${esc(r.label)}</span></button>`;
+    const tab = !holds && r.kind !== 'file' ? KIND_TAB[r.kind] : '';
+    const acts = [r.kind === 'file' ? `<button class="btn sm ghost" data-act="exview" data-path="${esc(r.path)}">보기</button><a class="btn sm ghost" href="/api/catalog/download?path=${encodeURIComponent(r.path)}">내려받기</a>` : '',
+      tab ? `<a class="btn sm ghost" href="#${tab}">${esc(navLabel(tab))} 열기</a>` : '',
+      r.manage ? `<button class="btn sm ghost" data-act="exrename" data-id="${esc(r.id)}">이름 변경</button>` : ''].join('');
+    const where = search ? `<td class="muted" style="font-size:12px;white-space:nowrap">${(r.trail || []).map((t) => `<button class="plink" data-act="exgo" data-id="${esc(t.id)}">${esc(t.label)}</button>`).join(' › ') || '-'}</td>
+      <td><div class="chips">${r.found.map((f) => `<span class="chip sm ${EX_FOUND[f] || ''}">${esc(f)}</span>`).join('')}</div></td>` : `<td class="muted">${r.bytes !== undefined ? fileSize(r.bytes) : '-'}</td>`;
+    const what = search && r.snippet ? `<span class="muted" style="font-size:12px">${esc(r.snippet)}</span>` : esc(r.facts.join(' · ')) || '<span class="muted">-</span>';
+    return `<tr class="${x.sel[r.path] ? 'sel' : ''}"><td>${r.manage ? `<input type="checkbox" data-in="exsel" data-path="${esc(r.path)}"${x.sel[r.path] ? ' checked' : ''} aria-label="${esc(r.label)} 선택">` : ''}</td>
+      <td>${name}</td><td style="white-space:nowrap">${esc(exKind(r))}</td>${where}<td style="font-size:12.5px">${what}</td><td><div class="chips">${status || '<span class="muted">-</span>'}</div></td>
+      <td style="text-align:right;white-space:nowrap">${acts}</td></tr>`;
+  }
+
+  function exTable(items, search) {
+    const head = `<tr><th style="width:30px"></th><th>이름</th><th>종류</th>${search ? '<th>위치</th><th>찾은 곳</th>' : '<th>크기</th>'}<th>내용</th><th>상태</th><th></th></tr>`;
+    const adding = S.ex.edit && S.ex.edit.id === '' ? `<tr><td></td><td colspan="${search ? 7 : 6}"><input type="text" id="exedit" data-in="exedit" value="${esc(S.ex.edit.value)}" placeholder="새 폴더 이름" aria-label="새 폴더 이름"></td></tr>` : '';
+    return `<div class="cwrap"><table class="tight extable">${head}${adding}${items.map((r) => exRow(r, search)).join('')}</table></div>`;
+  }
+
+  function viewExplorer() {
+    const x = S.ex;
+    const seg = `<div class="seg">${[['store', '보관함'], ['log', '작업 기록'], ['trash', `휴지통${x.tree && x.tree.summary.trash ? ` ${x.tree.summary.trash}` : ''}`]]
+      .map(([k, l]) => `<button class="${x.tab === k ? 'on' : ''}" data-act="extab" data-k="${k}">${esc(l)}</button>`).join('')}</div>`;
+    const head = pageHead('데이터 탐색기', '레포지토리의 파일부터 DB, 문서, 온톨로지, 저장소, 활용까지 스페이스의 데이터를 한곳에서 찾고 관리합니다', seg);
+    if (x.error && !x.tree) return `${head}<div class="banner no"><div class="why">${esc(x.error)}</div></div>`;
+    if (!x.tree || !x.items) return `${head}<div class="empty"><span class="spin"></span>스페이스를 읽는 중입니다.</div>`;
+    const s = x.tree.summary;
+    const sum = `<div class="exsum">${[[s.files, '파일'], [s.folders, '폴더'], [s.tables, '테이블'], [s.columns, '컬럼'], [s.documents, '문서'], [s.chunks, '청크'],
+      [s.objects, '객체'], [s.properties, '속성'], [s.links, '관계'], [s.uses, '질의 · 결정 · Action · 역할']].map(([n, l]) => `<span><b>${count(n)}</b>${esc(l)}</span>`).join('')}</div>`;
+    if (x.tab === 'log') {
+      const rows = (x.log || []).map((e) => `<tr><td class="muted" style="white-space:nowrap">${esc(e.at.replace('T', ' '))}</td><td>${esc(EX_ACTION[e.action] || e.action)}</td>
+        <td class="mono" style="font-size:12px">${esc(e.path)}</td><td class="muted" style="font-size:12.5px">${esc(e.detail || '')}</td></tr>`).join('');
+      return `${head}${sum}<div class="card"><div class="ch">작업 기록<div class="right muted" style="font-size:12px">${esc(x.tree.tree.find((n) => n.current).label)} · 최근 ${count((x.log || []).length)}건</div></div>
+        <div class="cb">${rows ? `<div class="cwrap"><table class="tight"><tr><th>시각</th><th>작업</th><th>경로</th><th>상세</th></tr>${rows}</table></div>` : '<div class="empty">기록된 작업이 없습니다.</div>'}</div></div>`;
+    }
+    if (x.tab === 'trash') {
+      const picked = (x.trash || []).filter((t) => x.tsel[t.id]);
+      const rows = (x.trash || []).map((t) => `<tr><td><input type="checkbox" data-in="extsel" data-id="${esc(t.id)}"${x.tsel[t.id] ? ' checked' : ''} aria-label="${esc(t.name)} 선택"></td>
+        <td><b>${esc(t.name)}</b></td><td class="mono muted" style="font-size:12px">${esc(t.path)}</td><td>${t.kind === 'folder' ? '폴더' : '파일'}</td><td>${count(t.files)}개</td><td>${fileSize(t.bytes)}</td>
+        <td class="muted" style="white-space:nowrap">${esc(t.at.replace('T', ' '))}</td><td style="text-align:right;white-space:nowrap"><button class="btn sm" data-act="exrestore" data-id="${esc(t.id)}">복원</button>
+        <button class="btn sm ghost danger" data-act="expurge" data-id="${esc(t.id)}">영구 삭제</button></td></tr>`).join('');
+      const tools = `${picked.length ? `<button class="btn sm" data-act="exrestore">선택 복원 ${picked.length}</button><button class="btn sm ghost danger" data-act="expurge">선택 영구 삭제</button>` : ''}
+        <button class="btn sm ghost danger" data-act="expurge" data-all="1"${rows ? '' : ' disabled'}>휴지통 비우기</button>`;
+      return `${head}${sum}<div class="card"><div class="ch">휴지통<div class="right">${tools}</div></div>
+        <div class="cb">${rows ? `<div class="cwrap"><table class="tight"><tr><th style="width:30px"></th><th>이름</th><th>원래 위치</th><th>종류</th><th>파일</th><th>크기</th><th>삭제일</th><th></th></tr>${rows}</table></div>` : '<div class="empty">휴지통이 비어 있습니다.</div>'}</div></div>`;
+    }
+    const kinds = ['', 'file', 'folder', 'table', 'column', 'document', 'object', 'property', 'link', 'query', 'decision', 'action', 'role'];
+    const repo = exInRepo(x.node), picked = Object.keys(x.sel).filter((k) => x.sel[k]);
+    const tool = `<div class="extool"><div class="exq">${ui('search')}<input type="search" data-in="exq" value="${esc(x.q)}" placeholder="이름, 경로, 정의, 문서 내용으로 찾습니다" aria-label="데이터 검색"></div>
+      <select class="inline" data-in="exkind" aria-label="종류">${kinds.map((k) => `<option value="${k}"${x.kind === k ? ' selected' : ''}>${k ? esc(KIND[k] || k) : '전체 종류'}</option>`).join('')}</select>
+      <button class="btn sm primary" data-act="exsearch"${x.busy ? ' disabled' : ''}>${x.busy ? '<span class="spin"></span>' : ''}검색</button>${x.hits ? '<button class="btn sm ghost" data-act="exclear">검색 지우기</button>' : ''}
+      <div class="grow"></div>${repo ? `<button class="btn sm" data-act="exnew">새 폴더</button><button class="btn sm" data-act="exupload">업로드</button>
+      <button class="btn sm" data-act="exmove"${picked.length ? '' : ' disabled'}>이동</button><button class="btn sm ghost danger" data-act="exdelete"${picked.length ? '' : ' disabled'}>삭제</button>` : ''}
+      <button class="iconbtn" data-act="exreload" aria-label="새로고침" title="새로고침">${ui('reload')}</button></div>`;
+    const folders = [''].concat(x.tree.tree.filter((n) => n.id.startsWith('dir:')).map((n) => n.id.slice(4)));
+    const moving = x.moving ? `<div class="cbulk"><b>${picked.length}개 이동</b><select class="inline" data-in="exto" aria-label="이동할 폴더">${folders.map((f) => `<option value="${esc(f)}"${x.moving.to === f ? ' selected' : ''}>${esc(f || x.tree.tree.find((n) => n.current).label)}</option>`).join('')}</select>
+      <button class="btn sm primary" data-act="exmoveok">이동</button><button class="btn sm ghost" data-act="exmovecancel">취소</button></div>` : '';
+    let list;
+    if (x.hits) {
+      const h = x.hits, by = {};
+      for (const r of h.hits) for (const f of r.found) by[f] = (by[f] || 0) + 1;
+      list = `<div class="card exlist"><div class="ch">'${esc(h.q)}' 검색 결과<div class="right muted" style="font-size:12px">${count(h.total)}건${Object.entries(by).map(([f, n]) => ` · ${esc(f)} ${count(n)}`).join('')}</div></div>
+        <div class="cb">${h.hits.length ? exTable(h.hits, true) : '<div class="empty">찾은 항목이 없습니다.</div>'}</div></div>`;
+    } else {
+      const trail = x.items.trail.concat([{ id: x.node, label: x.items.label }]);
+      const bar = trail.map((t, i) => (i === trail.length - 1 ? `<b>${esc(t.label)}</b>` : `<button class="plink" data-act="exgo" data-id="${esc(t.id)}">${esc(t.label)}</button>`)).join(' › ');
+      list = `<div class="card exlist"><div class="ch"><div class="extrail">${bar}</div><div class="right muted" style="font-size:12px">항목 ${count(x.items.items.length)}개</div></div>
+        <div class="cb">${x.items.items.length || (x.edit && x.edit.id === '') ? exTable(x.items.items, false) : '<div class="empty">비어 있습니다.</div>'}</div></div>`;
+    }
+    return `${head}${sum}${tool}${moving}<div class="exbody"><div class="card extree"><div class="cb">${exTree()}</div></div>${list}</div>`;
+  }
+
+  async function exSwitch(repo) {
+    if (!window.confirm('사용 중인 레포지토리를 전환합니다. 초안과 문서 색인은 전환한 레포지토리의 파일을 기준으로 다시 읽습니다.')) return;
+    try { await api('catalog/repository', { op: 'use', id: repo }); await explorerChanged(`repo:${repo}`); } catch (e) { fail(e); }
   }
 
   function viewMap() {
@@ -2266,7 +2410,7 @@ ${controls}${body}`;
 
   // after anything that changes the files: the catalog, what a draft reads, and the counts in the menu
   async function catalogChanged() {
-    spaceChanged();
+    spaceChanged();  // the explorer reads the files again too
     S.files = null; S.conv = null; S.cat.sel = {};
     S.st = await api('state');
     await loadCatalog();
@@ -3650,7 +3794,7 @@ ${controls}${body}`;
     } catch (e) { fail(e); }
   }
 
-  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); };
+  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
     helpopen: () => { S.help = true; paintLayer(); },
     helpclose: () => { S.help = false; paintLayer(); },
@@ -3840,6 +3984,75 @@ ${controls}${body}`;
       try { localStorage.setItem('xspace-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
       renderSide();
     },
+    extab: (t) => { S.ex.tab = t.dataset.k; loadExplorer(); },
+    exgo: (t) => {
+      if (t.dataset.switch) return exSwitch(t.dataset.id.slice(5));
+      S.ex.hits = null;
+      return loadExplorer(t.dataset.id);
+    },
+    extoggle: (t) => { S.ex.open[t.dataset.id] = !S.ex.open[t.dataset.id]; render(); },
+    exopen: (t) => {
+      const id = t.dataset.id, kind = t.dataset.kind;
+      if (t.dataset.switch) return exSwitch(id.slice(5));
+      if (exHolds(id) || kind === 'folder') { S.ex.hits = null; return loadExplorer(id); }
+      if (kind === 'file') return ACT.exview({ dataset: { path: id.slice(5) } });
+      if (KIND_TAB[kind]) location.hash = '#' + KIND_TAB[kind];
+    },
+    exview: async (t) => {
+      try { S.cat.file = await api('catalog/file?path=' + encodeURIComponent(t.dataset.path)); S.cat.view = 'preview'; paintLayer(); } catch (e) { fail(e); }
+    },
+    exsearch: async () => {
+      const x = S.ex;
+      if (!x.q.trim()) { x.hits = null; return render(); }
+      x.busy = true; render();
+      try { x.hits = await api(`explorer/search?q=${encodeURIComponent(x.q)}&kind=${encodeURIComponent(x.kind)}`); } catch (e) { fail(e); }
+      x.busy = false; render();
+    },
+    exclear: () => { Object.assign(S.ex, { hits: null, q: '' }); render(); },
+    exreload: () => loadExplorer(),
+    exnew: () => { S.ex.edit = { id: '', value: '' }; render(); const i = $('#exedit'); if (i) i.focus(); },
+    exrename: (t) => {
+      const r = S.ex.items.items.concat(S.ex.hits ? S.ex.hits.hits : []).find((x) => x.id === t.dataset.id);
+      if (!r) return;
+      S.ex.edit = { id: r.id, value: r.label, path: r.path };
+      render();
+      const i = $('#exedit'); if (i) { i.focus(); i.select(); }
+    },
+    exsave: async () => {
+      const x = S.ex, e = x.edit;
+      if (!e) return;
+      const name = e.value.trim();
+      x.edit = null;
+      if (!name || (e.id && name === baseName(e.path))) return render();
+      try {
+        if (e.id) await api('catalog/rename', { path: e.path, name });
+        else await api('catalog/folder', { path: (exFolder(x.node) ? exFolder(x.node) + '/' : '') + name });
+        await explorerChanged();
+      } catch (err) { fail(err); render(); }
+    },
+    excancel: () => { S.ex.edit = null; render(); },
+    exdelete: async () => {
+      const paths = Object.keys(S.ex.sel).filter((k) => S.ex.sel[k]);
+      if (!paths.length || !window.confirm(`선택한 ${paths.length}개를 휴지통으로 이동합니다. 폴더는 안의 파일도 함께 이동합니다.`)) return;
+      try { await api('catalog/remove', { paths }); toast('휴지통으로 이동했습니다. [휴지통]에서 복원할 수 있습니다.'); await explorerChanged(); } catch (e) { fail(e); }
+    },
+    exmove: () => { S.ex.moving = { to: exFolder(S.ex.node) }; render(); },
+    exmovecancel: () => { S.ex.moving = null; render(); },
+    exmoveok: async () => {
+      const x = S.ex, paths = Object.keys(x.sel).filter((k) => x.sel[k]);
+      try { await api('catalog/move', { paths, folder: x.moving.to }); x.moving = null; toast(`${paths.length}개를 이동했습니다.`); await explorerChanged(); } catch (e) { fail(e); }
+    },
+    exupload: () => { Object.assign(S.cat, { folder: exFolder(S.ex.node), sel: {}, ext: '', edit: null, file: null, st: null }); location.hash = '#catalog'; },
+    exrestore: async (t) => {
+      const x = S.ex, ids = t.dataset.id ? [t.dataset.id] : Object.keys(x.tsel).filter((k) => x.tsel[k]);
+      try { const r = await api('catalog/trash', { op: 'restore', ids }); x.tsel = {}; toast(`파일 ${r.restored}개를 복원했습니다.`); await explorerChanged(); } catch (e) { fail(e); }
+    },
+    expurge: async (t) => {
+      const x = S.ex, all = !!t.dataset.all, ids = all ? [] : t.dataset.id ? [t.dataset.id] : Object.keys(x.tsel).filter((k) => x.tsel[k]);
+      if (!all && !ids.length) return;
+      if (!window.confirm(all ? '휴지통의 항목을 모두 영구 삭제합니다. 영구 삭제한 항목은 복원할 수 없습니다.' : `선택한 ${ids.length}개를 영구 삭제합니다. 영구 삭제한 항목은 복원할 수 없습니다.`)) return;
+      try { await api('catalog/trash', { op: 'purge', ids }); x.tsel = {}; toast('영구 삭제했습니다.'); await loadExplorer(); } catch (e) { fail(e); }
+    },
     mapgo: async (t) => {
       S.mapsel = t.dataset.id;
       window.SpaceGraph.focus(t.dataset.id);
@@ -3904,7 +4117,7 @@ ${controls}${body}`;
       const c = S.cat;
       const paths = t.dataset.path ? [t.dataset.path] : Object.keys(c.sel).filter((k) => c.sel[k]);
       closeFloats();
-      if (!paths.length || !window.confirm(paths.length === 1 ? `${baseName(paths[0])}을(를) 삭제합니다. 폴더는 안의 파일도 함께 삭제합니다.` : `선택한 ${paths.length}개를 삭제합니다. 폴더는 안의 파일도 함께 삭제합니다.`)) return;
+      if (!paths.length || !window.confirm(paths.length === 1 ? `${baseName(paths[0])}을(를) 휴지통으로 이동합니다. 폴더는 안의 파일도 함께 이동하고, [데이터 탐색기] [휴지통]에서 복원할 수 있습니다.` : `선택한 ${paths.length}개를 휴지통으로 이동합니다. 폴더는 안의 파일도 함께 이동하고, [데이터 탐색기] [휴지통]에서 복원할 수 있습니다.`)) return;
       if (c.file && paths.includes(c.file.path)) c.file = null;
       await catalogCall('catalog/remove', { paths });
     },
@@ -4149,6 +4362,8 @@ ${controls}${body}`;
   };
 
   const INPUT = {
+    exq: (t) => { S.ex.q = t.value; },
+    exedit: (t) => { if (S.ex.edit) S.ex.edit.value = t.value; },
     gwurl: (t) => { S.gw.url = t.value; },
     gwconn: (t) => { S.gw.connection = t.value; },
     gwdialect: (t) => { S.gw.dialect = t.value; },
@@ -4211,6 +4426,10 @@ ${controls}${body}`;
   };
 
   const CHANGE = {
+    exkind: (t) => { S.ex.kind = t.value; if (S.ex.hits) ACT.exsearch(); },
+    exsel: (t) => { S.ex.sel[t.dataset.path] = t.checked; render(); },
+    extsel: (t) => { S.ex.tsel[t.dataset.id] = t.checked; render(); },
+    exto: (t) => { S.ex.moving.to = t.value; },
     ptarget: (t) => { S.pol.target = t.value; },
     medver: async (t) => { try { await openModule(S.ed.name, t.value); render(); toast(`${t.value} 버전을 불러왔습니다. [변경 요청]을 선택하면 새 버전으로 되돌립니다.`); } catch (e) { fail(e); } },
     pdoc: (t) => loadDocument(t.value, ''),
@@ -4379,6 +4598,8 @@ ${controls}${body}`;
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('change', (ev) => { const t = ev.target; if (t.dataset && CHANGE[t.dataset.in]) CHANGE[t.dataset.in](t); });
     main.addEventListener('keydown', (ev) => {
+      if (ev.target.dataset && ev.target.dataset.in === 'exq' && ev.key === 'Enter') { ev.preventDefault(); ACT.exsearch(); }
+      if (ev.target.dataset && ev.target.dataset.in === 'exedit' && (ev.key === 'Enter' || ev.key === 'Escape')) { ev.preventDefault(); ACT[ev.key === 'Enter' ? 'exsave' : 'excancel'](); }
       if (ev.key === 'Enter' && ev.target.dataset && ['param', 'principal', 'question'].includes(ev.target.dataset.in)) { ev.preventDefault(); runQuery(); }
       if (ev.key === 'Enter' && ev.target.dataset && ['dlab', 'dvalues'].includes(ev.target.dataset.in)) { ev.preventDefault(); ev.target.blur(); }
       if (ev.key === 'Tab' && ev.target.dataset && ev.target.dataset.in === 'mtext') {

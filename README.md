@@ -139,7 +139,8 @@ The sidebar follows the data from raw files to checked answers. A stage's screen
 |---|---|---|
 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
 | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| 데이터 지도 | | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
+| 데이터 지도 | 탐색기 | Browse everything the space holds as folders (repositories, databases, documents, ontology, stores, queries and decisions), with what each part went through; search names, paths, definitions and document text at once and see which of them found each hit; move, rename and delete files, with a trash and a work record |
+| | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
 | ① 원천 데이터 | 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
 | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
 | ② 변환 | 결과 | See what each file came to, and the one JSON they roll up into |
@@ -930,6 +931,15 @@ whole. One process writes to one file.
 | Standards in | `exchange.importer.from_owl(ttl)` | a starting definition from schema.org, GS1 or any OWL/RDFS, with the same report |
 
 ## The data map
+
+The explorer shows the same assets as folders. A folder says how many of its files are indexed as documents and how many
+go into a draft; a table names the objects that read it; a document, its chunks and the objects it mentions. One search
+covers names and paths, the definitions a question names, and document text by words and by meaning. A deleted file goes to
+the trash with its folder, comes back where it was, and every change is in the repository's work record.
+
+<p align="center">
+  <img src="assets/screens/explorer.png" alt="Data explorer screen: a tree of the whole space beside the files of a repository, each with its size, what it holds and whether it is indexed and in the draft" width="100%">
+</p>
 
 <p align="center">
   <img src="assets/screens/space-map.png" alt="Space map screen: files, tables, documents, vector stores, objects and queries as one graph, with a side panel for the picked node" width="100%">

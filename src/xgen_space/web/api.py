@@ -989,10 +989,10 @@ class StudioSession(SpaceMixin):
         before = self.repositories.files(self.repo).get(path)
         if before is None and files >= lim.files:
             raise ValueError(f"업로드 파일 수가 {lim.files}개 한도에 도달해 추가하지 못했습니다. "
-                             "파일을 삭제한 뒤 다시 업로드해 주세요.")
+                             "파일을 삭제하고 휴지통을 비운 뒤 다시 업로드해 주세요.")
         if total - (before["bytes"] if before else 0) + size > lim.total_bytes:
             raise ValueError(f"전체 업로드 용량이 {_size(lim.total_bytes)} 한도를 초과해 업로드하지 못했습니다. "
-                             "파일을 삭제한 뒤 다시 업로드해 주세요.")
+                             "파일을 삭제하고 휴지통을 비운 뒤 다시 업로드해 주세요.")
 
     def _keep(self, path: str, data: bytes, tables: list, defs: Any, error: str = "") -> None:
         """A file goes into the repository, and what was read from it into the next draft."""
@@ -1219,6 +1219,33 @@ class StudioSession(SpaceMixin):
         self.repositories.include(self.repo, [clean_path(p) for p in paths], on)
         self._hold()
         return {"ok": True}
+
+    def catalog_move(self, paths: list, folder: str) -> dict:
+        """Files and folders into another folder of the repository, keeping their names."""
+        folder = clean_path(folder)
+        for p in [clean_path(p) for p in paths]:
+            name = p.rsplit("/", 1)[-1]
+            if p != (folder + "/" if folder else "") + name:
+                self.repositories.move(self.repo, p, (folder + "/" if folder else "") + name)
+        self._hold()
+        return {"ok": True}
+
+    def catalog_trash(self) -> dict:
+        return {"items": self.repositories.trash(self.repo)}
+
+    def catalog_trash_op(self, op: str, ids: list) -> dict:
+        """Put trashed items back, or delete them for good; without ids, the whole trash goes."""
+        ids = [str(i) for i in ids or []]
+        if op == "restore":
+            back = self.repositories.restore(self.repo, ids)
+            self._hold()  # what came back goes into the next draft as it did before
+            return {"ok": True, "restored": len(back)}
+        if op == "purge":
+            return {"ok": True, "purged": self.repositories.purge(self.repo, ids or None)}
+        raise ValueError("요청 형식이 올바르지 않아 처리하지 못했습니다.")
+
+    def catalog_history(self) -> dict:
+        return {"items": self.repositories.history(self.repo)}
 
     def catalog_repository(self, op: str, repo: str = "", label: str = "") -> dict:
         if op == "create":

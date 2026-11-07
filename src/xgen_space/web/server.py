@@ -447,6 +447,16 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.catalog_download(str(a.get("path", "")))
                 if route == "catalog/json":
                     return s.catalog_json()
+                if route == "catalog/trash":
+                    return s.catalog_trash()
+                if route == "catalog/history":
+                    return s.catalog_history()
+                if route == "explorer":
+                    return s.explorer()
+                if route == "explorer/items":
+                    return s.explorer_items(str(a.get("node", "")))
+                if route == "explorer/search":
+                    return s.explorer_search(str(a.get("q", "")), str(a.get("kind", "")))
                 if route == "module":
                     return s.module_source(a["name"], a.get("version", ""))
                 if route == "object/rows":
@@ -582,6 +592,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.catalog_rename(str(a.get("path", "")), str(a.get("name", "")))
             if route == "catalog/include":
                 return s.catalog_include(list(a.get("paths") or []), bool(a.get("on")))
+            if route == "catalog/move":
+                return s.catalog_move(list(a.get("paths") or []), str(a.get("folder", "")))
+            if route == "catalog/trash":
+                return s.catalog_trash_op(str(a.get("op", "")), list(a.get("ids") or []))
             if route == "catalog/repository":
                 return s.catalog_repository(str(a.get("op", "")), str(a.get("id", "")), str(a.get("label", "")))
             if route == "catalog/import":

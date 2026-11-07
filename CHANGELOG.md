@@ -31,6 +31,13 @@
 - The adapters screen shows what was measured, not what is known: every registered query compiled for each language (with the reason
   for any that cannot be), the stores' agreement, each reasoner's run, and the modules the current pipeline is built from instead of
   the example library's names. The tests run once when the screen opens; the configuration notes moved to help.
+- A data explorer opens the data map: everything the space holds as folders, from repository files to tables and columns,
+  documents, objects and properties, stores, queries and decisions, each row with what it went through (indexed as a
+  document, in the draft, mapped to an object). One search covers names and paths, definitions and document text by words and
+  by meaning, and says which of them found each hit. Files and folders can be moved and renamed there.
+- Deleting a file or a folder puts it in the repository's trash, from which it is restored where it was or deleted for good;
+  its bytes stay, and count against the limits, until then. A repository keeps a work record of uploads, moves, renames,
+  deletions, restores and what goes into a draft. `catalog/move`, `catalog/trash`, `catalog/history`.
 - `{@name}` inside a rule's output text puts the named value in force there.
 - Fixed: a decision table read a database amount as a Decimal, which the ZEN engine refused, so the page always said ZEN failed for it.
 - The page: requests that ran stay listed with their rollback after the page is left; a request names who made it, a person or an

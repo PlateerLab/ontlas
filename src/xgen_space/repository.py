@@ -22,6 +22,8 @@ INDEX = "index.json"
 DEFAULT_LABEL = "기본 레포지토리"
 LITTER_NAMES = {".ds_store", "thumbs.db", "desktop.ini"}  # what an operating system leaves in a folder
 LITTER_FOLDERS = {"__macosx", ".git", ".svn"}
+TRASH_MAX = 200  # items a repository's trash keeps; past it the oldest goes for good
+LOG_MAX = 300  # entries of a repository's work record
 
 
 def clean_path(path: str) -> str:
@@ -89,10 +91,15 @@ class Repositories:
         os.replace(tmp, self.root / INDEX)
 
     def _forget(self, shas: set[str]) -> None:
-        """Remove the bytes no file refers to any more."""
-        used = {f["sha256"] for r in self.items.values() for f in r["files"].values()}
+        """Remove the bytes no file refers to any more, in a repository or in its trash."""
+        used = {f["sha256"] for r in self.items.values() for f in [*r["files"].values(), *_trashed(r)]}
         for sha in shas - used:
             self._blob(sha).unlink(missing_ok=True)
+
+    @staticmethod
+    def _log(r: dict, action: str, path: str, detail: str = "") -> None:
+        r.setdefault("log", []).insert(0, {"at": _now(), "action": action, "path": path, "detail": detail})
+        del r["log"][LOG_MAX:]
 
     # ---- repositories ----------------------------------------------------------------------------------------
 
@@ -129,7 +136,7 @@ class Repositories:
             r = self._repo(repo)
             if len(self.items) == 1:
                 raise ValueError("마지막 레포지토리여서 삭제하지 못했습니다. 다른 레포지토리를 만든 뒤 삭제해 주세요.")
-            shas = {f["sha256"] for f in r["files"].values()}
+            shas = {f["sha256"] for f in [*r["files"].values(), *_trashed(r)]}
             del self.items[repo]
             self._forget(shas)
             self._save()
@@ -140,9 +147,10 @@ class Repositories:
                      "bytes": sum(f["bytes"] for f in r["files"].values())} for k, r in self.items.items()]
 
     def usage(self) -> tuple[int, int]:
-        """Files and bytes across every repository, counted as a person sees them."""
-        rows = self.rows()
-        return sum(r["files"] for r in rows), sum(r["bytes"] for r in rows)
+        """Files and bytes across every repository, the trash with them: what is in it is still kept."""
+        with self.lock:
+            kept = [f for r in self.items.values() for f in [*r["files"].values(), *_trashed(r)]]
+        return len(kept), sum(f["bytes"] for f in kept)
 
     # ---- files and folders -----------------------------------------------------------------------------------
 
@@ -185,6 +193,7 @@ class Repositories:
                                 "included": before["included"] if before else True, **facts}
             if before and before["sha256"] != sha:
                 self._forget({before["sha256"]})
+            self._log(r, "replace" if before else "upload", path, f"{len(data):,}바이트")
             self._save()
             return r["files"][path]
 
@@ -194,18 +203,74 @@ class Repositories:
             if path in r["folders"]:
                 raise ValueError(f"{path}: 같은 이름의 폴더가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
             self._make_parents(r, path)
+            self._log(r, "folder", path)
             self._save()
 
     def remove(self, repo: str, paths: list[str]) -> list[str]:
-        """Remove files and folders, what is in a folder with it; the paths of the files that went."""
+        """Move files and folders, what is in a folder with it, to the trash; the paths of the files that went."""
         with self.lock:
             r = self._repo(repo)
-            gone = [p for p in r["files"] if any(_under(p, x) for x in paths if x)]
-            r["folders"] = [f for f in r["folders"] if not any(_under(f, x) for x in paths if x)]
-            shas = {r["files"].pop(p)["sha256"] for p in gone}
-            self._forget(shas)
+            tops = sorted({x for x in paths if x}, key=len)
+            tops = [x for i, x in enumerate(tops) if not any(_under(x, y) for y in tops[:i])]  # a/b goes with a
+            trash = r.setdefault("trash", [])
+            gone = []
+            for x in tops:
+                files = {p: r["files"].pop(p) for p in [p for p in r["files"] if _under(p, x)]}
+                folders = [f for f in r["folders"] if _under(f, x)]
+                if not files and not folders:
+                    continue
+                r["folders"] = [f for f in r["folders"] if f not in folders]
+                n = 1 + max([int(t["id"][1:]) for t in trash], default=0)
+                trash.insert(0, {"id": f"t{n}", "path": x, "kind": "folder" if x in folders else "file", "at": _now(),
+                                 "files": files, "folders": folders})
+                self._log(r, "trash", x, f"파일 {len(files)}개")
+                gone += files
+            old = trash[TRASH_MAX:]
+            del trash[TRASH_MAX:]
+            self._forget({f["sha256"] for t in old for f in t["files"].values()})
             self._save()
             return gone
+
+    def trash(self, repo: str) -> list[dict]:
+        with self.lock:
+            return [{"id": t["id"], "path": t["path"], "name": t["path"].rsplit("/", 1)[-1], "kind": t["kind"], "at": t["at"],
+                     "files": len(t["files"]), "bytes": sum(f["bytes"] for f in t["files"].values())}
+                    for t in self._repo(repo).get("trash", [])]
+
+    def restore(self, repo: str, ids: list[str]) -> list[str]:
+        """Put trashed items back where they were; the paths of the files that came back."""
+        with self.lock:
+            r = self._repo(repo)
+            back = []
+            for t in [t for t in r.get("trash", []) if t["id"] in ids]:
+                taken = [p for p in t["files"] if p in r["files"] or p in r["folders"]]
+                taken += [f for f in t["folders"] if f in r["files"]]
+                if taken:
+                    raise ValueError(f"{taken[0]}: 같은 이름이 있어 복원하지 못했습니다. 그 자리의 이름을 바꾼 뒤 복원해 주세요.")
+                self._make_parents(r, parent(t["path"]))
+                r["folders"] += [f for f in t["folders"] if f not in r["folders"]]
+                r["files"].update(t["files"])
+                r["trash"].remove(t)
+                self._log(r, "restore", t["path"], f"파일 {len(t['files'])}개")
+                back += t["files"]
+            self._save()
+            return back
+
+    def purge(self, repo: str, ids: list[str] | None = None) -> int:
+        """Delete trashed items for good, all of them without `ids`; how many went."""
+        with self.lock:
+            r = self._repo(repo)
+            out = [t for t in r.get("trash", []) if ids is None or t["id"] in ids]
+            r["trash"] = [t for t in r.get("trash", []) if t not in out]
+            for t in out:
+                self._log(r, "purge", t["path"], f"파일 {len(t['files'])}개")
+            self._forget({f["sha256"] for t in out for f in t["files"].values()})
+            self._save()
+            return len(out)
+
+    def history(self, repo: str) -> list[dict]:
+        with self.lock:
+            return list(self._repo(repo).get("log", []))
 
     def move(self, repo: str, path: str, to: str) -> None:
         """Rename a file or a folder, with what is in the folder."""
@@ -215,9 +280,12 @@ class Repositories:
                 raise LookupError(f"경로 {path}")
             if to in r["files"] or to in r["folders"]:
                 raise ValueError(f"{to}: 같은 이름이 있어 바꾸지 못했습니다. 다른 이름을 입력해 주세요.")
+            if _under(to, path):
+                raise ValueError(f"{to}: 폴더를 그 안의 폴더로 옮길 수 없어 처리하지 못했습니다. 다른 위치를 선택해 주세요.")
             r["files"] = {(_moved(p, path, to) if _under(p, path) else p): f for p, f in r["files"].items()}
             r["folders"] = [(_moved(f, path, to) if _under(f, path) else f) for f in r["folders"]]
             self._make_parents(r, parent(to))
+            self._log(r, "rename" if parent(to) == parent(path) else "move", path, to)
             self._save()
 
     def include(self, repo: str, paths: list[str], on: bool) -> None:
@@ -227,6 +295,8 @@ class Repositories:
             for p, f in r["files"].items():
                 if any(_under(p, x) for x in paths):
                     f["included"] = on
+            for x in paths:
+                self._log(r, "include" if on else "exclude", x)
             self._save()
 
     def listing(self, repo: str, folder: str = "") -> tuple[list[dict], list[dict]]:
@@ -244,6 +314,10 @@ class Repositories:
             files = [{"path": k, "name": k.rsplit("/", 1)[-1], **f} for k, f in sorted(r["files"].items())
                      if parent(k) == folder]
             return folders, files
+
+
+def _trashed(r: dict) -> list[dict]:
+    return [f for t in r.get("trash", []) for f in t["files"].values()]
 
 
 def _now() -> str:
