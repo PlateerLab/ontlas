@@ -12,15 +12,21 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from xgen_space.model import _scope_filter
 from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
-               "cite")
+               "cite", "transform", "source_type")
 OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite")
 LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite")
+PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
+METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
+IDENTITY_FIELDS = ("label", "table", "members", "rules")
+FUNCTION_FIELDS = ("label", "description", "runtime", "target", "version", "owner", "status", "inputs", "outputs", "expr",
+                   "decision", "query", "entry", "call", "depends", "cite")
 
 
 class EditError(ValueError):
@@ -414,29 +420,135 @@ class Workspace:
         self._section("body", "decisions")[name] = spec
         return f"decision:{name}"
 
+    def _parameter_value(self, name: str, kind: str, raw: Any, low: Any, high: Any, label: str = "") -> Any:
+        try:
+            value: Any = {"integer": int, "decimal": float, "number": float}.get(kind, str)(raw)
+        except (TypeError, ValueError):
+            raise EditError(f"{name} takes a {kind}") from None
+        if kind == "boolean":
+            value = str(raw).strip().lower() in ("true", "1", "y", "yes")
+        elif isinstance(value, (int, float)):
+            if low not in (None, "") and value < float(low):
+                raise EditError(f"{label or name} must be at least {low}")
+            if high not in (None, "") and value > float(high):
+                raise EditError(f"{label or name} must be at most {high}")
+        return value
+
+    def _add_parameter(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"named value '{name}' must be letters, digits and _ starting with a letter")
+        if name in self.composed().ontology.parameters:
+            raise EditError(f"named value '{name}' already exists")
+        kind = str(a.get("type") or "integer")
+        spec: dict[str, Any] = {"type": kind, "value": self._parameter_value(name, kind, a.get("value"), a.get("min"), a.get("max"))}
+        spec.update({k: a[k] for k in PARAMETER_FIELDS if a.get(k) not in (None, "")})
+        self._section("body", "parameters")[name] = spec
+        return f"parameter:{name}"
+
     def _update_parameter(self, a: dict) -> str:
         name = str(a.get("name") or "")
         p = self.composed().ontology.parameters.get(name)
         if p is None:
             raise EditError(f"named value '{name}' is unknown")
-        try:
-            value: Any = {"integer": int, "decimal": float, "number": float}.get(p.type, str)(a.get("value"))
-        except (TypeError, ValueError):
-            raise EditError(f"{name} takes a {p.type}") from None
-        if isinstance(value, (int, float)):
-            if p.min is not None and value < p.min:
-                raise EditError(f"{p.label or name} must be at least {p.min}")
-            if p.max is not None and value > p.max:
-                raise EditError(f"{p.label or name} must be at most {p.max}")
+        low, high = a.get("min", p.min), a.get("max", p.max)
+        value = self._parameter_value(name, p.type, a.get("value", p.value), low, high, p.label)
+        meta = {k: a[k] for k in PARAMETER_FIELDS if k in a}
         if self._owns("parameters", name):
-            self._section("body", "parameters")[name]["value"] = value
+            spec = self._section("body", "parameters")[name]
+            spec.update({"value": value, **meta})
+            for k in [k for k, v in spec.items() if v in ("", None)]:
+                del spec[k]
         else:
-            self._section("extend", "parameters")[name] = {"value": value}
+            patch = self._section("extend", "parameters")
+            cur = patch.get(name)
+            patch[name] = {**(cur if isinstance(cur, dict) else {}), "value": value, **meta}
         return f"parameter:{name}"
+
+    def _delete_parameter(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        onto = self.composed().ontology
+        if name not in onto.parameters:
+            raise EditError(f"named value '{name}' is unknown")
+        rest = {k: v for k, v in onto.to_dict().items() if k != "parameters"}
+        if re.search(rf"@{re.escape(name)}\b", str(rest)):  # a rule reading it would go with it otherwise
+            raise EditError(f"'{name}' is read by rules or expressions; change those first")
+        if self._owns("parameters", name):
+            del self._section("body", "parameters")[name]
+        else:
+            (self.module.extend.get("parameters") or {}).pop(name, None)
+            self._removed("parameters").append(name)
+        return f"parameter:{name}"
+
+    def _entry(self, section: str, kind: str, a: dict, fields: tuple) -> str:
+        """Add or change one entry of a section that takes what it is given: its fields, over what was there."""
+        name = str(a.get("name") or "")
+        spec = {k: copy.deepcopy(a[k]) for k in fields if k in a}
+        if self._owns(section, name):
+            held = self._section("body", section)[name]
+            held.update(spec)
+            for k in [k for k, v in held.items() if v in ("", None, [], {})]:
+                del held[k]
+        else:
+            self._section("extend", section).setdefault(name, {}).update(spec)
+        return f"{kind}:{name}"
+
+    def _new_entry(self, section: str, kind: str, a: dict, fields: tuple, known) -> str:
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"{kind} name '{name}' must be letters, digits and _ starting with a letter")
+        if name in known:
+            raise EditError(f"{kind} '{name}' already exists")
+        self._section("body", section)[name] = {k: copy.deepcopy(a[k]) for k in fields if a.get(k) not in (None, "", [], {})}
+        return f"{kind}:{name}"
+
+    def _gone_entry(self, section: str, kind: str, a: dict, known) -> str:
+        name = str(a.get("name") or "")
+        if name not in known:
+            raise EditError(f"{kind} '{name}' is unknown")
+        if self._owns(section, name):
+            del self._section("body", section)[name]
+        else:
+            (self.module.extend.get(section) or {}).pop(name, None)
+            self._removed(section).append(name)
+        return f"{kind}:{name}"
+
+    def _add_metric(self, a: dict) -> str:
+        return self._new_entry("metrics", "metric", a, METRIC_FIELDS, self.composed().ontology.metrics)
+
+    def _update_metric(self, a: dict) -> str:
+        if str(a.get("name") or "") not in self.composed().ontology.metrics:
+            raise EditError(f"metric '{a.get('name')}' is unknown")
+        return self._entry("metrics", "metric", a, METRIC_FIELDS)
+
+    def _delete_metric(self, a: dict) -> str:
+        return self._gone_entry("metrics", "metric", a, self.composed().ontology.metrics)
+
+    def _add_identity(self, a: dict) -> str:
+        return self._new_entry("identities", "identity", a, IDENTITY_FIELDS, self.composed().ontology.identities)
+
+    def _update_identity(self, a: dict) -> str:
+        if str(a.get("name") or "") not in self.composed().ontology.identities:
+            raise EditError(f"identity '{a.get('name')}' is unknown")
+        return self._entry("identities", "identity", a, IDENTITY_FIELDS)
+
+    def _delete_identity(self, a: dict) -> str:
+        return self._gone_entry("identities", "identity", a, self.composed().ontology.identities)
+
+    def _add_function(self, a: dict) -> str:
+        return self._new_entry("functions", "function", a, FUNCTION_FIELDS, self.composed().ontology.functions)
+
+    def _update_function(self, a: dict) -> str:
+        if str(a.get("name") or "") not in self.composed().ontology.functions:
+            raise EditError(f"function '{a.get('name')}' is unknown")
+        return self._entry("functions", "function", a, FUNCTION_FIELDS)
+
+    def _delete_function(self, a: dict) -> str:
+        return self._gone_entry("functions", "function", a, self.composed().ontology.functions)
 
     def _action_spec(self, a: dict) -> dict:
         spec: dict[str, Any] = {}
-        for k in ("label", "parameters", "criteria", "transition_to", "approval", "cite"):
+        for k in ("label", "parameters", "criteria", "set", "transition_to", "approval", "cite", "call", "undo"):
             if k in a:
                 spec[k] = a[k]
         return spec
@@ -480,18 +592,75 @@ class Workspace:
         if name in self.composed().ontology.roles:
             raise EditError(f"role '{name}' already exists")
         spec = {k: a[k] for k in ("label", "read", "run", "request", "execute", "mask", "row_filters") if a.get(k)}
+        if a.get("rows"):
+            spec["row_filters"] = self._rows(a["rows"])
+        if (a.get("scope") or {}).get("attribute"):
+            spec["scope"] = self._scope(a["scope"])
         self._section("body", "roles")[name] = spec
         return f"role:{name}"
+
+    def _rows(self, rows: list) -> dict:
+        """Row rules from the form as row filters. One it cannot say is carried as it came."""
+        from xgen_space.check import _find_prop
+
+        onto, out = self.composed().ontology, {}
+        for r in rows:
+            t = str(r.get("type") or "")
+            if t not in onto.objects:
+                raise EditError(f"object type '{t}' is unknown")
+            if r.get("raw"):
+                out[t] = r["raw"]
+                continue
+            who = {"principal": str(r["principal"])} if r.get("principal") else r.get("value")
+            if who in (None, ""):
+                raise EditError(f"{t}: say what the rows are compared with")
+            via = [str(x) for x in r.get("via") or [] if x]
+            spec = _scope_filter(onto, {"via": via, "property": str(r.get("property") or "")}, "", who)
+            if spec is None:
+                raise EditError(f"{t}: the row rule does not reach a property")
+            here = t
+            for step in via:
+                lk = onto.links.get(step) or onto.link_by_inverse(step)
+                if lk is None:
+                    raise EditError(f"link '{step}' is unknown")
+                here = lk.target if lk.name == step else lk.source
+            if _find_prop(onto, here, str(r.get("property") or "")) is None:
+                raise EditError(f"{here} has no property '{r.get('property')}'")
+            out[t] = spec
+        return out
+
+    def _scope(self, scope: dict) -> dict:
+        """An organisation's scope from the form: the signed-in attribute and where each type holds it."""
+        types: dict[str, Any] = {}
+        for r in scope.get("types") or []:
+            via = [str(x) for x in r.get("via") or [] if x]
+            types[str(r.get("type"))] = {"via": via, "property": str(r.get("property"))} if via else str(r.get("property"))
+        return {"attribute": str(scope.get("attribute") or ""), "types": types}
 
     def _update_role(self, a: dict) -> str:
         name = str(a.get("name") or "")
         r = self.composed().ontology.roles.get(name)
         if r is None:
             raise EditError(f"role '{name}' is unknown")
+        rows = self._rows(a["rows"]) if "rows" in a else None
+        scope = self._scope(a["scope"]) if (a.get("scope") or {}).get("attribute") else ({} if "scope" in a else None)
         if self._owns("roles", name):
-            self._section("body", "roles")[name].update({k: a[k] for k in ("label", "read", "run", "request", "execute", "mask") if k in a})
+            spec = self._section("body", "roles")[name]
+            spec.update({k: a[k] for k in ("label", "read", "run", "request", "execute", "mask") if k in a})
+            if rows is not None:
+                spec["row_filters"] = rows
+            if scope is not None:
+                spec["scope"] = scope
+            for k in ("row_filters", "scope"):
+                if not spec.get(k):
+                    spec.pop(k, None)
             return f"role:{name}"
         patch = self._section("extend", "roles").setdefault(name, {})
+        if rows is not None:
+            patch["row_filters"] = {t: v for t, v in rows.items() if r.row_filters.get(t) != v}
+            patch["row_filters_drop"] = [t for t in r.row_filters if t not in rows]
+        if scope is not None and scope != r.scope:
+            patch["scope_set"] = scope
         if "label" in a:
             patch["label"] = a["label"]
         for k in ("read", "run", "request", "execute"):
@@ -558,10 +727,15 @@ class Workspace:
                 owners.add(comp.owner(f"property:{t}.{p}"))
         for lk in self.module.extend.get("links") or {}:
             owners.add(comp.owner(f"link:{lk}"))
-        for section, kind in (("decisions", "decision"), ("actions", "action"), ("roles", "role"), ("parameters", "parameter")):
+        for section, kind in (("decisions", "decision"), ("actions", "action"), ("roles", "role"), ("parameters", "parameter"),
+                              ("metrics", "metric"), ("identities", "identity"), ("functions", "function")):
             owners |= {comp.owner(f"{kind}:{k}") for k in self.module.extend.get(section) or {}}
-        for section in ("decisions", "actions"):
+        for section in ("decisions", "actions", "functions"):
             owners |= {comp.owner(f"object:{spec.get('target')}") for spec in (self.module.body.get(section) or {}).values()}
+        for spec in (self.module.body.get("metrics") or {}).values():
+            owners |= {comp.owner(f"object:{t}") for t in ((spec.get("formula") or {}).get("match") or {}).values()}
+        for spec in (self.module.body.get("identities") or {}).values():
+            owners |= {comp.owner(f"object:{t}") for t in spec.get("members") or {}}
         for s, items in self.module.remove.items():
             if s == "properties":
                 owners |= {comp.owner(f"property:{t}.{p}") for t, ps in items.items() for p in ps}
@@ -571,7 +745,8 @@ class Workspace:
                 owners |= {comp.owner(f"object:{t}") for t in items}
             else:
                 kind = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision",
-                        "actions": "action", "identities": "identity"}.get(s, s)
+                        "actions": "action", "identities": "identity", "parameters": "parameter", "metrics": "metric",
+                        "functions": "function", "roles": "role"}.get(s, s)
                 owners |= {comp.owner(f"{kind}:{k}") for k in items}
         for spec in (self.module.body.get("objects") or {}).values():
             if spec.get("parent"):
@@ -584,12 +759,35 @@ class Workspace:
         self.module.requires = [Requirement(o) for o in sorted(o for o in owners if o and o != NAME)]
 
 
+def row_rule(type_name: str, spec: dict) -> dict:
+    """A row filter as the form reads it. One it cannot say comes back as it is, to be kept."""
+    def side(who: Any) -> dict | None:
+        if isinstance(who, dict):
+            return {"principal": who["principal"]} if set(who) == {"principal"} else None
+        return {"value": who}
+
+    if set(spec) == {"eq"} and str(spec["eq"][0]).startswith("$self.") and side(spec["eq"][1]):
+        return {"type": type_name, "via": [], "property": spec["eq"][0].split(".", 1)[1], **side(spec["eq"][1])}
+    body = spec.get("exists") if set(spec) == {"exists"} else None
+    if body and set((body.get("where") or {})) == {"eq"}:
+        ref, who = body["where"]["eq"]
+        edges, here, via = body.get("edges") or [], "$self", []
+        for e in edges:
+            if len(e) != 3 or e[0] != here:
+                return {"type": type_name, "raw": spec}
+            via.append(e[1])
+            here = e[2]
+        if str(ref).startswith(f"{here}.") and side(who):
+            return {"type": type_name, "via": via, "property": str(ref).split(".", 1)[1], **side(who)}
+    return {"type": type_name, "raw": spec}
+
+
 def _removals(d: dict) -> set[str]:
     """The elements a module dict takes out, as element ids (object:Claim, property:Customer.spent, ...)."""
     out: set[str] = set()
     kinds = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision", "actions": "action",
              "identities": "identity", "questions": "question", "states": "states", "roles": "role",
-             "interfaces": "interface"}
+             "interfaces": "interface", "parameters": "parameter", "metrics": "metric", "functions": "function"}
     for s, items in (d.get("remove") or {}).items():
         if s == "properties":
             out |= {f"property:{t}.{p}" for t, ps in (items or {}).items() for p in ps}
@@ -600,7 +798,7 @@ def _removals(d: dict) -> set[str]:
 
 def _prop_spec(a: dict) -> dict:
     spec = {"type": str(a.get("type") or "string")}
-    for k in ("label", "description", "column", "unit", "expr", "mask", "cite"):
+    for k in ("label", "description", "column", "unit", "expr", "mask", "cite", "transform", "source_type"):
         if a.get(k):
             spec[k] = a[k]
     if a.get("columns"):

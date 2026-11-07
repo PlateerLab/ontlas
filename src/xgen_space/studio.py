@@ -1,13 +1,14 @@
 """Studio: the ontology plus its backends; every read, decision and action goes through here."""
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Callable
 
 from xgen_space.actions import ActionService, SqlWriteback
 from xgen_space.backends.base import Backend, Result
-from xgen_space.check import all_props, check, column_of, find_prop
+from xgen_space.check import all_props, check, column_of, find_prop, interface_view
 from xgen_space.compile.base import Compiled, CompileError, compiler_for
 from xgen_space.conformance import ConformanceReport
 from xgen_space.conformance import run as run_conformance
@@ -68,6 +69,8 @@ class Studio:
         self._compose_kw: dict[str, str] = {}
         self.settings: dict[str, Any] = {}
         self.last_sync: dict[str, Any] = {}
+        self.entries: dict[str, Callable] = {}  # the callables a deployment offers functions (functions.py)
+        self.function_log: deque = deque(maxlen=200)
         from xgen_space.review import ChangeService
 
         self.changes = ChangeService(self)
@@ -183,7 +186,7 @@ class Studio:
             query, extra = apply_role(self.onto, query, role, principal)
             values.update(extra)
         b = self.backend(backend)
-        missing = b.unsupported(query, self.onto)
+        missing = b.unsupported(query, interface_view(self.onto, query))
         if missing:
             raise CompileError(f"backend {b.name} does not support {missing}")
         compiled = b.compiler(self.onto).compile(query)
@@ -388,7 +391,11 @@ class Studio:
             "decisions": {d.name: {"label": d.label, "target": d.target, "outputs": d.outputs}
                           for d in o.decisions.values()},
             "actions": {a.name: {"label": a.label, "target": a.target, "parameters": a.parameters,
-                                 "approval": a.approval} for a in o.actions.values()},
+                                 "approval": a.approval, **({"auto_within": a.auto_within} if a.auto_within else {})}
+                        for a in o.actions.values()},
+            "functions": {f.name: {"label": f.label, "target": f.target, "version": f.version, "owner": f.owner,
+                                   "runtime": f.runtime, "status": f.status, "inputs": f.inputs, "outputs": f.outputs}
+                          for f in o.functions.values()},
             "backends": {n: b.capabilities.to_dict() for n, b in self.backends.items()},
         }
 
@@ -429,6 +436,22 @@ class Studio:
         measured = measure(self, settings)
         results = gates(measured, settings)
         return {"measured": measured, "gates": [_asdict(g) for g in results], "passed": all(g.passed for g in results)}
+
+    def function(self, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
+                 principal: dict | None = None, by: str = "", trial: bool = False) -> dict[str, Any]:
+        """Run a registered function (see functions.py). With `trial`, a person tries out one still in draft."""
+        from xgen_space.functions import run_function
+
+        return run_function(self, name, key, params, role=role, principal=principal, by=by, trial=trial)
+
+    def value_accuracy(self, specs: list[dict] | None = None) -> dict[str, Any]:
+        """Hold what the ontology answers against what the transaction system shows (see review.value_accuracy)."""
+        from xgen_space.review import value_accuracy
+
+        specs = self.flow.values if specs is None else specs
+        if not specs:
+            raise ValueError("no values are configured: give the flow a list of values to compare")
+        return value_accuracy(self, specs)
 
     def agreement(self, spec: dict[str, Any] | None = None) -> dict[str, Any]:
         """Decide past cases again and compare with what was decided then (spec: see review.agreement)."""

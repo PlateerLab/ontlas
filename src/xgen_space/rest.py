@@ -13,7 +13,7 @@ from xgen_space.tools import StudioTools
 
 Handler = Callable[[StudioTools, dict], Any]
 
-ANY = {"description": "Any JSON value"}
+ANY = {"type": "string", "description": "The name of a registered query, or an IR query as JSON text"}
 STRING = {"type": "string"}
 OBJECT = {"type": "object"}
 INT = {"type": "integer"}
@@ -26,6 +26,8 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      {}, [], lambda t, b: t.describe()),
     ("/v1/answer", "POST", "answer_question", "Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause it stands on.",
      {"text": STRING}, ["text"], lambda t, b: t.answer_question(b["text"])),
+    ("/v1/context", "POST", "agent_context", "The definitions and rules a question is about, as text to put in an agent's prompt.",
+     {"text": STRING, "k": INT}, ["text"], lambda t, b: t.agent_context(b["text"], b.get("k", 8))),
     ("/v1/find", "POST", "find_definitions", "The object types, rules, queries and actions a question is about. Read these rather than the whole ontology.",
      {"text": STRING, "k": INT}, ["text"], lambda t, b: t.find_definitions(b["text"], b.get("k", 8))),
     ("/v1/object", "POST", "describe_object", "One object type with its properties, links, decisions and actions.",
@@ -44,6 +46,10 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      {"text": STRING, "params": OBJECT, "backend": STRING}, ["text"], lambda t, b: t.run_cypher(b["text"], b.get("params"), b.get("backend"))),
     ("/v1/decide", "POST", "decide", "Evaluate a decision table for one object: outputs, the rule that matched, the evidence.",
      {"decision": STRING, "key": STRING, "params": OBJECT}, ["decision", "key"], lambda t, b: t.decide(b["decision"], b["key"], b.get("params"))),
+    ("/v1/functions", "GET", "list_functions", "The functions this token may run, with what they take and give, their versions and owners.",
+     {}, [], lambda t, b: t.list_functions()),
+    ("/v1/function", "POST", "run_function", "Run a registered function on one object, or on its inputs alone.",
+     {"name": STRING, "key": STRING, "params": OBJECT}, ["name"], lambda t, b: t.run_function(b["name"], b.get("key", ""), b.get("params"))),
     ("/v1/actions", "POST", "request_action", "Request a declared action. Checks run now; a person approves it before anything is written.",
      {"action": STRING, "key": STRING, "params": OBJECT}, ["action", "key"], lambda t, b: t.request_action(b["action"], b["key"], b.get("params"))),
 ]

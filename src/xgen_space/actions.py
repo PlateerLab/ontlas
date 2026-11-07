@@ -53,6 +53,7 @@ class Proposal:
     call: dict[str, Any] = field(default_factory=dict)
     rolled_back_by: str = ""
     revalidated: list[CheckResult] = field(default_factory=list)  # asked again right before it ran
+    limits: list[dict[str, Any]] = field(default_factory=list)  # each automatic approval limit and how this request fared
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -100,6 +101,8 @@ class SqlWriteback:
         self.backend = backend
 
     def apply(self, onto, type_name: str, key: str, changes: dict[str, Any]) -> int:
+        if not changes:  # an action that only calls out
+            return 0
         type_name, changes = through_view(onto, type_name, changes)
         obj = onto.obj(type_name)
         cols = obj.key_prop.cols
@@ -208,6 +211,18 @@ class HttpCaller:
         return any(host == h.lower() or (h.startswith(".") and host.endswith(h.lower())) for h in self.allow_hosts)
 
     def send(self, spec: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        out = self._exchange(spec, context, 2000)
+        return {**out, "body": out["body"][:500]}
+
+    def ask(self, spec: dict[str, Any], context: dict[str, Any]) -> Any:
+        """A service's answer, read as JSON: what a function gives, or a value to hold another against."""
+        out = self._exchange(spec, context, 1_000_000)
+        try:
+            return json.loads(out["body"])
+        except ValueError:
+            raise ActionError(f"the call to {out['url']} did not answer with JSON") from None
+
+    def _exchange(self, spec: dict[str, Any], context: dict[str, Any], limit: int) -> dict[str, Any]:
         def quoted(v):
             return {k: quoted(x) for k, x in v.items()} if isinstance(v, dict) else urllib.parse.quote(str(v), safe="")
 
@@ -225,14 +240,14 @@ class HttpCaller:
         opener = self.opener or urllib.request.urlopen
         try:
             with opener(req, timeout=float(spec.get("timeout", self.timeout))) as resp:
-                status, text = resp.status, resp.read(2000).decode("utf-8", "replace")
+                status, text = resp.status, resp.read(limit).decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            status, text = e.code, e.read(2000).decode("utf-8", "replace")
+            status, text = e.code, e.read(limit).decode("utf-8", "replace")
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise ActionError(f"the call to {url} failed: {getattr(e, 'reason', e)}") from None
         if status >= 400:
             raise ActionError(f"the call to {url} answered {status}: {text[:200]}")
-        return {"url": url, "method": method, "status": status, "body": text[:500]}
+        return {"url": url, "method": method, "status": status, "body": text}
 
 
 class ActionService:
@@ -342,9 +357,49 @@ class ActionService:
                 outs = res.outputs if isinstance(res.outputs, dict) else {}
                 ok = all(outs.get(k) == v for k, v in c.expect.items())
                 out.append(CheckResult(f"decision:{c.decision}", ok, str(outs)))
+            if c.function:
+                from xgen_space.functions import run_function
+
+                outs = run_function(self.studio, c.function, key)["outputs"]
+                ok = all(outs.get(k) == v for k, v in c.expect.items())
+                out.append(CheckResult(f"function:{c.function}", ok, str(outs)))
             if c.states:
                 state = current.get(obj.states.property) if obj.states else None
                 out.append(CheckResult("states", state in c.states, f"{state} in {c.states}"))
+        return out
+
+    def _limit(self, spec: Any) -> float | None:
+        """A limit as a number: written out, or `@name` for a named value a customer can change in one place."""
+        if isinstance(spec, str) and spec.startswith("@"):
+            spec = self.studio.onto.parameters[spec[1:]].value
+        return None if spec is None else float(spec)
+
+    def _limits(self, a, params: dict[str, Any], current: dict[str, Any] | None, changes: dict[str, Any]) -> list[dict[str, Any]]:
+        """How this request stands against each limit of its action. A value that cannot be read is past the limit."""
+        out = []
+        for spec in a.auto_within:
+            prop, param = spec.get("property", ""), spec.get("parameter", "")
+            before = (current or {}).get(prop) if prop else None
+            after = changes.get(prop, before) if prop else params.get(param)
+            for kind in ("delta", "percent", "max", "min"):
+                if kind not in spec:
+                    continue
+                limit = self._limit(spec[kind])
+                try:
+                    now, was = float(after), float(before) if before is not None else None
+                except (TypeError, ValueError):
+                    now = was = None
+                value = None
+                if now is not None:
+                    if kind == "delta" and was is not None:
+                        value = abs(now - was)
+                    elif kind == "percent" and was:
+                        value = abs(now - was) / abs(was) * 100
+                    elif kind in ("max", "min"):
+                        value = now
+                within = value is not None and (value >= limit if kind == "min" else value <= limit)
+                out.append({"subject": prop or param, "kind": kind, "limit": limit, "value": value, "before": normalize(before),
+                            "after": normalize(after), "within": within})
         return out
 
     def request(self, action: str, key: str, params: dict | None = None, *, actor: Actor) -> Proposal:
@@ -388,9 +443,15 @@ class ActionService:
             p.status = "rejected"
             self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
             return p
-        auto = not a.approval and actor.kind == "human" and self._allowed(actor, "execute", action) \
-            and not self._outside(actor, "execute", a, str(key))
+        p.limits = self._limits(a, params, current, changes)
+        inside = bool(p.limits) and all(x["within"] for x in p.limits)
+        free = not a.approval or inside
+        allowed = actor.kind == "human" or (inside and a.auto_agents)
+        auto = free and allowed and self._allowed(actor, "execute", action) and not self._outside(actor, "execute", a, str(key))
         if auto:
+            if inside:
+                p.approved_by = "auto"
+                self._log(actor, "auto_approved", p, limits=p.limits)
             self._execute(p, actor)
         return p
 

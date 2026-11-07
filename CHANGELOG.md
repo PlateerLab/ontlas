@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.12.0
+
+- An interface is queried like a parent type: `{match: {x: Named}}` reads every type that implements it, on every store. A role reads
+  through it only if it reads each of those types without a row limit, and it sees the strictest mask among them.
+- Functions are a section of the ontology: inputs, outputs, version, owner and status under one contract, carried out as an expression,
+  a decision, a query, a callable the deployment registered or a service on an allowed host. A role is given one by name. `/v1/functions`,
+  `/v1/function`, MCP `list_functions` and `run_function`, `xspace functions` and a tab under definitions. An action can take one as a condition.
+- `approval: {auto_within: [...], agents: false}`: inside its limits an action runs at once, past them a person approves. A limit reads a
+  change (`delta`, `percent`) or a value (`max`, `min`), by number or named value. The request records how it stood.
+- `transform` and `source_type` on a property: how a column becomes its value, compiled into every language.
+- `flow.values` and `max_value_errors`: what the ontology answers held case by case against what the transaction system recorded or answers
+  now. `xspace values` and a card on the check screen.
+- OpenAPI 3 and Swagger 2, in JSON or YAML, read as tables, references and code groups, and each writing operation as a drafted action.
+- Forms for what was module text only: adding a named value, metrics, identities, an action's limits, values it sets and outside calls, a
+  role's rows and organisation scope, a property's transform. A row rule the form cannot say is kept as it is.
+- `/v1/context` and MCP `agent_context` give what a question is about as text for a prompt. `/v1/openapi.json` carries the address it was
+  reached at, and `query` is declared a string, which a parser that wants a type can read.
+- Fixed: `/v1/actions` dropped the connection when a row held a decimal. An action that only calls out wrote an empty update. A crosswalk not
+  written yet no longer fails the database check or the graph load of a copy.
+- A README section on prior art.
+
 ## 0.11.0
 
 - XGEN Space is open source now, under the Apache License 2.0. Versions before this one stay under the terms they shipped with.

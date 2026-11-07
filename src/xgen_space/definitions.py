@@ -63,7 +63,7 @@ MESSAGE_HEADERS = {
     "kind": ["구분", "메시지구분", "유형", "kind", "type", "category"],
     "screen": ["화면", "화면명", "화면id", "화면코드", "screen", "page"],
 }
-SECTIONS = ("tables", "codes", "terms", "messages", "documents")  # the keys of the canonical JSON
+SECTIONS = ("tables", "codes", "terms", "messages", "documents", "apis")  # the keys of the canonical JSON
 DOCUMENT_KINDS = ("policy", "screen", "other")
 INDEX_HEADERS = {
     "table": ["테이블물리", "테이블명", "테이블id", "물리테이블명", "table", "tablename", "table_name"],
@@ -123,6 +123,7 @@ class Definitions:
     terms: list[dict] = field(default_factory=list)
     messages: list[dict] = field(default_factory=list)  # {code, text, kind, screen}
     documents: list[dict] = field(default_factory=list)  # {name, kind, text, sections: [{title, text}]}
+    apis: list[dict] = field(default_factory=list)  # {name, label, method, url, table, parameters}: an API's operations
 
     def table(self, name: str) -> TableDef | None:
         low = name.lower()
@@ -138,7 +139,7 @@ class Definitions:
     def merge(self, other: Definitions) -> Definitions:
         out = Definitions(dict(self.tables), dict(self.codes), [*self.sources, *other.sources],
                           _later(self.terms, other.terms, "term"), _later(self.messages, other.messages, "code"),
-                          _later(self.documents, other.documents, "name"))
+                          _later(self.documents, other.documents, "name"), _later(self.apis, other.apis, "name"))
         for t in other.tables.values():
             same = out.table(t.name)
             if same is None:
@@ -155,13 +156,14 @@ class Definitions:
                 "references": sum(len(t.references) for t in self.tables.values()), "codes": len(self.codes),
                 "code_values": sum(len(g.values) for g in self.codes.values()),
                 **{k: len(v) for k, v in (("terms", self.terms), ("messages", self.messages),
-                                          ("documents", self.documents)) if v}}
+                                          ("documents", self.documents), ("apis", self.apis)) if v}}
 
     def to_dict(self) -> dict:
         return {"tables": [_clean(asdict(t)) for t in self.tables.values()],
                 "codes": {k: {**({"label": g.label} if g.label else {}), **({"refs": g.refs} if g.refs else {}),
                               "values": g.values} for k, g in self.codes.items()},
-                "terms": self.terms, "messages": self.messages, "documents": self.documents}
+                "terms": self.terms, "messages": self.messages, "documents": self.documents,
+                **({"apis": self.apis} if self.apis else {})}
 
     @classmethod
     def from_dict(cls, d: dict, source: str = "") -> Definitions:
@@ -205,7 +207,7 @@ class Definitions:
         terms = [x for x in map(_term, d.get("terms") or []) if x["term"]]
         messages = [x for x in map(_message, d.get("messages") or []) if x["code"]]
         documents = [x for x in map(_document, d.get("documents") or []) if x["name"]]
-        return cls(tables, codes, [source] if source else [], terms, messages, documents)
+        return cls(tables, codes, [source] if source else [], terms, messages, documents, [dict(a) for a in d.get("apis") or []])
 
 
 def read_definitions(data: bytes, source: str) -> Definitions | None:

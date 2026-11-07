@@ -20,7 +20,7 @@ from xgen_space.values import from_source, normalize, parse_datetime
 STAGES = ("source", "define", "bind", "project", "index", "query", "decide", "check")
 REQUIRED = ("source", "define")
 GATES = {"bind": ("max_errors", "max_warnings"), "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
-         "check": ("min_accuracy", "min_grounded")}
+         "check": ("min_accuracy", "min_grounded", "max_value_errors")}
 DEFAULT_GATES = {"bind": {"max_errors": 0}, "query": {"min_agree": 1.0}}
 
 
@@ -52,6 +52,7 @@ class FlowSettings:
     off: list[str] = field(default_factory=list)
     gates: dict[str, dict[str, float]] = field(default_factory=lambda: json.loads(json.dumps(DEFAULT_GATES)))
     agreement: dict[str, Any] = field(default_factory=dict)
+    values: list[dict[str, Any]] = field(default_factory=list)  # what is held against the transaction system (value_accuracy)
 
     @classmethod
     def from_dict(cls, d: dict | None) -> FlowSettings:
@@ -59,7 +60,7 @@ class FlowSettings:
         out = cls(off=[str(s) for s in d.get("off") or []],
                   gates={**json.loads(json.dumps(DEFAULT_GATES)), **{k: dict(v or {}) for k, v in
                                                                      (d.get("gates") or {}).items()}},
-                  agreement=dict(d.get("agreement") or {}))
+                  agreement=dict(d.get("agreement") or {}), values=[dict(v) for v in d.get("values") or []])
         issues = out.issues()
         if issues:
             raise ValueError("; ".join(issues))
@@ -92,10 +93,18 @@ class FlowSettings:
                     out.append(f"agreement needs '{k}'")
             if not a.get("inputs") and not a.get("key"):
                 out.append("agreement needs 'key' (decide each case by its object) or 'inputs' (the values then)")
+        for v in self.values:
+            who = v.get("name") or v.get("label") or "a value"
+            for k in ("query", "key", "truth", "answer"):
+                if not v.get(k):
+                    out.append(f"values: {who} needs '{k}'")
+            if v.get("answer") and not any(k in v["answer"] for k in ("decision", "function", "property")):
+                out.append(f"values: {who} answers by a decision, a function or a property")
         return out
 
     def to_dict(self) -> dict:
-        return {"off": list(self.off), "gates": json.loads(json.dumps(self.gates)), "agreement": dict(self.agreement)}
+        return {"off": list(self.off), "gates": json.loads(json.dumps(self.gates)), "agreement": dict(self.agreement),
+                "values": [dict(v) for v in self.values]}
 
     def on(self, stage: str) -> bool:
         return stage not in self.off
@@ -163,6 +172,65 @@ def agreement(studio, spec: dict[str, Any]) -> dict[str, Any]:
             "mismatches": mismatches, "confusion": confusion}
 
 
+def _answer(studio, spec: dict[str, Any], key: Any) -> Any:
+    """What the ontology says of one case."""
+    if spec.get("decision"):
+        outs = studio.decide(spec["decision"], key).outputs
+        return outs.get(spec.get("output", "")) if isinstance(outs, dict) else outs
+    if spec.get("function"):
+        return studio.function(spec["function"], key)["outputs"].get(spec.get("output", ""))
+    row = studio.fetch(spec.get("type", ""), key)
+    return row.get(spec["property"]) if row else None
+
+
+def _truth(studio, truth: Any, row: dict[str, Any], key: Any) -> Any:
+    """What the transaction system shows: a column of the case, or its API."""
+    if isinstance(truth, str):
+        return row.get(truth)
+    caller = studio.actions.caller
+    if caller is None:
+        raise ValueError("no allowed host is configured for calls")
+    got = caller.ask(truth, {"key": key, "row": {k: normalize(v) for k, v in row.items()}})
+    for step in [s for s in str(truth.get("path", "")).split(".") if s]:
+        got = got.get(step) if isinstance(got, dict) else None
+    return got
+
+
+def _same(a: Any, b: Any, tolerance: float) -> bool:
+    if isinstance(a, bool) or isinstance(b, bool):  # a store may keep a flag as 0 or 1
+        return a is not None and b is not None and bool(a) == bool(b)
+    if a is None or b is None:
+        return normalize(a) == normalize(b)
+    try:
+        return abs(float(a) - float(b)) <= tolerance
+    except (TypeError, ValueError):
+        return normalize(a) == normalize(b)
+
+
+def value_accuracy(studio, specs: list[dict[str, Any]]) -> dict[str, Any]:
+    """The values a customer sees, held case by case against the transaction system: an answer that names the wrong price or
+    fee is an error however right its rule reads.
+
+    Each spec: name, label, query (registered, one row per case), key (the column with the object's key), truth (the column
+    the system recorded, or a request {url, path} to its API), answer ({decision, output}, {function, output} or
+    {type, property}) and tolerance.
+    """
+    items, cases, errors = [], 0, 0
+    for spec in specs:
+        rows = studio.run(spec["query"], dict(spec.get("params") or {})).records()
+        wrong = []
+        for r in rows:
+            key = r.get(spec["key"])
+            said, real = _answer(studio, spec["answer"], key), _truth(studio, spec["truth"], r, key)
+            if not _same(said, real, float(spec.get("tolerance", 0))):
+                wrong.append({"key": normalize(key), "answer": normalize(said), "truth": normalize(real)})
+        items.append({"name": spec.get("name", ""), "label": spec.get("label") or spec.get("name", ""), "cases": len(rows),
+                      "errors": len(wrong), "mismatches": wrong})
+        cases += len(rows)
+        errors += len(wrong)
+    return {"cases": cases, "errors": errors, "rate": (cases - errors) / cases if cases else None, "items": items}
+
+
 def measure(studio, settings: FlowSettings) -> dict[str, Any]:
     """The numbers the pass conditions read, for the stages that are on."""
     out: dict[str, Any] = {}
@@ -188,6 +256,12 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
         q = studio.questions()
         out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in q.results if not r.passed],
                         "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in q.results if not r.grounded}}
+    if settings.on("check") and settings.values:
+        try:
+            v = value_accuracy(studio, settings.values)
+            out.setdefault("check", {}).update({"value_errors": v["errors"], "value_cases": v["cases"], "values": v["items"]})
+        except Exception as e:  # a value that cannot be read is a failed condition, not a crash of the review
+            out.setdefault("check", {}).update({"value_errors": 1, "value_error": f"{type(e).__name__}: {e}"})
     if settings.on("decide") and settings.agreement:
         try:
             out["decide"] = agreement(studio, settings.agreement)
@@ -203,7 +277,8 @@ def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
               ("query", "min_agree"): (measured.get("query") or {}).get("share"),
               ("decide", "min_agreement"): (measured.get("decide") or {}).get("rate"),
               ("check", "min_accuracy"): (measured.get("check") or {}).get("accuracy"),
-              ("check", "min_grounded"): (measured.get("check") or {}).get("grounded")}
+              ("check", "min_grounded"): (measured.get("check") or {}).get("grounded"),
+              ("check", "max_value_errors"): (measured.get("check") or {}).get("value_errors")}
     out = []
     for stage, conds in settings.gates.items():
         if not settings.on(stage):
@@ -230,7 +305,7 @@ def _elements(onto) -> dict[str, str]:
         for p, v in props.items():
             out[f"property:{name}.{p}"] = json.dumps(v, sort_keys=True, ensure_ascii=False)
     for section, kind in (("links", "link"), ("actions", "action"), ("roles", "role"), ("queries", "query"),
-                          ("identities", "identity")):
+                          ("identities", "identity"), ("functions", "function")):
         for k, v in (d.get(section) or {}).items():
             out[f"{kind}:{k}"] = json.dumps(v, sort_keys=True, ensure_ascii=False)
     for name, dt in (d.get("decisions") or {}).items():
@@ -255,6 +330,7 @@ def trial(studio, modules: list[Module], settings: FlowSettings):
 
     copy = Studio.from_modules(modules, library=studio.library, now=studio.now, **studio._compose_kw)
     copy.settings = dict(studio.settings)
+    copy.entries, copy.actions.caller = studio.entries, studio.actions.caller
     if studio.source:
         copy.backends[studio.source] = studio.backends[studio.source]
         copy.source = studio.source

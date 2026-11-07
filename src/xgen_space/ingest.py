@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import os
 import re
 import struct
@@ -26,7 +27,7 @@ from datetime import datetime, timedelta
 from html.parser import HTMLParser
 from itertools import accumulate
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from xml.parsers import expat
 
 from xgen_space.definitions import (
@@ -1377,7 +1378,185 @@ def _sqlite(data: bytes, source: str) -> Definitions:
     return out
 
 
+_API_TYPES = {"integer": "integer", "number": "decimal", "boolean": "boolean"}
+_API_WRITES = ("post", "put", "patch", "delete")
+
+
+def _api_spec(data: bytes, source: str) -> dict | None:
+    """The document of an OpenAPI or Swagger file, in JSON or YAML; None for anything else."""
+    text = data.decode("utf-8-sig", "replace")
+    if '"openapi"' not in text and '"swagger"' not in text and "openapi:" not in text and "swagger:" not in text:
+        return None
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        import yaml
+
+        try:
+            doc = yaml.safe_load(text)
+        except yaml.YAMLError:
+            return None
+    return doc if isinstance(doc, dict) and ("openapi" in doc or "swagger" in doc) else None
+
+
+def _api_ref(ref: Any) -> str:
+    return str(ref).rsplit("/", 1)[-1] if ref else ""
+
+
+def _api_props(schema: dict, schemas: dict, seen: frozenset = frozenset()) -> tuple[dict, list]:
+    """A schema's properties and required names, through allOf and references to other schemas."""
+    props, required = dict(schema.get("properties") or {}), list(schema.get("required") or [])
+    for part in schema.get("allOf") or []:
+        name = _api_ref(part.get("$ref"))
+        if name and name in seen:
+            continue
+        p, r = _api_props(schemas.get(name, {}) if name else part, schemas, seen | {name})
+        props = {**p, **props}
+        required += r
+    return props, required
+
+
+def _api_key(table: str, names: list[str], schema: dict) -> str:
+    """A schema's key: what it says with x-primary-key, else the name a key usually goes by."""
+    said = schema.get("x-primary-key")
+    if isinstance(said, str) and said in names:
+        return said
+    low = {n.lower(): n for n in names}
+    for n in ("id", f"{table.lower()}_id", f"{table.lower()}id", f"{table.lower()}no", f"{table.lower()}_no", "code"):
+        if n in low:
+            return low[n]
+    return ""
+
+
+def _api_target(path: str, tables: dict[str, TableDef]) -> str:
+    """The schema an operation acts on: the last word of its path that names one."""
+    def singular(w: str) -> str:
+        return w[:-3] + "y" if w.endswith("ies") else (w[:-1] if w.endswith("s") else w)
+
+    words = [w for w in path.split("/") if w and not w.startswith("{")]
+    flat = {re.sub(r"[-_]", "", n).lower(): n for n in tables}
+    for w in reversed(words):
+        hit = flat.get(re.sub(r"[-_]", "", singular(w)).lower()) or flat.get(re.sub(r"[-_]", "", w).lower())
+        if hit:
+            return hit
+    return ""
+
+
+def _api_name(method: str, path: str, op: dict) -> str:
+    said = str(op.get("operationId") or "")
+    if said:
+        return re.sub(r"\W", "_", said)
+    words = [w for w in re.split(r"[/{}_-]+", path) if w]
+    return method + "".join(w[:1].upper() + w[1:] for w in words)
+
+
+def _api_column(table: TableDef, name: str, spec: dict, required: list, schemas: dict, codes: dict, key: str) -> None:
+    ref = _api_ref(spec.get("$ref"))
+    if ref:  # another schema held inline: a reference to it, under a column of its own
+        col = f"{name}_key"
+        table.columns.append(ColumnDef(name=col, label=str(spec.get("title") or name), required=name in required))
+        table.references.append({"columns": [col], "table": ref, "ref_columns": []})
+        return
+    kind = spec.get("type", "string")
+    kind = kind[0] if isinstance(kind, list) and kind else kind
+    if kind in ("object", "array"):
+        return  # a list of other schemas is told from their side, by _api_lists
+    fmt = spec.get("format", "")
+    out = _API_TYPES.get(kind) or {"date": "date", "date-time": "datetime"}.get(fmt, "string")
+    col = ColumnDef(name=name, label=str(spec.get("title") or ""), type=out, length=int(spec.get("maxLength") or 0),
+                    pk=name == key, required=name in required or name == key, description=str(spec.get("description") or ""))
+    if spec.get("enum"):
+        col.code = f"{table.name}.{name}"
+        names = spec.get("x-enum-varnames") or spec.get("x-enumNames") or []
+        codes[col.code] = CodeGroup(col.code, col.label or name, [
+            {"code": str(v), "name": str(names[i]) if i < len(names) else str(v), "use": True} for i, v in enumerate(spec["enum"])])
+    table.columns.append(col)
+
+
+def _api_lists(tables: dict[str, TableDef], schemas: dict) -> None:
+    """A schema that lists another: the listed one points back at it, as a child row points at its parent."""
+    for name, schema in schemas.items():
+        parent = tables.get(name)
+        if parent is None or not parent.primary_key:
+            continue
+        props, _ = _api_props(schema, schemas)
+        for spec in props.values():
+            child = tables.get(_api_ref((spec.get("items") or {}).get("$ref"))) if spec.get("type") == "array" else None
+            if child is None or child is parent:
+                continue
+            col = f"{name.lower()}_{parent.primary_key[0]}"
+            if child.column(col) is None:
+                child.columns.append(ColumnDef(name=col, label=parent.label or name))
+                child.references.append({"columns": [col], "table": name, "ref_columns": list(parent.primary_key)})
+
+
+def _api_operations(doc: dict, tables: dict[str, TableDef]) -> tuple[list[dict], list[dict]]:
+    """What the API offers, as operations a draft can turn into actions, and as sections to read."""
+    servers = doc.get("servers") or [{}]
+    base = str(servers[0].get("url", "") if isinstance(servers[0], dict) else "")
+    if not base and doc.get("host"):
+        base = f"https://{doc['host']}{doc.get('basePath', '')}"
+    apis, sections = [], []
+    for path, item in (doc.get("paths") or {}).items():
+        if not isinstance(item, dict):
+            continue
+        for method, op in item.items():
+            if method not in ("get", *_API_WRITES) or not isinstance(op, dict):
+                continue
+            label = str(op.get("summary") or op.get("description") or "").split("\n")[0][:80]
+            sections.append({"title": f"{method.upper()} {path}", "text": label or str(op.get("description") or "")})
+            if method not in _API_WRITES:
+                continue
+            body = (((op.get("requestBody") or {}).get("content") or {}).get("application/json") or {}).get("schema") or {}
+            props, need = _api_props({"allOf": [body]} if body.get("$ref") else body, doc.get("components", {}).get("schemas", {})
+                                     or doc.get("definitions", {}))
+            params = {k: {"type": _API_TYPES.get(v.get("type", ""), "string"), "label": str(v.get("title") or v.get("description") or k)[:40],
+                          "required": k in need} for k, v in props.items() if v.get("type") not in ("object", "array") and "$ref" not in v}
+            apis.append({"name": _api_name(method, path, op), "label": label, "method": method.upper(), "url": base + path,
+                         "path": path, "table": _api_target(path, tables), "parameters": params})
+    return apis, sections
+
+
+def _api(doc: dict, source: str) -> Definitions:
+    """An OpenAPI or Swagger description: schemas become tables, enums become codes, operations become actions to review."""
+    schemas = (doc.get("components") or {}).get("schemas") or doc.get("definitions") or {}
+    tables: dict[str, TableDef] = {}
+    codes: dict[str, CodeGroup] = {}
+    for name, schema in schemas.items():
+        props, required = _api_props(schema, schemas)
+        if not props:
+            continue
+        t = TableDef(name, str(schema.get("title") or ""), str(schema.get("description") or ""))
+        key = _api_key(name, list(props), schema)
+        for prop, spec in props.items():
+            _api_column(t, prop, spec, required, schemas, codes, key)
+        t.primary_key = [key] if key else []
+        tables[name] = t
+    for t in tables.values():
+        for r in t.references:
+            target = tables.get(r["table"])
+            r["ref_columns"] = list(target.primary_key) if target else []
+        t.references = [r for r in t.references if r["ref_columns"]]
+    _api_lists(tables, schemas)
+    apis, sections = _api_operations(doc, tables)
+    title = str((doc.get("info") or {}).get("title") or Path(source).stem)
+    text = "\n".join(f"{s['title']} {s['text']}".strip() for s in sections)
+    if not tables and not apis:
+        raise IngestError(f"{source}: the API description has no schemas or operations", "format")
+    return Definitions(tables, codes, [source], documents=[{"name": title, "kind": "api", "text": text, "sections": sections}], apis=apis)
+
+
+def _yaml(data: bytes, source: str) -> Definitions:
+    doc = _api_spec(data, source)
+    if doc is None:
+        raise IngestError(f"{source}: a YAML file here is an OpenAPI or Swagger description; this is neither", "format")
+    return _api(doc, source)
+
+
 def _json(data: bytes, source: str) -> Definitions:
+    doc = _api_spec(data, source)
+    if doc is not None:
+        return _api(doc, source)
     out = read_definitions(data, f"{Path(source).stem}.json")
     if out is None:
         raise IngestError(f"{source}: no tables, codes, terms, messages or documents found", "format")
@@ -2250,4 +2429,5 @@ register(".txt", _txt)
 register(".pdf", _pdf)
 register(SHEETS, _sheets)
 register(".json", _json)
+register([".yaml", ".yml"], _yaml)
 register([".db", ".sqlite", ".sqlite3"], _sqlite)

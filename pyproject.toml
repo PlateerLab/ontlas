@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xgen-space"
-version = "0.11.0"
+version = "0.12.0"
 description = "One space for every kind of data an AI can use: files, documents, vectors, graphs and ontologies, tied to no store, model, domain or platform."
 readme = "README.md"
 requires-python = ">=3.10"

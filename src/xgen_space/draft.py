@@ -747,6 +747,7 @@ class Draft:
     decisions: dict[str, dict] = field(default_factory=dict)  # drawn from past outcomes (induce.py), then edited
     terms: list[dict] = field(default_factory=list)  # from a glossary: a dictionary module goes with the draft
     messages: list[dict] = field(default_factory=list)
+    api_actions: dict[str, dict] = field(default_factory=dict)  # an API's writing operations, each behind a person
 
     def revise(self, *, drop: list[str] = (), labels: dict[str, str] | None = None, keys: dict[str, str] | None = None,
                types: dict[str, str] | None = None, values: dict[str, list[str]] | None = None,
@@ -843,7 +844,7 @@ class Draft:
                 name = f"set{o.name}{_pascal(target, 'State')}"
                 out[name] = {"label": words["action"].format(o=o.label, s=target), "target": o.name,
                              "transition_to": target, "approval": True}
-        return out
+        return {**out, **self.api_actions}
 
     def person(self) -> PlannedObject | None:
         """The table of people whose own rows a scoped role reads, by the person name hints."""
@@ -990,7 +991,7 @@ class Draft:
                   "states": s.states, "initial": s.initial, "why": s.why, "history": s.history,
                   "transitions": [{"from": a, "to": b, "seen": n} for a, b, n in s.transitions]} for s in self.states]
         rules += [{"element": f"action:{k}", "kind": "action", "label": v["label"], "object": v["target"],
-                   "to": v["transition_to"]} for k, v in self.actions().items()]
+                   "to": v["transition_to"]} for k, v in self.actions().items() if v.get("transition_to")]
         rules += [{"element": f"role:{k}", "kind": "role", "label": v["label"], "read": v["read"],
                    "filters": sorted(v.get("row_filters", {}))} for k, v in self.roles().items()]
         rules += [{"element": f"question:{q['id']}", "kind": "question", "text": q["text"], "query": q["query"],
@@ -1179,6 +1180,8 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     d = Draft(name, label or name, list(objects.values()), links, profs, skipped, loaded, origin, lang, rules,
               terms=list(getattr(definitions, "terms", None) or []),
               messages=list(getattr(definitions, "messages", None) or []))
+    if definitions is not None:
+        d.api_actions = _api_actions(d.objects, definitions)
     if definitions is not None and rules.code_tables:
         from xgen_space.codetables import code_tables
 
@@ -1188,6 +1191,22 @@ def draft(backend, *, name: str = "my-data", label: str = "", tables: list[str] 
     if rules.questions:
         d.answers = _answers(backend, d)
     return d
+
+
+def _api_actions(objects, defs) -> dict[str, dict]:
+    """An operation that writes, on a table the draft made into an object: an action that calls it, with a person's approval."""
+    by_table = {o.table: o for o in objects}
+    out: dict[str, dict] = {}
+    for api in getattr(defs, "apis", None) or []:
+        o = by_table.get(api.get("table"))
+        if o is None:
+            continue
+        key = re.findall(r"\{(\w+)\}", api.get("url", ""))
+        url = re.sub(r"\{\w+\}", "$key", api["url"], count=1) if key else api["url"]
+        params = dict(api.get("parameters") or {})
+        call = {"url": url, "method": api["method"], **({"body": {k: f"${k}" for k in params}} if params else {})}
+        out[api["name"]] = {"label": api.get("label") or api["name"], "target": o.name, "parameters": params, "call": call, "approval": True}
+    return out
 
 
 def _annotate(objects: dict[str, PlannedObject], defs) -> None:

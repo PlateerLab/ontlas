@@ -105,6 +105,9 @@ class SqlCompiler(Compiler):
         names = stored_props(self.onto, obj.name)
         parts = []
         for s in subs:
+            made = [n for n in names if find_prop(self.onto, s, n).expr]
+            if made:
+                raise CompileError(f"{s}.{made[0]} is computed, so {obj.name} cannot read it as a column")
             cols = ", ".join(f"{joined('', columns_of(self.onto, s, n))} AS {qi(n)}" for n in names)
             parts.append(f"SELECT {cols}, '{s}' AS {qi('__type')} FROM {qi(self.onto.objects[s].table)}")
         return "(" + " UNION ALL ".join(parts) + ")"

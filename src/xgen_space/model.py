@@ -19,6 +19,9 @@ class ModelError(ValueError):
 KEY_SEP = "|"  # between the values of a key read from several columns
 TEXT_SUFFIX = "__text"        # the stored text of a date kept as text
 CURRENT_SUFFIX = "__current"  # a period row's value while the row is valid, else null
+RAW_SUFFIX = "__raw"          # the stored value of a property that a transform changes on its way in
+FUNCTION_RUNTIMES = ("expr", "decision", "query", "python", "http")
+FUNCTION_STATUS = ("draft", "active", "retired")
 
 
 @dataclass
@@ -38,6 +41,8 @@ class Property:
     labels: dict[str, str] = field(default_factory=dict)  # an allowed value's name (a code's name), by value
     columns: list[str] = field(default_factory=list)  # read from several columns: a composite key or reference
     format: str = ""  # a date stored as text in this layout, such as YYYYMMDD (see expr.date_format)
+    transform: str = ""  # how the column becomes this value, over `value`: value / 100, value = 'Y'
+    source_type: str = ""  # the column's own type where a transform changes it; the property's type otherwise
     internal: bool = False  # made while loading, so not part of the definition: it is left out when written back
 
     @property
@@ -210,6 +215,7 @@ class Criterion:
     decision: str = ""
     expect: dict[str, Any] = field(default_factory=dict)
     states: list[str] = field(default_factory=list)
+    function: str = ""
 
 
 @dataclass
@@ -225,6 +231,8 @@ class ActionType:
     cite: str = ""
     call: dict[str, Any] = field(default_factory=dict)  # an external request sent after the change is written
     undo: dict[str, Any] = field(default_factory=dict)  # the request that reverses `call`, for a rollback
+    auto_within: list[dict[str, Any]] = field(default_factory=list)  # inside all of these, no person need approve
+    auto_agents: bool = False  # an agent's request may run on its own too; a person's may by default
 
 
 @dataclass
@@ -343,6 +351,29 @@ class Metric:
 
 
 @dataclass
+class Function:
+    """Logic with a contract: what it takes, what it gives, who owns it, which version runs (see functions.py)."""
+
+    name: str
+    runtime: str = "expr"
+    target: str = ""  # the object type it is run on; none for one that takes only inputs
+    label: str = ""
+    description: str = ""
+    version: str = "1.0.0"
+    owner: str = ""
+    status: str = "active"
+    inputs: dict[str, Any] = field(default_factory=dict)  # as an action's parameters
+    outputs: dict[str, str] = field(default_factory=dict)  # name -> type
+    expr: str = ""
+    decision: str = ""
+    query: str = ""
+    entry: str = ""  # the name a deployment registered a callable under; a module never names code itself
+    call: dict[str, Any] = field(default_factory=dict)
+    depends: list[str] = field(default_factory=list)  # what it needs beyond the definition: a model, a service
+    cite: str = ""
+
+
+@dataclass
 class Question:
     id: str
     text: str
@@ -372,6 +403,7 @@ class Ontology:
     parameters: dict[str, Parameter] = field(default_factory=dict)
     metrics: dict[str, Metric] = field(default_factory=dict)
     conflicts: dict[str, SourceConflict] = field(default_factory=dict)  # what is recorded; rules can show more
+    functions: dict[str, Function] = field(default_factory=dict)
     clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
@@ -385,6 +417,11 @@ class Ontology:
             return self.links[name]
         except KeyError:
             raise ModelError(f"unknown link '{name}'") from None
+
+    def crosswalks(self) -> set[str]:
+        """The tables resolving an identity writes: absent until then, which is no fault of the source."""
+        return {i.table for i in self.identities.values()} | {
+            i.member_table(m) for i in self.identities.values() for m in i.members}
 
     def link_by_inverse(self, name: str) -> LinkType | None:
         return next((lk for lk in self.links.values() if lk.inverse == name), None)
@@ -467,7 +504,8 @@ def _prop(name: str, d: Any) -> Property:
                     values=list(values), required=bool(d.get("required", False)),
                     cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
                     mask=str(d.get("mask", "") or ""), labels=labels, columns=columns,
-                    format=str(d.get("format", "") or ""))
+                    format=str(d.get("format", "") or ""), transform=str(d.get("transform", "") or ""),
+                    source_type=str(d.get("source_type", "") or ""))
 
 
 def _states(d: dict | None) -> StateMachine | None:
@@ -492,10 +530,28 @@ def _text_dates(props: dict[str, Property]) -> None:
             p.expr = f"text_date({raw.name}, '{p.format}')"
 
 
+def _over(transform: str, name: str) -> str:
+    """A transform with `value` read as the stored property; text in quotes stays as it is."""
+    parts = re.split(r"('[^']*')", transform)
+    return "".join(p if i % 2 else re.sub(r"\bvalue\b", name, p) for i, p in enumerate(parts))
+
+
+def _transforms(props: dict[str, Property]) -> None:
+    """A column that needs changing on its way in reads like a computed property over what is stored, so every language
+    sees the changed value and a graph holds the stored one."""
+    for p in list(props.values()):
+        if p.transform and not p.expr and not p.columns:
+            raw = Property(p.name + RAW_SUFFIX, p.source_type or p.type, description=f"{p.name} as stored",
+                           required=p.required, column=p.column or p.name, mask=p.mask, internal=True)
+            props[raw.name] = raw
+            p.expr = _over(p.transform, raw.name)
+
+
 def _object(name: str, d: dict) -> ObjectType:
     source = d.get("source") or {}
     props = {k: _prop(k, v) for k, v in d.get("properties", {}).items()}
     _text_dates(props)
+    _transforms(props)
     series = dict(d.get("series") or {})
     if series.get("time", "") + TEXT_SUFFIX in props:  # a graph holds the stored text, which sorts the same
         series["time"] += TEXT_SUFFIX
@@ -583,11 +639,22 @@ def _metric(name: str, d: dict) -> Metric:
 
 def _action(name: str, d: dict) -> ActionType:
     crit = [Criterion(decision=c.get("decision", ""), expect=dict(c.get("expect", {})),
-                      states=list(c.get("states", []))) for c in d.get("criteria", [])]
+                      states=list(c.get("states", [])), function=c.get("function", "")) for c in d.get("criteria", [])]
+    approval = d.get("approval", True)
+    limits = approval if isinstance(approval, dict) else {}  # {auto_within: [...], agents: true}: a person past the limits
     return ActionType(name=name, target=d["target"], label=d.get("label", ""), parameters=dict(d.get("parameters", {})),
                       criteria=crit, set=dict(d.get("set", {})), transition_to=d.get("transition_to", ""),
-                      approval=bool(d.get("approval", True)), cite=d.get("cite", ""), call=dict(d.get("call") or {}),
-                      undo=dict(d.get("undo") or {}))
+                      approval=True if limits else bool(approval), cite=d.get("cite", ""), call=dict(d.get("call") or {}),
+                      undo=dict(d.get("undo") or {}), auto_within=[dict(x) for x in limits.get("auto_within") or []],
+                      auto_agents=bool(limits.get("agents", False)))
+
+
+def _function(name: str, d: dict) -> Function:
+    return Function(name, str(d.get("runtime", "expr")), d.get("target", ""), d.get("label", ""), d.get("description", ""),
+                    str(d.get("version", "1.0.0")), d.get("owner", ""), str(d.get("status", "active")),
+                    dict(d.get("inputs") or {}), {str(k): str(v) for k, v in (d.get("outputs") or {}).items()},
+                    str(d.get("expr", "") or ""), d.get("decision", ""), d.get("query", ""), d.get("entry", ""),
+                    dict(d.get("call") or {}), [str(x) for x in d.get("depends") or []], d.get("cite", ""))
 
 
 def _role(name: str, d: dict) -> Role:
@@ -633,9 +700,10 @@ def expand_identities(objects: dict[str, ObjectType], links: dict[str, LinkType]
                                        label=f"{ident.label or ident.name} 구성원")
 
 
-def _scope_filter(onto: Ontology, where: Any, attribute: str) -> dict | None:
-    """The row filter of one scoped type: its own property, or one reached over links."""
-    who = {"principal": attribute}
+def _scope_filter(onto: Ontology, where: Any, attribute: str, who: Any = None) -> dict | None:
+    """The row filter of one scoped type: its own property, or one reached over links. It compares with the signed-in
+    attribute, or with `who` when a value is given."""
+    who = {"principal": attribute} if who is None else who
     if isinstance(where, str):
         return {"eq": [f"$self.{where}", who]}
     if not isinstance(where, dict) or not where.get("property"):
@@ -735,6 +803,7 @@ def _from_dict(d: dict) -> Ontology:
         parameters=parameters,
         metrics={k: _metric(k, v) for k, v in (d.get("metrics") or {}).items()},
         conflicts={k: _conflict(k, v) for k, v in (d.get("conflicts") or {}).items()},
+        functions={k: _function(k, v) for k, v in (d.get("functions") or {}).items()},
     )
     _period_values(onto)
     _role_scopes(onto)
@@ -756,8 +825,9 @@ def _to_dict(o: Ontology) -> dict:
         props = {p.name: _clean({"type": p.type, "label": p.label, "description": p.description,
                                  "column": p.column, "unit": p.unit, "values": p.values, "required": p.required,
                                  "cite": p.cite, "aligned": p.aligned, "mask": p.mask, "labels": p.labels,
-                                 "expr": "" if p.name + TEXT_SUFFIX in t.properties else p.expr,
-                                 "columns": p.columns, "format": p.format})
+                                 "expr": "" if p.transform or p.name + TEXT_SUFFIX in t.properties else p.expr,
+                                 "columns": p.columns, "format": p.format, "transform": p.transform,
+                                 "source_type": p.source_type})
                  for p in t.properties.values() if not p.internal}
         sm = None
         if t.states:
@@ -790,11 +860,12 @@ def _to_dict(o: Ontology) -> dict:
                               "source": r.source})
                       | ({} if r.priority is None else {"priority": r.priority}) for r in dt.rules]})
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
-                               "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states})
-                                            for c in a.criteria],
+                               "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states,
+                                                    "function": c.function}) for c in a.criteria],
                                "set": a.set, "transition_to": a.transition_to, "cite": a.cite,
                                "call": a.call, "undo": a.undo})
-               | {"approval": a.approval} for a in o.actions.values()}
+               | {"approval": _clean({"auto_within": a.auto_within, "agents": a.auto_agents}) if a.auto_within else a.approval}
+               for a in o.actions.values()}
     roles = {r.name: _clean({"label": r.label, "read": r.read, "row_filters": r.row_filters, "run": r.run,
                              "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask,
                              "scope": r.scope})
@@ -816,6 +887,11 @@ def _to_dict(o: Ontology) -> dict:
                                "formula": m.formula, "denominator": m.denominator, "time": m.time, "cite": m.cite,
                                "params": m.params}) | ({} if m.scale == 1 else {"scale": m.scale})
                for m in o.metrics.values()}
+    functions = {f.name: _clean({"label": f.label, "description": f.description, "runtime": f.runtime, "target": f.target,
+                                 "version": f.version, "owner": f.owner, "status": f.status, "inputs": f.inputs,
+                                 "outputs": f.outputs, "expr": f.expr, "decision": f.decision, "query": f.query,
+                                 "entry": f.entry, "call": f.call, "depends": f.depends, "cite": f.cite})
+                 for f in o.functions.values()}
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
@@ -825,6 +901,7 @@ def _to_dict(o: Ontology) -> dict:
         "parameters": parameters, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
         "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "metrics": metrics,
+        "functions": functions,
         "conflicts": conflicts, "questions": questions,
         "exclusive": [list(x) for x in o.exclusive], "identities": identities,
     })

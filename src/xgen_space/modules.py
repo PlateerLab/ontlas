@@ -14,10 +14,10 @@ from xgen_space.model import Ontology
 # data (the draft rules). Both plug in and out like the rest.
 KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
 SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities", "parameters",
-            "metrics", "conflicts")
+            "metrics", "conflicts", "functions")
 SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
             "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
-            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict"}
+            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict", "functions": "function"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -368,6 +368,11 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
         scope = r.setdefault("scope", {})
         scope.update({k: copy.deepcopy(v) for k, v in patch["scope"].items() if k != "types"})
         scope.setdefault("types", {}).update(copy.deepcopy(patch["scope"].get("types") or {}))
+    if "scope_set" in patch:  # the whole scope, from the screen that edits it
+        if patch["scope_set"]:
+            r["scope"] = copy.deepcopy(patch["scope_set"])
+        else:
+            r.pop("scope", None)
     if patch.get("mask"):
         mask = patch["mask"]
         cur = r.get("mask") or {}
@@ -387,7 +392,7 @@ def _extend_action(acc: dict, m: Module, name: str, patch: dict, touched: dict) 
     a = acc["actions"].get(name)
     if a is None:
         raise ModuleError(f"{m.key} extends action '{name}', which no attached module defines")
-    for k in ("label", "parameters", "criteria", "set", "transition_to", "approval", "cite"):
+    for k in ("label", "parameters", "criteria", "set", "transition_to", "approval", "cite", "call", "undo"):
         if k in patch:
             a[k] = copy.deepcopy(patch[k])
     touched.setdefault(f"action:{name}", []).append(m.name)
@@ -406,7 +411,7 @@ def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict
 
 
 def _extend_entry(acc: dict, m: Module, section: str, name: str, patch: dict, touched: dict) -> None:
-    """A metric or a conflict takes what the patch gives; a customer redefines one or picks in one."""
+    """A metric, a conflict or a function takes what the patch gives; a customer redefines one or picks in one."""
     kind = SINGULAR[section]
     if name not in acc[section]:
         raise ModuleError(f"{m.key} extends {kind} '{name}', which no attached module defines")
@@ -455,11 +460,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_action(acc, m, k, patch or {}, touched)
                 elif s == "parameters":
                     _extend_parameter(acc, m, k, patch, touched)
-                elif s in ("metrics", "conflicts"):
+                elif s in ("metrics", "conflicts", "functions", "identities"):
                     _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
                     raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, actions, roles, "
-                                      "parameters, metrics or conflicts")
+                                      "parameters, metrics, conflicts, functions or identities")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():
@@ -553,7 +558,7 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
             kind, _, ident = head.partition(" ")
             section = {"query": "queries", "question": "questions", "decision": "decisions", "action": "actions",
                        "link": "links", "identity": "identities", "metric": "metrics",
-                       "conflict": "conflicts"}.get(kind)
+                       "conflict": "conflicts", "function": "functions"}.get(kind)
             if kind == "decision":
                 ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
             if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:

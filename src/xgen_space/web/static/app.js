@@ -42,14 +42,14 @@
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
   const NAV = [['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '통합 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
-    ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
+    ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: the board, the map, then the six stages in the order data moves. A stage's screens are tabs on its page.
   const NAV_GROUP = [['', '파이프라인 관제', ['monitor', 'flow']], ['', '사용 안내', ['guide']], ['', '데이터 지도', ['map']], ['①', '원천 데이터', ['catalog', 'db']], ['②', '변환', ['convert', 'sources']],
-    ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'actions', 'roles', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
+    ['③', '온톨로지 구축', ['data', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles', 'library']], ['④', '저장소 어댑터', ['adapters', 'vectors']], ['⑤', '활용', ['search', 'query', 'decide', 'rules', 'connect']], ['⑥', '검증', ['check', 'bind']]];
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
   const TAB_WORD = { monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문' };
-  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
   const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
@@ -60,7 +60,7 @@
   const MAP_STORE = new Set(['vector_store', 'graph_store', 'reasoner', 'embedder']);
   const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 객체'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
   const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
-    question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값' };
+    question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값', function: '함수', metric: '지표', identity: '식별 통합' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
   const STATUS = { pending: ['warn', '승인 대기'], stale: ['warn', '실행 전 재검사 실패'], rejected: ['bad', '반려'], executed: ['ok', '원천 반영'],
@@ -192,15 +192,24 @@
       '[규칙 추가]로 새 규칙을 만들고, [새 결정표]로 새 판정을 만듭니다.',
       '기준값을 선택하면 값을 변경합니다. 이 값을 참조하는 규칙이 함께 변경됩니다.',
       '변경 내용은 대기 중인 변경에 쌓이고, [변경 요청]을 선택하면 사본에서 검토한 뒤 승인되면 판정에 반영됩니다. 표준 모듈은 변경되지 않습니다.']],
+    ['mgfuncs', '계산, 판정, 외부 모델을 입출력 · 판본 · 담당이 있는 함수로 등록합니다.', [
+      '[새 함수]에서 실행 방식을 선택합니다. 계산식은 저장소 언어로 변환되고, 결정표와 등록 질의는 이름으로 연결합니다.',
+      'Python과 외부 호출은 설치 환경에서 허용한 항목만 실행합니다.',
+      '함수를 선택해 [실행]으로 대상 번호를 지정해 결과를 확인합니다. 초안 상태의 함수는 이 화면에서만 실행됩니다.',
+      '역할에 함수를 허용하면 Agent와 외부 플랫폼이 /v1/function과 MCP run_function으로 실행합니다.']],
     ['states', '객체의 상태 값과 허용되는 전이를 관리합니다.', [
       '객체를 선택하면 상태 속성, 상태 값, 초기 상태, 전이를 수정합니다.',
       '상태 값에 새 값을 추가하면 해당 속성의 허용값에도 추가됩니다.']],
     ['actions', '처리 요청의 입력값, 판정 조건, 상태 전이, 승인 여부를 관리합니다.', [
       '판정 조건을 지정하면 조건을 충족한 요청만 접수됩니다.',
-      '승인이 필요한 액션은 판정 · 처리의 승인 대기 요청에서 승인합니다.']],
+      '승인이 필요한 액션은 판정 · 처리의 승인 대기 요청에서 승인합니다.',
+      '자동 승인 기준을 지정하면 변경 폭이 기준 안인 요청은 실행 권한이 있을 때 바로 실행하고, 기준을 넘으면 승인 대기로 접수합니다.',
+      '외부 호출은 원천 반영 후 실행합니다. 호출이 실패하면 원천을 복원합니다.']],
     ['roles', '역할별 조회, 실행, 요청 범위와 가림 속성을 관리합니다.', [
       '역할을 선택하면 조회 객체, 실행 질의와 결정, 요청 액션을 선택합니다.',
       '가림 속성은 일부 가림 또는 전체 가림으로 지정합니다.',
+      '행 범위는 객체별로 볼 수 있는 행을 지정합니다. 사용자 속성과 비교하거나 고정 값과 비교합니다.',
+      '조직 범위는 로그인한 조직의 행으로 조회와 요청을 함께 제한합니다.',
       'Agent와 외부 플랫폼은 지정한 역할의 범위 안에서만 조회하고 요청합니다.']],
     ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
       '[규칙 수정]을 선택하면 규칙 관리로 이동합니다. 규칙과 기준값을 입력 폼에서 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
@@ -440,7 +449,7 @@
     renderTop();
     renderSide();
     const views = { rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
-      sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks, states: viewStates, mgrules: viewMgRules, actions: viewMgActions, roles: viewRoles };
+      sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
     const main = $('#main');
     main.innerHTML = subTabs() + (views[S.tab] || viewMonitor)();
     paintLayer();
@@ -1323,6 +1332,7 @@ ${controls}${body}`;
       const diff = Object.keys(p.changes).map((k) => `<div class="diff"><span class="mono">${esc(k)}</span><span class="chip">${show(p.before[k])}</span><span class="arrow">→</span><span class="chip ${p.status === 'executed' ? 'ok' : 'b'}">${show(p.changes[k])}</span></div>`).join('');
       const buttons = p.status === 'pending' ? `<div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" style="flex:1" data-act="approve" data-id="${esc(p.id)}">승인</button><button class="btn" style="flex:1" data-act="reject" data-id="${esc(p.id)}">반려</button></div>`
         : (p.can_roll_back ? `<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1" data-act="rollback" data-id="${esc(p.id)}">되돌리기</button></div>` : '');
+      const limits = (p.limits || []).length ? `<div class="hint" style="margin-top:8px">${p.approved_by === 'auto' ? '자동 승인 기준을 충족해 바로 실행했습니다.' : '자동 승인 기준을 넘어 승인 대기로 접수했습니다.'} ${p.limits.map((l) => `${esc(p.labels[l.subject] || l.subject)} ${esc(({ percent: '변화율', delta: '변화폭', max: '값', min: '값' })[l.kind])} ${l.value === null ? '-' : show(Math.round(l.value * 100) / 100)}${l.kind === 'percent' ? '%' : ''} / 기준 ${show(l.limit)}${l.kind === 'percent' ? '%' : ''}`).join(' · ')}</div>` : '';
       const call = p.call && (p.call.status || p.call.error) ? `<div class="hint" style="margin-top:8px">외부 호출 ${p.call.error ? esc(p.call.error) : `${esc(p.call.method)} ${esc(p.call.url)} · ${esc(p.call.status)}`}</div>` : '';
       const done = (p.status === 'executed' ? '<div class="hint" style="margin-top:10px">원천 DB와 그래프 저장소에 반영했습니다. 판정을 다시 계산했습니다.</div>'
         : (p.status === 'rolled_back' ? `<div class="hint" style="margin-top:10px">${esc(p.rolled_back_by)} 님이 실행 전 값으로 되돌렸습니다.</div>` : '')) + call;
@@ -1442,6 +1452,7 @@ ${controls}${body}`;
     S.qa = { busy: true };
     if (S.tab === 'check') render();
     try { S.qa = await api('questions', {}); } catch (e) { S.qa = { error: e.message }; }
+    try { S.val = await api('values'); } catch (e) { S.val = { ok: false, configured: true, error: e.message }; }
     if (S.tab === 'check') render();
   }
 
@@ -1472,7 +1483,16 @@ ${controls}${body}`;
 <div class="grid" style="grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);align-items:start">
   <div class="card"><div class="ch">검증 질문</div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>번호</th><th>질문</th><th>정답</th><th>결과</th><th>근거</th><th></th></tr>${rows}</table>` : '<div class="empty" style="padding:14px">등록된 검증 질문이 없습니다.</div>'}</div></div>
   <div class="card"><div class="ch">Backend 결과 일치<div class="right muted" style="font-weight:600;font-size:12px">등록 질의 기준</div></div><div class="cb scroll" style="padding:0">${conf ? `<table class="tight"><tr><th>질의</th><th>행</th><th></th></tr>${conf}</table>` : '<div class="empty" style="padding:14px">비교할 Backend가 하나뿐입니다.</div>'}</div></div>
-</div>${questionCard()}`;
+</div>${valuesCard()}${questionCard()}`;
+  }
+
+  function valuesCard() {
+    const v = S.val;
+    if (!v || v.busy) return '';
+    if (!v.configured) return '<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도</div><div class="cb"><div class="hint">거래 시스템의 값과 대조할 항목이 없습니다. 흐름 설정의 거래 값 대조에서 지정합니다.</div></div></div>';
+    if (!v.ok) return `<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도</div><div class="cb"><div class="hint">${esc(v.error)}</div></div></div>`;
+    const rows = v.items.map((x) => `<tr><td><b>${esc(x.label)}</b></td><td>${x.cases}건</td><td>${x.errors ? `<span class="chip sm warn">오류 ${x.errors}건</span>` : '<span class="chip sm ok">일치</span>'}</td><td style="font-size:12px">${x.mismatches.slice(0, 5).map((m) => `<span class="mono">${esc(m.key)}</span> 온톨로지 ${show(m.answer)} · 거래 시스템 ${show(m.truth)}`).join('<br>')}</td></tr>`).join('');
+    return `<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도<div class="right"><span class="chip ${v.errors ? 'warn' : 'ok'}">오류 ${v.errors}건 / ${v.cases}건</span></div></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>항목</th><th>대조</th><th>결과</th><th>다른 건</th></tr>${rows}</table></div></div>`;
   }
 
   // ---- bindings ------------------------------------------------------------------------------------------------
@@ -1660,7 +1680,23 @@ ${controls}${body}`;
       <div class="sec">판정 일치율</div><div class="rgrid two">
         <label class="field"><span>결정표</span><select data-in="fagree" data-kind="decision"><option value="">사용 안 함</option>${f.decisions.map((d) => `<option value="${esc(d.name)}"${d.name === a.decision ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>
         <label class="field"><span>처리 기록 질의</span><select data-in="fagree" data-kind="query"><option value="">-</option>${f.queries.map((x) => `<option value="${esc(x.name)}"${x.name === a.query ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select></label></div>
+      ${valueRows(f, s)}
       ${maps}<div class="hint" style="margin-top:10px">처리 기록 질의는 한 건이 한 행입니다. 결정표 입력마다 그때 값을 담은 컬럼을, 결과마다 실제 처리 결과 컬럼을 지정합니다. 변경 요청은 저장한 조건으로 검토합니다.${(f.raised || []).length ? ' 검증 기준 모듈이 더 높은 조건을 정한 항목은 모듈 조건을 적용하고, 모듈을 해제하면 저장한 조건으로 복원됩니다.' : ''}</div></div></div>`;
+  }
+
+  function valueRows(f, s) {
+    const list = s.values = s.values || [];
+    const sel = (i, k, options, cur) => `<select class="inline" data-in="fval" data-i="${i}" data-k="${k}" aria-label="${k}"><option value="">-</option>${options.map(([a, b]) => opt(a, b, cur)).join('')}</select>`;
+    const row = (v, i) => {
+      const q = f.queries.find((x) => x.name === v.query), cols = ((q || {}).columns || []).map((c) => [c, c]);
+      const a = v.answer || {}, kind = a.decision ? 'decision' : (a.function ? 'function' : (a.property ? 'property' : ''));
+      const outs = kind === 'decision' ? ((f.decisions.find((d) => d.name === a.decision) || {}).outputs || []) : (kind === 'function' ? ((f.functions || []).find((x) => x.name === a.function) || {}).outputs || [] : []);
+      return `<div class="mgrow"><input type="text" data-in="fval" data-i="${i}" data-k="label" value="${esc(v.label || '')}" placeholder="항목 이름">${sel(i, 'query', f.queries.map((x) => [x.name, x.label || x.name]), v.query)}${sel(i, 'key', cols, v.key)}${sel(i, 'truth', cols, typeof v.truth === 'string' ? v.truth : '')}
+        ${sel(i, 'by', [...f.decisions.map((d) => [`decision:${d.name}`, `결정 · ${d.label || d.name}`]), ...(f.functions || []).map((x) => [`function:${x.name}`, `함수 · ${x.label || x.name}`])], a.decision ? `decision:${a.decision}` : (a.function ? `function:${a.function}` : ''))}${sel(i, 'output', outs.map((o) => [o, o]), a.output)}
+        <button class="iconbtn" data-act="fvaldel" data-i="${i}" aria-label="행 삭제">×</button></div>`;
+    };
+    return `<div class="sec">거래 값 대조</div><div class="mgrows">${list.map(row).join('')}<button class="btn sm" data-act="fvaladd">항목 추가</button></div>
+      <div class="hint" style="margin-top:6px">질의는 한 건이 한 행이고, 대상 번호 컬럼과 거래 시스템이 기록한 값 컬럼을 지정합니다. 온톨로지가 낸 값과 건별로 비교합니다.</div>`;
   }
 
   // ---- data in: files or a database, drafted step by step, reviewed, plugged in ------------------------------------
@@ -2427,7 +2463,7 @@ ${controls}${body}`;
   // Every edit lands in one overlay module ("관리 변경") over the standard modules, and reaches the other screens only
   // once it is filed as a change request and approved.
 
-  const MG_TABS = ['sources', 'objects', 'props', 'links', 'states', 'mgrules', 'actions', 'roles'];
+  const MG_TABS = ['sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles'];
   const OP_WORD = { add_object: '객체 추가', update_object: '객체 변경', delete_object: '객체 제외', add_property: '속성 추가',
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
@@ -2577,7 +2613,26 @@ ${controls}${body}`;
     return `${head}${pendingBar()}${unlinked}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start">
       <div class="card"><div class="ch">객체 <span class="chip sm">${list.length}</span></div><div class="cb scroll" style="padding:0;max-height:640px">
         <table class="tight"><tr><th>객체</th><th>원천 테이블</th><th>키</th><th>상위</th><th>속성</th><th>관계</th><th>행</th><th>정의</th></tr>${rows}</table></div></div>
-      ${objectForm()}</div>${rowsCard()}`;
+      ${objectForm()}</div>${rowsCard()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start;margin-top:16px">${identityCard()}${identityForm()}</div>`;
+  }
+
+  function identityCard() {
+    const m = S.mg.st;
+    const rows = m.identities.map((x) => `<tr class="${S.mg.sel === `identity:${x.name}` ? 'sel' : ''}" data-act="mgident" data-name="${esc(x.name)}" style="cursor:pointer"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.name)}</div></td><td>${esc(Object.keys(x.members).map(mgLabel).join(', '))}</td><td>${x.rules.length}</td><td><div class="chips">${ownerChip(x)}</div></td></tr>`).join('');
+    return `<div class="card"><div class="ch">식별 통합 <span class="chip sm">${m.identities.length}</span><div class="right"><button class="btn sm" data-act="mgidentnew">새 식별 통합</button></div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>이름</th><th>구성 객체</th><th>규칙</th><th>정의</th></tr>${rows}</table>` : '<div class="empty">시스템마다 다른 번호를 하나로 묶는 규칙이 없습니다.</div>'}</div></div>`;
+  }
+
+  function identityForm() {
+    const f = S.mg.form && S.mg.form.kind === 'identity' ? S.mg.form : null;
+    if (!f) return '<div></div>';
+    const v = f.v, m = S.mg.st;
+    const objects = m.objects.filter((o) => !o.concept).map((o) => [o.name, o.label]);
+    const propsOf = (t) => [['', '속성 선택'], ...mgProps(t).map((p) => [p.name, p.label || p.name])];
+    return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 식별 통합' : `식별 통합 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
+      ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: Person"')) : ''}${mgField('라벨', mgInput('label', v.label))}
+      <div class="sec">구성 객체와 비교 항목</div>${mgRows('imembers', (r, i) => `${rowSelect('imembers', i, 'type', objects, r.type)}${rowInput('imembers', i, 'field', r.field, '비교 항목 이름')}${rowSelect('imembers', i, 'prop', propsOf(r.type), r.prop)}`, v.imembers)}
+      <div class="sec">통합 규칙</div>${mgRows('irules', (r, i) => `${rowInput('irules', i, 'id', r.id, '규칙 번호')}${rowInput('irules', i, 'match', r.match, '비교 항목, 쉼표로 구분')}${rowSelect('irules', i, 'normalize', [['none', '그대로'], ['digits', '숫자만'], ['lower', '소문자'], ['trim', '공백 제거']], r.normalize)}`, v.irules)}
+      <div class="hint" style="margin-top:10px">승인 후 온톨로지 화면의 식별 통합에서 교차표를 저장합니다.</div>${mgButtons(f, '식별 통합 제외')}</div></div>`;
   }
 
   function objectForm() {
@@ -2672,6 +2727,8 @@ ${controls}${body}`;
       ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}
       ${v.expr ? field('계산식', `<input type="text" data-in="mgf" data-f="expr" value="${esc(v.expr)}" class="mono">`)
         : (p && p.columns.length ? field('원천 컬럼', `<input type="text" value="${esc(p.columns.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field('원천 컬럼', colSel))}
+      ${v.expr || (p && p.columns.length) ? '' : `<div class="rgrid two">${field('변환식', `<input type="text" data-in="mgf" data-f="transform" value="${esc(v.transform || '')}" class="mono" placeholder="예: value / 100">`, '원천 값을 value로 참조합니다. 비워 두면 그대로 읽습니다.')}
+        ${field('원천 자료형', `<select data-in="mgf" data-f="source_type"><option value="">속성과 동일</option>${TYPES.filter((t) => t !== 'enum').map((t) => opt(t, TYPE_WORD[t], v.source_type || '')).join('')}</select>`)}</div>`}
       ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 지정합니다.')}
       <div class="rgrid two">${field('단위', `<input type="text" data-in="mgf" data-f="unit" value="${esc(v.unit)}" placeholder="예: 원">`)}
         ${field('가림', `<select data-in="mgf" data-f="mask">${Object.entries(MASK_WORD).map(([k, l]) => opt(k, l, v.mask)).join('')}</select>`)}</div>
@@ -2859,10 +2916,64 @@ ${controls}${body}`;
   function paramForm() {
     const f = S.mg.form && S.mg.form.kind === 'param' ? S.mg.form : null;
     if (!f) return '';
-    const v = f.v;
-    return `<div class="card"><div class="ch">기준값 ${esc(v.label)}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
-      ${mgField(`값${v.unit ? ` (${esc(v.unit)})` : ''}`, mgInput('value', v.value), v.min !== null || v.max !== null ? `범위 ${v.min ?? ''} ~ ${v.max ?? ''}` : '')}
-      <div class="hint">이 값을 참조하는 규칙이 함께 변경됩니다.</div>${mgButtons(f, '')}</div></div>`;
+    const v = f.v, fresh = f.mode === 'new';
+    return `<div class="card"><div class="ch">${fresh ? '새 기준값' : `기준값 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
+      ${fresh ? `${mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: free_shipping_over"'), '규칙과 계산식에서 @이름으로 참조합니다.')}
+        ${mgField('자료형', `<select data-in="mgf" data-f="type">${[['integer', '정수'], ['decimal', '소수'], ['string', '문자열'], ['boolean', '참 · 거짓']].map(([k, l]) => opt(k, l, v.type)).join('')}</select>`)}` : ''}
+      ${mgField('라벨', mgInput('label', v.label))}${mgField('값', mgInput('value', v.value))}
+      <div class="rgrid two">${mgField('단위', mgInput('unit', v.unit))}${mgField('출처', mgInput('cite', v.cite))}</div>
+      <div class="rgrid two">${mgField('최솟값', mgInput('min', v.min))}${mgField('최댓값', mgInput('max', v.max))}</div>
+      ${fresh ? '' : '<div class="hint">이 값을 참조하는 규칙이 함께 변경됩니다.</div>'}${mgButtons(f, '기준값 제외')}</div></div>`;
+  }
+
+  // a condition as rows of the form: {property, op, value}; one the form cannot say stays as it was written
+  const WHERE_OPS = [['eq', '같음'], ['ne', '다름'], ['lt', '미만'], ['lte', '이하'], ['gt', '초과'], ['gte', '이상'], ['not_null', '값 있음'], ['is_null', '값 없음']];
+  const typedValue = (x) => (x === 'true' ? true : x === 'false' ? false : (x !== '' && !Number.isNaN(Number(x)) ? Number(x) : x));
+  const oneCond = (w) => {
+    const k = Object.keys(w || {})[0];
+    if (['not_null', 'is_null'].includes(k)) return { property: String(w[k]).split('.').pop(), op: k, value: '' };
+    if (WHERE_OPS.some(([o]) => o === k) && Array.isArray(w[k])) return { property: String(w[k][0]).split('.').pop(), op: k, value: String(w[k][1]) };
+    return null;
+  };
+  const condRows = (w) => {
+    if (!w) return [];
+    const list = (w.and || [w]).map(oneCond);
+    return list.every(Boolean) ? list : null;
+  };
+  const condSpec = (rows, alias) => {
+    const list = rows.filter((r) => r.property).map((r) => (['not_null', 'is_null'].includes(r.op) ? { [r.op]: `${alias}.${r.property}` } : { [r.op]: [`${alias}.${r.property}`, typedValue(r.value)] }));
+    return list.length > 1 ? { and: list } : list[0];
+  };
+  const AGG_WORD = [['count', '건수'], ['sum', '합계'], ['avg', '평균'], ['min', '최솟값'], ['max', '최댓값']];
+  const aggOf = (part) => { const v = (part || {}).value || {}; const fn = Object.keys(v)[0] || 'count'; return { fn, prop: String(v[fn] || '').includes('.') ? String(v[fn]).split('.').pop() : '' }; };
+
+  function metricForm() {
+    const f = S.mg.form && S.mg.form.kind === 'metric' ? S.mg.form : null;
+    if (!f) return '';
+    const v = f.v, m = S.mg.st;
+    const props = [['', '대상 자체'], ...mgProps(v.object).map((p) => [p.name, p.label || p.name])];
+    const conds = (list) => mgRows(list, (r, i) => `${rowSelect(list, i, 'property', props.slice(1), r.property)}${rowSelect(list, i, 'op', WHERE_OPS, r.op)}${rowInput(list, i, 'value', r.value, '값')}`, v[list]);
+    const fixed = f.raw ? '<div class="hint">식이 여러 객체를 잇고 있어 대상과 조건은 라이브러리의 모듈 편집에서 수정합니다.</div>' : `
+      ${mgField('대상 객체', `<select data-in="mgf" data-f="object" data-re="1">${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.object)).join('')}</select>`)}
+      <div class="rgrid two">${mgField('집계', `<select data-in="mgf" data-f="fn">${AGG_WORD.map(([k, l]) => opt(k, l, v.fn)).join('')}</select>`)}${mgField('집계 속성', `<select data-in="mgf" data-f="prop">${props.map(([k, l]) => opt(k, l, v.prop)).join('')}</select>`)}</div>
+      <div class="sec">조건</div>${conds('where')}
+      <label class="tick" style="margin-top:10px"><input type="checkbox" data-in="mgf" data-f="ratio" data-re="1"${v.ratio ? ' checked' : ''}>분모로 나누어 비율로 표시</label>
+      ${v.ratio ? `<div class="sec">분모 조건</div>${conds('den')}${mgField('분모 이름', mgInput('den_label', v.den_label))}` : ''}`;
+    return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 지표' : `지표 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
+      ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: cancelRate"')) : ''}
+      ${mgField('라벨', mgInput('label', v.label))}${mgField('담당', mgInput('owner', v.owner), '지표의 뜻을 책임지는 담당입니다.')}
+      ${fixed}
+      <div class="rgrid two">${mgField('단위', mgInput('unit', v.unit))}${mgField('배율', mgInput('scale', v.scale), '백분율은 100')}</div>
+      ${mgField('기준 시각', mgInput('basis', v.basis, 'placeholder="예: 주문 일시"'))}
+      ${f.raw ? '' : mgField('기준 시각 속성', `<select data-in="mgf" data-f="time_prop"><option value="">없음</option>${mgProps(v.object).filter((p) => ['date', 'datetime'].includes(p.type)).map((p) => opt(p.name, p.label || p.name, v.time_prop)).join('')}</select>`)}
+      ${mgField('설명', mgInput('description', v.description))}${mgField('출처', mgInput('cite', v.cite))}
+      ${mgButtons(f, '지표 제외')}</div></div>`;
+  }
+
+  function metricCard() {
+    const m = S.mg.st;
+    const rows = m.metrics.map((x) => `<tr class="${S.mg.sel === `metric:${x.name}` ? 'sel' : ''}" data-act="mgmetric" data-name="${esc(x.name)}" style="cursor:pointer"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.name)}</div></td><td>${esc(x.owner || '-')}</td><td>${esc(x.unit || '-')}</td><td><div class="chips">${ownerChip(x)}${stateChips(x)}</div></td></tr>`).join('');
+    return `<div class="card"><div class="ch">지표 <span class="chip sm">${m.metrics.length}</span><div class="right"><button class="btn sm" data-act="mgmetricnew">새 지표</button></div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>이름</th><th>담당</th><th>단위</th><th>정의</th></tr>${rows}</table>` : '<div class="empty">지표가 없습니다.</div>'}</div></div>`;
   }
 
   function decisionForm() {
@@ -2887,15 +2998,69 @@ ${controls}${body}`;
     if (!S.mg.dec || !m.decisions.some((d) => d.name === S.mg.dec)) S.mg.dec = (m.decisions[0] || {}).name || '';
     const d = m.decisions.find((x) => x.name === S.mg.dec);
     const pick = `<select data-in="mgdec" style="width:220px">${m.decisions.map((x) => opt(x.name, x.label, S.mg.dec)).join('')}</select>`;
-    const head = mgHead(title, sub, `${pick}<button class="btn sm" data-act="mgdecnew">새 결정표</button>${d ? '<button class="btn sm primary" data-act="mgrulenew">규칙 추가</button>' : ''}`);
-    const params = m.parameters.length ? `<div class="card"><div class="ch">기준값 <span class="chip sm">${m.parameters.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>정의</th></tr>${m.parameters.map((p) => `<tr class="${S.mg.sel === `param:${p.name}` ? 'sel' : ''}" data-act="mgparam" data-name="${esc(p.name)}" style="cursor:pointer"><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${show(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`).join('')}</table></div></div>` : '';
-    if (!d) return `${head}${pendingBar()}${params}${decisionForm() || mgEmpty('결정표', '결정표가 없습니다. [새 결정표]로 만듭니다.')}`;
+    const head = mgHead(title, sub, `${pick}<button class="btn sm" data-act="mgparamnew">기준값 추가</button><button class="btn sm" data-act="mgdecnew">새 결정표</button>${d ? '<button class="btn sm primary" data-act="mgrulenew">규칙 추가</button>' : ''}`);
+    const params = m.parameters.length ? `<div class="card" data-mgparams="1"><div class="ch">기준값 <span class="chip sm">${m.parameters.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>정의</th></tr>${m.parameters.map((p) => `<tr class="${S.mg.sel === `param:${p.name}` ? 'sel' : ''}" data-act="mgparam" data-name="${esc(p.name)}" style="cursor:pointer"><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${show(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`).join('')}</table></div></div>` : '';
+    if (!d) return `${head}${pendingBar()}${params}${metricCard()}${paramForm()}${metricForm()}${decisionForm() || mgEmpty('결정표', '결정표가 없습니다. [새 결정표]로 만듭니다.')}`;
     const rows = d.rules.map((r) => `<tr class="${S.mg.sel === r.id ? 'sel' : ''}" data-act="mgrule" data-name="${esc(r.id)}" style="cursor:pointer"><td class="mono" style="white-space:nowrap">${esc(r.id)}${r.cite ? `<div class="muted cite-note">${esc(r.cite)}</div>` : ''}</td>
       ${d.inputs.map((i) => `<td style="white-space:nowrap">${esc(r.said[i.name])}</td>`).join('')}${d.outputs.map((o) => `<td style="min-width:110px">${yesNo(r.then[o.name])}</td>`).join('')}</tr>`).join('');
     const table = `<div class="card"><div class="ch">${esc(d.label)} <span class="chip sm">규칙 ${d.rules.length}</span>${ownerChip(d)}${stateChips(d)}<div class="right muted" style="font-weight:600;font-size:12px">위에서부터 먼저 적용</div></div>
       <div class="cb scroll" style="padding:0"><table class="tight" style="font-size:12.5px"><tr><th>규칙</th>${d.inputs.map((i) => `<th>${esc(i.label)}</th>`).join('')}${d.outputs.map((o) => `<th>${esc(outWord(d, o.name))}</th>`).join('')}</tr>${rows}</table></div></div>`;
-    return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(340px,1fr);align-items:start"><div style="display:flex;flex-direction:column;gap:16px;min-width:0">${table}${params}</div>
-      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${decisionForm()}${paramForm()}${ruleForm(d)}</div></div>`;
+    return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(340px,1fr);align-items:start"><div style="display:flex;flex-direction:column;gap:16px;min-width:0">${table}${params}${metricCard()}</div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${decisionForm()}${paramForm()}${metricForm()}${S.mg.form && ['param', 'metric', 'decision'].includes(S.mg.form.kind) ? '' : ruleForm(d)}</div></div>`;
+  }
+
+  const RUNTIME = [['expr', '계산식'], ['decision', '결정표'], ['query', '등록 질의'], ['python', 'Python'], ['http', '외부 호출']];
+  const FN_STATUS = [['active', '사용'], ['draft', '초안'], ['retired', '중단']];
+
+  function functionForm() {
+    const f = S.mg.form && S.mg.form.kind === 'function' ? S.mg.form : null;
+    if (!f) return mgEmpty('함수 정보', '함수를 선택하면 입출력, 판본, 담당을 수정하고 실행 결과를 확인할 수 있습니다.');
+    const v = f.v, m = S.mg.st;
+    const by = {
+      expr: mgField('계산식', mgInput('expr', v.expr, 'class="mono" placeholder="예: line_total * @rate"'), '대상 객체의 속성을 이름으로, 입력값을 @이름으로 참조합니다.'),
+      decision: mgField('결정표', `<select data-in="mgf" data-f="decision"><option value="">선택</option>${m.decisions.map((d) => opt(d.name, d.label, v.decision)).join('')}</select>`),
+      query: mgField('등록 질의', `<select data-in="mgf" data-f="query"><option value="">선택</option>${m.queries.map((q) => opt(q.name, q.label, v.query)).join('')}</select>`),
+      python: mgField('등록 이름', mgInput('entry', v.entry), '설치 환경의 studio 파일 functions.python에 등록한 이름입니다.'),
+      http: `${mgField('호출 주소', mgInput('url', v.url, 'class="mono" placeholder="https://service.example/score/$key"'), '허용한 호스트만 호출합니다. $key, $row.속성, $입력값을 참조합니다.')}
+        <div class="rgrid two">${mgField('방식', `<select data-in="mgf" data-f="method">${['POST', 'GET'].map((x) => opt(x, x, v.method)).join('')}</select>`)}${mgField('응답 경로', mgInput('path', v.path, 'placeholder="예: data"'))}</div>`,
+    }[v.runtime] || '';
+    return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 함수' : `함수 ${esc(v.label || v.name)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
+      ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: refundEstimate"')) : ''}
+      ${mgField('라벨', mgInput('label', v.label))}
+      <div class="rgrid two">${mgField('실행 방식', `<select data-in="mgf" data-f="runtime" data-re="1">${RUNTIME.map(([k, l]) => opt(k, l, v.runtime)).join('')}</select>`)}
+        ${mgField('대상 객체', `<select data-in="mgf" data-f="target"><option value="">없음</option>${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}</div>
+      ${by}
+      <div class="sec">입력값</div>${mgRows('fin', (r, i) => `${rowInput('fin', i, 'name', r.name, '영문 이름')}${rowInput('fin', i, 'label', r.label, '라벨')}${rowSelect('fin', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.fin)}
+      <div class="sec">출력값</div>${mgRows('fout', (r, i) => `${rowInput('fout', i, 'name', r.name, '영문 이름')}${rowSelect('fout', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.fout)}
+      <div class="rgrid two">${mgField('판본', mgInput('version', v.version))}${mgField('담당', mgInput('owner', v.owner))}</div>
+      <div class="rgrid two">${mgField('상태', `<select data-in="mgf" data-f="status">${FN_STATUS.map(([k, l]) => opt(k, l, v.status)).join('')}</select>`)}${mgField('외부 의존', mgInput('depends', v.depends, 'placeholder="쉼표로 구분"'))}</div>
+      ${mgField('설명', mgInput('description', v.description))}${mgField('출처', mgInput('cite', v.cite))}
+      ${mgButtons(f, '함수 제외')}</div></div>`;
+  }
+
+  function functionRun() {
+    const f = S.mg.form && S.mg.form.kind === 'function' && S.mg.form.mode === 'edit' ? S.mg.form : null;
+    if (!f) return '';
+    const x = S.mg.st.functions.find((y) => y.name === f.v.name), r = S.mg.fnres;
+    if (!x) return '';
+    const inputs = Object.keys(x.inputs).map((k) => mgField(esc((x.inputs[k] || {}).label || k), `<input type="text" data-in="fnin" data-k="${esc(k)}" value="${esc((S.mg.fnin || {})[k] ?? '')}">`)).join('');
+    const out = r ? (r.ok ? `<div class="sec">결과 · 판본 ${esc(r.version)}</div><table class="tight">${Object.entries(r.outputs).map(([k, val]) => `<tr><td class="mono">${esc(k)}</td><td>${Array.isArray(val) ? `${val.length}행` : show(val)}</td></tr>`).join('')}</table>
+      ${(r.evidence || []).filter((e) => e.property).length ? `<div class="sec">사용한 값</div><table class="tight">${r.evidence.filter((e) => e.property).map((e) => `<tr><td class="mono">${esc(e.property)}</td><td>${show(e.value)}</td></tr>`).join('')}</table>` : ''}` : `<div class="hint" style="margin-top:10px">${esc(r.error)}</div>`) : '';
+    return `<div class="card"><div class="ch">실행</div><div class="cb">${x.target ? mgField(`${esc(mgLabel(x.target))} 번호`, `<input type="text" data-in="fnkey" value="${esc(S.mg.fnkey || '')}">`) : ''}${inputs}
+      <button class="btn primary" data-act="fnrun"${S.mg.busy ? ' disabled' : ''}>실행</button>${out}</div></div>`;
+  }
+
+  function viewMgFunctions() {
+    const title = '함수 관리', sub = '계산, 판정, 외부 모델을 입출력 · 판본 · 담당이 있는 함수로 등록합니다';
+    const wait = mgWait(title, sub);
+    if (wait) return wait;
+    const m = S.mg.st;
+    const head = mgHead(title, sub, '<button class="btn sm primary" data-act="mgfnnew">새 함수</button>');
+    const word = (list, k) => (list.find((x) => x[0] === k) || [k, k])[1];
+    const rows = m.functions.map((x) => `<tr class="${S.mg.sel === x.name ? 'sel' : ''}" data-act="mgfn" data-name="${esc(x.name)}" style="cursor:pointer"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.name)}</div></td><td>${esc(word(RUNTIME, x.runtime))}</td><td>${esc(x.target ? mgLabel(x.target) : '-')}</td><td class="mono">${esc(x.version)}</td><td>${esc(x.owner || '-')}</td><td><span class="chip sm${x.status === 'active' ? ' ok' : ''}">${esc(word(FN_STATUS, x.status))}</span></td><td><div class="chips">${ownerChip(x)}${stateChips(x)}</div></td></tr>`).join('');
+    return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr);align-items:start">
+      <div class="card"><div class="ch">함수 <span class="chip sm">${m.functions.length}</span></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>함수</th><th>실행 방식</th><th>대상</th><th>판본</th><th>담당</th><th>상태</th><th>정의</th></tr>${rows}</table>` : '<div class="empty">함수가 없습니다. [새 함수]로 등록합니다.</div>'}</div></div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${functionForm()}${functionRun()}</div></div>`;
   }
 
   function stateForm() {
@@ -2926,11 +3091,15 @@ ${controls}${body}`;
       <div class="card"><div class="ch">상태 전이 <span class="chip sm">${m.states.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>객체</th><th>상태</th><th>전이</th><th>정의</th></tr>${rows}</table></div></div>${stateForm()}</div>`;
   }
 
+  const LIMIT_KIND = [['percent', '변화율 이내 (%)'], ['delta', '변화폭 이내'], ['max', '최댓값 이하'], ['min', '최솟값 이상']];
+
   function actionForm() {
     const f = S.mg.form && S.mg.form.kind === 'action' ? S.mg.form : null;
     if (!f) return mgEmpty('액션 정보', '액션을 선택하면 입력값, 판정 조건, 상태 전이, 승인 여부를 수정할 수 있습니다.');
     const v = f.v, m = S.mg.st;
     const machine = m.states.find((s) => s.object === v.target);
+    const props = mgProps(v.target).filter((p) => !p.expr && !p.key);
+    const subjects = [['', '기준 선택'], ...props.filter((p) => ['integer', 'decimal'].includes(p.type)).map((p) => [`p:${p.name}`, `속성 · ${p.label || p.name}`]), ...v.params.filter((p) => p.name).map((p) => [`i:${p.name}`, `입력값 · ${p.label || p.name}`])];
     const decisions = [['', '선택'], ...m.decisions.filter((d) => d.target === v.target).map((d) => [d.name, d.label])];
     const outs = (r) => { const d = m.decisions.find((x) => x.name === r.decision); return d ? d.outputs.filter((o) => o.name !== 'reason') : []; };
     const expect = (r, i) => {
@@ -2943,8 +3112,33 @@ ${controls}${body}`;
       <div class="sec">입력값</div>${mgRows('params', (r, i) => `${rowInput('params', i, 'name', r.name, '영문 이름')}${rowInput('params', i, 'label', r.label, '라벨')}${rowSelect('params', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.params)}
       <div class="sec">판정 조건</div>${mgRows('criteria', (r, i) => `${rowSelect('criteria', i, 'decision', decisions, r.decision)}${rowSelect('criteria', i, 'field', [['', '결과 선택'], ...outs(r).map((o) => [o.name, outWord(m.decisions.find((x) => x.name === r.decision), o.name)])], r.field)}${expect(r, i)}`, v.criteria)}
       ${mgField('처리 후 상태', machine ? `<select data-in="mgf" data-f="transition_to"><option value="">변경 없음</option>${machine.states.map((s) => opt(s, s, v.transition_to)).join('')}</select>` : '<span class="muted" style="font-size:12.5px">대상 객체에 상태 전이가 없습니다.</span>')}
+      <div class="sec">변경 값</div>${mgRows('set', (r, i) => `${rowSelect('set', i, 'prop', [['', '속성 선택'], ...props.map((p) => [p.name, p.label || p.name])], r.prop)}${rowInput('set', i, 'value', r.value, '값 또는 $입력값')}`, v.set)}
       <label class="tick"><input type="checkbox" data-in="mgf" data-f="approval"${v.approval ? ' checked' : ''}>사람의 승인 필요</label>
+      <div class="sec">자동 승인 기준</div>${mgRows('limits', (r, i) => `${rowSelect('limits', i, 'subject', subjects, r.subject)}${rowSelect('limits', i, 'kind', LIMIT_KIND, r.kind)}${rowInput('limits', i, 'value', r.value, '값 또는 @기준값')}`, v.limits)}
+      ${v.limits.length ? `<label class="tick" style="margin-top:8px"><input type="checkbox" data-in="mgf" data-f="agents"${v.agents ? ' checked' : ''}>Agent 요청도 기준 안이면 자동 실행</label>` : ''}
+      <div class="hint" style="margin-top:8px">기준을 모두 충족하고 실행 권한이 있으면 바로 실행합니다. 기준을 넘으면 승인 대기로 접수합니다.</div>
+      <div class="sec">외부 호출</div>
+      <div class="rgrid two">${mgField('방식', `<select data-in="mgf" data-f="method">${['POST', 'PUT', 'PATCH', 'DELETE', 'GET'].map((x) => opt(x, x, v.method)).join('')}</select>`)}${mgField('호출 주소', mgInput('url', v.url, 'class="mono" placeholder="https://service.example/orders/$key"'))}</div>
+      ${mgField('요청 본문', mgInput('body', v.body, 'class="mono" placeholder="JSON, $key · $입력값 · $after.속성 참조"'))}
+      ${mgField('되돌리기 호출 주소', mgInput('undo_url', v.undo_url, 'class="mono"'), '비워 두면 외부 호출을 실행한 요청은 되돌릴 수 없습니다.')}
       ${mgField('출처', mgInput('cite', v.cite))}${mgButtons(f, '액션 제외')}</div></div>`;
+  }
+
+  function actionTry() {
+    const f = S.mg.form && S.mg.form.kind === 'action' && S.mg.form.mode === 'edit' ? S.mg.form : null;
+    const a = f && S.mg.st.actions.find((x) => x.name === f.v.name);
+    if (!a) return '';
+    const roles = (S.st.roles || []).map((r) => [r.name, r.label || r.name]);
+    const t = S.mg.actry = S.mg.actry && S.mg.actry.action === a.name ? S.mg.actry : { action: a.name, key: '', role: (roles[roles.length - 1] || [''])[0], params: {}, res: null };
+    const inputs = a.parameters.map((p) => mgField(esc(p.label || p.name), `<input type="text" data-in="actry" data-k="${esc(p.name)}" value="${esc(t.params[p.name] ?? '')}">`)).join('');
+    const p = t.res && t.res.proposal;
+    const [cls, word] = p ? (STATUS[p.status] || ['', p.status]) : ['', ''];
+    const out = t.res ? (p ? `<div class="sec">결과</div><div class="chips"><span class="chip ${cls}">${esc(word)}</span>${p.approved_by === 'auto' ? '<span class="chip sm ok">자동 승인</span>' : ''}</div>
+      ${(p.limits || []).map((l) => `<div class="muted" style="font-size:12.5px;margin-top:6px">${esc(p.labels[l.subject] || l.subject)} ${l.value === null ? '-' : show(Math.round(l.value * 100) / 100)}${l.kind === 'percent' ? '%' : ''} / 기준 ${show(l.limit)}${l.kind === 'percent' ? '%' : ''}</div>`).join('')}
+      ${p.checks.filter((c) => !c.passed).map((c) => `<div class="hint" style="margin-top:6px">${esc(c.title)} ${esc(c.detail)}</div>`).join('')}` : `<div class="hint" style="margin-top:10px">${esc(t.res.error)}</div>`) : '';
+    return `<div class="card"><div class="ch">요청</div><div class="cb">${mgField(`${esc(mgLabel(a.target))} 번호`, `<input type="text" data-in="actrykey" value="${esc(t.key)}">`)}${inputs}
+      ${mgField('요청 역할', `<select data-in="actryrole">${roles.map(([k, l]) => opt(k, l, t.role)).join('')}</select>`)}
+      <button class="btn primary" data-act="actrygo"${S.mg.busy ? ' disabled' : ''}>요청</button>${out}</div></div>`;
   }
 
   function viewMgActions() {
@@ -2953,10 +3147,22 @@ ${controls}${body}`;
     if (wait) return wait;
     const m = S.mg.st;
     const head = mgHead(title, sub, '<button class="btn sm primary" data-act="mgactionnew">새 액션</button>');
-    const rows = m.actions.map((a) => `<tr class="${S.mg.sel === a.name ? 'sel' : ''}" data-act="mgaction" data-name="${esc(a.name)}" style="cursor:pointer"><td><b>${esc(a.label)}</b><div class="muted mono">${esc(a.name)}</div></td><td>${esc(a.target_label)}</td><td>${a.parameters.length}</td><td>${a.criteria.length}</td><td>${esc(a.transition_to || '-')}</td><td>${a.approval ? '필요' : '자동'}</td><td><div class="chips">${ownerChip(a)}${stateChips(a)}</div></td></tr>`).join('');
+    const rows = m.actions.map((a) => `<tr class="${S.mg.sel === a.name ? 'sel' : ''}" data-act="mgaction" data-name="${esc(a.name)}" style="cursor:pointer"><td><b>${esc(a.label)}</b><div class="muted mono">${esc(a.name)}</div></td><td>${esc(a.target_label)}</td><td>${a.parameters.length}</td><td>${a.criteria.length}</td><td>${esc(a.transition_to || '-')}</td><td>${a.auto_within.length ? '기준 초과 시' : (a.approval ? '필요' : '자동')}</td><td><div class="chips">${ownerChip(a)}${stateChips(a)}</div></td></tr>`).join('');
     return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr);align-items:start">
-      <div class="card"><div class="ch">액션 <span class="chip sm">${m.actions.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>액션</th><th>대상</th><th>입력값</th><th>판정 조건</th><th>처리 후 상태</th><th>승인</th><th>정의</th></tr>${rows}</table></div></div>${actionForm()}</div>`;
+      <div class="card"><div class="ch">액션 <span class="chip sm">${m.actions.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>액션</th><th>대상</th><th>입력값</th><th>판정 조건</th><th>처리 후 상태</th><th>승인</th><th>정의</th></tr>${rows}</table></div></div><div style="display:flex;flex-direction:column;gap:16px;min-width:0">${actionForm()}${actionTry()}</div></div>`;
   }
+
+  const hopsOf = (t) => [['', '직접'], ...S.mg.st.links.filter((l) => l.source === t || l.target === t).map((l) => [l.source === t ? l.name : (l.inverse || l.name), `${l.label || l.name} · ${mgLabel(l.source === t ? l.target : l.source)}`])];
+  const hopEnd = (t, step) => { const l = S.mg.st.links.find((x) => x.name === step || x.inverse === step); return !l ? t : (l.name === step ? l.target : l.source); };
+  const hopProps = (r) => [['', '속성 선택'], ...mgProps(r.via ? hopEnd(r.type, r.via) : r.type).map((p) => [p.name, p.label || p.name])];
+  const roleObjects = () => S.mg.st.objects.filter((o) => !o.concept).map((o) => [o.name, o.label]);
+
+  function rowRule(r, i) {
+    if (r.raw) return `<span class="muted" style="flex:1;font-size:12.5px">${esc(mgLabel(r.type))} · 모듈에서 정의한 조건</span>`;
+    return `${rowSelect('rows', i, 'type', roleObjects(), r.type)}${rowSelect('rows', i, 'via', hopsOf(r.type), r.via)}${rowSelect('rows', i, 'property', hopProps(r), r.property)}${rowSelect('rows', i, 'mode', [['principal', '사용자 속성'], ['value', '고정 값']], r.mode)}${rowInput('rows', i, 'value', r.value, r.mode === 'value' ? '값' : '속성 이름')}`;
+  }
+
+  const scopeRule = (r, i) => `${rowSelect('scopes', i, 'type', roleObjects(), r.type)}${rowSelect('scopes', i, 'via', hopsOf(r.type), r.via)}${rowSelect('scopes', i, 'property', hopProps(r), r.property)}`;
 
   function roleForm() {
     const f = S.mg.form && S.mg.form.kind === 'role' ? S.mg.form : null;
@@ -2968,10 +3174,12 @@ ${controls}${body}`;
     return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 역할' : `역할 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
       ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: cs_manager"')) : ''}${mgField('라벨', mgInput('label', v.label))}
       <div class="sec">조회 객체</div><div class="mgticks">${ticks('read', m.objects.map((o) => [o.name, o.label]))}</div>
-      <div class="sec">실행 질의 · 결정</div><div class="mgticks">${ticks('run', [...m.decisions.map((d) => [d.name, d.label]), ...m.queries.map((q) => [q.name, q.label])])}</div>
+      <div class="sec">실행 질의 · 결정 · 함수</div><div class="mgticks">${ticks('run', [...m.decisions.map((d) => [d.name, d.label]), ...m.functions.map((x) => [x.name, x.label]), ...m.queries.map((q) => [q.name, q.label])])}</div>
       <div class="sec">요청 액션</div><div class="mgticks">${ticks('request', m.actions.map((a) => [a.name, a.label]))}</div>
       <div class="sec">가림 속성</div>${mgRows('mask', (r, i) => `${rowSelect('mask', i, 'prop', [['', '선택'], ...propsOf], r.prop)}${rowSelect('mask', i, 'style', [['partial', '일부 가림'], ['full', '전체 가림']], r.style)}`, v.mask)}
-      ${f.filters && f.filters.length ? `<div class="hint" style="margin-top:10px">행 범위 제한 ${esc(f.filters.map(mgLabel).join(', '))}. 행 범위는 라이브러리의 모듈 편집에서 수정합니다.</div>` : ''}
+      <div class="sec">행 범위</div>${mgRows('rows', rowRule, v.rows)}
+      <div class="sec">조직 범위</div>${mgField('사용자 속성', mgInput('scope_attr', v.scope_attr, 'placeholder="예: seller_id"'), '지정하면 아래 객체의 조회와 요청을 로그인한 조직의 행으로 제한합니다.')}
+      ${mgRows('scopes', scopeRule, v.scopes)}
       ${mgButtons(f, '역할 제외')}</div></div>`;
   }
 
@@ -3006,16 +3214,42 @@ ${controls}${body}`;
     if (kind === 'action') {
       const a = m.actions.find((x) => x.name === key);
       const criteria = a.criteria.filter((c) => c.decision).flatMap((c) => Object.entries(c.expect).map(([field, value]) => ({ decision: c.decision, field, value: String(value) })));
-      S.mg.form = { kind, mode: 'edit', v: { name: a.name, label: a.label, target: a.target, params: a.parameters.map((p) => ({ ...p })), criteria, transition_to: a.transition_to, approval: a.approval, cite: a.cite } };
+      const limits = a.auto_within.flatMap((l) => LIMIT_KIND.filter(([k]) => k in l).map(([k]) => ({ subject: l.property ? `p:${l.property}` : `i:${l.parameter}`, kind: k, value: String(l[k]) })));
+      const set = Object.entries(a.set).map(([prop, value]) => ({ prop, value: String(value) }));
+      const body = a.call.body === undefined ? '' : (typeof a.call.body === 'string' ? a.call.body : JSON.stringify(a.call.body));
+      S.mg.form = { kind, mode: 'edit', keep: a.criteria.filter((c) => !c.decision), call: a.call, undo: a.undo, v: { name: a.name, label: a.label, target: a.target, params: a.parameters.map((p) => ({ ...p })), criteria, set, limits, agents: a.auto_agents, method: a.call.method || 'POST', url: a.call.url || '', body, undo_url: a.undo.url || '', transition_to: a.transition_to, approval: a.approval, cite: a.cite } };
+    }
+    if (kind === 'metric') {
+      const x = m.metrics.find((y) => y.name === key);
+      S.mg.sel = `metric:${key}`;
+      const match = x.formula.match || {}, alias = Object.keys(match)[0], where = condRows(x.formula.where), den = condRows((x.denominator || {}).where), agg = aggOf(x.formula);
+      const raw = Object.keys(match).length !== 1 || where === null || den === null || !!x.formula.edges;
+      S.mg.form = { kind, mode: 'edit', raw, orig: x, v: { name: x.name, label: x.label, owner: x.owner, object: match[alias] || '', fn: agg.fn, prop: agg.prop, where: where || [], den: den || [], ratio: !!Object.keys(x.denominator || {}).length, den_label: (x.denominator || {}).label || '', unit: x.unit, scale: x.scale, basis: (x.time || {}).basis || '', time_prop: String((x.time || {}).property || '').split('.').pop(), description: x.description, cite: x.cite } };
+    }
+    if (kind === 'identity') {
+      const x = m.identities.find((y) => y.name === key);
+      S.mg.sel = `identity:${key}`;
+      const imembers = Object.entries(x.members).flatMap(([type, fields]) => Object.entries(fields).map(([field, prop]) => ({ type, field, prop })));
+      const irules = x.rules.map((r) => ({ id: r.id, match: r.match.join(', '), normalize: Object.values(r.normalize)[0] || 'none' }));
+      S.mg.form = { kind, mode: 'edit', v: { name: x.name, label: x.label, imembers, irules } };
+    }
+    if (kind === 'function') {
+      const x = m.functions.find((y) => y.name === key);
+      const fin = Object.entries(x.inputs).map(([name, s]) => ({ name, label: (s || {}).label || name, type: (typeof s === 'string' ? s : (s || {}).type) || 'string' }));
+      S.mg.form = { kind, mode: 'edit', call: x.call, v: { name: x.name, label: x.label, runtime: x.runtime, target: x.target, expr: x.expr, decision: x.decision, query: x.query, entry: x.entry, url: x.call.url || '', method: x.call.method || 'POST', path: x.call.path || '', fin, fout: Object.entries(x.outputs).map(([name, type]) => ({ name, type })), version: x.version, owner: x.owner, status: x.status, depends: x.depends.join(', '), description: x.description, cite: x.cite } };
     }
     if (kind === 'role') {
       const r = m.roles.find((x) => x.name === key);
-      S.mg.form = { kind, mode: 'edit', filters: r.filters, v: { name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })) } };
+      const rows = r.rows.map((x) => (x.raw ? { ...x } : { type: x.type, via: (x.via || [])[0] || '', property: x.property, mode: x.principal ? 'principal' : 'value', value: x.principal || String(x.value ?? '') }));
+      const scopes = Object.entries((r.scope || {}).types || {}).map(([type, w]) => (typeof w === 'string' ? { type, via: '', property: w } : { type, via: (w.via || [])[0] || '', property: w.property }));
+      S.mg.form = { kind, mode: 'edit', v: { name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })), rows, scope_attr: (r.scope || {}).attribute || '', scopes } };
     }
     render();
   }
 
-  const NEW_ROW = { params: { name: '', label: '', type: 'string' }, criteria: { decision: '', field: '', value: '' }, transitions: { from: '', to: '', action: '' }, mask: { prop: '', style: 'partial' }, inputs: { property: '' } };
+  const NEW_ROW = { params: { name: '', label: '', type: 'string' }, criteria: { decision: '', field: '', value: '' }, transitions: { from: '', to: '', action: '' }, mask: { prop: '', style: 'partial' }, inputs: { property: '' },
+    set: { prop: '', value: '' }, limits: { subject: '', kind: 'percent', value: '' }, rows: { type: '', via: '', property: '', mode: 'principal', value: '' }, scopes: { type: '', via: '', property: '' },
+    where: { property: '', op: 'eq', value: '' }, den: { property: '', op: 'eq', value: '' }, imembers: { type: '', field: '', prop: '' }, irules: { id: '', match: '', normalize: 'none' }, fin: { name: '', label: '', type: 'string' }, fout: { name: '', type: 'decimal' } };
 
   function mgSaveMore(f) {
     const v = f.v;
@@ -3025,7 +3259,43 @@ ${controls}${body}`;
       if (f.mode === 'new') { S.mg.sel = v.id; mgEdit('add_rule', { ...args, first: !!v.first }, '규칙을 추가했습니다.'); } else mgEdit('update_rule', args, '규칙을 변경했습니다.');
       return true;
     }
-    if (f.kind === 'param') { mgEdit('update_parameter', { name: v.name, value: v.value }, '기준값을 변경했습니다.'); return true; }
+    if (f.kind === 'param') {
+      const meta = { label: v.label || '', unit: v.unit || '', cite: v.cite || '', min: v.min === '' || v.min === null ? null : Number(v.min), max: v.max === '' || v.max === null ? null : Number(v.max) };
+      S.mg.sel = `param:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_parameter', { name: v.name, type: v.type, value: v.value, ...meta }, '기준값을 추가했습니다.'); else mgEdit('update_parameter', { name: v.name, value: v.value, ...meta }, '기준값을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'metric') {
+      const args = { name: v.name, label: v.label, owner: v.owner, unit: v.unit || '', scale: Number(v.scale) || 1, description: v.description || '', cite: v.cite || '' };
+      if (f.raw) args.time = { ...(f.orig.time || {}), basis: v.basis };
+      else {
+        const al = 'x', ref = v.prop ? `${al}.${v.prop}` : al, where = condSpec(v.where, al), den = condSpec(v.den, al);
+        args.formula = { match: { [al]: v.object }, ...(where ? { where } : {}), value: { [v.fn]: ref } };
+        args.denominator = v.ratio ? { ...(den ? { where: den } : {}), value: { count: al }, ...(v.den_label ? { label: v.den_label } : {}) } : {};
+        args.time = { basis: v.basis, ...(v.time_prop ? { property: `${al}.${v.time_prop}` } : {}) };
+      }
+      S.mg.sel = `metric:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_metric', args, '지표를 추가했습니다.'); else mgEdit('update_metric', args, '지표를 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'identity') {
+      const members = {};
+      for (const r of v.imembers.filter((x) => x.type && x.field && x.prop)) (members[r.type] = members[r.type] || {})[r.field] = r.prop;
+      const rules = v.irules.filter((r) => r.id && r.match).map((r) => { const match = String(r.match).split(',').map((x) => x.trim()).filter(Boolean); return { id: r.id, match, ...(r.normalize && r.normalize !== 'none' ? { normalize: Object.fromEntries(match.map((x) => [x, r.normalize])) } : {}) }; });
+      const args = { name: v.name, label: v.label, members, rules };
+      S.mg.sel = `identity:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_identity', args, '식별 통합을 추가했습니다.'); else mgEdit('update_identity', args, '식별 통합을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'function') {
+      const inputs = Object.fromEntries(v.fin.filter((p) => p.name).map((p) => [p.name, { type: p.type || 'string', label: p.label || p.name }]));
+      const outputs = Object.fromEntries(v.fout.filter((p) => p.name).map((p) => [p.name, p.type || 'string']));
+      const by = { expr: { expr: v.expr }, decision: { decision: v.decision }, query: { query: v.query }, python: { entry: v.entry }, http: { call: { ...(f.call || {}), url: v.url, method: v.method, ...(v.path ? { path: v.path } : {}) } } }[v.runtime] || {};
+      const args = { name: v.name, label: v.label, runtime: v.runtime, target: v.target || '', inputs, outputs, version: v.version, owner: v.owner || '', status: v.status, description: v.description || '', cite: v.cite || '', depends: String(v.depends || '').split(',').map((x) => x.trim()).filter(Boolean), expr: '', decision: '', query: '', entry: '', call: {}, ...by };
+      S.mg.sel = v.name;
+      if (f.mode === 'new') mgEdit('add_function', args, '함수를 추가했습니다.'); else mgEdit('update_function', args, '함수를 변경했습니다.');
+      return true;
+    }
     if (f.kind === 'decision') {
       const inputs = {};
       for (const r of v.inputs.filter((x) => x.property)) {
@@ -3048,14 +3318,23 @@ ${controls}${body}`;
       const parameters = Object.fromEntries(v.params.filter((p) => p.name).map((p) => [p.name, { type: p.type || 'string', label: p.label || p.name }]));
       const by = {};
       for (const c of v.criteria.filter((x) => x.decision && x.field)) (by[c.decision] = by[c.decision] || {})[c.field] = typed(c.value);
-      const args = { name: v.name, label: v.label, parameters, criteria: Object.entries(by).map(([decision, expect]) => ({ decision, expect })), transition_to: v.transition_to || '', approval: !!v.approval, cite: v.cite || '' };
+      const parts = {};
+      for (const l of v.limits.filter((x) => x.subject && x.value !== '')) (parts[l.subject] = parts[l.subject] || { [l.subject[0] === 'p' ? 'property' : 'parameter']: l.subject.slice(2) })[l.kind] = String(l.value).startsWith('@') ? l.value : Number(l.value);
+      const limits = Object.values(parts);
+      const asBody = (x) => { try { return JSON.parse(x); } catch (e) { return x; } };
+      const call = v.url ? { ...(f.call || {}), url: v.url, method: v.method, ...(v.body ? { body: asBody(v.body) } : {}) } : {};
+      const undo = v.undo_url ? { ...(f.undo || {}), url: v.undo_url, method: (f.undo || {}).method || 'POST' } : {};
+      const set = Object.fromEntries(v.set.filter((x) => x.prop).map((x) => [x.prop, String(x.value).startsWith('$') ? x.value : typed(x.value)]));
+      const args = { name: v.name, label: v.label, parameters, set, call, undo, criteria: [...Object.entries(by).map(([decision, expect]) => ({ decision, expect })), ...(f.keep || [])], transition_to: v.transition_to || '', approval: limits.length ? { auto_within: limits, agents: !!v.agents } : !!v.approval, cite: v.cite || '' };
       S.mg.sel = v.name;
       if (f.mode === 'new') mgEdit('add_action', { ...args, target: v.target }, '액션을 추가했습니다.'); else mgEdit('update_action', args, '액션을 변경했습니다.');
       return true;
     }
     if (f.kind === 'role') {
       const mask = Object.fromEntries(v.mask.filter((r) => r.prop).map((r) => [r.prop, r.style]));
-      const args = { name: v.name, label: v.label, read: v.read, run: v.run, request: v.request, mask };
+      const rows = v.rows.filter((r) => r.raw || (r.type && r.property)).map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: typed(r.value) } : { principal: r.value }) }));
+      const scope = v.scope_attr ? { attribute: v.scope_attr, types: v.scopes.filter((r) => r.type && r.property).map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
+      const args = { name: v.name, label: v.label, read: v.read, run: v.run, request: v.request, mask, rows, scope };
       S.mg.sel = v.name;
       if (f.mode === 'new') mgEdit('add_role', args, '역할을 추가했습니다.'); else mgEdit('update_role', args, '역할을 변경했습니다.');
       return true;
@@ -3065,13 +3344,17 @@ ${controls}${body}`;
 
   function mgDeleteMore(f) {
     const v = f.v;
-    const say = { rule: '규칙', action: '액션', role: '역할' }[f.kind];
+    const say = { rule: '규칙', action: '액션', role: '역할', param: '기준값', metric: '지표', identity: '식별 통합', function: '함수' }[f.kind];
     if (!say) return false;
     if (!window.confirm(`이 ${say}을 제외합니다. 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return true;
     S.mg.sel = '';
     if (f.kind === 'rule') mgEdit('delete_rule', { decision: S.mg.dec, id: v.id }, `${say} 제외를 저장했습니다.`);
     if (f.kind === 'action') mgEdit('delete_action', { name: v.name }, `${say} 제외를 저장했습니다.`);
     if (f.kind === 'role') mgEdit('delete_role', { name: v.name }, `${say} 제외를 저장했습니다.`);
+    if (f.kind === 'param') mgEdit('delete_parameter', { name: v.name }, `${say} 제외를 저장했습니다.`);
+    if (f.kind === 'metric') mgEdit('delete_metric', { name: v.name }, `${say} 제외를 저장했습니다.`);
+    if (f.kind === 'identity') mgEdit('delete_identity', { name: v.name }, `${say} 제외를 저장했습니다.`);
+    if (f.kind === 'function') mgEdit('delete_function', { name: v.name }, `${say} 제외를 저장했습니다.`);
     return true;
   }
 
@@ -3107,7 +3390,7 @@ ${controls}${body}`;
       const pairs = list(v.values).map((x) => { const i = x.indexOf('='); return i > 0 ? [x.slice(0, i).trim(), x.slice(i + 1).trim()] : [x, '']; });
       const spec = { label: v.label, description: v.description, type: v.type, unit: v.unit, values: pairs.map(([c]) => c),
         labels: Object.fromEntries(pairs.filter(([, n]) => n)), required: !!v.required, mask: v.mask || '' };
-      if (v.expr) spec.expr = v.expr; else spec.column = v.column || '';
+      if (v.expr) spec.expr = v.expr; else { spec.column = v.column || ''; spec.transform = (v.transform || '').trim(); spec.source_type = v.transform ? (v.source_type || '') : ''; }
       if (f.mode === 'new') {
         if (!IDENT.test(v.name || '')) { toast('이름은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있습니다.', true); return; }
         S.mg.sel = `${v.object}.${v.name}`;
@@ -3178,7 +3461,7 @@ ${controls}${body}`;
     if (kind === 'prop') {
       const [obj, name] = key.split('.');
       const p = m.properties.find((x) => x.object === obj && x.name === name);
-      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', values: valueText(p, ', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr } };
+      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', transform: p.transform || '', source_type: p.source_type || '', values: valueText(p, ', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr } };
     }
     if (kind === 'link') {
       const l = m.links.find((x) => x.name === key);
@@ -3577,6 +3860,8 @@ ${controls}${body}`;
     mgaction: (t) => mgOpenMore('action', t.dataset.name),
     mgrole: (t) => mgOpenMore('role', t.dataset.name),
     mgclose: () => { S.mg.form = null; S.mg.sel = ''; render(); },
+    fvaladd: () => { const s = S.flset.settings; (s.values = s.values || []).push({ name: '', label: '', query: '', key: '', truth: '', answer: {} }); render(); },
+    fvaldel: (t) => { S.flset.settings.values.splice(Number(t.dataset.i), 1); render(); },
     mgrows: async (t) => {
       S.mg.rows = { busy: true };
       render();
@@ -3594,8 +3879,26 @@ ${controls}${body}`;
     },
     mgdecnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'decision', mode: 'new', v: { name: '', label: '', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', inputs: [{ property: '' }], otherwise: '해당하는 규칙이 없습니다' } }; render(); },
     mgstatenew: () => { const o = S.mg.st.objects.find((x) => !x.states); S.mg.sel = ''; S.mg.form = { kind: 'states', mode: 'new', v: { object: o ? o.name : '', property: '', states: '', initial: '', transitions: [] } }; render(); },
-    mgactionnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'action', mode: 'new', v: { name: '', label: '', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', params: [], criteria: [], transition_to: '', approval: true, cite: '' } }; render(); },
-    mgrolenew: () => { S.mg.sel = ''; S.mg.form = { kind: 'role', mode: 'new', v: { name: '', label: '', read: [], run: [], request: [], mask: [] } }; render(); },
+    mgactionnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'action', mode: 'new', v: { set: [], limits: [], agents: false, method: 'POST', url: '', body: '', undo_url: '', name: '', label: '', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', params: [], criteria: [], transition_to: '', approval: true, cite: '' } }; render(); },
+    mgrolenew: () => { S.mg.sel = ''; S.mg.form = { kind: 'role', mode: 'new', v: { name: '', label: '', read: [], run: [], request: [], mask: [], rows: [], scope_attr: '', scopes: [] } }; render(); },
+    mgparamnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'param', mode: 'new', v: { name: '', label: '', type: 'integer', value: '', unit: '', cite: '', min: '', max: '' } }; render(); },
+    mgmetric: (t) => mgOpenMore('metric', t.dataset.name),
+    mgmetricnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'metric', mode: 'new', v: { name: '', label: '', owner: '', object: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', fn: 'count', prop: '', where: [], den: [], ratio: false, den_label: '', unit: '', scale: 1, basis: '', time_prop: '', description: '', cite: '' } }; render(); },
+    mgident: (t) => mgOpenMore('identity', t.dataset.name),
+    mgidentnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'identity', mode: 'new', v: { name: '', label: '', imembers: [{ ...NEW_ROW.imembers }], irules: [{ ...NEW_ROW.irules }] } }; render(); },
+    mgfn: (t) => { S.mg.fnres = null; S.mg.fnkey = ''; S.mg.fnin = {}; mgOpenMore('function', t.dataset.name); },
+    mgfnnew: () => { S.mg.sel = ''; S.mg.fnres = null; S.mg.form = { kind: 'function', mode: 'new', v: { name: '', label: '', runtime: 'expr', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', expr: '', decision: '', query: '', entry: '', url: '', method: 'POST', path: '', fin: [], fout: [{ name: 'value', type: 'decimal' }], version: '1.0.0', owner: '', status: 'draft', depends: '', description: '', cite: '' } }; render(); },
+    actrygo: async () => {
+      const t = S.mg.actry;
+      S.mg.busy = true; render();
+      try { t.res = await api('request', { action: t.action, key: t.key, params: t.params, role: t.role }); S.mg.st = await api('manage'); } catch (e) { t.res = { error: e.message }; }
+      S.pa = null; S.mg.busy = false; render();
+    },
+    fnrun: async () => {
+      S.mg.busy = true; render();
+      try { S.mg.fnres = await api('function/run', { name: S.mg.form.v.name, key: S.mg.fnkey || '', params: S.mg.fnin || {} }); } catch (e) { S.mg.fnres = { ok: false, error: e.message }; }
+      S.mg.busy = false; render();
+    },
     mgprop: (t) => mgOpen('prop', t.dataset.id),
     mglink: (t) => mgOpen('link', t.dataset.name),
     mglinkgo: (t) => { S.mg.keep = true; S.mg.q = ''; S.mg.obj = ''; location.hash = '#links'; mgOpen('link', t.dataset.name); },
@@ -3730,6 +4033,11 @@ ${controls}${body}`;
     mgwhen: (t) => { S.mg.form.v.when[t.dataset.k] = { ...(S.mg.form.v.when[t.dataset.k] || { op: 'any', value: '' }), [t.dataset.p]: t.value }; },
     mgthen: (t) => { S.mg.form.v.then[t.dataset.k] = t.dataset.t === 'boolean' ? t.value === 'true' : (['integer', 'decimal', 'number'].includes(t.dataset.t) && t.value !== '' ? Number(t.value) : t.value); },
     mgrow: (t) => { S.mg.form.v[t.dataset.list][Number(t.dataset.i)][t.dataset.f] = t.value; },
+    fnkey: (t) => { S.mg.fnkey = t.value; },
+    actrykey: (t) => { S.mg.actry.key = t.value; },
+    actry: (t) => { S.mg.actry.params[t.dataset.k] = t.value; },
+    actryrole: (t) => { S.mg.actry.role = t.value; },
+    fnin: (t) => { (S.mg.fnin = S.mg.fnin || {})[t.dataset.k] = t.value; },
     mgq: (t) => {
       S.mg.q = t.value;
       clearTimeout(S.mg.qt);
@@ -3768,6 +4076,7 @@ ${controls}${body}`;
       const row = S.mg.form.v[t.dataset.list][Number(t.dataset.i)];
       row[t.dataset.f] = t.value;
       if (t.dataset.list === 'criteria' && t.tagName === 'SELECT' && t.dataset.f !== 'value') render();
+      if (['rows', 'scopes', 'imembers'].includes(t.dataset.list) && t.tagName === 'SELECT' && ['type', 'via', 'mode'].includes(t.dataset.f)) render();
     },
     mgtick: (t) => {
       const list = S.mg.form.v[t.dataset.list], at = list.indexOf(t.dataset.v);
@@ -3827,6 +4136,19 @@ ${controls}${body}`;
     fstage: (t) => {
       const s = S.flset.settings;
       s.off = t.checked ? s.off.filter((x) => x !== t.dataset.k) : [...new Set([...s.off, t.dataset.k])];
+    },
+    fval: (t) => {
+      const s = S.flset.settings, v = s.values[Number(t.dataset.i)], k = t.dataset.k;
+      if (k === 'by') {
+        const [kind, name] = t.value.split(':');
+        v.answer = t.value ? { [kind]: name, output: '' } : {};
+        render();
+        return;
+      }
+      if (k === 'output') { v.answer = { ...(v.answer || {}), output: t.value }; return; }
+      v[k] = t.value;
+      if (k === 'label' && !v.name) v.name = `value${Number(t.dataset.i) + 1}`;
+      if (k === 'query') render();
     },
     fagree: (t) => {
       const s = S.flset.settings;

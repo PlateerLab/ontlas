@@ -169,6 +169,10 @@ def _open_studio(path: str | Path, applied: bool) -> Studio:
 
         studio.actions.caller = HttpCaller(list(calls), float((spec.get("actions") or {}).get("timeout", 10)))
     studio.settings = {k: spec[k] for k in ("flow", "sync", "notice", "monitor") if k in spec}
+    if (spec.get("functions") or {}).get("python"):
+        from xgen_space.functions import load_entries
+
+        studio.entries = load_entries(spec["functions"]["python"])
     from xgen_space.reason.port import open_reasoners
     from xgen_space.space import open_space
 

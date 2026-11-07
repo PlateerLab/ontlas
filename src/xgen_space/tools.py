@@ -29,6 +29,7 @@ class StudioTools:
             d["queries"] = {k: v for k, v in d["queries"].items() if r.can("run", k)}
             d["decisions"] = {k: v for k, v in d["decisions"].items() if r.can("run", k)}
             d["actions"] = {k: v for k, v in d["actions"].items() if r.can("request", k)}
+            d["functions"] = {k: v for k, v in d["functions"].items() if r.can("run", k)}
         return d
 
     def translate(self, query: Any, to: str) -> dict:
@@ -95,6 +96,15 @@ class StudioTools:
         found = self.knowledge().find(str(text), max(1, min(int(k), 30)) * 3, ("object", "rule", "query", "action"))
         return {"found": [f for f in found if f["element"] in allowed][:max(1, min(int(k), 30))]}
 
+    def agent_context(self, text: str, k: int = 8) -> dict:
+        """What a question is about, written out for a prompt: an agent gets the words, rules and sources it should go by."""
+        found = self.find_definitions(text, k)["found"]
+        lines = [f"- [{f.get('kind_label', '')}] {f.get('title', '')}: {' '.join(str(f.get('text', '')).split())[:300]}" for f in found]
+        terms = [t for t in (self.terms or []) if str(t.get("term", "")) and str(t["term"]) in text]
+        words = [f"- {t['term']}: {t.get('definition', '')}" for t in terms]
+        head = "이 정의와 규칙을 기준으로 답합니다. 판정은 decide 도구로 확인합니다."
+        return {"text": "\n".join([head, *lines, *words]), "found": found}
+
     def answer_question(self, text: str) -> dict:
         """One question to a decision, a record, a query or the documents, with what the answer stands on."""
         from xgen_space.answer import answer_question
@@ -113,16 +123,29 @@ class StudioTools:
         target = self.studio.onto.decisions[decision].target
         if target:
             self._visible(target, key)
-        return self.studio.decide(decision, key, params, role=self.role).to_dict()
+        return _plain(self.studio.decide(decision, key, params, role=self.role).to_dict())
+
+    def list_functions(self) -> dict:
+        """The functions this role may run, with their contracts, owners and versions."""
+        from xgen_space.functions import describe
+
+        onto = self.studio.onto
+        return {"functions": [describe(onto, onto.functions[n]) for n in self.describe()["functions"]]}
+
+    def run_function(self, name: str, key: str = "", params: dict | None = None) -> dict:
+        return _plain(self.studio.function(name, key or None, params, role=self.role, principal=self.principal, by=self.actor.id))
 
     def request_action(self, action: str, key: str, params: dict | None = None) -> dict:
         if self.read_only:
             raise PermissionError("this server is read-only")
         self._visible(self.studio.onto.actions[action].target, key)
-        return self.studio.actions.request(action, key, params, actor=self.actor).to_dict()
+        p = self.studio.actions.request(action, key, params, actor=self.actor)
+        if p.status == "executed":  # inside its limits it ran at once, so the graphs follow
+            self.studio.sync()
+        return _plain(p.to_dict())
 
     def list_proposals(self) -> list[dict]:
-        return [p.to_dict() for p in self.studio.actions.proposals.values()]
+        return [_plain(p.to_dict()) for p in self.studio.actions.proposals.values()]
 
     def list_modules(self) -> list[dict]:
         comp = self.studio.composition

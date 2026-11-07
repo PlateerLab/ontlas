@@ -33,11 +33,12 @@ CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "�
                "states": "허용 상태", "call": "외부 호출"}
 EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
                "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
-               "rolled_back": "되돌림"}
+               "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족"}
 GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
               ("index", "min_found"): "문서 검색 적중률 최소",
               ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
-              ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소"}
+              ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소",
+              ("check", "max_value_errors"): "거래 값 오류 최대"}
 STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
@@ -779,14 +780,16 @@ class StudioSession(SpaceMixin):
                       "target_label": self._obj_label(p.target), "key": p.key, "params": p.params,
                       "requested_by": p.requested_by.id, "requested_kind": p.requested_by.kind, "status": p.status, "checks": checks,
                       "changes": p.changes, "before": p.before, "approved_by": p.approved_by, "call": p.call,
-                      "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
+                      "limits": p.limits, "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
                           not (a and a.call) or bool(a and a.undo))})
 
     def request(self, action: str, key: str, params: dict, role: str, principal: dict | None = None) -> dict:
         actor = Actor(self.studio.onto.roles[role].label or role if role else "Agent", "agent",
                       [role] if role else [], principal=principal or {})
         p = self.studio.actions.request(action, key, params, actor=actor)
-        state = "승인 대기 중입니다." if p.status == "pending" else "검사를 통과하지 못해 반려되었습니다."
+        if p.status == "executed":  # inside its limits it ran at once
+            self._reproject()
+        state = {"pending": "승인 대기 중입니다.", "executed": "자동 승인 기준을 충족해 실행했습니다."}.get(p.status, "검사를 통과하지 못해 반려되었습니다.")
         self._note("request", f"요청 접수: {actor.id}, {self._obj_label(p.target)} {key} {self._proposal(p)['label']}. "
                    f"{state}")
         return {"ok": True, "proposal": self._proposal(p)}
@@ -824,6 +827,27 @@ class StudioSession(SpaceMixin):
                 }.get(p.status, "반려했습니다")
         self._note("approve", f"요청 {p.id}: {verb}.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
+
+    def function_run(self, name: str, key: str, params: dict) -> dict:
+        """Try a function on one object. A draft runs here and nowhere else."""
+        try:
+            return {"ok": True, **plain(self.studio.function(name, key or None, params, by=self.who, trial=True))}
+        except (ValueError, KeyError, PermissionError, OSError) as e:  # the page says it where the result would be
+            return {"ok": False, "error": str(e)}
+
+    def function_log(self) -> dict:
+        return {"log": plain(list(reversed(self.studio.function_log)))}
+
+    def value_state(self) -> dict:
+        """What the ontology answers against what the transaction system shows, with the condition it is held to."""
+        specs = self.studio.flow.values
+        if not specs:
+            return {"ok": True, "configured": False, "items": []}
+        try:
+            out = self.studio.value_accuracy(specs)
+        except Exception as e:  # a query that no longer runs or a service that does not answer: what the page should say
+            return {"ok": False, "configured": True, "error": f"{type(e).__name__}: {e}", "items": []}
+        return {"ok": True, "configured": True, "limit": (self.studio.flow.gates.get("check") or {}).get("max_value_errors"), **plain(out)}
 
     def audit(self) -> list[dict]:
         return [{"at": a.at, "actor": a.actor, "kind": a.actor_kind, "event": EVENT_LABEL.get(a.event, a.event),
@@ -1738,7 +1762,8 @@ class StudioSession(SpaceMixin):
     def manage_state(self) -> dict:
         """The definition as the pending edits would leave it, and what the source holds, for the management screens."""
         from xgen_space.draft import _catalog
-        from xgen_space.manage import _lineage
+        from xgen_space.functions import describe as describe_function
+        from xgen_space.manage import _lineage, row_rule
         from xgen_space.review import element_diff
 
         ws = self._ws()
@@ -1781,9 +1806,9 @@ class StudioSession(SpaceMixin):
                 from_type = t.name if pname in t.properties else next(
                     (x for x in _lineage(o, t.name) if pname in o.objects[x].properties), t.name)
                 properties.append({
-                    "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr else "",
+                    "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr or p.transform else "",
                     "values": p.values, "labels": p.labels, "columns": p.columns, "required": p.required,
-                    "mask": p.mask, "expr": p.expr,
+                    "mask": p.mask, "expr": "" if p.transform else p.expr, "transform": p.transform, "source_type": p.source_type,
                     "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,
@@ -1828,13 +1853,25 @@ class StudioSession(SpaceMixin):
         actions = [{"name": a.name, "label": a.label or a.name, "target": a.target, "target_label": mine_label(o, a.target),
                     "parameters": [{"name": k, "label": (v.get("label") if isinstance(v, dict) else "") or k, "type": (v.get("type") if isinstance(v, dict) else v) or "string"}
                                    for k, v in a.parameters.items()],
-                    "criteria": [{"decision": c.decision, "expect": c.expect, "states": c.states} for c in a.criteria],
-                    "transition_to": a.transition_to, "approval": a.approval, "cite": a.cite,
+                    "criteria": [{"decision": c.decision, "expect": c.expect, "states": c.states, "function": c.function} for c in a.criteria],
+                    "transition_to": a.transition_to, "approval": a.approval, "cite": a.cite, "set": a.set,
+                    "auto_within": a.auto_within, "auto_agents": a.auto_agents, "call": a.call, "undo": a.undo,
                     "pending": f"action:{a.name}" in touched, "new": a.name not in base.actions, **owner(f"action:{a.name}")}
                    for a in o.actions.values()]
         roles = [{"name": r.name, "label": r.label or r.name, "read": r.read, "run": r.run, "request": r.request, "execute": r.execute,
                   "mask": r.mask, "unmask": r.unmask, "filters": sorted(r.row_filters), "pending": f"role:{r.name}" in touched,
+                  "rows": [row_rule(t, s) for t, s in r.row_filters.items()], "scope": r.scope,
                   "new": r.name not in base.roles, **owner(f"role:{r.name}")} for r in o.roles.values()]
+        metrics = [{"name": x.name, "label": x.label or x.name, "description": x.description, "unit": x.unit, "owner": x.owner,
+                    "scale": x.scale, "cite": x.cite, "formula": x.formula, "denominator": x.denominator, "time": x.time,
+                    "pending": f"metric:{x.name}" in touched, "new": x.name not in base.metrics, **owner(f"metric:{x.name}")}
+                   for x in o.metrics.values()]
+        identities = [{"name": i.name, "label": i.label or i.name, "table": i.table,
+                       "members": {m.type: m.fields for m in i.members.values()},
+                       "rules": [{"id": r.id, "match": r.match, "normalize": r.normalize} for r in i.rules],
+                       "new": i.name not in base.identities, **owner(f"identity:{i.name}")} for i in o.identities.values()]
+        functions = [{**describe_function(o, f), "pending": f"function:{f.name}" in touched, "new": f.name not in base.functions,
+                      **owner(f"function:{f.name}")} for f in o.functions.values()]
         states = [{"object": t.name, "label": t.label or t.name, "property": t.states.property, "states": t.states.states,
                    "initial": t.states.initial, "pending": f"object:{t.name}" in touched, **owner(f"object:{t.name}"),
                    "transitions": [{"from": m.source, "to": m.target, "action": m.action} for m in t.states.transitions]}
@@ -1843,6 +1880,7 @@ class StudioSession(SpaceMixin):
         return plain({
             "objects": objects, "properties": properties, "links": links, "questions": questions,
             "decisions": decisions, "parameters": parameters, "actions": actions, "roles": roles, "states": states,
+            "metrics": metrics, "identities": identities, "functions": functions,
             "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
@@ -1954,6 +1992,7 @@ class StudioSession(SpaceMixin):
                            "module_label": self._label(m)})
         return plain({"settings": st.own_flow.to_dict(), "raised": raised,
                       "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in STAGES],
+                      "functions": [{"name": x.name, "label": x.label or x.name, "outputs": list(x.outputs)} for x in self.studio.onto.functions.values()],
                       "conditions": {s: [{"id": c, "label": GATE_LABEL[(s, c)]} for c in cs]
                                      for s, cs in GATES.items()},
                       "queries": qs, "decisions": ds})

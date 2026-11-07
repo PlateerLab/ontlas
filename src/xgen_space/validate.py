@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from xgen_space.model import CARDINALITIES, TEXT_SUFFIX, TYPES, Ontology, valid_name
+from xgen_space.model import CARDINALITIES, RAW_SUFFIX, TEXT_SUFFIX, TYPES, Ontology, valid_name
 
 
 def validate_ontology(o: Ontology) -> list[str]:
@@ -30,6 +30,8 @@ def validate_ontology(o: Ontology) -> list[str]:
             for p in iface.properties:
                 if p not in t.properties:
                     add(f"{t.name}: implements {i} but lacks '{p}'")
+                elif t.properties[p].expr:
+                    add(f"{t.name}: implements {i} with '{p}' computed; an interface reads stored properties")
         for p in t.properties.values():
             if not valid_name(p.name):
                 add(f"{t.name}.{p.name}: property name is not an identifier")
@@ -42,7 +44,8 @@ def validate_ontology(o: Ontology) -> list[str]:
                     f"{sorted(set(p.labels) - {str(v) for v in p.values})}")
             if p.mask and p.mask not in MASKS:
                 add(f"{t.name}.{p.name}: mask '{p.mask}' is not one of {MASKS}")
-            stored_text = p.name + TEXT_SUFFIX in t.properties  # a format makes the expression, over its column
+            stored_text = p.name + TEXT_SUFFIX in t.properties or p.name + RAW_SUFFIX in t.properties  # the expression is made
+            issues.extend(f"{t.name}.{p.name}: {e}" for e in _transform(t, p))
             if p.format:
                 issues.extend(f"{t.name}.{p.name}: {e}" for e in _format(p, stored_text))
             if p.expr and p.column and not stored_text:
@@ -171,6 +174,9 @@ def validate_ontology(o: Ontology) -> list[str]:
         for c in a.criteria:
             if c.decision and c.decision not in o.decisions:
                 add(f"action {a.name}: criterion uses unknown decision '{c.decision}'")
+            if c.function and c.function not in o.functions:
+                add(f"action {a.name}: criterion uses unknown function '{c.function}'")
+        issues.extend(f"action {a.name}: approval: {e}" for e in _auto_within(o, a, t))
         for v in a.set.values():
             if isinstance(v, str) and v.startswith("$") and v[1:] not in a.parameters and not _fills_itself(v):
                 add(f"action {a.name}: '{v}' is not a parameter")
@@ -197,6 +203,10 @@ def validate_ontology(o: Ontology) -> list[str]:
         if r.scope:
             issues.extend(f"role {r.name}: scope: {e}" for e in _scope(o, r))
     issues.extend(_identities(o))
+    from xgen_space.functions import function_issues
+
+    for f in o.functions.values():
+        issues.extend(f"function {f.name}: {e}" for e in function_issues(o, f))
 
     from xgen_space.check import check
     from xgen_space.ir import IRError, Query
@@ -234,7 +244,7 @@ def validate_ontology(o: Ontology) -> list[str]:
 
 MASKS = ("partial", "full")
 PARAMETER_TYPES = ("integer", "decimal", "string", "boolean")
-PARAM_KEYS = {"type", "label", "required", "min", "max", "values", "pattern", "max_length"}
+PARAM_KEYS = {"default", "type", "label", "required", "min", "max", "values", "pattern", "max_length"}
 METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
 
@@ -402,6 +412,58 @@ def _parameters(o: Ontology) -> list[str]:
     return issues
 
 
+def _transform(t, p) -> list[str]:
+    out = []
+    if p.source_type and p.source_type not in TYPES:
+        out.append(f"source_type '{p.source_type}' is not one of {TYPES}")
+    if not p.transform:
+        return out + (["source_type goes with a transform"] if p.source_type else [])
+    if p.name == t.key:
+        out.append("a key is read as it is stored, without a transform")
+    if p.columns:
+        out.append("a transform reads one column, not several")
+    if p.format:
+        out.append("a date kept as text takes format, not a transform")
+    if p.name + RAW_SUFFIX not in t.properties and not p.columns:
+        out.append("give a transform or an expression, not both")
+    return out
+
+
+def _auto_within(o: Ontology, a, t) -> list[str]:
+    from xgen_space.check import _find_prop
+
+    out = []
+    for spec in a.auto_within:
+        prop, param = spec.get("property"), spec.get("parameter")
+        kinds = [k for k in ("delta", "percent", "max", "min") if k in spec]
+        if bool(prop) == bool(param):
+            out.append("each limit names a property or a parameter")
+            continue
+        if not kinds:
+            out.append(f"{prop or param}: give delta, percent, max or min")
+        if param:
+            if param not in a.parameters:
+                out.append(f"'{param}' is not a parameter of the action")
+            if "delta" in kinds or "percent" in kinds:
+                out.append(f"{param}: a parameter has no before, so it takes max or min")
+        else:
+            found = _find_prop(o, t.name, prop)
+            if found is None:
+                out.append(f"'{prop}' is not a property of {t.name}")
+            elif found.type not in ("integer", "decimal"):
+                out.append(f"'{prop}' is {found.type}; a limit reads a number")
+            elif prop not in a.set:
+                out.append(f"the action does not set '{prop}'")
+        for k in kinds:
+            v = spec[k]
+            if isinstance(v, str) and v.startswith("@"):
+                if v[1:] not in o.parameters:
+                    out.append(f"{k}: unknown named value '{v}'")
+            elif isinstance(v, bool) or not isinstance(v, (int, float)):
+                out.append(f"{k} is a number or @name")
+    return out
+
+
 def _computed(o: Ontology) -> list[str]:
     from xgen_space.expr import check_computed
 
@@ -441,7 +503,7 @@ def _call(spec: dict) -> list[str]:
         out.append("url must start with http:// or https://")
     if str(spec.get("method", "POST")).upper() not in METHODS:
         out.append(f"method must be one of {METHODS}")
-    unknown = set(spec) - {"url", "method", "headers", "body", "timeout", "label"}
+    unknown = set(spec) - {"url", "method", "headers", "body", "timeout", "label", "path"}  # path: where a JSON answer holds its value
     if unknown:
         out.append(f"unknown keys {sorted(unknown)}")
     return out

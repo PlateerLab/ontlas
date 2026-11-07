@@ -7,6 +7,7 @@ requires: [commerce-operations, commerce-bindings]
 
 extend:
   objects:
+    CheckoutRecord: {table: checkout_records}
     Seller: {table: sellers}
     Payment: {table: payments}
     Refund: {table: refunds}
@@ -15,6 +16,7 @@ extend:
     Coupon: {table: coupons}
     Review: {table: reviews}
   links:
+    recordOf: {"on": {order_id: order_id}}
     soldBy: {via: {table: product_sellers, source: product_id, target: seller_id}}
     paidWith: {"on": {order_id: order_id}}
     hasRefund: {"on": {claim_id: claim_id}}

@@ -26,12 +26,17 @@ class Projection:
             t = onto.objects[t].parent if t in onto.objects else ""
         return out
 
+    def types(self, onto: Ontology, type_name: str) -> list[str]:
+        """Everything a node is: its type, its parents and the interfaces any of them implement."""
+        chain = self.ancestors(onto, type_name)
+        return chain + [i for a in chain if a in onto.objects for i in onto.objects[a].implements if i not in chain]
+
     def triples(self, onto: Ontology) -> list[tuple[str, str, str]]:
         """(subject, predicate, object) in N-Triples term syntax."""
         ir, out = Iris(onto), []
         for (t, k), props in sorted(self.nodes.items()):
             s = iri(ir.node(t, k))
-            for a in self.ancestors(onto, t):
+            for a in self.types(onto, t):
                 out.append((s, iri(RDF_TYPE), iri(ir.cls(a))))
             for p, v in sorted(props.items()):
                 if v is None:
@@ -56,7 +61,7 @@ class Projection:
             by_type.setdefault(t, []).append({"key": k, "props": {p: _graph_value(v) for p, v in props.items()}})
         for t, rows in by_type.items():
             key = onto.objects[t].key
-            labels = ":".join(f"`{a}`" for a in self.ancestors(onto, t))
+            labels = ":".join(f"`{a}`" for a in self.types(onto, t))
             for i in range(0, len(rows), batch):
                 stmts.append((f"UNWIND $rows AS r MERGE (n:{labels} {{`{key}`: r.key}}) SET n += r.props",
                               {"rows": rows[i:i + batch]}))
@@ -140,8 +145,9 @@ def _read_rows(onto: Ontology, source, q: Query) -> list[tuple]:
 def project(onto: Ontology, source) -> Projection:
     """Read every bound object type and link from a relational source backend."""
     proj = Projection()
+    absent = {t for t in onto.crosswalks() if source.columns(t) is None}
     for t in onto.objects.values():
-        if not t.table:
+        if not t.table or t.table in absent:
             continue
         names = stored_props(onto, t.name)  # computed properties are compiled into each language, not copied
         types = {p: find_prop(onto, t.name, p).type for p in names}
@@ -156,7 +162,7 @@ def project(onto: Ontology, source) -> Projection:
             proj.nodes[(t.name, str(key))] = props
     for lk in onto.links.values():
         src, dst = onto.objects[lk.source], onto.objects[lk.target]
-        if not (lk.bound and src.table and dst.table):
+        if not (lk.bound and src.table and dst.table) or {src.table, dst.table} & absent:
             continue
         q = Query(nodes={"a": src.name, "b": dst.name}, edges=[Edge("a", lk.name, "b")],
                   columns=[Column(Ref("a", src.key), "s"), Column(Ref("b", dst.key), "t")])

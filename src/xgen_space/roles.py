@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from xgen_space.ir import Agg, And, Cmp, Column, Exists, Not, Or, Query, Ref, filter_refs, parse_filter
-from xgen_space.model import TEXT_SUFFIX, Ontology, Role
+from xgen_space.model import RAW_SUFFIX, TEXT_SUFFIX, Ontology, Role
 
 
 class AccessDenied(PermissionError):
@@ -82,7 +82,12 @@ def mask_style(onto: Ontology, role: Role, type_name: str, prop: str, _seen: fro
     hidden too."""
     from xgen_space.check import _find_prop
 
-    prop = prop.removesuffix(TEXT_SUFFIX)  # a date's stored text shows what the date shows
+    prop = prop.removesuffix(TEXT_SUFFIX).removesuffix(RAW_SUFFIX)  # what is stored shows what its property shows
+    if type_name in onto.interfaces and type_name not in onto.objects:  # the strictest of those that implement it
+        from xgen_space.check import concrete_subtypes
+
+        styles = {mask_style(onto, role, t, prop, _seen) for t in concrete_subtypes(onto, type_name)}
+        return "full" if "full" in styles else next(iter(styles - {""}), "")
     names = _lineage(onto, type_name)
     if "*" in role.unmask or any(f"{t}.{prop}" in role.unmask or f"{t}.*" in role.unmask for t in names):
         return ""
@@ -209,6 +214,14 @@ def apply_role(onto: Ontology, q: Query, role_name: str, principal: dict | None)
         raise AccessDenied(f"unknown role '{role_name}'")
 
     def check(t: str) -> None:
+        if t in onto.interfaces and t not in onto.objects:  # no row filter sits on an interface, so none may be passed
+            from xgen_space.check import concrete_subtypes
+
+            for m in concrete_subtypes(onto, t):
+                check(m)
+                if row_filter(role, m, "x")[0] is not None:
+                    raise AccessDenied(f"role {role.name} reads {m} row by row, so not through interface {t}")
+            return
         if not role.can_read(t):
             raise AccessDenied(f"role {role.name} may not read {t}")
 

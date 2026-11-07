@@ -147,7 +147,7 @@ def test_rest_answers_with_a_token_and_only_then(tools):
     assert r.answer("GET", "/v1/search", {})[0] == 405
     assert r.answer("GET", "/v1/none", {})[0] == 404
     code, out = r.answer("GET", "/v1/space", {})
-    assert code == 200 and out["ontology"]["objects"] == 18 and out["space"]["documents"] == 7
+    assert code == 200 and out["ontology"]["objects"] == 19 and out["space"]["documents"] == 7
     assert r.answer("POST", "/v1/query", {"query": "revenueByCategory"})[1]["columns"] == ["category", "revenue", "items"]
     assert "SELECT" in r.answer("POST", "/v1/translate", {"query": "orderTotals", "to": "sql:postgres"})[1]["text"]
     assert r.answer("POST", "/v1/decide", {"decision": "shippingFee", "key": "O1"})[1]["outputs"]["fee"] == 0
@@ -437,7 +437,7 @@ def test_live_draft_through_a_query_service_over_postgres():
 
 def test_the_rules_screen_reads_what_the_modules_say(session):
     r = session.rules_state()
-    assert {p["name"] for p in r["parameters"]} == {"free_shipping_amount", "base_shipping_fee"}
+    assert {p["name"] for p in r["parameters"]} == {"free_shipping_amount", "base_shipping_fee", "price_auto_percent"}
     assert r["metrics"][0]["metric"] == "returnRate" and r["conflicts"][0]["status"] == "open"
     assert any(f["decision"] == "returnEligibility" for f in r["findings"])
     m = session.metric_run("returnRate")

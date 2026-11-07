@@ -273,6 +273,18 @@ registered queries and seven validation questions.
 Decision cells are a small FEEL subset: `-`, `null`, `not null`, `<= 7`, `[1..7]`, `"VIP"`, `!= "NORMAL"`,
 `in ["A", "B"]`, `true`.
 
+A column that needs changing on its way in takes a `transform` over `value`. Every language reads the changed value, a graph holds
+the stored one, and an action cannot write it back:
+
+```yaml
+price:   {type: decimal, column: price_cents, transform: "value / 100", source_type: integer}
+on_sale: {type: boolean, column: on_sale_yn, transform: "value = 'Y'", source_type: string}
+```
+
+An interface is queried like a parent type. `{match: {x: Named}, return: [x.name]}` reads every type that implements it, on every
+store, and a role reads through it only if it reads each of those types without a row limit. Its properties keep the same name on
+each type and are stored, not computed.
+
 ## Computed properties and series
 
 ```yaml
@@ -470,6 +482,7 @@ takes like any other input. On the page, the same adapters read what reaches the
 | `.db`, `.sqlite` | The tables, keys and references of a SQLite file |
 | `.csv`, `.xlsx`: table, index, code, glossary and message sheets | By their headers, Korean or English, under a title and behind a cover sheet. Group rows and reference columns of a code definition are understood |
 | `.docx`, `.pptx`, `.hwp`, `.hwpx`, `.pdf`, `.html`, `.md`, `.txt` | Text by section, for policy drafting (`.pdf` needs `[pdf]`). A `.hwp` with a password or a viewing-only copy is refused |
+| `.json`, `.yaml`: OpenAPI 3 or Swagger 2 | Schemas as tables, `$ref` and lists as references, `enum` as code groups, operations as sections, and each writing operation as an action to review, behind a person's approval |
 | `.json` | The same shape, written by hand or by another tool |
 
 ```json
@@ -717,6 +730,74 @@ A property marked `mask: partial | full` (or listed in a role's `mask`) is shown
 `unmask` it, and so is a computed property built from it; filtering or ordering on a masked property is refused,
 since the answer would give the value away. Queries the studio runs for itself see values in clear.
 
+An action can also say how far it goes without a person. Inside every limit it runs at once for whoever may execute it; past one it
+waits. An agent's request waits too, unless the action says `agents: true`. A limit reads a property's change (`delta`, `percent`),
+a value (`max`, `min`) or a parameter, and takes a number or a named value:
+
+```yaml
+actions:
+  changePrice:
+    target: Sku
+    parameters: {price: {type: decimal, min: 0}}
+    set: {price: $price}
+    approval:
+      auto_within:
+        - {property: price, percent: "@price_auto_percent"}
+```
+
+The request records how it stood against each limit, and the audit trail says it was approved by its limits.
+
+## Functions under a contract
+
+A function is logic the ontology owns. It says what it takes and gives, which version runs, who owns it and what it stands on, and a
+role is given it by name. The runtime is only how it is carried out.
+
+```yaml
+functions:
+  refundEstimate:
+    label: 예상 환불 금액
+    target: OrderItem
+    version: 1.0.0
+    owner: 정산팀
+    inputs: {fee_rate: {type: decimal, required: false, default: 0, min: 0, max: 1}}
+    outputs: {amount: decimal}
+    expr: "line_total * (1 - @fee_rate)"
+```
+
+| `runtime` | Carried out by |
+|---|---|
+| `expr` (the default) | An expression compiled into the language of the store, like a computed property |
+| `decision`, `query` | A decision table or a registered query |
+| `python` | A callable the deployment registered: `functions: {python: {score: package.module:callable}}` in the studio file |
+| `http` | A service on the hosts the studio file allows, such as a model or a solver |
+
+A module names a callable and brings no code, so a definition uploaded to a page cannot run anything. What comes back is held to the
+declared outputs. `status` is `active`, `draft` (a person tries it out, no role runs it) or `retired`, and code outside the ontology
+sees a row the way the caller's role sees it. An action can take a function as a condition.
+
+```bash
+xspace functions examples/library/studio.yaml --run refundEstimate --key I1001 --param fee_rate=0.1
+```
+
+## Values held against the system
+
+Rules can read right and a customer still see the wrong price. `flow.values` compares what the ontology answers with what the
+transaction system recorded or answers now, case by case, and `max_value_errors` makes it a pass condition:
+
+```yaml
+flow:
+  gates: {check: {max_value_errors: 0}}
+  values:
+    - {name: shipping, label: 배송비, query: checkoutRecords, key: order_id, truth: charged_shipping,
+       answer: {decision: shippingFee, output: fee}}
+    - {name: price, label: 판매가, query: checkoutRecords, key: sku_id,
+       truth: {url: "https://shop.example/price/$key", method: GET, path: data.price},
+       answer: {type: Sku, property: price}}
+```
+
+`truth` is a column of the case or a request to the system's API, on an allowed host. `answer` is a decision, a function or a
+property. The check screen lists each case that differs, and `xspace values examples/library/studio.yaml` exits non-zero if any does.
+
 ## Identity across systems
 
 ```yaml
@@ -876,8 +957,9 @@ curl localhost:7710/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \
      -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'
 ```
 
-`/v1/openapi.json` describes the API for whatever imports OpenAPI and `/v1/tools` lists it as function definitions; `xspace
-openapi` writes the same file. Search, queries in any language, translation and decisions run under the role of the token, with
+`/v1/openapi.json` describes the API for whatever imports OpenAPI, with the address it was reached at, and `/v1/tools` lists it as
+function definitions; `xspace openapi --server URL` writes the same file. `/v1/context` gives what a question is about as text for an
+agent's prompt, and `/v1/function` runs a function. Search, queries in any language, translation and decisions run under the role of the token, with
 its row filters and masks. It is read-only unless started with `--api-write`, and then an action is only a request a person
 approves. `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
 person approves holds for it at once, and an action it requests waits on the decision page for a person to approve.
@@ -897,7 +979,7 @@ backends:
 xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
 ```
 
-Tools: `answer_question`, `find_definitions`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
+Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
 `decide`, `request_action`, `list_proposals`. Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. Works with the MCP Python SDK 1.x and 2.x.
 
@@ -960,6 +1042,8 @@ xspace ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o b
 xspace draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
 xspace gates examples/library/studio.yaml                         # the flow's pass conditions, measured
 xspace agreement examples/library/studio.yaml                     # past decisions decided again
+xspace values examples/library/studio.yaml                        # answers held against the transaction system
+xspace functions examples/library/studio.yaml                     # registered functions; --run NAME --key K to run one
 xspace review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
 xspace identity studio.yaml Person --write       # join the records, write the crosswalk
 xspace sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
@@ -1036,6 +1120,25 @@ examples/documents/         # the shop's policies and guides, for search and the
 tools/                      # render_screens.py (the README images), make_commerce_seed.py (the shop), graph-kit/ (the graph engine bundle)
 ```
 
+## Prior art
+
+XGEN Space is an independent project. It is not affiliated with the products below and does not copy them; these are the public
+ideas it studied and what it took from each.
+
+| Reference | What it took | Where it is here | Where it differs |
+|---|---|---|---|
+| [Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/core-concepts) | Objects, properties and links over data sources, with actions and functions as parts of the model; language, engine and tools kept apart | `model.py`, `actions.py`, `functions.py`, the management screens | Definitions are module files anyone can read and diff; one query runs on any store rather than one backend |
+| [Foundry interfaces](https://www.palantir.com/docs/foundry/interfaces/interface-overview) | One shape shared by object types, read without naming the type | `check.interface_view` | Properties keep their names across types; no property mapping and no interface extending another |
+| [Microsoft Fabric IQ ontology](https://learn.microsoft.com/en-us/fabric/iq/ontology/overview) | Definitions and bindings over data left in its own system; rules beside entities; RDF and OWL in and out | Bindings, `bindings.py` check, `exchange/` | Rules run as decision tables, not as text for a model |
+| [W3C Direct Mapping](https://www.w3.org/TR/rdb-direct-mapping/) and [R2RML](https://www.w3.org/TR/r2rml/) | Table to class, column to property, foreign key to link; a mapping others can read | `draft.py`, `exchange/r2rml.py` | Keys and references are also inferred from values, with the reason kept |
+| [SHACL](https://www.w3.org/TR/shacl/) and [OWL 2 RL](https://www.w3.org/TR/owl2-profiles/) | Structure checks and derived facts as a layer over the store | `reason/` | Business decisions stay out of the reasoner |
+| [Ontop](https://ontop-vkg.org/) and [Stardog virtual graphs](https://docs.stardog.com/virtual-graphs/) | A graph view over tables that stay where they are | `compile/`, `projection.py` | Compiles from its own query IR to six languages |
+| [GoRules ZEN](https://github.com/gorules/zen) | Decision tables as data, run by an engine | `decide/`, `decide/zen.py` | A built-in evaluator gives the same answer with the grounds |
+| [LinkML](https://linkml.io/) | One definition, many artifacts | `exchange/`, `xspace export` | The definition also carries rules, actions and roles |
+| [TinkerPop](https://tinkerpop.apache.org/) | A conformance suite that every provider must pass | `conformance.py`, `xspace conformance` | Compares rows across languages, not one language across providers |
+| [schema.org](https://schema.org/), [GS1 Web Vocabulary](https://ref.gs1.org/voc/), [FIBO](https://spec.edmcouncil.org/fibo/), [Brick](https://brickschema.org/) | Terms an element can align with, kept as `aligned` | `aligned`, `exchange/owl.py` | A domain stays a module, so no vocabulary is built in |
+| [LightRAG](https://github.com/HKUDS/LightRAG) and [sigma.js](https://www.sigmajs.org/) | The look of the graph screen | `static/graph.js`, `static/graph-kit.js` | Clusters fold past 120 nodes for a schema of hundreds of tables |
+
 ## Roadmap
 
 - GQL run on a real engine: its text is compiled and checked as text, and no server here executes it
@@ -1044,6 +1147,7 @@ tools/                      # render_screens.py (the README images), make_commer
 - sign-in through an organisation's identity provider for team studios
 - decision tables drawn from outcomes with dates as inputs (days between two columns)
 - several source databases in one studio
+- interface properties mapped to differently named properties, and interfaces that extend others
 
 ## Repository model
 

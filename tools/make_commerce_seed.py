@@ -157,6 +157,8 @@ CREATE TABLE shipments (shipment_id TEXT PRIMARY KEY, order_id TEXT, carrier_id 
                         delivered_at TEXT, ship_status TEXT);
 CREATE TABLE coupons (coupon_id TEXT PRIMARY KEY, name TEXT, discount_rate REAL, min_amount REAL, expires_at TEXT);
 CREATE TABLE order_coupons (order_id TEXT, coupon_id TEXT);
+CREATE TABLE checkout_records (record_id TEXT PRIMARY KEY, order_id TEXT, sku_id TEXT, charged_shipping REAL, shown_price REAL,
+                               shown_sold_out INTEGER);
 CREATE TABLE reviews (review_id TEXT PRIMARY KEY, customer_id TEXT, product_id TEXT, rating INTEGER, written_at TEXT, body TEXT);
 
 """
@@ -169,6 +171,15 @@ sql += insert("product_sellers", OLD_PRODUCT_SELLERS + [(p[0], p[4]) for p in PR
 sql += insert("payments", payments) + insert("refunds", refund_rows) + insert("carriers", CARRIERS)
 sql += insert("shipments", shipments) + insert("coupons", COUPONS) + insert("order_coupons", order_coupons)
 sql += insert("reviews", reviews)
+sql += '''
+INSERT INTO checkout_records VALUES
+  ('CR1', 'O1', 'S1', 0, 59000, 0),
+  ('CR2', 'O2', 'S2', 0, 59000, 0),
+  ('CR3', 'O3', 'S3', 0, 19000, 0),
+  ('CR4', 'O4', 'S3', 0, 19000, 0),
+  ('CR5', 'O16', 'S4', 3000, 15000, 0),
+  ('CR6', 'O20', 'S5', 0, 89000, 0);
+'''
 (ROOT / "examples" / "library" / "seed_operations.sql").write_text(sql, encoding="utf-8", newline="\n")
 
 

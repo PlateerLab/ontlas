@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from xgen_space.check import Checked, check
+from xgen_space.check import Checked, check, interface_view
 from xgen_space.ir import Agg, Exists, Param, Query, filter_refs, walk_filters
 from xgen_space.model import Ontology
 from xgen_space.values import coerce
@@ -117,15 +117,16 @@ class Compiler:
     def checked(self, q: Query | dict) -> Checked:
         if isinstance(q, dict):
             q = Query.from_dict(q)
+        plain, self.onto = self.onto, interface_view(self.onto, q)
         chk = check(q, self.onto)
-        _check_column_filters(chk, self.onto)
+        _check_column_filters(chk, self.onto, plain)
         return chk.raise_for_issues()
 
     def compile(self, q: Query | dict) -> Compiled:
         raise NotImplementedError
 
 
-def _check_column_filters(chk: Checked, onto: Ontology) -> None:
+def _check_column_filters(chk: Checked, onto: Ontology, plain: Ontology) -> None:
     """Check each aggregate's own where. Roles scope and mask the query's where and not this one, so it may not leave
     the row (exists) or read a property a role sees masked: counting by it would tell the masked value."""
     from xgen_space.check import _Checker
@@ -142,7 +143,7 @@ def _check_column_filters(chk: Checked, onto: Ontology) -> None:
         if any(isinstance(x, Exists) for x in walk_filters(f)):
             checker.issue(f"column '{c.name}': exists belongs in the query's where, an aggregate's where reads its row")
         for r in filter_refs(f, deep=False):
-            who = sorted(role.name for role in onto.roles.values() if mask_style(onto, role, scope.get(r.alias), r.prop))
+            who = sorted(role.name for role in plain.roles.values() if mask_style(plain, role, scope.get(r.alias), r.prop))
             if who:
                 checker.issue(f"column '{c.name}': {r} is masked for {', '.join(who)}, so it cannot decide what a "
                               "column counts; filter on it in the query's where, which checks the role")

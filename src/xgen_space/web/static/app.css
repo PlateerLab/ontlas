@@ -544,7 +544,8 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 .mgcond select, .mgcond input, .mgrow select, .mgrow input { min-width:0; width:100%; height:32px; padding:0 8px; border:1px solid var(--line); border-radius:7px; font:inherit; font-size:12.5px; background:#fff; }
 .mgrows { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
 .mgrow { display:flex; gap:6px; align-items:center; width:100%; }
-.mgrow > select, .mgrow > input { flex:1; }
+.mgrow { flex-wrap:wrap; }
+.mgrow > select, .mgrow > input { flex:1 1 100px; }
 .mgticks { display:flex; flex-wrap:wrap; gap:4px 12px; max-height:150px; overflow:auto; }
 .banner.plain { background:var(--panel); border:1px solid var(--line); }
 @media (max-width:640px) { .mgcond { grid-template-columns:1fr; } .mgrow { flex-wrap:wrap; } }

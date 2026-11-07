@@ -22,7 +22,7 @@ from xgen_space.ir import (
     Query,
     Ref,
 )
-from xgen_space.model import Ontology
+from xgen_space.model import ObjectType, Ontology, Property
 from xgen_space.values import accepts
 
 
@@ -53,14 +53,37 @@ class Checked:
 
 
 def is_a(onto: Ontology, type_name: str, base: str) -> bool:
+    """Whether a type is the base, descends from it, or implements it, itself or through a parent."""
     seen = set()
     t = type_name
     while t and t not in seen:
         if t == base:
             return True
         seen.add(t)
-        t = onto.objects[t].parent if t in onto.objects else ""
+        obj = onto.objects.get(t)
+        if obj is None:
+            return False
+        if base in obj.implements:
+            return True
+        t = obj.parent
     return False
+
+
+def interface_view(onto: Ontology, q: Query) -> Ontology:
+    """The ontology a query is read against: an interface it names stands as an abstract type of the shared properties, so
+    every compiler reads it the way it reads a parent. Only the query sees that type; a definition has no such object."""
+    asked = {t for t in aliases_of(q).values() if t in onto.interfaces and t not in onto.objects}
+    if not asked:
+        return onto
+    objects = dict(onto.objects)
+    for name in asked:
+        members = [o.name for o in onto.objects.values() if is_a(onto, o.name, name)]
+        first = members[0] if members else ""
+        shared = onto.interfaces[name].properties
+        props = {p: replace(_find_prop(onto, first, p) or Property(p), column="", columns=[], expr="", mask="")
+                 for p in shared}
+        objects[name] = ObjectType(name, shared[0] if shared else "", props, label=onto.interfaces[name].label)
+    return replace(onto, objects=objects)
 
 
 class _Checker:
@@ -338,7 +361,7 @@ def _comparable(a: str, b: str) -> bool:
 
 
 def check(q: Query, onto: Ontology) -> Checked:
-    return _Checker(onto).query(q)
+    return _Checker(interface_view(onto, q)).query(q)
 
 
 def check_or_raise(q: Query | dict, onto: Ontology) -> Checked:

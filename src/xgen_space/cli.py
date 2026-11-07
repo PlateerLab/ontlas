@@ -239,6 +239,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("config")
     s = sub.add_parser("agreement", help="decide past cases again and compare with what was decided then")
     s.add_argument("config")
+    s = sub.add_parser("values", help="hold the values the ontology answers against what the transaction system shows")
+    s.add_argument("config")
+    s = sub.add_parser("functions", help="list the registered functions, or run one")
+    s.add_argument("config")
+    s.add_argument("--run", default="", help="the function to run")
+    s.add_argument("--key", default="", help="the object it runs on")
+    s.add_argument("--param", action="append", default=[], help="key=value, an input of the function")
     s = sub.add_parser("identity", help="join the records several systems keep for one thing")
     s.add_argument("config")
     s.add_argument("name")
@@ -695,6 +702,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if rep["passed"] else 1
     elif a.cmd == "agreement":
         _out(studio.agreement())
+    elif a.cmd == "values":
+        rep = studio.value_accuracy()
+        _out(rep)
+        return 0 if not rep["errors"] else 1
+    elif a.cmd == "functions":
+        from xgen_space.functions import describe
+
+        if a.run:
+            _out(studio.function(a.run, a.key or None, dict(x.split("=", 1) for x in a.param), trial=True))
+        else:
+            _out([describe(studio.onto, f) for f in studio.onto.functions.values()])
     elif a.cmd == "identity":
         _out(studio.resolve_identity(a.name, write=a.write).to_dict())
     elif a.cmd == "review":

@@ -56,10 +56,14 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
             checked["tables"] += 1
         return cols[name]
 
+    absent = {t for t in onto.crosswalks() if table(t) is None}
     for o in onto.objects.values():
         if not o.table:
             continue
         have = table(o.table)
+        if o.table in absent:
+            out.append(Finding("warning", "table", f"object:{o.name}", f"identity not resolved yet: '{o.table}' is written then"))
+            continue
         if have is None:
             out.append(Finding("error", "table", f"object:{o.name}", f"table '{o.table}' does not exist"))
             continue
@@ -77,6 +81,8 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
                     out.append(Finding("warning", "type", f"property:{o.name}.{p}",
                                        f"{prop.type} is read from {o.table}.{col} declared {have[col.lower()] or '?'}"))
     for lk in onto.links.values():
+        if lk.via and lk.via.table in absent:
+            continue
         if lk.via:
             have = table(lk.via.table)
             if have is None:
@@ -87,14 +93,14 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
                 if c.lower() not in have:
                     out.append(Finding("error", "column", f"link:{lk.name}", f"column '{lk.via.table}.{c}' does not exist"))
     if data and not any(f.severity == "error" for f in out):
-        out += _data_checks(onto, backend, limit, checked)
+        out += _data_checks(onto, backend, limit, checked, absent)
     return BindingReport(out, checked)
 
 
-def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int]) -> list[Finding]:
+def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int], absent: set[str]) -> list[Finding]:
     out: list[Finding] = []
     for o in onto.objects.values():
-        if not o.table:
+        if not o.table or o.table in absent:
             continue
         t, key = qi(o.table), ", ".join(qi(c) for c in o.key_prop.cols)
         dialect = backend.capabilities.dialect

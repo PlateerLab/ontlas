@@ -310,8 +310,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             from xgen_space import __version__
             from xgen_space.rest import openapi, tool_list
 
-            if path == "/v1/openapi.json":
-                return self._json(200, openapi(__version__))
+            if path == "/v1/openapi.json":  # a platform that imports it needs to know where it answers
+                host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or ""
+                scheme = self.headers.get("X-Forwarded-Proto") or "http"
+                return self._json(200, openapi(__version__, f"{scheme}://{host}" if host else ""))
             if path == "/v1/tools":
                 return self._json(200, {"tools": tool_list()})
             if rest is None:
@@ -428,6 +430,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.pending_actions()
                 if route == "audit":
                     return {"audit": s.audit()}
+                if route == "functions/log":
+                    return s.function_log()
+                if route == "values":
+                    return s.value_state()
                 if route == "files":
                     return s.files_state()
                 if route == "catalog":
@@ -552,6 +558,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.request(a["action"], str(a["key"]), a.get("params") or {}, role, principal)
             if route == "approve":
                 return s.approve(str(a["id"]), bool(a.get("approve", True)))
+            if route == "function/run":
+                return s.function_run(str(a.get("name", "")), str(a.get("key", "")), a.get("params") if isinstance(a.get("params"), dict) else {})
             if route == "questions":
                 return s.questions()
             if route == "bindings":

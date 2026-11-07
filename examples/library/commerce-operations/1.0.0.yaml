@@ -6,8 +6,51 @@ description: 판매자, 결제, 환불, 배송, 택배사, 쿠폰, 상품평과 
 requires: [commerce]
 
 parameters:
+  price_auto_percent: {type: integer, value: 10, min: 0, max: 100, unit: "%", label: 판매가 자동 변경 허용 폭, cite: 가격 운영 기준 v1.0 2조}
   free_shipping_amount: {type: integer, value: 50000, min: 0, unit: 원, label: 무료 배송 기준 금액, cite: 배송비 정책서 v1.0 2조}
   base_shipping_fee: {type: integer, value: 3000, min: 0, unit: 원, label: 기본 배송비, cite: 배송비 정책서 v1.0 2조}
+
+functions:
+  refundEstimate:
+    label: 예상 환불 금액
+    description: 결제 금액에서 수수료율만큼 뺀 금액입니다
+    target: OrderItem
+    version: 1.0.0
+    owner: 정산팀
+    inputs:
+      fee_rate: {type: decimal, label: 수수료율, required: false, default: 0, min: 0, max: 1}
+    outputs: {amount: decimal}
+    expr: "line_total * (1 - @fee_rate)"
+    cite: 결제환불안내 환불 금액
+  soldOut:
+    label: 품절 여부
+    description: 재고가 없으면 품절입니다
+    target: Sku
+    version: 1.0.0
+    owner: 상품운영팀
+    outputs: {sold_out: boolean}
+    expr: "stock = 0"
+  orderShipping:
+    label: 주문 배송비
+    runtime: decision
+    target: Order
+    decision: shippingFee
+    version: 1.0.0
+    owner: 물류운영팀
+    outputs: {fee: decimal, reason: string}
+    cite: 배송비 정책서 v1.0 2조
+
+actions:
+  changePrice:
+    label: 판매가 변경
+    target: Sku
+    cite: 가격 운영 기준 v1.0 2조
+    parameters:
+      price: {type: decimal, label: 새 판매가, min: 0}
+    set: {price: $price}
+    approval:
+      auto_within:
+        - {property: price, percent: "@price_auto_percent"}
 
 metrics:
   returnRate:
@@ -28,6 +71,18 @@ conflicts:
       - {source: 고객센터 안내문, says: {days: 14}}
 
 objects:
+  CheckoutRecord:
+    label: 결제 화면 기록
+    description: 결제 화면이 고객에게 보여 준 값입니다
+    key: record_id
+    properties:
+      record_id: {type: string, label: 기록 번호, required: true}
+      order_id: {type: string, label: 주문 번호}
+      sku_id: {type: string, label: 단품 번호}
+      charged_shipping: {type: decimal, unit: KRW, label: 청구 배송비}
+      shown_price: {type: decimal, unit: KRW, label: 표시 판매가}
+      shown_sold_out: {type: boolean, label: 품절 표시}
+
   Seller:
     label: 판매자
     parent: Party
@@ -103,6 +158,7 @@ objects:
     properties:
       coupon_id: {type: string, label: 쿠폰 번호, required: true}
       name: {type: string, label: 쿠폰명}
+      discount_percent: {type: decimal, unit: "%", label: 할인율, column: discount_rate, transform: "value * 100"}
       discount_rate: {type: decimal, label: 할인율}
       min_amount: {type: decimal, unit: KRW, label: 최소 주문 금액}
       expires_at: {type: datetime, label: 만료 일시}
@@ -120,6 +176,7 @@ objects:
       body: {type: string, label: 내용}
 
 links:
+  recordOf: {from: CheckoutRecord, to: Order, cardinality: many_to_one, label: 기록한 주문}
   soldBy: {from: Product, to: Seller, inverse: sells, label: 판매자}
   paidWith: {from: Order, to: Payment, cardinality: one_to_many, inverse: paymentOf, label: 결제}
   hasRefund: {from: Claim, to: Refund, cardinality: one_to_many, inverse: refundOf, label: 환불}
@@ -146,6 +203,19 @@ decisions:
       - {id: basic, when: {}, then: {fee: "@base_shipping_fee", reason: 기본 배송비 3천원입니다}}
 
 queries:
+  checkoutRecords:
+    label: 결제 화면 기록
+    query:
+      match: {r: CheckoutRecord}
+      return: [r.record_id, r.order_id, r.sku_id, r.charged_shipping, r.shown_price, r.shown_sold_out]
+      order: [record_id]
+  namedThings:
+    label: 이름이 있는 항목 전체
+    description: 고객, 판매자, 카테고리, 상품, 택배사, 쿠폰을 유형과 관계없이 조회합니다
+    query:
+      match: {x: Named}
+      return: [x.name]
+      order: [name]
   paymentsByMethod:
     label: 결제 수단별 금액
     query:

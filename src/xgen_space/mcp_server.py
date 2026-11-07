@@ -113,6 +113,11 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         return tools.answer_question(text)
 
     @server.tool()
+    def agent_context(text: str, k: int = 8) -> dict:
+        """The definitions and rules a question is about, as text to put in a prompt."""
+        return tools.agent_context(text, k)
+
+    @server.tool()
     def find_definitions(text: str, k: int = 8) -> dict:
         """The object types, rules, queries and actions a question is about. Read these rather than the whole ontology."""
         return tools.find_definitions(text, k)
@@ -156,6 +161,16 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
     def decide(decision: str, key: str, params: dict | None = None) -> dict:
         """Evaluate a decision table for one object; returns the outputs, the rule that matched and the evidence."""
         return tools.decide(decision, key, params)
+
+    @server.tool()
+    def list_functions() -> dict:
+        """The functions this agent may run, with what they take and give, their versions and owners."""
+        return tools.list_functions()
+
+    @server.tool()
+    def run_function(name: str, key: str = "", params: dict | None = None) -> dict:
+        """Run a registered function on one object, or on its inputs alone."""
+        return tools.run_function(name, key, params)
 
     if not read_only:
         @server.tool()
