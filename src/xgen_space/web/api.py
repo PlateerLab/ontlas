@@ -31,6 +31,27 @@ from xgen_space.web.space_api import SpaceMixin, attach
 KIND_ORDER = list(MODULE_KIND)
 CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이",
                "states": "허용 상태", "call": "외부 호출"}
+_NO_COLUMN = re.compile(r"no such column: (\S+)|column \W?([\w.]+)\W? does not exist|Unknown column '([^']+)'", re.I)
+_NO_TABLE = re.compile(r"no such table: (\S+)|relation \W?([\w.]+)\W? does not exist|Table '([^']+)' doesn't exist", re.I)
+
+
+def said(e: Exception | str) -> str:
+    """An engine's or a database's error as the page says it: what is missing, then where to look. The original stays at
+    the end, for whoever fixes the source."""
+    text = str(e) if isinstance(e, str) else f"{type(e).__name__}: {e}"
+    m = _NO_COLUMN.search(text)
+    if m:
+        name = next(g for g in m.groups() if g)
+        return f"원천 DB에 {name} 컬럼이 없어 실행하지 못했습니다. DB 대조에서 정의와 원천 DB를 확인해 주세요. ({text})"
+    m = _NO_TABLE.search(text)
+    if m:
+        name = next(g for g in m.groups() if g)
+        return f"원천 DB에 {name} 테이블이 없어 실행하지 못했습니다. DB 대조에서 정의와 원천 DB를 확인해 주세요. ({text})"
+    return text
+
+
+STATUS_WORD = {"pending": "승인 대기", "stale": "실행 전 재검사 실패", "rejected": "반려", "executed": "실행",
+               "failed": "외부 호출 실패", "rolled_back": "되돌림"}
 EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
                "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
                "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족", "stale": "실행 전 재검사 실패",
@@ -778,16 +799,24 @@ class StudioSession(SpaceMixin):
         labels = {k: (v.get("label") if isinstance(v, dict) else "") or k for k, v in (a.parameters if a else {}).items()}
         target = st.onto.objects.get(p.target)
         labels.update({k: x.label for k, x in (target.properties if target else {}).items() if x.label and k in p.changes})
+        inside = bool(p.limits) and all(x["within"] for x in p.limits)
+        waits = ""  # why a request inside its limits still waits for a person
+        if p.status == "pending" and inside and a is not None:
+            waits = "agent" if p.requested_by.kind != "human" and not a.auto_agents else "right"
         return plain({"id": p.id, "action": p.action, "label": a.label if a else p.action, "target": p.target, "labels": labels,
+                      "waits": waits,
                       "target_label": self._obj_label(p.target), "key": p.key, "params": p.params,
                       "requested_by": p.requested_by.id, "requested_kind": p.requested_by.kind, "status": p.status, "checks": checks,
                       "changes": p.changes, "before": p.before, "approved_by": p.approved_by, "call": p.call,
                       "limits": p.limits, "rolled_back_by": p.rolled_back_by, "can_roll_back": p.status == "executed" and (
                           not (a and a.call) or bool(a and a.undo))})
 
-    def request(self, action: str, key: str, params: dict, role: str, principal: dict | None = None) -> dict:
-        actor = Actor(self.studio.onto.roles[role].label or role if role else "Agent", "agent",
-                      [role] if role else [], principal=principal or {})
+    def request(self, action: str, key: str, params: dict, role: str, principal: dict | None = None, *,
+                kind: str = "agent") -> dict:
+        """A request from this page, as an agent under a role or as the person signed in, acting in that role."""
+        label = self.studio.onto.roles[role].label or role if role else "Agent"
+        who = label if kind == "agent" else self.who
+        actor = Actor(who, kind, [role] if role else [], principal=principal or {})
         p = self.studio.actions.request(action, key, params, actor=actor)
         if p.status == "executed":  # inside its limits it ran at once
             self._reproject()
@@ -813,16 +842,35 @@ class StudioSession(SpaceMixin):
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def pending_actions(self) -> dict:
-        """Requests waiting for a person, whoever asked: this page, another person, a platform or an agent."""
-        return {"pending": [self._proposal(p) for p in self.studio.actions.proposals.values() if p.status == "pending"]}
+        """Requests waiting for a person, whoever asked: this page, another person, a platform or an agent; and the
+        latest that ran, so one can still be rolled back after the page that approved it is gone."""
+        props = list(self.studio.actions.proposals.values())
+        ran = [p for p in props if p.status in ("executed", "rolled_back", "failed")][-10:]
+        return {"pending": [self._proposal(p) for p in props if p.status == "pending"],
+                "done": [self._proposal(p) for p in reversed(ran)]}
 
     def approve(self, proposal_id: str, approve: bool) -> dict:
+        from xgen_space.actions import Refused, Settled
+
         approver = self._approver()
         acts = self.studio.actions
+        verb = "승인" if approve else "반려"
         try:
             p = acts.approve(proposal_id, approver=approver) if approve else \
                 acts.reject(proposal_id, approver=approver, reason="운영자 반려")
-        except (PermissionError, ValueError, RuntimeError, KeyError) as e:
+        except Refused as e:
+            why = {"self": f"요청한 사람은 자기 요청을 {verb}할 수 없어 처리하지 못했습니다. 다른 승인 권한자에게 {verb}을 요청해 주세요.",
+                   "right": f"실행 권한이 있는 역할이 없어 {verb}하지 못했습니다. 권한 관리에서 이 액션의 실행 권한을 확인해 주세요.",
+                   "scope": f"대상 행이 승인자의 조회 범위 밖이라 {verb}하지 못했습니다. 이 행을 조회할 수 있는 승인자에게 요청해 주세요."}
+            return {"ok": False, "error": why.get(e.code, f"{verb} 권한이 없어 처리하지 못했습니다. {e}")}
+        except Settled as e:
+            if e.code == "ran":
+                return {"ok": False, "error": "이미 실행된 요청이라 반려하지 못했습니다. 되돌리기로 실행 전 값으로 복원해 주세요."}
+            word = STATUS_WORD.get(e.code, e.code)
+            return {"ok": False, "error": f"이미 {word} 상태인 요청이라 {verb}하지 못했습니다. 화면을 새로 고쳐 현재 상태를 확인해 주세요."}
+        except KeyError:
+            return {"ok": False, "error": "요청을 찾을 수 없어 처리하지 못했습니다. 화면을 새로 고쳐 다시 시도해 주세요."}
+        except (PermissionError, ValueError, RuntimeError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
         verb = {"executed": "승인 후 원천 DB에 반영했습니다", "failed": "외부 호출이 실패해 원천 DB를 실행 전 값으로 복원했습니다"
@@ -831,11 +879,15 @@ class StudioSession(SpaceMixin):
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def function_run(self, name: str, key: str, params: dict) -> dict:
-        """Try a function on one object. A draft runs here and nowhere else."""
+        """Try a function on one object. A draft runs here and nowhere else. An input left empty takes its default."""
+        params = {k: v for k, v in (params or {}).items() if v not in (None, "")}
+        f = self.studio.onto.functions.get(name)
+        if f is not None and f.target and key and self.studio.fetch(f.target, key) is None:
+            return {"ok": False, "error": f"{self._obj_label(f.target)} {key}을(를) 찾을 수 없어 실행하지 못했습니다. 번호를 확인해 주세요."}
         try:
             return {"ok": True, **plain(self.studio.function(name, key or None, params, by=self.who, trial=True))}
         except (ValueError, KeyError, PermissionError, OSError) as e:  # the page says it where the result would be
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": said(e)}
 
     def function_log(self) -> dict:
         return {"log": plain(list(reversed(self.studio.function_log)))}
@@ -848,7 +900,7 @@ class StudioSession(SpaceMixin):
         try:
             out = self.studio.value_accuracy(specs)
         except Exception as e:  # a query that no longer runs or a service that does not answer: what the page should say
-            return {"ok": False, "configured": True, "error": f"{type(e).__name__}: {e}", "items": []}
+            return {"ok": False, "configured": True, "error": said(e), "items": []}
         return {"ok": True, "configured": True, "limit": (self.studio.flow.gates.get("check") or {}).get("max_value_errors"), **plain(out)}
 
     def audit(self) -> list[dict]:
@@ -1802,9 +1854,13 @@ class StudioSession(SpaceMixin):
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
                 "rows": rows.get(t.table) if t.table else None, "states": bool(t.states),
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
+        from xgen_space.model import RAW_SUFFIX
+
         properties = []
         for t in o.objects.values():
             for pname in all_props(o, t.name):
+                if pname.endswith(RAW_SUFFIX):  # the stored value behind a transform is the property's, not one of its own
+                    continue
                 p = find_prop(o, t.name, pname)
                 from_type = t.name if pname in t.properties else next(
                     (x for x in _lineage(o, t.name) if pname in o.objects[x].properties), t.name)
@@ -1850,8 +1906,20 @@ class StudioSession(SpaceMixin):
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
                            "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
                           for r in t.rules]})
+        def readers(name: str) -> list[str]:
+            """What reads a named value, so a person changing it sees what moves with it."""
+            at = re.compile(rf"@{re.escape(name)}\b")
+            out = [f"{d.label or d.name} · {r.id}" for d in o.decisions.values() for r in d.rules
+                   if at.search(f"{r.when} {r.then}")]
+            out += [f"{mine_label(o, t.name)} · {x.label or x.name}" for t in o.objects.values() for x in t.properties.values()
+                    if x.expr and at.search(x.expr)]
+            out += [f"{a.label or a.name}" for a in o.actions.values() if at.search(str(a.auto_within))]
+            out += [f"{f.label or f.name}" for f in o.functions.values() if at.search(f"{f.expr} {f.inputs}")]
+            return out
+
         parameters = [{"name": p.name, "label": p.label or p.name, "value": p.value, "type": p.type, "unit": p.unit, "min": p.min, "max": p.max,
-                       "description": p.description, "cite": p.cite, "pending": f"parameter:{p.name}" in touched, **owner(f"parameter:{p.name}")}
+                       "description": p.description, "cite": p.cite, "pending": f"parameter:{p.name}" in touched, "readers": readers(p.name),
+                       **owner(f"parameter:{p.name}")}
                       for p in o.parameters.values()]
         actions = [{"name": a.name, "label": a.label or a.name, "target": a.target, "target_label": mine_label(o, a.target),
                     "parameters": [{"name": k, "label": (v.get("label") if isinstance(v, dict) else "") or k, "type": (v.get("type") if isinstance(v, dict) else v) or "string"}
@@ -2112,8 +2180,8 @@ class StudioSession(SpaceMixin):
              "rules": sum(len(d.rules) for d in o.decisions.values()),
              "agreement": {k: agree.get(k) for k in ("cases", "agree", "rate", "error") if k in agree}
              if agree else None},
-            {"id": "check", "questions": len(o.questions), "accuracy": qa["accuracy"] if qa else None,
-             "grounded": qa["grounded"] if qa else None},
+            {"id": "check", "questions": len(o.questions), "accuracy": (qa or {}).get("accuracy"),
+             "grounded": (qa or {}).get("grounded"), "value_errors": (qa or {}).get("value_errors")},
         ]
         for s in steps:
             s["on"] = settings.on(s["id"])
@@ -2139,7 +2207,8 @@ class StudioSession(SpaceMixin):
             except Exception as e:
                 conf = {"passed": False, "error": f"{type(e).__name__}: {e}"}
         return plain({"accuracy": rep.accuracy, "grounded": rep.grounded,
-                      "results": [{**r.__dict__, "gaps": [_gap_text(g) for g in r.gaps]} for r in rep.results],
+                      "results": [{**r.__dict__, "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps]}
+                                  for r in rep.results],
                       "conformance": conf})
 
     def bindings(self) -> dict:

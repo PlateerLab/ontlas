@@ -85,10 +85,22 @@ def _split_list(s: str) -> list[str]:
     return [x.strip() for x in out if x.strip()]
 
 
+_IN_TEXT = re.compile(r"\{@([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
 def resolve(value: Any, named: dict[str, Any]) -> Any:
-    """A rule's output: `@name` gives the parameter's value, anything else stands as written."""
+    """A rule's output: `@name` gives the parameter's value, and `{@name}` inside a text puts it there, so a reason
+    says the value in force rather than the one it was written with. Anything else stands as written."""
     if isinstance(value, str) and value.startswith("@") and value[1:] in named:
         return named[value[1:]]
+    if isinstance(value, str) and "{@" in value:
+        def put(m: re.Match) -> str:
+            v = named.get(m.group(1))
+            if v is None:
+                return m.group(0)
+            return f"{v:,}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)
+
+        return _IN_TEXT.sub(put, value)
     return value
 
 

@@ -191,6 +191,8 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
         "verify": [_tag("verify.questions", "검증 질문", check["questions"], tab="check"),
                    _tag("verify.accuracy", "정답률", _pct(check.get("accuracy")), state("check"), "check"),
                    _tag("verify.grounded", "근거 제시율", _pct(check.get("grounded")), tab="check"),
+                   *([_tag("verify.values", "거래 값 오류", check["value_errors"], "bad" if check["value_errors"] else "ok", "check")]
+                     if check.get("value_errors") is not None else []),
                    _tag("verify.gates", "통과 조건", f"{sum(g['passed'] for g in gates)} / {len(gates)}",
                         "ok" if flow["passed"] else "bad", "flow")],
     }

@@ -28,6 +28,12 @@
   `/v1/record` one object by key; MCP gains `get_record`, and `list_proposals` gives an agent with a role only its own requests.
 - A role can list the documents it reads (`documents:`); search, answers and the document list keep to them. The role form has them.
 - The audit trail names the module versions and the matched rules, and an agent's decisions, answers and functions go into it.
+- `{@name}` inside a rule's output text puts the named value in force there.
+- Fixed: a decision table read a database amount as a Decimal, which the ZEN engine refused, so the page always said ZEN failed for it.
+- The page: requests that ran stay listed with their rollback after the page is left; a request names who made it, a person or an
+  agent, and says why one inside its limits still waits; a refused approval says why in words; a change that fails its review lists the
+  questions and values that differ; a named value lists what reads it; a fixed row rule offers the allowed values; database errors and
+  findings say what to do; each screen's help says why it works as it does. An example's own names left the manual.
 
 ## 0.11.0
 

@@ -556,7 +556,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 s.event("decide", f"판정 · {a['name']} {a['key']}")
                 return s.decide(a["name"], str(a["key"]))
             if route == "request":
-                return s.request(a["action"], str(a["key"]), a.get("params") or {}, role, principal)
+                return s.request(a["action"], str(a["key"]), a.get("params") or {}, role, principal,
+                                 kind="human" if a.get("kind") == "human" else "agent")
             if route == "approve":
                 return s.approve(str(a["id"]), bool(a.get("approve", True)))
             if route == "function/run":

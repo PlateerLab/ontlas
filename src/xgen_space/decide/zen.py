@@ -58,7 +58,9 @@ def evaluate_zen(table: DecisionTable, inputs: dict[str, Any]) -> Any:
         raise ImportError("ZEN evaluation needs the [zen] extra (zen-engine)") from e
     engine = zen.ZenEngine()
     decision = engine.create_decision(json.dumps(to_jdm(table), ensure_ascii=False))
-    out = decision.evaluate(dict(inputs))
+    from xgen_space.values import normalize
+
+    out = decision.evaluate({k: normalize(v) for k, v in inputs.items()})  # an amount from a database is a Decimal
     result = out.get("result", out)
     if table.hit_policy == "collect":
         return [{k: r.get(k) for k in table.outputs} for r in (result or [])]

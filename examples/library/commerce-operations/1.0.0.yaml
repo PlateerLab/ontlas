@@ -199,8 +199,8 @@ decisions:
     outputs: {fee: decimal, reason: string}
     rules:
       - {id: cancelled, when: {order_status: '= "CANCELLED"'}, then: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
-      - {id: free, when: {order_total: ">= @free_shipping_amount"}, then: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
-      - {id: basic, when: {}, then: {fee: "@base_shipping_fee", reason: 기본 배송비 3천원입니다}}
+      - {id: free, when: {order_total: ">= @free_shipping_amount"}, then: {fee: 0, reason: "{@free_shipping_amount}원 이상 주문은 무료 배송입니다"}}
+      - {id: basic, when: {}, then: {fee: "@base_shipping_fee", reason: "기본 배송비 {@base_shipping_fee}원입니다"}}
 
 queries:
   checkoutRecords:
@@ -273,6 +273,6 @@ questions:
   - {id: OP1, text: "지금 배송 중인 주문은 몇 건인가요?", query: shipmentsInTransit, expect: {rows: 5}}
   - {id: OP2, text: "처리 중인 환불은 몇 건인가요?", query: pendingRefunds, expect: {rows: 1}}
   - {id: OP3, text: "승인된 결제에 쓰인 결제 수단은 몇 가지인가요?", query: paymentsByMethod, expect: {rows: 4}}
-  - {id: OP4, text: "9만 7천원 주문 O1 의 배송비는 얼마인가요?", decision: shippingFee, key: O1, expect: {fee: 0, reason: 5만원 이상 주문은 무료 배송입니다}}
+  - {id: OP4, text: "9만 7천원 주문 O1 의 배송비는 얼마인가요?", decision: shippingFee, key: O1, expect: {fee: 0, reason: "50,000원 이상 주문은 무료 배송입니다"}}
   - {id: OP5, text: "취소된 주문 O4 의 배송비는 얼마인가요?", decision: shippingFee, key: O4, expect: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
   - {id: OP6, text: "3만 8천원 주문 O16 의 배송비는 얼마인가요?", decision: shippingFee, key: O16, expect: {fee: 3000}}

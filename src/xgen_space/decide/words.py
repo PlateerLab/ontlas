@@ -9,6 +9,7 @@ from xgen_space.model import DecisionRule, DecisionTable, Ontology
 
 OPS = {"<=": "{} 이하", ">=": "{} 이상", "<": "{} 미만", ">": "{} 초과", "==": "{}", "!=": "{} 제외"}
 WORDS = {True: "예", False: "아니요"}
+UNIT_WORD = {"KRW": "원"}  # a currency code a property keeps, as people write it after a number
 
 
 def reads(onto: Ontology, table: DecisionTable, name: str) -> tuple[str, str]:
@@ -32,7 +33,9 @@ def unit_of(onto: Ontology, table: DecisionTable, name: str) -> str:
         return "건"
     here, prop = reads(onto, table, name)
     p = _find_prop(onto, here, prop) if here and prop else None
-    return " " + p.unit if p is not None and p.unit else ""
+    if p is None or not p.unit:
+        return ""
+    return UNIT_WORD.get(p.unit, " " + p.unit)
 
 
 def input_label(onto: Ontology, table: DecisionTable, name: str) -> str:
@@ -53,6 +56,8 @@ def _value(v: Any, unit: str, labels: dict) -> str:
         return WORDS[v]
     if v is None:
         return "값 없음"
+    if str(v) not in labels and isinstance(v, (int, float)) and unit:
+        return f"{v:,}{unit}"  # an amount or a count, with its thousands marked
     return f"{labels.get(str(v), v)}{unit}"
 
 

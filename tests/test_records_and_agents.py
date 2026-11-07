@@ -218,3 +218,19 @@ def test_a_document_list_survives_a_module_round_trip():
     back = Ontology.from_dict(json.loads(json.dumps(_to_dict(onto))))
     assert back.roles["none"].documents == [] and not back.roles["none"].can_read_document("안내문")
     assert back.roles["all"].documents is None and back.roles["all"].can_read_document("안내문")
+
+
+# ---- a request from the page
+
+def test_a_person_on_the_page_runs_a_change_inside_its_limit_and_an_agent_waits():
+    pytest.importorskip("rdflib")
+    from xgen_space.config import load_studio
+    from xgen_space.web.api import StudioSession
+
+    s = StudioSession(load_studio(Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml"))
+    small = s.request("changePrice", "S1", {"price": 62000}, "operator", kind="human")["proposal"]
+    assert small["status"] == "executed" and small["approved_by"] == "auto" and small["requested_kind"] == "human"
+    waits = s.request("changePrice", "S2", {"price": 62000}, "operator")["proposal"]  # an agent, by default
+    assert waits["status"] == "pending" and waits["requested_kind"] == "agent"
+    big = s.request("changePrice", "S3", {"price": 26000}, "operator", kind="human")["proposal"]
+    assert big["status"] == "pending" and not big["limits"][0]["within"]

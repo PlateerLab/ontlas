@@ -96,6 +96,22 @@ class ActionError(ValueError):
     """The action cannot go ahead as asked; the message says why."""
 
 
+class Refused(PermissionError):
+    """Who asked to settle a request may not. `code` says which rule: person, self, right or scope."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+class Settled(ValueError):
+    """The request is past the step asked for. `code` is ran (roll it back instead) or its status."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 def _stored(prop, value: Any) -> Any:
     """A value in the form its column keeps: a date kept as text goes back in the text's layout."""
     value = coerce(value, prop.type)
@@ -286,8 +302,9 @@ class ActionService:
 
     def versions(self) -> list[str]:
         comp = self.studio.composition
-        rows = comp.summary() if comp else [{"module": self.studio.onto.name, "version": self.studio.onto.version}]
-        return [f"{m['module']}@{m['version']}" for m in rows]
+        if comp is None:
+            return [f"{self.studio.onto.name}@{self.studio.onto.version}"]
+        return [f"{m.name}@{m.version}" for m in comp.modules]
 
     def _log(self, actor: Actor, event: str, p: Proposal, **detail) -> None:
         self.note(actor, event, p.action, p.target, p.key, p.id, p=p, **detail)
@@ -503,20 +520,20 @@ class ActionService:
     def _decider(self, p: Proposal, who: Actor, verb: str) -> None:
         """Who may settle a request: a person, with the right to execute it on this row, other than the one who asked."""
         if who.kind != "human":
-            raise PermissionError(f"only a person {verb}s an action")
+            raise Refused("person", f"only a person {verb}s an action")
         if who.id == p.requested_by.id and not self.self_approve:
-            raise PermissionError(f"{p.id} was requested by {who.id}; another person {verb}s it")
+            raise Refused("self", f"{p.id} was requested by {who.id}; another person {verb}s it")
         if not self._allowed(who, "execute", p.action):
-            raise PermissionError(f"{who.id} may not execute {p.action}")
+            raise Refused("right", f"{who.id} may not execute {p.action}")
         a = self.studio.onto.actions.get(p.action)
         outside = self._outside(who, "execute", a, p.key) if a is not None else ""
         if outside:
-            raise PermissionError(outside)
+            raise Refused("scope", outside)
 
     def approve(self, proposal_id: str, *, approver: Actor) -> Proposal:
         p = self._get(proposal_id)
         if p.status != "pending":
-            raise ValueError(f"proposal {p.id} is {p.status}")
+            raise Settled(p.status, f"proposal {p.id} is {p.status}")
         if p.action not in self.studio.onto.actions:
             raise ValueError(f"{p.action} is no longer declared, so {p.id} cannot run")
         self._decider(p, approver, "approve")
@@ -529,8 +546,9 @@ class ActionService:
         """Close a request that has not run. One that ran is rolled back instead, so the source and the record agree."""
         p = self._get(proposal_id)
         if p.status not in ("pending", "stale"):
-            raise ValueError(f"proposal {p.id} is {p.status}; only a request that has not run is rejected"
-                             + ("; roll it back instead" if p.status == "executed" else ""))
+            raise Settled("ran" if p.status == "executed" else p.status,
+                          f"proposal {p.id} is {p.status}; only a request that has not run is rejected"
+                          + ("; roll it back instead" if p.status == "executed" else ""))
         self._decider(p, approver, "reject")
         p.status = "rejected"
         self._log(approver, "rejected", p, reason=reason)

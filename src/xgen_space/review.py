@@ -17,6 +17,15 @@ from typing import Any
 from xgen_space.modules import Module, ModuleError
 from xgen_space.values import from_source, normalize, parse_datetime
 
+
+def normalize_all(value: Any) -> Any:
+    """A question's expected or given answer, in a form a page can read."""
+    if isinstance(value, dict):
+        return {str(k): normalize_all(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [normalize_all(v) for v in value]
+    return normalize(value)
+
 STAGES = ("source", "define", "bind", "project", "index", "query", "decide", "check")
 REQUIRED = ("source", "define")
 GATES = {"bind": ("max_errors", "max_warnings"), "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
@@ -255,6 +264,8 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
     if settings.on("check") and studio.onto.questions:
         q = studio.questions()
         out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in q.results if not r.passed],
+                        "wrong": [{"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got),
+                                   "error": r.error} for r in q.results if not r.passed][:20],
                         "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in q.results if not r.grounded}}
     if settings.on("check") and settings.values:
         try:

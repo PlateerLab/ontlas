@@ -705,7 +705,7 @@ Rules stay readable as they grow. All of this is in the module file, and the 규
 | In a module | What it does |
 |---|---|
 | `hit_policy: priority` | The highest rule wins, and the answer says which rules it overrode |
-| `parameters` | One named value, read as `@name` by rules and expressions; a customer module changes it alone |
+| `parameters` | One named value, read as `@name` by rules and expressions, and as `{@name}` inside a rule's text, so a reason says the value in force; a customer module changes it alone |
 | `metrics` | A number with its formula, denominator, time basis and owner |
 | `conflicts` | Two sources that disagree stay open until a person picks one, and the pick is reviewed like any change |
 | transitions | A state change with a guard, side effects and `after`; an action is asked again right before it runs |
