@@ -747,6 +747,22 @@ actions:
 
 The request records how it stood against each limit, and the audit trail says it was approved by its limits.
 
+Who settles a request is fixed too. A person approves or rejects it, with the right to execute it on that row, and not the one who
+asked; a single visitor's own page is the one place a person plays both sides. A request that ran is rolled back, not rejected,
+so the record never says rejected while the source holds the change. Each line of the audit trail names the module versions the
+studio stood on, and a check that asked a decision names the rule that answered; an agent's decisions, answers and functions go
+in with the same.
+
+A role reads only the documents it lists, by name or pattern, when it has a list: an agent for customers does not find the
+seller's terms in a search, an answer or the list of documents.
+
+```yaml
+roles:
+  customer_agent:
+    read: [Order, OrderItem]
+    documents: [반품정책서, 배송안내, "쿠폰*"]   # no list: every document
+```
+
 ## Functions under a contract
 
 A function is logic the ontology owns. It says what it takes and gives, which version runs, who owns it and what it stands on, and a
@@ -889,7 +905,7 @@ kept module no longer fits the source, the studio starts from its file's own lis
 
 ```bash
 xspace users add users.yaml kim --name 김하람 --roles editor,approver    # the password from XSPACE_PASSWORD, or asked
-xspace serve studio.yaml --users users.yaml --library-write --sync 60
+xspace serve studio.yaml --users users.yaml --library-write --journal records/journal.jsonl --sync 60
 ```
 
 With `--users`, people sign in (PBKDF2 hashes, a session cookie that is HttpOnly and SameSite=Strict, writes only
@@ -897,6 +913,11 @@ from the page itself, sign-in attempts limited) and share one studio. viewer rea
 modules and files requests, approver approves changes and actions, admin also sets the flow. `--library-write` saves
 approved versions to the library folder; `--sync` reads the source again every N seconds and sends each graph the
 change set.
+
+The source database keeps what an action wrote, but not who asked for it, who approved it or what it replaced. Add
+`--journal records/journal.jsonl` and requests, approvals, change requests and the audit trail are written there one line
+each, and read back when the server starts: a request still waits, a change can still be rolled back, and the trail is
+whole. One process writes to one file.
 
 ## Reason, validate, exchange
 
@@ -964,6 +985,19 @@ its row filters and masks. It is read-only unless started with `--api-write`, an
 approves. `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
 person approves holds for it at once, and an action it requests waits on the decision page for a person to approve.
 
+Give each agent a token of its own, so the audit trail says which agent asked and one agent cannot read another's requests.
+Tokens come from the environment, never from the file:
+
+```yaml
+# agents.yaml, for xspace serve ... --api-agents agents.yaml
+agents:
+  - {name: 고객 응대 Agent, token_env: XSPACE_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}
+  - {name: 상담원 Agent, token_env: XSPACE_SUPPORT_TOKEN, role: support_agent}
+```
+
+`/v1/proposals` gives a token the requests it made and how each stands, and `/v1/record` one object by its key, inside the
+token's rows and masks.
+
 The other direction: a platform that manages database connections can lend one. `kind: gateway` sends SQL as text to its query
 service and reads the rows back, so the password never reaches the space and the platform's read-only rule and table allow-list
 stay in force. A space reads through it and never writes. An answer that comes back full is marked as possibly cut.
@@ -980,8 +1014,10 @@ xspace mcp examples/commerce/studio.yaml --role customer_agent --principal custo
 ```
 
 Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
-`decide`, `request_action`, `list_proposals`. Every call runs inside the role's row filters; `request_action`
-only files a request, and nothing is written until a person approves it. Works with the MCP Python SDK 1.x and 2.x.
+`decide`, `request_action`, `list_proposals`, `get_record`. Every call runs inside the role's row filters; `request_action`
+only files a request, and nothing is written until a person approves it. `list_proposals` gives an agent with a role its own
+requests. `--agent NAME` is what the audit trail calls it, and `--journal FILE` keeps its requests across restarts. Works with
+the MCP Python SDK 1.x and 2.x.
 
 An agent need not read a whole ontology: `find_definitions` gives what a question is about and `describe_object` one object with what
 touches it. A running server reads the library again once an approved change is saved there (`--library-write`). A request stays in its own

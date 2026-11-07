@@ -318,10 +318,11 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._json(200, {"tools": tool_list()})
             if rest is None:
                 return self._json(404, {"error": "API is off on this server. Start it with --api-token-env."})
-            if not rest.allowed(self.headers.get("Authorization") or ""):
+            tools = rest.caller(self.headers.get("Authorization") or "")
+            if tools is None:
                 return self._json(401, {"error": "a valid bearer token is required"})
             with rest.lock:
-                code, out = rest.answer(method, path, body)
+                code, out = rest.answer(method, path, body, tools)
             self._json(code, out)
 
         def do_POST(self) -> None:
@@ -639,21 +640,25 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
 
 def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: int = 7710, limit: int = 24,
           idle: float = 3600, ask_per_minute: int = 20, quiet: bool = False, data: DataOptions | None = None,
-          video: Path | None = None, users: Path | None = None, sync: float = 0, api: dict | None = None) -> None:
-    """Serve the page: a studio per visitor, or with `users` one shared studio for a team that signs in."""
+          video: Path | None = None, users: Path | None = None, sync: float = 0,
+          api: dict | list[dict] | None = None) -> None:
+    """Serve the page: a studio per visitor, or with `users` one shared studio for a team that signs in.
+    `api` turns /v1 on: one client, or a list of them, each {name, token, role, principal, write}."""
     from xgen_space.web.team import Logins, Syncer, TeamSessions, Users
 
     logins = Logins(Users.load(users)) if users else None
     sessions = TeamSessions(build, logins) if logins else Sessions(build, limit=limit, idle=idle)
     rest = None
-    if api and api.get("token"):  # a team's own studio, or one of its own; read-only unless told otherwise
+    clients = [c for c in ([api] if isinstance(api, dict) else api or []) if c.get("token")]
+    if clients:  # a team's own studio, or one of its own; read-only unless told otherwise
         from xgen_space.rest import Rest
         from xgen_space.tools import StudioTools
 
         shared = sessions.shared if logins else None
-        tools = StudioTools(shared.studio if shared else build().studio, role=api.get("role") or None,
-                            principal=api.get("principal"), actor_id="api", read_only=not api.get("write"))
-        rest = Rest(tools, api["token"], source=(lambda: shared.studio) if shared else None,
+        studio = shared.studio if shared else build().studio
+        rest = Rest([(c["token"], StudioTools(studio, role=c.get("role") or None, principal=c.get("principal"),
+                                              actor_id=c.get("name") or "api", read_only=not c.get("write"), audit=True))
+                     for c in clients], source=(lambda: shared.studio) if shared else None,
                     lock=shared.lock if shared else None)
     httpd = ThreadingHTTPServer((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
                                                            quiet=quiet, upload_max=(data or DataOptions()).file_bytes,

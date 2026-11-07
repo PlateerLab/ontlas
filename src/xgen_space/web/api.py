@@ -33,7 +33,8 @@ CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "�
                "states": "허용 상태", "call": "외부 호출"}
 EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
                "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
-               "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족"}
+               "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족", "stale": "실행 전 재검사 실패",
+               "decided": "판정 조회", "answered": "질문 답변", "function_ran": "함수 실행"}
 GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
               ("index", "min_found"): "문서 검색 적중률 최소",
               ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
@@ -266,6 +267,7 @@ class StudioSession(SpaceMixin):
         """Make a studio this session's: its change requests follow the session's approval and storage."""
         self.studio = studio
         studio.changes.self_approve = self.self_approve
+        studio.actions.self_approve = self.self_approve
         studio.changes.store = self.store
         attach(self)
 
@@ -820,7 +822,7 @@ class StudioSession(SpaceMixin):
         try:
             p = acts.approve(proposal_id, approver=approver) if approve else \
                 acts.reject(proposal_id, approver=approver, reason="운영자 반려")
-        except (PermissionError, ValueError, RuntimeError) as e:
+        except (PermissionError, ValueError, RuntimeError, KeyError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
         verb = {"executed": "승인 후 원천 DB에 반영했습니다", "failed": "외부 호출이 실패해 원천 DB를 실행 전 값으로 복원했습니다"
@@ -851,7 +853,8 @@ class StudioSession(SpaceMixin):
 
     def audit(self) -> list[dict]:
         return [{"at": a.at, "actor": a.actor, "kind": a.actor_kind, "event": EVENT_LABEL.get(a.event, a.event),
-                 "proposal": a.proposal, "key": a.key, "detail": plain(a.detail)}
+                 "proposal": a.proposal, "key": a.key, "target": a.target, "action": a.action, "detail": plain(a.detail),
+                 "versions": a.versions}
                 for a in reversed(self.studio.actions.audit)]
 
     # ---- data in: files or a database, drafted into modules, plugged in ---------------------------------------
@@ -1860,7 +1863,7 @@ class StudioSession(SpaceMixin):
                    for a in o.actions.values()]
         roles = [{"name": r.name, "label": r.label or r.name, "read": r.read, "run": r.run, "request": r.request, "execute": r.execute,
                   "mask": r.mask, "unmask": r.unmask, "filters": sorted(r.row_filters), "pending": f"role:{r.name}" in touched,
-                  "rows": [row_rule(t, s) for t, s in r.row_filters.items()], "scope": r.scope,
+                  "rows": [row_rule(t, s) for t, s in r.row_filters.items()], "scope": r.scope, "documents": r.documents,
                   "new": r.name not in base.roles, **owner(f"role:{r.name}")} for r in o.roles.values()]
         metrics = [{"name": x.name, "label": x.label or x.name, "description": x.description, "unit": x.unit, "owner": x.owner,
                     "scale": x.scale, "cite": x.cite, "formula": x.formula, "denominator": x.denominator, "time": x.time,
@@ -1882,6 +1885,7 @@ class StudioSession(SpaceMixin):
             "decisions": decisions, "parameters": parameters, "actions": actions, "roles": roles, "states": states,
             "metrics": metrics, "identities": identities, "functions": functions,
             "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
+            "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,

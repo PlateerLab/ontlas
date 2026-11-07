@@ -177,21 +177,30 @@ def default_retriever() -> str:
 
 
 class Knowledge:
-    def __init__(self, items: list[Entry], links: list[tuple[str, str, str]], retriever, keep: Any = None):
+    def __init__(self, items: list[Entry], links: list[tuple[str, str, str]], retriever, keep: Any = None,
+                 hidden: frozenset[str] = frozenset()):
         self.items, self.links, self.retriever = items, links, retriever
         self._keep = keep  # the ontology this was built from: its identity is the cache key
+        self.hidden = hidden  # passages of documents the reader may not read: never found, never cited
+
+    def only(self, allowed: Callable[[str], bool]) -> Knowledge:
+        """The same index for a reader of some documents. The index is shared; what comes back is not."""
+        hidden = frozenset(e.id for e in self.items if e.kind == "document" and not allowed(e.meta.get("document", "")))
+        return self if not hidden else Knowledge(self.items, self.links, self.retriever, self._keep, hidden)
 
     def find(self, text: str, k: int = 8, kinds: tuple[str, ...] = ()) -> list[dict]:
-        wide = max(k * 4, 24) if kinds else k
+        wide = max(k * 4, 24) if kinds or self.hidden else k
         out = []
         for e, score in self.retriever.search(text, wide):
-            if kinds and e.kind not in kinds:
+            if (kinds and e.kind not in kinds) or e.id in self.hidden:
                 continue
             out.append(self._said(e, score))
         return out[:k]
 
     def relations(self, text: str) -> list[str]:
-        return [r for r in self.retriever.relations(text) if " → 언급 → " not in r]  # that a text names a thing is no relation
+        gone = {e.meta.get("document", "") for e in self.items if e.id in self.hidden} - {""}
+        return [r for r in self.retriever.relations(text) if " → 언급 → " not in r  # that a text names a thing is no relation
+                and not any(d in r for d in gone)]
 
     def _said(self, e: Entry, score: float = 1.0) -> dict:
         return {"id": e.id, "kind": e.kind, "kind_label": KIND_WORD.get(e.kind, e.kind), "title": e.title, "text": e.text,
@@ -199,7 +208,7 @@ class Knowledge:
 
     def standing_on(self, entry_id: str) -> list[dict]:
         """An entry and the clauses it cites: what a matched rule rests on."""
-        by_id = {e.id: e for e in self.items}
+        by_id = {e.id: e for e in self.items if e.id not in self.hidden}
         if entry_id not in by_id:
             return []
         cited = [o for s, p, o in self.links if s == entry_id and p == "출처" and o in by_id]

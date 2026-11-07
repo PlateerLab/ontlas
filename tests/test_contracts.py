@@ -299,7 +299,7 @@ def test_inside_its_limit_an_action_runs_and_past_it_a_person_approves(shop):
     q = shop.actions.request("setPrice", "G2", {"to": 4000}, actor=who)  # 33% of 3000
     assert q.status == "pending" and not q.limits[0]["within"] and q.limits[0]["limit"] == 10
     assert shop.fetch("Goods", "G2")["list_price"] == 3000
-    assert shop.actions.approve(q.id, approver=who).status == "executed"
+    assert shop.actions.approve(q.id, approver=Actor("lee", "human", ["clerk"])).status == "executed"
 
 
 def test_an_agent_goes_to_a_person_unless_the_action_says_otherwise():

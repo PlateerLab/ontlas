@@ -596,8 +596,16 @@ class Workspace:
             spec["row_filters"] = self._rows(a["rows"])
         if (a.get("scope") or {}).get("attribute"):
             spec["scope"] = self._scope(a["scope"])
+        if a.get("documents") is not None:  # an empty list is a role that reads no document
+            spec["documents"] = self._documents(a["documents"])
         self._section("body", "roles")[name] = spec
         return f"role:{name}"
+
+    @staticmethod
+    def _documents(names: Any) -> list[str]:
+        if not isinstance(names, list):
+            raise EditError("documents must be a list of document names or patterns")
+        return [str(x).strip() for x in names if str(x).strip()]
 
     def _rows(self, rows: list) -> dict:
         """Row rules from the form as row filters. One it cannot say is carried as it came."""
@@ -651,6 +659,11 @@ class Workspace:
                 spec["row_filters"] = rows
             if scope is not None:
                 spec["scope"] = scope
+            if "documents" in a:
+                if a["documents"] is None:
+                    spec.pop("documents", None)
+                else:
+                    spec["documents"] = self._documents(a["documents"])
             for k in ("row_filters", "scope"):
                 if not spec.get(k):
                     spec.pop(k, None)
@@ -661,6 +674,12 @@ class Workspace:
             patch["row_filters_drop"] = [t for t in r.row_filters if t not in rows]
         if scope is not None and scope != r.scope:
             patch["scope_set"] = scope
+        if "documents" in a:
+            want = None if a["documents"] is None else self._documents(a["documents"])
+            if want != r.documents:
+                patch["documents_set"] = want
+            else:
+                patch.pop("documents_set", None)
         if "label" in a:
             patch["label"] = a["label"]
         for k in ("read", "run", "request", "execute"):
@@ -673,7 +692,7 @@ class Workspace:
             want = dict(a["mask"] or {})
             patch["mask"] = {k: v for k, v in want.items() if r.mask.get(k) != v}
             patch["mask_drop"] = [k for k in r.mask if k not in want]
-        for k in [k for k, v in patch.items() if v in ([], {})]:
+        for k in [k for k, v in patch.items() if v in ([], {}) and k != "documents_set"]:
             del patch[k]
         return f"role:{name}"
 

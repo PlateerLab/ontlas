@@ -175,10 +175,12 @@ roles:
           where: {eq: [own.customer_id, {principal: customer_id}]}
     run: [myOrders, returnEligibility]
     request: [requestReturn]
+    documents: [반품정책서, 교환정책서, 배송안내, 결제환불안내, 쿠폰약관, 상품평운영기준]
   support_agent:
     label: 상담원
     read: [Customer, Order, OrderItem]
     run: [customerValue, orderTotals]
+    documents: [반품정책서, 교환정책서, 배송안내, 결제환불안내, 쿠폰약관, 상품평운영기준]
   operator:
     label: 운영자
     read: ["*"]

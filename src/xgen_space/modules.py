@@ -385,6 +385,16 @@ def _extend_role(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
         r["mask"] = {k: v for k, v in cur.items() if k not in patch["mask_drop"]}
     for t in patch.get("row_filters_drop") or []:
         (r.get("row_filters") or {}).pop(t, None)
+    if r.get("documents") is not None:  # a role that reads every document has no list to add to or take from
+        if patch.get("documents"):
+            r["documents"] = list(dict.fromkeys([*r["documents"], *patch["documents"]]))
+        if patch.get("documents_drop"):
+            r["documents"] = [x for x in r["documents"] if x not in patch["documents_drop"]]
+    if "documents_set" in patch:  # the whole list, from the screen that edits it; null reads every document
+        if patch["documents_set"] is None:
+            r.pop("documents", None)
+        else:
+            r["documents"] = list(patch["documents_set"])
     touched.setdefault(f"role:{name}", []).append(m.name)
 
 

@@ -54,9 +54,10 @@ def _guard(fn):
     return run
 
 
-def following(config: str | Path, studio: Studio) -> Callable[[], Studio]:
+def following(config: str | Path, studio: Studio, journal: str | Path | None = None) -> Callable[[], Studio]:
     """The studio of a file, read again once an approved change reaches its library: a running agent goes by the rules in force.
-    A library that cannot be read keeps the studio it had, and says so."""
+    A library that cannot be read keeps the studio it had, and says so. With a journal, the studio read again takes back
+    the requests and audit trail the one before kept."""
     import yaml
 
     from xgen_space.config import load_studio
@@ -75,6 +76,8 @@ def following(config: str | Path, studio: Studio) -> Callable[[], Studio]:
             seen = now
             try:
                 studio = load_studio(config)
+                if journal:
+                    studio.keep_journal(journal)
             except (OSError, ValueError, yaml.YAMLError) as e:
                 print(f"library changed but could not be read: {e}", file=sys.stderr)
         return studio
@@ -83,8 +86,9 @@ def following(config: str | Path, studio: Studio) -> Callable[[], Studio]:
 
 
 def build_server(studio: Studio, *, role: str | None = None, principal: dict | None = None,
-                 read_only: bool = False, name: str = "xgen-space", fresh: Callable[[], Studio] | None = None):
-    tools = StudioTools(studio, role=role, principal=principal, read_only=read_only)
+                 read_only: bool = False, name: str = "xgen-space", fresh: Callable[[], Studio] | None = None,
+                 agent: str = ""):
+    tools = StudioTools(studio, role=role, principal=principal, read_only=read_only, actor_id=agent or "agent", audit=True)
     raw = _server_class()(name)
 
     def current(fn):
@@ -196,8 +200,13 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
 
     @server.tool()
     def list_proposals() -> list[dict]:
-        """Action requests and their status (pending, rejected, executed)."""
+        """The action requests this agent made and their status (pending, rejected, executed, rolled back)."""
         return tools.list_proposals()
+
+    @server.tool()
+    def get_record(type_name: str, key: str) -> dict:
+        """One object's values by its key, inside this agent's rows and with its masks."""
+        return tools.get_record(type_name, key)
 
     return raw
 
@@ -212,9 +221,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--role")
     ap.add_argument("--principal", action="append", default=[], help="key=value")
     ap.add_argument("--read-only", action="store_true")
+    ap.add_argument("--agent", default="", help="the name the audit trail gives this agent")
+    ap.add_argument("--journal", default="", help="a file of this process's own that keeps its requests and audit trail")
     ap.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
     a = ap.parse_args(argv)
     principal = dict(x.split("=", 1) for x in a.principal)
     studio = load_studio(a.config)
-    server = build_server(studio, role=a.role, principal=principal, read_only=a.read_only, fresh=following(a.config, studio))
+    if a.journal:
+        studio.keep_journal(a.journal)
+    server = build_server(studio, role=a.role, principal=principal, read_only=a.read_only, agent=a.agent,
+                          fresh=following(a.config, studio, a.journal or None))
     server.run(a.transport)

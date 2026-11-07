@@ -20,6 +20,14 @@
 - Fixed: `/v1/actions` dropped the connection when a row held a decimal. An action that only calls out wrote an empty update. A crosswalk not
   written yet no longer fails the database check or the graph load of a copy.
 - A README section on prior art.
+- `--journal FILE` keeps requests, approvals, change requests and the audit trail of a team studio across restarts; `xspace mcp --journal`
+  does the same for an agent's process. Before, a restart forgot who asked, who approved and what a change replaced.
+- A request is settled by a person other than the one who asked, with the right to execute it on that row. A request that ran can no
+  longer be rejected, which left the record saying rejected while the source kept the change; it is rolled back instead.
+- `--api-agents FILE`: one token per agent, each with its own name, role and rows. `/v1/proposals` gives a token its own requests,
+  `/v1/record` one object by key; MCP gains `get_record`, and `list_proposals` gives an agent with a role only its own requests.
+- A role can list the documents it reads (`documents:`); search, answers and the document list keep to them. The role form has them.
+- The audit trail names the module versions and the matched rules, and an agent's decisions, answers and functions go into it.
 
 ## 0.11.0
 

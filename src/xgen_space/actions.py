@@ -35,6 +35,7 @@ class CheckResult:
     name: str
     passed: bool
     detail: str = ""
+    rules: list[str] = field(default_factory=list)  # the decision rules that answered, for the audit
 
 
 @dataclass
@@ -57,6 +58,12 @@ class Proposal:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Proposal:
+        checks = lambda xs: [CheckResult(**x) for x in xs or []]  # noqa: E731
+        return cls(**{**d, "requested_by": Actor(**d["requested_by"]), "checks": checks(d.get("checks")),
+                      "revalidated": checks(d.get("revalidated"))})
 
 
 @dataclass
@@ -82,6 +89,7 @@ class AuditEntry:
     key: str
     proposal: str
     detail: dict[str, Any] = field(default_factory=dict)
+    versions: list[str] = field(default_factory=list)  # the module versions the studio stood on: module@version
 
 
 class ActionError(ValueError):
@@ -258,10 +266,44 @@ class ActionService:
         self.proposals: dict[str, Proposal] = {}
         self.audit: list[AuditEntry] = []
         self._ids = itertools.count(1)
+        self.journal = None  # journal.Journal: requests and the audit trail outlive a restart
+        self.self_approve = False  # a single visitor plays both sides; anywhere else the requester does not approve
+
+    def keep(self, journal) -> None:
+        """Write every request and audit entry to `journal` from now on, after taking back what it already holds."""
+        from xgen_space.journal import next_number
+
+        for r in journal.read():
+            if r.get("kind") != "action":
+                continue
+            if r.get("audit"):
+                self.audit.append(AuditEntry(**r["audit"]))
+            if r.get("proposal"):
+                p = Proposal.from_dict(r["proposal"])
+                self.proposals[p.id] = p
+        self._ids = itertools.count(next_number(list(self.proposals), "P"))
+        self.journal = journal
+
+    def versions(self) -> list[str]:
+        comp = self.studio.composition
+        rows = comp.summary() if comp else [{"module": self.studio.onto.name, "version": self.studio.onto.version}]
+        return [f"{m['module']}@{m['version']}" for m in rows]
 
     def _log(self, actor: Actor, event: str, p: Proposal, **detail) -> None:
-        self.audit.append(AuditEntry(self.studio.now().isoformat(timespec="seconds"), actor.id, actor.kind, event,
-                                     p.action, p.target, p.key, p.id, detail))
+        self.note(actor, event, p.action, p.target, p.key, p.id, p=p, **detail)
+
+    def note(self, actor: Actor, event: str, action: str, target: str, key: str, proposal: str = "", *,
+             p: Proposal | None = None, **detail) -> None:
+        """One line of the audit trail. A decision, an answer or a function an agent asked for is written here too."""
+        entry = AuditEntry(self.studio.now().isoformat(timespec="seconds"), actor.id, actor.kind, event,
+                           action, target, key, proposal, detail, self.versions())
+        self.audit.append(entry)
+        if self.journal is not None:
+            self.journal.write("action", {"audit": asdict(entry), "proposal": p.to_dict() if p else None})
+
+    def _keep(self, p: Proposal) -> None:
+        if self.journal is not None:
+            self.journal.write("action", {"audit": None, "proposal": p.to_dict()})
 
     def _allowed(self, actor: Actor, verb: str, action: str) -> bool:
         roles = [self.studio.onto.roles[r] for r in actor.roles if r in self.studio.onto.roles]
@@ -356,7 +398,7 @@ class ActionService:
                 res = self.studio.decide(c.decision, key)
                 outs = res.outputs if isinstance(res.outputs, dict) else {}
                 ok = all(outs.get(k) == v for k, v in c.expect.items())
-                out.append(CheckResult(f"decision:{c.decision}", ok, str(outs)))
+                out.append(CheckResult(f"decision:{c.decision}", ok, str(outs), [f"{c.decision}.{r}" for r in res.matched]))
             if c.function:
                 from xgen_space.functions import run_function
 
@@ -438,10 +480,11 @@ class ActionService:
         p = Proposal(f"P{next(self._ids)}", action, a.target, str(key), params, actor, "pending", checks, changes,
                      before)
         self.proposals[p.id] = p
-        self._log(actor, "requested", p, params=params)
+        rules = [r for c in checks for r in c.rules]
+        self._log(actor, "requested", p, params=params, rules=rules)
         if not all(c.passed for c in checks):
             p.status = "rejected"
-            self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed])
+            self._log(actor, "rejected", p, failed=[c.name for c in checks if not c.passed], rules=rules)
             return p
         p.limits = self._limits(a, params, current, changes)
         inside = bool(p.limits) and all(x["within"] for x in p.limits)
@@ -453,28 +496,50 @@ class ActionService:
                 p.approved_by = "auto"
                 self._log(actor, "auto_approved", p, limits=p.limits)
             self._execute(p, actor)
+        else:
+            self._keep(p)  # the limits it was held to, for whoever approves it, after a restart too
         return p
 
-    def approve(self, proposal_id: str, *, approver: Actor) -> Proposal:
-        p = self.proposals[proposal_id]
-        if p.status != "pending":
-            raise ValueError(f"proposal {p.id} is {p.status}")
-        if approver.kind != "human":
-            raise PermissionError("only a person approves an action")
-        if not self._allowed(approver, "execute", p.action):
-            raise PermissionError(f"{approver.id} may not execute {p.action}")
-        outside = self._outside(approver, "execute", self.studio.onto.actions[p.action], p.key)
+    def _decider(self, p: Proposal, who: Actor, verb: str) -> None:
+        """Who may settle a request: a person, with the right to execute it on this row, other than the one who asked."""
+        if who.kind != "human":
+            raise PermissionError(f"only a person {verb}s an action")
+        if who.id == p.requested_by.id and not self.self_approve:
+            raise PermissionError(f"{p.id} was requested by {who.id}; another person {verb}s it")
+        if not self._allowed(who, "execute", p.action):
+            raise PermissionError(f"{who.id} may not execute {p.action}")
+        a = self.studio.onto.actions.get(p.action)
+        outside = self._outside(who, "execute", a, p.key) if a is not None else ""
         if outside:
             raise PermissionError(outside)
+
+    def approve(self, proposal_id: str, *, approver: Actor) -> Proposal:
+        p = self._get(proposal_id)
+        if p.status != "pending":
+            raise ValueError(f"proposal {p.id} is {p.status}")
+        if p.action not in self.studio.onto.actions:
+            raise ValueError(f"{p.action} is no longer declared, so {p.id} cannot run")
+        self._decider(p, approver, "approve")
         p.approved_by = approver.id
         self._log(approver, "approved", p)
         self._execute(p, approver)
         return p
 
     def reject(self, proposal_id: str, *, approver: Actor, reason: str = "") -> Proposal:
-        p = self.proposals[proposal_id]
+        """Close a request that has not run. One that ran is rolled back instead, so the source and the record agree."""
+        p = self._get(proposal_id)
+        if p.status not in ("pending", "stale"):
+            raise ValueError(f"proposal {p.id} is {p.status}; only a request that has not run is rejected"
+                             + ("; roll it back instead" if p.status == "executed" else ""))
+        self._decider(p, approver, "reject")
         p.status = "rejected"
         self._log(approver, "rejected", p, reason=reason)
+        return p
+
+    def _get(self, proposal_id: str) -> Proposal:
+        p = self.proposals.get(proposal_id)
+        if p is None:
+            raise KeyError(f"unknown proposal '{proposal_id}'")
         return p
 
     def _context(self, p: Proposal) -> dict[str, Any]:

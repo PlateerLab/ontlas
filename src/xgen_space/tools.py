@@ -15,11 +15,23 @@ def _jsonable(rows: list[tuple], columns: list[str], types: dict[str, str]) -> l
 
 class StudioTools:
     def __init__(self, studio: Studio, *, role: str | None = None, principal: dict | None = None,
-                 actor_id: str = "agent", read_only: bool = False):
+                 actor_id: str = "agent", read_only: bool = False, audit: bool = False):
         self.studio, self.role, self.principal = studio, role, dict(principal or {})
         self.actor = Actor(actor_id, "agent", [role] if role else [], principal=self.principal)
         self.read_only = read_only
+        self.audit = audit  # an agent's decisions, answers and functions go into the audit trail with what they stood on
         self.terms: list[dict] | None = None  # the glossary, when the caller has one
+
+    def _note(self, event: str, target: str, key: str, name: str = "", **detail) -> None:
+        if self.audit:
+            self.studio.actions.note(self.actor, event, name, target, str(key or ""), **_plain(detail))
+
+    def _role(self):
+        return self.studio.onto.roles[self.role] if self.role else None
+
+    def documents_allowed(self, name: str) -> bool:
+        r = self._role()
+        return r is None or r.can_read_document(name)
 
     def describe(self) -> dict:
         d = self.studio.describe()
@@ -59,10 +71,9 @@ class StudioTools:
         onto = self.studio.onto
         t = onto.obj(type_name)
         self._visible(type_name, key)
+        if self.role and not onto.roles[self.role].can_read(type_name):
+            raise PermissionError(f"{type_name} is outside this role")
         props = [p for p in all_props(onto, type_name) if not find_prop(onto, type_name, p).expr]
-        if self.role:
-            r = onto.roles[self.role]
-            props = [p for p in props if r.can_read(type_name)]
         q = {"match": {"x": type_name}, "where": {"eq": [f"x.{t.key}", str(key)]}, "return": [f"x.{p}" for p in props]}
         res = self.run_query(q)
         row = res["rows"][0] if res["rows"] else {}
@@ -82,11 +93,13 @@ class StudioTools:
                 "actions": [k for k in d["actions"] if onto.actions[k].target == name]}
 
     def knowledge(self):
-        """Definitions, rules and passages in one index."""
+        """Definitions, rules and passages in one index; a role reads only the passages of its documents."""
         from xgen_space.knowledge import build
 
         space = self.studio.space
-        return space.knowledge(self.studio.onto, self.terms) if space is not None else build(self.studio.onto)
+        know = space.knowledge(self.studio.onto, self.terms) if space is not None else build(self.studio.onto)
+        r = self._role()
+        return know if r is None or r.documents is None else know.only(lambda doc: r.can_read_document(doc))
 
     def find_definitions(self, text: str, k: int = 8) -> dict:
         """The definitions a question is about, so an agent reads these rather than all of them."""
@@ -109,7 +122,11 @@ class StudioTools:
         """One question to a decision, a record, a query or the documents, with what the answer stands on."""
         from xgen_space.answer import answer_question
 
-        return _plain(answer_question(self, text))
+        out = _plain(answer_question(self, text))
+        d = (out.get("decisions") or [{}])[0]
+        self._note("answered", d.get("target", ""), d.get("key", ""), question=out["question"], route=out["route"],
+                   answer=out["answer"], sources=[s.get("id") for s in out.get("sources") or []])
+        return out
 
     def _visible(self, type_name: str, key: str) -> None:
         if not self.role:
@@ -123,7 +140,10 @@ class StudioTools:
         target = self.studio.onto.decisions[decision].target
         if target:
             self._visible(target, key)
-        return _plain(self.studio.decide(decision, key, params, role=self.role).to_dict())
+        out = _plain(self.studio.decide(decision, key, params, role=self.role).to_dict())
+        self._note("decided", target or "", key, decision, outputs=out.get("outputs"),
+                   rules=[f"{decision}.{r}" for r in out.get("matched") or []])
+        return out
 
     def list_functions(self) -> dict:
         """The functions this role may run, with their contracts, owners and versions."""
@@ -133,7 +153,9 @@ class StudioTools:
         return {"functions": [describe(onto, onto.functions[n]) for n in self.describe()["functions"]]}
 
     def run_function(self, name: str, key: str = "", params: dict | None = None) -> dict:
-        return _plain(self.studio.function(name, key or None, params, role=self.role, principal=self.principal, by=self.actor.id))
+        out = _plain(self.studio.function(name, key or None, params, role=self.role, principal=self.principal, by=self.actor.id))
+        self._note("function_ran", out.get("target") or "", key, name, version=out.get("version"), outputs=out.get("outputs"))
+        return out
 
     def request_action(self, action: str, key: str, params: dict | None = None) -> dict:
         if self.read_only:
@@ -145,7 +167,13 @@ class StudioTools:
         return _plain(p.to_dict())
 
     def list_proposals(self) -> list[dict]:
-        return [_plain(p.to_dict()) for p in self.studio.actions.proposals.values()]
+        """The requests this caller made, and how each stands. A role's caller sees no one else's."""
+        mine = [p for p in self.studio.actions.proposals.values() if not self.role or p.requested_by.id == self.actor.id]
+        return [_plain(p.to_dict()) for p in mine]
+
+    def get_record(self, type_name: str, key: str) -> dict:
+        """One object's values, inside the role's rows and with its masks."""
+        return self.record(type_name, key)
 
     def list_modules(self) -> list[dict]:
         comp = self.studio.composition
@@ -178,12 +206,15 @@ class StudioTools:
         for doc, title in made["sections"]:
             sections.setdefault(doc, []).append(title)
         return {"documents": [{"name": n, "kind": d.get("kind", ""), "sections": sections.get(n, [])}
-                              for n, d in space.documents().items()],
+                              for n, d in space.documents().items() if self.documents_allowed(n)],
                 "concepts": len(made["concepts"])}
 
     def search_documents(self, text: str, k: int = 5, store: str = "", where: dict | None = None) -> dict:
         space = self._space()
-        hits = space.search(str(text), max(1, min(int(k), 50)), store=store, where=where)
+        k = max(1, min(int(k), 50))
+        r = self._role()
+        hits = space.search(str(text), k if r is None or r.documents is None else k * 4, store=store, where=where)
+        hits = [h for h in hits if self.documents_allowed(h["document"])][:k]
         return {"embedder": space.embedder.describe(), "store": hits[0]["store"] if hits else space.primary(), "hits": hits,
                 "ontology": space.concepts_in(str(text), self.studio.onto)}
 

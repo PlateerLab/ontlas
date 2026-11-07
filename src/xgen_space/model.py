@@ -249,9 +249,15 @@ class Role:
     scope: dict[str, Any] = field(default_factory=dict)  # {attribute: seller_id, types: {Type: property | {via, property}}}
     scoped: dict[str, dict] = field(default_factory=dict)  # made from scope: the row filter each type gets
     closed: set[str] = field(default_factory=set)  # decisions that read a scoped row with no regard for the scope
+    documents: list[str] | None = None  # document names or patterns this role reads; None reads every document
 
     def can_read(self, type_name: str) -> bool:
         return "*" in self.read or type_name in self.read
+
+    def can_read_document(self, name: str) -> bool:
+        from fnmatch import fnmatchcase
+
+        return self.documents is None or any(fnmatchcase(str(name), p) for p in self.documents)
 
     def can(self, verb: str, name: str) -> bool:
         if verb == "run" and name in self.closed:  # roles.decide_in_scope asks them inside the scope
@@ -665,7 +671,9 @@ def _role(name: str, d: dict) -> Role:
                 row_filters=dict(d.get("row_filters", {})), run=list(d.get("run", [])),
                 request=list(d.get("request", [])), execute=list(d.get("execute", [])),
                 mask={str(k): str(v) for k, v in mask.items()}, unmask=list(d.get("unmask", [])),
-                scope=dict(d.get("scope") or {}))
+                scope=dict(d.get("scope") or {}),
+                documents=None if d.get("documents") is None else
+                [str(x) for x in ([d["documents"]] if isinstance(d["documents"], str) else d["documents"])])
 
 
 def _identity(name: str, d: dict) -> Identity:
@@ -868,7 +876,7 @@ def _to_dict(o: Ontology) -> dict:
                for a in o.actions.values()}
     roles = {r.name: _clean({"label": r.label, "read": r.read, "row_filters": r.row_filters, "run": r.run,
                              "request": r.request, "execute": r.execute, "mask": r.mask, "unmask": r.unmask,
-                             "scope": r.scope})
+                             "scope": r.scope}) | ({"documents": r.documents} if r.documents is not None else {})
              for r in o.roles.values()}
     identities = {i.name: _clean({"label": i.label, "table": i.table,
                                   "members": {m.type: m.fields for m in i.members.values()},

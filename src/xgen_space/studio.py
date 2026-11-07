@@ -444,6 +444,16 @@ class Studio:
 
         return run_function(self, name, key, params, role=role, principal=principal, by=by, trial=trial)
 
+    def keep_journal(self, path):
+        """Keep requests, approvals, change requests and the audit trail in a file, so a restart forgets none of them.
+        What the file already holds is taken back first. One process writes to one file."""
+        from xgen_space.journal import Journal
+
+        journal = Journal(path)
+        self.actions.keep(journal)
+        self.changes.keep(journal)
+        return journal
+
     def value_accuracy(self, specs: list[dict] | None = None) -> dict[str, Any]:
         """Hold what the ontology answers against what the transaction system shows (see review.value_accuracy)."""
         from xgen_space.review import value_accuracy

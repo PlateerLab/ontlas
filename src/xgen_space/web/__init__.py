@@ -24,9 +24,13 @@ def config_origin(config: str | Path) -> dict:
 
 
 def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = None,
-                 data: DataOptions | None = None, library_write: bool = False, **kw) -> None:
+                 data: DataOptions | None = None, library_write: bool = False, journal: Path | None = None,
+                 **kw) -> None:
     """Serve a studio file; every visitor gets a studio of their own, built from the same file (or, with
-    `users`, one studio a team shares). With `library_write`, approved changes are saved to the library folder."""
+    `users`, one studio a team shares). With `library_write`, approved changes are saved to the library folder;
+    with `journal`, requests, approvals and the audit trail are kept in that file across restarts."""
+    if journal is not None and not kw.get("users"):
+        raise ValueError("a journal keeps the records of one studio a team shares; serve it with users")
     from xgen_space.config import load_studio
     from xgen_space.library import Library
     from xgen_space.repository import Repositories
@@ -41,7 +45,10 @@ def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = 
         store = Library(first.library.root)
 
     def build() -> StudioSession:
-        s = StudioSession(load_studio(config), llm=llm, data=data, origin=dict(origin), repositories=kept)
+        studio = load_studio(config)
+        if journal is not None:
+            studio.keep_journal(journal)
+        s = StudioSession(studio, llm=llm, data=data, origin=dict(origin), repositories=kept)
         if store is not None:
             s.store = store
             s._adopt(s.studio)

@@ -50,8 +50,12 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      {}, [], lambda t, b: t.list_functions()),
     ("/v1/function", "POST", "run_function", "Run a registered function on one object, or on its inputs alone.",
      {"name": STRING, "key": STRING, "params": OBJECT}, ["name"], lambda t, b: t.run_function(b["name"], b.get("key", ""), b.get("params"))),
-    ("/v1/actions", "POST", "request_action", "Request a declared action. Checks run now; a person approves it before anything is written.",
+    ("/v1/actions", "POST", "request_action", "Request a declared action. Checks run now; a person approves it before anything is written, unless the change is inside the action's limits.",
      {"action": STRING, "key": STRING, "params": OBJECT}, ["action", "key"], lambda t, b: t.request_action(b["action"], b["key"], b.get("params"))),
+    ("/v1/proposals", "GET", "list_proposals", "The action requests this token made and how each stands: pending, executed, rejected, rolled back.",
+     {}, [], lambda t, b: {"proposals": t.list_proposals()}),
+    ("/v1/record", "POST", "get_record", "One object's values by its key, inside this token's rows and with its masks.",
+     {"object": STRING, "key": STRING}, ["object", "key"], lambda t, b: t.get_record(b["object"], b["key"])),
 ]
 
 
@@ -83,18 +87,36 @@ def tool_list() -> list[dict]:
 
 class Rest:
     """With `source` it answers from the studio a team shares, under that studio's lock: what a person approved on the page
-    is what a platform sees, and what a platform requests is what a person finds there."""
+    is what a platform sees, and what a platform requests is what a person finds there.
 
-    def __init__(self, tools: StudioTools, token: str, *, source: Callable[[], Any] | None = None, lock: Any = None):
-        self.tools, self.token, self.source = tools, token, source
+    Each token is one caller with its own name, role and rows: the audit trail says which agent asked, and one agent's
+    requests are not another's to read."""
+
+    def __init__(self, clients: list[tuple[str, StudioTools]] | StudioTools, token: str = "", *,
+                 source: Callable[[], Any] | None = None, lock: Any = None):
+        self.clients = [(token, clients)] if isinstance(clients, StudioTools) else list(clients)
+        self.source = source
         self.lock = lock or threading.Lock()
 
-    def allowed(self, header: str) -> bool:
-        return bool(self.token) and hmac.compare_digest(header.encode("utf-8"), f"Bearer {self.token}".encode("utf-8"))
+    @property
+    def tools(self) -> StudioTools:
+        return self.clients[0][1]
 
-    def answer(self, method: str, path: str, body: dict) -> tuple[int, Any]:
+    def caller(self, header: str) -> StudioTools | None:
+        """The tools of the client whose token this is. Every token is compared, so the time taken says nothing."""
+        found = None
+        for token, tools in self.clients:
+            if token and hmac.compare_digest(header.encode("utf-8"), f"Bearer {token}".encode("utf-8")):
+                found = tools
+        return found
+
+    def allowed(self, header: str) -> bool:
+        return self.caller(header) is not None
+
+    def answer(self, method: str, path: str, body: dict, tools: StudioTools | None = None) -> tuple[int, Any]:
+        tools = tools or self.tools
         if self.source is not None:
-            self.tools.studio = self.source()
+            tools.studio = self.source()
         for p, m, _, _, _, required, handler in ROUTES:
             if p != path:
                 continue
@@ -104,7 +126,7 @@ class Rest:
             if missing:
                 return 400, {"error": "missing: " + ", ".join(missing)}
             try:
-                return 200, handler(self.tools, body)
+                return 200, handler(tools, body)
             except PermissionError as e:
                 return 403, {"error": str(e)}
             except (ValueError, LookupError, KeyError, TypeError, RuntimeError) as e:

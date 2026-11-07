@@ -42,7 +42,7 @@ def test_roles_and_questions_come_with_the_draft_and_hold():
     op = Actor("op", "human", ["my-data-operator"])
     p = st.actions.request("setDaechulBannap", "L0002", {}, actor=op)
     assert p.status == "pending"  # 연체 -> 반납 is a transition the history shows; a person approves it
-    st.actions.approve(p.id, approver=op)
+    st.actions.approve(p.id, approver=Actor("lead", "human", ["my-data-operator"]))  # not the one who asked
     assert p.status == "executed" and st.fetch("Daechul", "L0002")["sangtae"] == "반납"
     p = st.actions.request("setDaechulYeonche", "L0001", {}, actor=op)
     assert p.status == "rejected"  # 반납 -> 연체 never happened, so the machine refuses it

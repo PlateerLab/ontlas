@@ -1058,6 +1058,8 @@
         ${code('xspace mcp studio.yaml --role customer_agent --principal customer_id=C001 --read-only')}<div class="hint">역할을 지정하면 그 역할의 조회 범위와 가림이 그대로 적용됩니다.</div></div></div>
       <div class="card"><div class="ch">REST API<div class="right"><span class="chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? '켜짐' : '이 서버는 꺼짐'}</span></div></div><div class="cb"><div class="gwhat">어떤 플랫폼에서든 토큰으로 호출합니다. OpenAPI 문서를 가져가면 도구로 등록할 수 있습니다.</div>
         ${code(`export XSPACE_API_TOKEN=...\nxspace serve studio.yaml --api-token-env XSPACE_API_TOKEN --api-role support_agent\n\ncurl ${base}/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \\\n  -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'`)}
+        <div class="hint">Agent마다 토큰을 따로 발급하면 감사 기록에 Agent 이름이 남고, 각 Agent는 자기 요청만 조회합니다.</div>
+        ${code('# agents.yaml\nagents:\n  - {name: 고객 응대 Agent, token_env: XSPACE_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}\n\nxspace serve studio.yaml --api-agents agents.yaml')}
         <div class="chips"><a class="btn sm" href="/v1/openapi.json" target="_blank" rel="noopener">OpenAPI</a><a class="btn sm" href="/v1/tools" target="_blank" rel="noopener">도구 목록</a></div></div></div>
       <div class="card"><div class="ch">플랫폼 DB 연결</div><div class="cb"><div class="gwhat">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 사용합니다. 비밀번호는 공간에 저장하지 않으며, 읽기 전용과 허용 테이블 정책은 플랫폼 기준을 따릅니다.</div>
         ${code('backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true')}<div class="hint">원천 데이터는 읽기 전용입니다. 온톨로지와 벡터는 공간에 저장합니다.</div></div></div>
@@ -3176,6 +3178,7 @@ ${controls}${body}`;
       <div class="sec">조회 객체</div><div class="mgticks">${ticks('read', m.objects.map((o) => [o.name, o.label]))}</div>
       <div class="sec">실행 질의 · 결정 · 함수</div><div class="mgticks">${ticks('run', [...m.decisions.map((d) => [d.name, d.label]), ...m.functions.map((x) => [x.name, x.label]), ...m.queries.map((q) => [q.name, q.label])])}</div>
       <div class="sec">요청 액션</div><div class="mgticks">${ticks('request', m.actions.map((a) => [a.name, a.label]))}</div>
+      ${m.documents.length ? `<div class="sec">열람 문서</div><div class="mgticks">${ticks('docs', m.documents.map((d) => [d, d]))}</div><div class="hint">Agent가 이 역할로 검색하고 답할 때 선택한 문서만 근거로 사용합니다.</div>` : ''}
       <div class="sec">가림 속성</div>${mgRows('mask', (r, i) => `${rowSelect('mask', i, 'prop', [['', '선택'], ...propsOf], r.prop)}${rowSelect('mask', i, 'style', [['partial', '일부 가림'], ['full', '전체 가림']], r.style)}`, v.mask)}
       <div class="sec">행 범위</div>${mgRows('rows', rowRule, v.rows)}
       <div class="sec">조직 범위</div>${mgField('사용자 속성', mgInput('scope_attr', v.scope_attr, 'placeholder="예: seller_id"'), '지정하면 아래 객체의 조회와 요청을 로그인한 조직의 행으로 제한합니다.')}
@@ -3190,9 +3193,9 @@ ${controls}${body}`;
     const m = S.mg.st;
     const head = mgHead(title, sub, '<button class="btn sm primary" data-act="mgrolenew">새 역할</button>');
     const size = (x) => (x.includes('*') ? '전체' : x.length);
-    const rows = m.roles.map((r) => `<tr class="${S.mg.sel === r.name ? 'sel' : ''}" data-act="mgrole" data-name="${esc(r.name)}" style="cursor:pointer"><td><b>${esc(r.label)}</b><div class="muted mono">${esc(r.name)}</div></td><td>${size(r.read)}</td><td>${size(r.run)}</td><td>${size(r.request)}</td><td>${Object.keys(r.mask).length}</td><td>${r.filters.length}</td><td><div class="chips">${ownerChip(r)}${stateChips(r)}</div></td></tr>`).join('');
+    const rows = m.roles.map((r) => `<tr class="${S.mg.sel === r.name ? 'sel' : ''}" data-act="mgrole" data-name="${esc(r.name)}" style="cursor:pointer"><td><b>${esc(r.label)}</b><div class="muted mono">${esc(r.name)}</div></td><td>${size(r.read)}</td><td>${size(r.run)}</td><td>${size(r.request)}</td><td>${Object.keys(r.mask).length}</td><td>${r.filters.length}</td><td>${r.documents === null || r.documents === undefined ? '전체' : r.documents.length}</td><td><div class="chips">${ownerChip(r)}${stateChips(r)}</div></td></tr>`).join('');
     return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr);align-items:start">
-      <div class="card"><div class="ch">역할 <span class="chip sm">${m.roles.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>역할</th><th>조회</th><th>실행</th><th>요청</th><th>가림</th><th>행 범위</th><th>정의</th></tr>${rows}</table></div></div>${roleForm()}</div>`;
+      <div class="card"><div class="ch">역할 <span class="chip sm">${m.roles.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>역할</th><th>조회</th><th>실행</th><th>요청</th><th>가림</th><th>행 범위</th><th>문서</th><th>정의</th></tr>${rows}</table></div></div>${roleForm()}</div>`;
   }
 
   function mgOpenMore(kind, key) {
@@ -3242,7 +3245,7 @@ ${controls}${body}`;
       const r = m.roles.find((x) => x.name === key);
       const rows = r.rows.map((x) => (x.raw ? { ...x } : { type: x.type, via: (x.via || [])[0] || '', property: x.property, mode: x.principal ? 'principal' : 'value', value: x.principal || String(x.value ?? '') }));
       const scopes = Object.entries((r.scope || {}).types || {}).map(([type, w]) => (typeof w === 'string' ? { type, via: '', property: w } : { type, via: (w.via || [])[0] || '', property: w.property }));
-      S.mg.form = { kind, mode: 'edit', v: { name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })), rows, scope_attr: (r.scope || {}).attribute || '', scopes } };
+      S.mg.form = { kind, mode: 'edit', v: { name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })), rows, scope_attr: (r.scope || {}).attribute || '', scopes, docs: r.documents === null || r.documents === undefined ? ['*'] : [...r.documents] } };
     }
     render();
   }
@@ -3334,7 +3337,7 @@ ${controls}${body}`;
       const mask = Object.fromEntries(v.mask.filter((r) => r.prop).map((r) => [r.prop, r.style]));
       const rows = v.rows.filter((r) => r.raw || (r.type && r.property)).map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: typed(r.value) } : { principal: r.value }) }));
       const scope = v.scope_attr ? { attribute: v.scope_attr, types: v.scopes.filter((r) => r.type && r.property).map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
-      const args = { name: v.name, label: v.label, read: v.read, run: v.run, request: v.request, mask, rows, scope };
+      const args = { name: v.name, label: v.label, read: v.read, run: v.run, request: v.request, mask, rows, scope, documents: v.docs.includes('*') ? null : v.docs };
       S.mg.sel = v.name;
       if (f.mode === 'new') mgEdit('add_role', args, '역할을 추가했습니다.'); else mgEdit('update_role', args, '역할을 변경했습니다.');
       return true;
@@ -3880,7 +3883,7 @@ ${controls}${body}`;
     mgdecnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'decision', mode: 'new', v: { name: '', label: '', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', inputs: [{ property: '' }], otherwise: '해당하는 규칙이 없습니다' } }; render(); },
     mgstatenew: () => { const o = S.mg.st.objects.find((x) => !x.states); S.mg.sel = ''; S.mg.form = { kind: 'states', mode: 'new', v: { object: o ? o.name : '', property: '', states: '', initial: '', transitions: [] } }; render(); },
     mgactionnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'action', mode: 'new', v: { set: [], limits: [], agents: false, method: 'POST', url: '', body: '', undo_url: '', name: '', label: '', target: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', params: [], criteria: [], transition_to: '', approval: true, cite: '' } }; render(); },
-    mgrolenew: () => { S.mg.sel = ''; S.mg.form = { kind: 'role', mode: 'new', v: { name: '', label: '', read: [], run: [], request: [], mask: [], rows: [], scope_attr: '', scopes: [] } }; render(); },
+    mgrolenew: () => { S.mg.sel = ''; S.mg.form = { kind: 'role', mode: 'new', v: { name: '', label: '', read: [], run: [], request: [], mask: [], rows: [], scope_attr: '', scopes: [], docs: ['*'] } }; render(); },
     mgparamnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'param', mode: 'new', v: { name: '', label: '', type: 'integer', value: '', unit: '', cite: '', min: '', max: '' } }; render(); },
     mgmetric: (t) => mgOpenMore('metric', t.dataset.name),
     mgmetricnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'metric', mode: 'new', v: { name: '', label: '', owner: '', object: (S.mg.st.objects.find((o) => !o.concept) || {}).name || '', fn: 'count', prop: '', where: [], den: [], ratio: false, den_label: '', unit: '', scale: 1, basis: '', time_prop: '', description: '', cite: '' } }; render(); },

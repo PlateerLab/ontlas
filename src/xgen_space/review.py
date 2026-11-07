@@ -414,6 +414,22 @@ class ChangeService:
         self.requests: dict[str, ChangeRequest] = {}
         self.audit: list[dict[str, Any]] = []
         self._ids = itertools.count(1)
+        self.journal = None  # journal.Journal: change requests and their decisions outlive a restart
+
+    def keep(self, journal) -> None:
+        """Write every change request and decision to `journal` from now on, after taking back what it holds."""
+        from xgen_space.journal import next_number
+
+        for r in journal.read():
+            if r.get("kind") != "change":
+                continue
+            if r.get("audit"):
+                self.audit.append(r["audit"])
+            if r.get("change"):
+                cr = ChangeRequest(**r["change"])
+                self.requests[cr.id] = cr
+        self._ids = itertools.count(next_number(list(self.requests), "C"))
+        self.journal = journal
 
     def _now(self) -> str:
         now = self.studio.now()
@@ -480,5 +496,8 @@ class ChangeService:
         return cr
 
     def _log(self, by: str, event: str, cr: ChangeRequest, **detail) -> None:
-        self.audit.append({"at": self._now(), "by": by, "event": event, "change": cr.id, "module": cr.module,
-                           "version": cr.version, **detail})
+        entry = {"at": self._now(), "by": by, "event": event, "change": cr.id, "module": cr.module,
+                 "version": cr.version, **detail}
+        self.audit.append(entry)
+        if self.journal is not None:
+            self.journal.write("change", {"audit": entry, "change": cr.to_dict()})

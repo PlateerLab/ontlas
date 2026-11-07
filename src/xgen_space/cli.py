@@ -182,6 +182,25 @@ def _embedder(a) -> dict | None:
     return spec
 
 
+def _api_agents(path: str) -> list[dict]:
+    """Agents that call /v1, each by its own token. A token is read from the environment, never from the file."""
+    import yaml
+
+    spec = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    out = []
+    for i, x in enumerate(spec.get("agents") or []):
+        name, env = str(x.get("name") or ""), str(x.get("token_env") or "")
+        if not name or not env:
+            raise SystemExit(f"--api-agents: agent {i + 1} needs a name and a token_env")
+        token = os.environ.get(env, "")
+        if not token:
+            raise SystemExit(f"--api-agents: {env} for {name} is empty")
+        out.append({"name": name, "token": token, "role": str(x.get("role") or ""),
+                    "principal": {str(k): str(v) for k, v in (x.get("principal") or {}).items()},
+                    "write": bool(x.get("write"))})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="xspace", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -434,6 +453,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--api-role", default="", help="the role /v1 runs as; with none it reads everything")
     s.add_argument("--api-principal", action="append", default=[], help="key=value, for a role's row scope")
     s.add_argument("--api-write", action="store_true", help="let /v1 request actions; a person still approves them")
+    s.add_argument("--api-name", default="api", help="the name the audit trail gives the caller of --api-token-env")
+    s.add_argument("--api-agents", default="", help="a YAML file of agents, each with its own token, role and rows: "
+                                                    "agents: [{name, token_env, role, principal, write}]")
+    s.add_argument("--journal", default="", help="a file that keeps requests, approvals, change requests and the audit "
+                                                 "trail across restarts (with --users)")
     s.add_argument("config")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=7710)
@@ -606,16 +630,25 @@ def main(argv: list[str] | None = None) -> int:
                            samples=Path(a.samples) if a.samples else None, allow_connect=a.allow_connect,
                            policies=Path(a.policies) if a.policies else None,
                            repositories=Path(a.repositories) if a.repositories else None,
-                           embedder=_embedder(a), rest=bool(a.api_token_env))
-        api = None
+                           embedder=_embedder(a), rest=bool(a.api_token_env or a.api_agents))
+        api = []
         if a.api_token_env:
             token = os.environ.get(a.api_token_env, "")
             if not token:
                 raise SystemExit(f"--api-token-env: {a.api_token_env} is empty")
-            api = {"token": token, "role": a.api_role, "principal": dict(x.split("=", 1) for x in a.api_principal), "write": a.api_write}
+            api.append({"name": a.api_name, "token": token, "role": a.api_role,
+                        "principal": dict(x.split("=", 1) for x in a.api_principal), "write": a.api_write})
+        if a.api_agents:
+            api += _api_agents(a.api_agents)
+        names = [c["name"] for c in api]
+        if len(set(names)) < len(names):
+            raise SystemExit(f"--api-agents: each agent needs a name of its own, not {names}")
+        if a.journal and not a.users:
+            raise SystemExit("--journal keeps the records of one studio a team shares; give it --users as well")
         serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
                      quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
-                     sync=a.sync, library_write=a.library_write, api=api)
+                     sync=a.sync, library_write=a.library_write, api=api or None,
+                     journal=Path(a.journal) if a.journal else None)
         return 0
     if a.cmd == "users":
         from xgen_space.web.team import Users
