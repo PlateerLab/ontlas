@@ -16,6 +16,8 @@ BATCH = 50
 
 
 class GremlinBackend(Backend):
+    kind = "gremlin"
+
     def __init__(self, url: str = "ws://localhost:8182/gremlin", *, client: Any = None, source: str = "g",
                  name: str = "gremlin"):
         if client is None:

@@ -482,6 +482,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.space_map_node(a["node"])
                 if route == "adapters":
                     return s.adapters()
+                if route == "connections":
+                    return s.connections()
                 if route == "integrations":
                     return s.integrations()
                 if route == "monitor":

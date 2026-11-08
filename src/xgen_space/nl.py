@@ -284,6 +284,7 @@ def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = Non
         return openai_chat(url, model, key=key, extra=wider, timeout=max(seconds, timeout))
 
     call.roomier = roomier
+    call.kind = "openai"  # what a page names the connection by
     return call
 
 

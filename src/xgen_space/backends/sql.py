@@ -14,6 +14,8 @@ _DDL = re.compile(r"\s*(CREATE|ALTER|DROP|RENAME)\b", re.IGNORECASE)
 
 
 class SqliteBackend(Backend):
+    kind = "sqlite"
+
     def __init__(self, path: str = ":memory:", *, conn: sqlite3.Connection | None = None, name: str = "sqlite"):
         self.conn = conn or sqlite3.connect(path, check_same_thread=False)
         self.name = name
@@ -55,6 +57,7 @@ class SqliteBackend(Backend):
 
 class DbApiBackend(Backend):
     """Any DB-API connection; `paramstyle` follows the driver (psycopg: format, oracledb: numeric, or pymssql)."""
+    kind = "dbapi"
 
     def __init__(self, conn: Any, dialect: str = "postgres", *, paramstyle: str = "format", name: str = ""):
         self.conn = conn

@@ -40,6 +40,8 @@ def _walk(ctx, part):
 
 
 class RdflibBackend(Backend):
+    kind = "rdflib"
+
     def __init__(self, graph: Any = None, name: str = "rdflib"):
         try:
             import rdflib
@@ -77,6 +79,7 @@ def _py(v: Any) -> Any:
 
 class SparqlEndpointBackend(Backend):
     """Fuseki, GraphDB, Stardog, Virtuoso, Oxigraph server, Neptune RDF: anything speaking SPARQL 1.1 over HTTP."""
+    kind = "sparql"
 
     def __init__(self, query_url: str, *, update_url: str = "", gsp_url: str = "", user: str = "",
                  password: str = "", timeout: float = 60, name: str = "sparql"):

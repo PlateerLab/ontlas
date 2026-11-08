@@ -401,16 +401,13 @@ class SpaceMixin:
 
     def adapters(self) -> dict:
         from xgen_space.compile.base import CompileError
-        from xgen_space.compile.sql import _NAMES as SQL_NAMES
         from xgen_space.embed import _KINDS as EMBEDDERS
         from xgen_space.preview import TARGETS
 
         self._sync_space()
         st = self.studio
         sp = self.space.state()
-
-        def target(lang: str, dialect: str) -> str:  # the language a store reads, named as the compilers are
-            return f"sql:{SQL_NAMES.get(dialect, dialect) or 'postgres'}" if lang == "sql" else lang
+        target = _target
 
         backends = [{"name": n, "language": b.capabilities.language, "dialect": b.capabilities.dialect, "source": n == st.source,
                      "write": b.capabilities.write, "load": b.capabilities.load,
@@ -433,6 +430,44 @@ class SpaceMixin:
                 "vector_kinds": known_kinds(), "embedder": sp["embedder"], "embedder_kinds": sorted(EMBEDDERS),
                 "retriever": self.space.knowledge(st.onto, self._terms()).describe(),
                 "reasoners": [r.describe() for r in st.reasoners.values()], "can_connect": self.data.allow_connect}
+
+    def connections(self) -> dict:
+        """What the space is connected to, tried now, for the sidebar: each store answers a one-row query or says why
+        not, a vector store by the error the space keeps, the language model by how its last call went. It names kinds,
+        never what the data is about."""
+        from xgen_space.preview import TARGETS
+        from xgen_space.web.api import said
+
+        self._sync_space()
+        st, sp = self.studio, self.space
+        kinds = self.origin.get("backends") or {}
+        probe = next(((n, t.key) for n, t in st.onto.objects.items() if t.table and t.key), None)
+        labels = {_target(*t.split(":", 1)) if t.startswith("sql:") else t: label for t, label in TARGETS}
+        stores = []
+        for n, b in st.backends.items():
+            started, error = time.perf_counter(), ""
+            try:
+                if probe is None:
+                    raise LookupError("원천 테이블과 연결된 객체가 없어 질의하지 못했습니다.")
+                st.run({"match": {"x": probe[0]}, "return": [f"x.{probe[1]}"], "limit": 1}, backend=n)
+            except Exception as e:  # a store that does not answer is what this shows, not a failure of the page
+                error = said(e)
+            t = _target(b.capabilities.language, b.capabilities.dialect)
+            stores.append({"name": n, "kind": kinds.get(n) or b.kind, "source": n == st.source,
+                           "language": labels.get(t) or ("SQL" if t.startswith("sql:") else t.upper()),
+                           "state": "bad" if error else "ok", "error": error, "ms": round((time.perf_counter() - started) * 1000)})
+        ran = {_target(b.capabilities.language, b.capabilities.dialect) for b in st.backends.values()}
+        emb, last = sp.embedder.describe(), self._llm_last
+        return plain({
+            "pipeline": self.pipeline, "stores": stores,
+            "vectors": [{"name": n, "kind": s.kind, "state": "bad" if sp.errors.get(n) else "ok", "error": sp.errors.get(n, "")}
+                        for n, s in sp.stores.items()],
+            "translate": [label for t, label in labels.items() if t not in ran],
+            "embedder": {"kind": emb.get("kind", ""), "name": emb.get("name", ""), "dim": emb.get("dim")},
+            "llm": {"kind": getattr(self.llm, "kind", "") if self.llm else "", "at": (last or {}).get("at", ""),
+                    "error": (last or {}).get("error", ""),
+                    "state": "off" if self.llm is None else "idle" if last is None else "ok" if last["ok"] else "bad"},
+            "rest": bool(getattr(self.data, "rest", False))})
 
     def adapters_check(self) -> dict:
         """The tests that make swapping safe, run now on what this space holds."""
@@ -727,6 +762,13 @@ class SpaceMixin:
         from xgen_space.rest import tool_list
 
         return {"rest": bool(getattr(self.data, "rest", False)), "openapi": "/v1/openapi.json", "tools": tool_list(), "gateway": self.data.allow_connect}
+
+
+def _target(lang: str, dialect: str) -> str:
+    """The language a store reads, named as the compilers are."""
+    from xgen_space.compile.sql import _NAMES as SQL_NAMES
+
+    return f"sql:{SQL_NAMES.get(dialect, dialect) or 'postgres'}" if lang == "sql" else lang
 
 
 def attach(session: Any) -> None:

@@ -46,8 +46,11 @@
   agent, and says why one inside its limits still waits; a refused approval says why in words; a change that fails its review lists the
   questions and values that differ; a named value lists what reads it; a fixed row rule offers the allowed values; database errors and
   findings say what to do; each screen's help says why it works as it does. An example's own names left the manual.
-- The sidebar no longer ends in a card of the domain modules' names and the stores with a dot that was never measured: the pipeline
-  is chosen at the top, the modules are counted on the ontology screen and the stores are measured on the adapters screen.
+- The foot of the sidebar shows what the space is connected to, tried when the page opens and every 30 seconds, under stores,
+  languages and links: each store answers a one-row query (its kind and response time, or why it did not), the vector stores, the
+  embedding model, the language model by how its last call went, and the REST API. It replaces a card that named the domain
+  modules and listed the stores by their configuration keys with a dot that was never measured. `GET connections`; a store class
+  says its `kind`.
 
 ## 0.11.0
 

@@ -9,6 +9,7 @@ from xgen_space.compile.base import Compiled
 
 class Neo4jBackend(Backend):
     """Neo4j through the official driver; Memgraph and Neptune openCypher accept the same text."""
+    kind = "neo4j"
 
     def __init__(self, driver: Any, *, database: str | None = None, name: str = "neo4j"):
         self.driver = driver

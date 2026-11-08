@@ -41,6 +41,7 @@ class Result:
 
 class Backend:
     name = ""
+    kind = ""  # what the configuration calls it (sqlite, rdflib, neo4j, ...), for a page to name
     capabilities = Capabilities("sql")
 
     def compiler(self, onto: Ontology) -> Compiler:

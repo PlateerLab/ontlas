@@ -255,6 +255,7 @@ class StudioSession(SpaceMixin):
                  repositories: Repositories | None = None):
         self.studio = studio
         self.llm = llm
+        self._llm_last: dict | None = None  # how the model's last call went, for the sidebar
         self.data = data or DataOptions()
         self.origin = origin or {"kind": "config"}
         self.lock = threading.RLock()
@@ -602,7 +603,13 @@ class StudioSession(SpaceMixin):
             if tries and time.monotonic() - started > within:
                 raise TimeoutError("no time left for another attempt")
             tries.append(1)
-            return model(system, user)
+            try:
+                out = model(system, user)
+            except Exception as e:
+                self._llm_last = {"ok": False, "at": datetime.now().isoformat(timespec="seconds"), "error": said(e)}
+                raise
+            self._llm_last = {"ok": True, "at": datetime.now().isoformat(timespec="seconds")}
+            return out
 
         return llm, tries
 

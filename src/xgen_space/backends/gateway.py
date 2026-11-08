@@ -55,6 +55,8 @@ def inline(sql: str, args: tuple | list, dialect: str) -> str:
 
 
 class GatewayBackend(Backend):
+    kind = "gateway"
+
     def __init__(self, url: str, *, connection: Any, dialect: str = "postgres", token: str = "", token_env: str = "", max_rows: int = 500,
                  timeout: float = 30.0, fields: dict | None = None, name: str = "gateway"):
         self.url, self.connection, self.max_rows, self.timeout, self.name = url, connection, int(max_rows), float(timeout), name

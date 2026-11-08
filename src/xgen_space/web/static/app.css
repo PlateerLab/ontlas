@@ -312,8 +312,23 @@ button.chip:hover { border-color:var(--blue); color:var(--blue); }
 .mparts dt { font-weight:600; color:var(--ink); }
 .mparts dd { margin:0; color:#475467; }
 .nav.on .n { color:#c9ced6; }
+.sfoot { border-top:1px solid var(--line); padding:10px 12px 12px; display:flex; flex-direction:column; gap:7px; font-size:12px; }
+.sfoot .lhead { display:flex; align-items:center; justify-content:space-between; padding:0 4px; }
+.sfoot .lhead b { color:var(--ink); font-size:12.5px; }
+.sfoot .lhead span { font-size:11.5px; font-weight:600; }
+.sfoot .lhead .ok { color:#137a44; } .sfoot .lhead .bad { color:var(--bad); }
+.sfoot .lseg { display:flex; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:2px; gap:2px; }
+.sfoot .lseg button { flex:1; border:0; background:none; padding:4px 0; border-radius:6px; font-size:11.5px; font-weight:600; color:var(--muted); cursor:pointer; }
+.sfoot .lseg button.on { background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(19,33,60,.08); }
+.sfoot .lrows { display:flex; flex-direction:column; gap:1px; }
+.sfoot .lrow { display:grid; grid-template-columns:7px auto minmax(0, 1fr); align-items:center; gap:7px; padding:4px; border-radius:6px; color:var(--ink); text-decoration:none; }
+.sfoot .lrow:hover { background:var(--panel); }
+.sfoot .lrow b { font-weight:600; white-space:nowrap; }
+.sfoot .lrow span { color:var(--muted); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sfoot .dot.bad { background:var(--bad); } .sfoot .dot.off { background:#c4ccd6; }
+.sfoot .dot.idle { background:none; box-shadow:inset 0 0 0 1.5px #98a2b3; }
 @media (min-width: 1101px) {
-  .app.slim .bname, .app.slim .nl, .app.slim .snav .nav .chip { display:none; }
+  .app.slim .bname, .app.slim .sfoot, .app.slim .nl, .app.slim .snav .nav .chip { display:none; }
   .app.slim .sbrand { justify-content:center; padding:13px 0; }
   .app.slim .snav { overflow:visible; padding:10px 12px; }
   .app.slim .snav .nav { justify-content:center; padding:0; }
@@ -453,7 +468,7 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
   .app, .app.slim { grid-template-columns:minmax(0, 1fr); grid-template-rows:auto auto auto minmax(0, 1fr); }
   .side { grid-row:auto; }
   .sbrand { min-height:0; padding:8px 12px; }
-  .sidetoggle, .steps::before { display:none; }
+  .sfoot, .sidetoggle, .steps::before { display:none; }
   .side { overflow:hidden; }
   .snav { flex-direction:row; gap:4px; overflow-x:auto; padding:6px 12px; flex:none; }
   .nlead, .steps { display:contents; }

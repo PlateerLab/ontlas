@@ -37,6 +37,30 @@ def test_state_lists_the_library_and_the_schema_graph(session):
     json.dumps(st)
 
 
+def test_the_sidebar_shows_what_answers_now_not_what_is_configured(session):
+    c = session.connections()
+    assert [(s["kind"], s["state"]) for s in c["stores"]] == [("sqlite", "ok"), ("rdflib", "ok")]
+    assert c["llm"]["state"] == "off" and not c["rest"] and "Cypher 25" in c["translate"]
+    session.studio.backends["graph"].execute = lambda *a, **k: (_ for _ in ()).throw(ConnectionError("refused"))
+    down = next(s for s in session.connections()["stores"] if s["name"] == "graph")
+    assert down["state"] == "bad" and "refused" in down["error"]  # a store that stops answering says so on the next look
+    said = iter([OSError("unreachable"), "data"])
+
+    def llm(system: str, user: str) -> str:
+        out = next(said)
+        if isinstance(out, Exception):
+            raise out
+        return out
+    session.llm = llm
+    assert session.connections()["llm"]["state"] == "idle"  # set up, not called yet
+    ask, _ = session._budgeted()
+    with pytest.raises(OSError):
+        ask("s", "u")
+    assert session.connections()["llm"]["state"] == "bad"
+    ask("s", "u")
+    assert session.connections()["llm"]["state"] == "ok"
+
+
 def test_unplug_shows_the_impact_and_plugs_back(session):
     imp = session.impact("commerce")
     assert not imp["ok"] and set(imp["dependents"]) == {"acme-overlay", "commerce-bindings", "fashion", "party-identity"}

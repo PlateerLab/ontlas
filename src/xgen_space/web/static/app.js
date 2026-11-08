@@ -96,6 +96,7 @@
       '수치를 선택하면 해당 화면으로 이동합니다. 상단 탭에서 단계를 선택하면 해당 단계를 강조합니다.',
       '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 연쇄 장애에서 원인 경로를 확인합니다.',
       '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
+      '사이드바 아래 [연결]은 저장소, 쿼리 언어, 연동 항목이 지금 응답하는지 30초마다 확인해 표시합니다. 초록은 응답, 빨강은 응답 없음, 회색은 사용하지 않거나 아직 호출하지 않은 항목입니다.',
       '[장애 테스트]를 선택하면 설정한 장애 시나리오를 적용해 알람과 원인 경로를 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
@@ -321,7 +322,7 @@
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
-    ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, help: false,
+    ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
@@ -467,7 +468,44 @@
     return `<nav class="stabs" aria-label="${esc(g[1])}">${g[2].map(tab).join('')}${seg}</nav>`;
   }
 
+  // ---- what the space is connected to: the server tries each store when asked, so a dot is a measurement, never a default --
+  const LINKS_EVERY = 30000;
+  const LINK_WORD = { ok: '연결', bad: '응답 없음', idle: '호출 전', off: '사용 안 함' };
+  const LLM_KIND = { openai: 'OpenAI 호환 API' };
+
+  async function loadLinks() {
+    if (loadLinks.busy) return;
+    loadLinks.busy = true;
+    loadLinks.at = Date.now();
+    try { S.links = await api('connections'); } catch (e) { /* the last measurement stays until the next one */ }
+    loadLinks.busy = false;
+    renderSide();
+  }
+
+  function sideLinks() {
+    const c = S.links;
+    if (!c) return '';
+    const row = (state, name, detail, tab, tip) => `<a class="lrow" href="#${tab}" data-tip="${esc(tip)}"><i class="dot ${state}"></i><b>${esc(name)}</b><span>${esc(detail)}</span></a>`;
+    const role = (b) => (b.source ? '원천 DB' : '그래프 저장소');
+    const said = (b) => b.error || `${LINK_WORD[b.state]} · 응답 ${b.ms}ms`;
+    const llm = c.llm.state === 'ok' ? (LLM_KIND[c.llm.kind] || LINK_WORD.ok) : LINK_WORD[c.llm.state];
+    const rows = {
+      store: c.stores.map((b) => row(b.state, role(b), BACKEND_KIND[b.kind] || b.kind || b.name, 'adapters', said(b)))
+        .concat(c.vectors.map((v) => row(v.state, '벡터 저장소', v.kind, 'vectors', v.error || LINK_WORD[v.state]))),
+      lang: c.stores.map((b) => row(b.state, b.language, role(b), 'query', said(b)))
+        .concat(c.translate.length ? [row('off', '변환만', `${count(c.translate.length)}개 언어`, 'adapters', c.translate.join(', '))] : []),
+      link: [row('ok', '임베딩 모델', `${c.embedder.kind} · ${c.embedder.dim}차원`, 'vectors', c.embedder.name),
+        row(c.llm.state, '언어 모델', llm, 'search', c.llm.error || (c.llm.at ? `마지막 호출 ${c.llm.at.replace('T', ' ')}` : LINK_WORD[c.llm.state])),
+        row(c.rest ? 'ok' : 'off', '외부 API', c.rest ? '/v1' : LINK_WORD.off, 'connect', c.rest ? 'REST /v1' : '')],
+    };
+    const bad = c.stores.concat(c.vectors, [c.llm]).filter((x) => x.state === 'bad').length;
+    const tabs = [['store', '저장소'], ['lang', '언어'], ['link', '연동']].map(([k, w]) => `<button class="${S.ltab === k ? 'on' : ''}" data-act="ltab" data-k="${k}" role="tab" aria-selected="${S.ltab === k}">${w}</button>`).join('');
+    return `<div class="sfoot"><div class="lhead"><b>연결</b><span class="${bad ? 'bad' : 'ok'}">${bad ? `응답 없음 ${bad}` : '정상'}</span></div>
+      <div class="lseg" role="tablist" aria-label="연결 종류">${tabs}</div><div class="lrows">${rows[S.ltab].join('')}</div></div>`;
+  }
+
   function renderSide() {
+    if (S.st && !loadLinks.busy && (!S.links || S.links.pipeline !== S.st.pipeline || Date.now() - (loadLinks.at || 0) > LINKS_EVERY)) loadLinks();
     const wait = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
     const place = (i) => {
       const [no, label, keys] = NAV_GROUP[i];
@@ -481,7 +519,7 @@
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g) => !g[0])}</div><div class="steps">${at((g) => g[0])}</div></div>
+    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g) => !g[0])}</div><div class="steps">${at((g) => g[0])}</div></div>${sideLinks()}
       <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
     $('#side .snav').scrollTop = kept;
     if (S.tab !== renderSide.tab) {
@@ -3979,6 +4017,7 @@ ${controls}${body}`;
     fsample: () => catalogCall('files/sample', {}),
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
+    ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
     slim: () => {
       S.slim = !S.slim;
       try { localStorage.setItem('xspace-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
@@ -4633,6 +4672,7 @@ ${controls}${body}`;
 
   S.tab = (location.hash.slice(1) && NAV.some(([k]) => k === location.hash.slice(1))) ? location.hash.slice(1) : 'monitor';
   setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+  setInterval(() => { if (S.st && document.visibilityState === 'visible') loadLinks(); }, LINKS_EVERY);
   wire();
   load().catch(fail);
 })();
