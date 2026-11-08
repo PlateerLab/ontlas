@@ -468,7 +468,6 @@
   }
 
   function renderSide() {
-    const st = S.st;
     const wait = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
     const place = (i) => {
       const [no, label, keys] = NAV_GROUP[i];
@@ -479,11 +478,10 @@
       return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}>${mark}<span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}</a>`;
     };
     const at = (test) => NAV_GROUP.map((g, i) => (test(g, i) ? place(i) : '')).join('');
-    const foot = `<div class="sfoot"><b>${esc(st.title)}</b><span>모듈 ${st.modules_on}개</span>${st.backends.map((b) => `<span class="be"><i class="dot"></i>${esc(b.name)} · ${esc(b.language.toUpperCase())}</span>`).join('')}</div>`;
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g) => !g[0])}</div><div class="steps">${at((g) => g[0])}</div></div>${foot}
+    $('#side').innerHTML = `${BRAND}<div class="snav"><div class="nlead">${at((g) => !g[0])}</div><div class="steps">${at((g) => g[0])}</div></div>
       <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
     $('#side .snav').scrollTop = kept;
     if (S.tab !== renderSide.tab) {
@@ -1147,7 +1145,7 @@
 
   async function explorerChanged(node) {  // a change to files touches the catalog, the drafts and the space as well
     spaceChanged();
-    S.files = null; S.conv = null; S.cat.sel = {}; S.cat.st = null;
+    S.files = null; S.conv = null; S.cat.sel = {}; S.cat.st = null; S.ex.sel = {};
     S.st = await api('state');
     await loadExplorer(node);
   }
@@ -1236,8 +1234,10 @@
     if (x.hits) {
       const h = x.hits, by = {};
       for (const r of h.hits) for (const f of r.found) by[f] = (by[f] || 0) + 1;
+      const nearest = h.hits.length && h.hits.every((r) => r.found.every((f) => f === '의미 유사'));
+      const note = nearest ? '<div class="hint" style="margin-bottom:8px">이름, 정의, 단어로 찾은 항목이 없어 의미가 가장 가까운 문서를 표시합니다.</div>' : '';
       list = `<div class="card exlist"><div class="ch">'${esc(h.q)}' 검색 결과<div class="right muted" style="font-size:12px">${count(h.total)}건${Object.entries(by).map(([f, n]) => ` · ${esc(f)} ${count(n)}`).join('')}</div></div>
-        <div class="cb">${h.hits.length ? exTable(h.hits, true) : '<div class="empty">찾은 항목이 없습니다.</div>'}</div></div>`;
+        <div class="cb">${h.hits.length ? note + exTable(h.hits, true) : '<div class="empty">찾은 항목이 없습니다.</div>'}</div></div>`;
     } else {
       const trail = x.items.trail.concat([{ id: x.node, label: x.items.label }]);
       const bar = trail.map((t, i) => (i === trail.length - 1 ? `<b>${esc(t.label)}</b>` : `<button class="plink" data-act="exgo" data-id="${esc(t.id)}">${esc(t.label)}</button>`)).join(' › ');
@@ -4045,7 +4045,7 @@ ${controls}${body}`;
     exupload: () => { Object.assign(S.cat, { folder: exFolder(S.ex.node), sel: {}, ext: '', edit: null, file: null, st: null }); location.hash = '#catalog'; },
     exrestore: async (t) => {
       const x = S.ex, ids = t.dataset.id ? [t.dataset.id] : Object.keys(x.tsel).filter((k) => x.tsel[k]);
-      try { const r = await api('catalog/trash', { op: 'restore', ids }); x.tsel = {}; toast(`파일 ${r.restored}개를 복원했습니다.`); await explorerChanged(); } catch (e) { fail(e); }
+      try { const r = await api('catalog/trash', { op: 'restore', ids }); x.tsel = {}; toast(`${count(r.items)}개를 복원했습니다.`); await explorerChanged(); } catch (e) { fail(e); }
     },
     expurge: async (t) => {
       const x = S.ex, all = !!t.dataset.all, ids = all ? [] : t.dataset.id ? [t.dataset.id] : Object.keys(x.tsel).filter((k) => x.tsel[k]);

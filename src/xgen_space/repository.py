@@ -238,15 +238,20 @@ class Repositories:
                     for t in self._repo(repo).get("trash", [])]
 
     def restore(self, repo: str, ids: list[str]) -> list[str]:
-        """Put trashed items back where they were; the paths of the files that came back."""
+        """Put trashed items back where they were, all of them or none when a name is taken; the paths of the files
+        that came back."""
         with self.lock:
             r = self._repo(repo)
-            back = []
-            for t in [t for t in r.get("trash", []) if t["id"] in ids]:
-                taken = [p for p in t["files"] if p in r["files"] or p in r["folders"]]
-                taken += [f for f in t["folders"] if f in r["files"]]
+            picked = [t for t in r.get("trash", []) if t["id"] in ids]
+            files, folders = set(r["files"]), set(r["folders"])
+            for t in picked:
+                taken = [p for p in t["files"] if p in files or p in folders] + [f for f in t["folders"] if f in files]
                 if taken:
                     raise ValueError(f"{taken[0]}: 같은 이름이 있어 복원하지 못했습니다. 그 자리의 이름을 바꾼 뒤 복원해 주세요.")
+                files |= set(t["files"])
+                folders |= set(t["folders"])
+            back = []
+            for t in picked:
                 self._make_parents(r, parent(t["path"]))
                 r["folders"] += [f for f in t["folders"] if f not in r["folders"]]
                 r["files"].update(t["files"])

@@ -104,6 +104,23 @@ def test_the_trash_gives_back_what_went_and_the_record_says_what_happened(tmp_pa
     assert Repositories(tmp_path).history("r1") == r.history("r1")  # the record outlives the server too
 
 
+def test_a_restore_brings_back_all_it_was_given_or_none(tmp_path):
+    r = Repositories(tmp_path)
+    for p in ("x.csv", "y.csv"):
+        r.put("r1", p, b"1")
+    r.remove("r1", ["x.csv"])
+    r.remove("r1", ["y.csv"])
+    r.put("r1", "y.csv", b"new")
+    with pytest.raises(ValueError):
+        r.restore("r1", [t["id"] for t in r.trash("r1")])  # y.csv is taken, so x.csv stays in the trash too
+    assert sorted(t["path"] for t in r.trash("r1")) == ["x.csv", "y.csv"] and "x.csv" not in r.items["r1"]["files"]
+    r.put("r1", "x.csv", b"2")
+    r.remove("r1", ["x.csv"])
+    with pytest.raises(ValueError):
+        r.restore("r1", [t["id"] for t in r.trash("r1") if t["path"] == "x.csv"])  # two of the same name, one place
+    assert r.restore("r1", [next(t["id"] for t in r.trash("r1") if t["path"] == "x.csv")]) == ["x.csv"]
+
+
 def test_repositories_in_a_folder_outlive_the_server(tmp_path):
     r = Repositories(tmp_path)
     second = r.create("둘째")

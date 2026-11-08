@@ -34,16 +34,20 @@
 - A data explorer opens the data map: everything the space holds as folders, from repository files to tables and columns,
   documents, objects and properties, stores, queries and decisions, each row with what it went through (indexed as a
   document, in the draft, mapped to an object). One search covers names and paths, definitions and document text by words and
-  by meaning, and says which of them found each hit. Files and folders can be moved and renamed there.
+  by meaning, and says which of them found each hit; when only the meaning search answers, it says these are the nearest
+  documents. Files and folders can be moved and renamed there.
 - Deleting a file or a folder puts it in the repository's trash, from which it is restored where it was or deleted for good;
-  its bytes stay, and count against the limits, until then. A repository keeps a work record of uploads, moves, renames,
-  deletions, restores and what goes into a draft. `catalog/move`, `catalog/trash`, `catalog/history`.
+  its bytes stay, and count against the limits, until then. Items restored together come back all or none when a name is
+  taken. A repository keeps a work record of uploads, moves, renames, deletions, restores and what goes into a draft.
+  `catalog/move`, `catalog/trash`, `catalog/history`.
 - `{@name}` inside a rule's output text puts the named value in force there.
 - Fixed: a decision table read a database amount as a Decimal, which the ZEN engine refused, so the page always said ZEN failed for it.
 - The page: requests that ran stay listed with their rollback after the page is left; a request names who made it, a person or an
   agent, and says why one inside its limits still waits; a refused approval says why in words; a change that fails its review lists the
   questions and values that differ; a named value lists what reads it; a fixed row rule offers the allowed values; database errors and
   findings say what to do; each screen's help says why it works as it does. An example's own names left the manual.
+- The sidebar no longer ends in a card of the domain modules' names and the stores with a dot that was never measured: the pipeline
+  is chosen at the top, the modules are counted on the ontology screen and the stores are measured on the adapters screen.
 
 ## 0.11.0
 

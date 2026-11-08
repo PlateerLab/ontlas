@@ -371,8 +371,6 @@ class StudioSession(SpaceMixin):
                          "decisions": [c.decision for c in a.criteria if c.decision], "approval": a.approval}
                         for a in o.actions.values()],
             "roles": roles,
-            "backends": [{"name": n, "language": b.capabilities.language, "dialect": b.capabilities.dialect}
-                         for n, b in st.backends.items()],
             "targets": [{"id": t, "label": lbl} for t, lbl in TARGETS],
             "ask": self.llm is not None,
             "zen": _has_zen(),
@@ -1237,9 +1235,10 @@ class StudioSession(SpaceMixin):
         """Put trashed items back, or delete them for good; without ids, the whole trash goes."""
         ids = [str(i) for i in ids or []]
         if op == "restore":
+            items = sum(t["id"] in ids for t in self.repositories.trash(self.repo))
             back = self.repositories.restore(self.repo, ids)
             self._hold()  # what came back goes into the next draft as it did before
-            return {"ok": True, "restored": len(back)}
+            return {"ok": True, "restored": len(back), "items": items}
         if op == "purge":
             return {"ok": True, "purged": self.repositories.purge(self.repo, ids or None)}
         raise ValueError("요청 형식이 올바르지 않아 처리하지 못했습니다.")
