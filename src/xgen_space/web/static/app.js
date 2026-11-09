@@ -1312,7 +1312,10 @@
       const hot = way.has(`${e.source}|${e.target}`) || way.has(`${e.target}|${e.source}`);
       const on = g.sel === e.source || g.sel === e.target;
       const c = bend(p, q, ...place(e));
-      return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><path d="${c.d}" marker-end="url(#${hot ? 'gxhot' : 'gxarrow'})"/><text x="${c.x}" y="${c.y - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
+      // an arrowhead for each way the relation was opened: from its source, from its target, or both
+      const back = e.groups.some((x) => x.endsWith('|0')), ahead = e.route || !back || e.groups.some((x) => x.endsWith('|1'));
+      const tip = `url(#${hot ? 'gxhot' : 'gxarrow'})`;
+      return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><path d="${c.d}"${ahead ? ` marker-end="${tip}"` : ''}${back ? ` marker-start="${tip}"` : ''}/><text x="${c.x}" y="${c.y - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
     }).join('');
     const nodes = Object.entries(L.boxes).map(([id, b]) => {
       const n = g.nodes[id], [ink, fill] = gxColor(n.type);
