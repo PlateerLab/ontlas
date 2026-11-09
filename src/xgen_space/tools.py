@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from xgen_space.actions import Actor
@@ -79,7 +80,7 @@ class StudioTools:
         q = {"match": {"x": type_name}, "where": {"eq": [f"x.{t.key}", str(key)]}, "return": [f"x.{p}" for p in props]}
         res = self.run_query(q)
         row = res["rows"][0] if res["rows"] else {}
-        return {"type": type_name, "label": t.label or type_name, "key": str(key),
+        return {"type": type_name, "label": t.label or type_name, "key": str(key), "query": res["query_text"],
                 "values": [{"name": p, "label": find_prop(onto, type_name, p).label or p, "value": row.get(p)} for p in props]}
 
     def describe_object(self, name: str) -> dict:
@@ -123,11 +124,13 @@ class StudioTools:
         head = "이 정의와 규칙을 기준으로 답합니다. 판정은 decide 도구로 확인합니다."
         return {"text": "\n".join([head, *lines, *words]), "found": found}
 
-    def answer_question(self, text: str, folder: str = "") -> dict:
-        """One question to a decision, a record, a query or the documents, with what the answer stands on."""
+    def answer_question(self, text: str, pick: dict | None = None, folder: str = "") -> dict:
+        """One question to a decision, a record, a query or the documents, with what the answer stands on. `pick` is
+        what a person corrected of how the question was taken: {type, key, decision, at}; `folder` keeps the documents
+        to one folder."""
         from xgen_space.answer import answer_question
 
-        out = _plain(answer_question(self, text, folder=str(folder or "")))
+        out = _plain(answer_question(self, text, pick=pick, folder=str(folder or "")))
         d = (out.get("decisions") or [{}])[0]
         self._note("answered", d.get("target", ""), d.get("key", ""), question=out["question"], route=out["route"],
                    answer=out["answer"], sources=[s.get("id") for s in out.get("sources") or []])
@@ -141,11 +144,11 @@ class StudioTools:
         if not self.studio.run(q, role=self.role, principal=self.principal).rows:
             raise PermissionError(f"{type_name} {key} is outside this role's rows")
 
-    def decide(self, decision: str, key: str, params: dict | None = None) -> dict:
+    def decide(self, decision: str, key: str, params: dict | None = None, at: datetime | None = None) -> dict:
         target = self.studio.onto.decisions[decision].target
         if target:
             self._visible(target, key)
-        out = _plain(self.studio.decide(decision, key, params, role=self.role).to_dict())
+        out = _plain(self.studio.decide(decision, key, params, role=self.role, at=at).to_dict())
         self._note("decided", target or "", key, decision, outputs=out.get("outputs"),
                    rules=[f"{decision}.{r}" for r in out.get("matched") or []])
         return out

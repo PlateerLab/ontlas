@@ -25,7 +25,7 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
     ("/v1/ontology", "GET", "describe_ontology", "Object types, properties, links, registered queries, decisions and actions this token may use.",
      {}, [], lambda t, b: t.describe()),
     ("/v1/answer", "POST", "answer_question", "Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause it stands on.",
-     {"text": STRING, "folder": STRING}, ["text"], lambda t, b: t.answer_question(b["text"], b.get("folder", ""))),
+     {"text": STRING, "folder": STRING}, ["text"], lambda t, b: t.answer_question(b["text"], folder=b.get("folder", ""))),
     ("/v1/context", "POST", "agent_context", "The definitions and rules a question is about, as text to put in an agent's prompt.",
      {"text": STRING, "k": INT}, ["text"], lambda t, b: t.agent_context(b["text"], b.get("k", 8))),
     ("/v1/find", "POST", "find_definitions", "The object types, rules, queries and actions a question is about. Read these rather than the whole ontology.",

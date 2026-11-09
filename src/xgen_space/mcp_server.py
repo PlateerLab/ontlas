@@ -115,7 +115,7 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
     def answer_question(text: str, folder: str = "") -> dict:
         """Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause.
         With a folder, only the documents of that folder are read."""
-        return tools.answer_question(text, folder)
+        return tools.answer_question(text, folder=folder)
 
     @server.tool()
     def agent_context(text: str, k: int = 8) -> dict:

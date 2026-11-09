@@ -32,7 +32,7 @@ NEEDS = {
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
-    "change/decide": "approver", "approve": "approver", "rollback": "approver",
+    "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
 }
 

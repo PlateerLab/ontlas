@@ -167,16 +167,17 @@ class SpaceMixin:
                 "store": hits[0]["store"] if hits else sp.primary(), "can_answer": self.llm is not None,
                 "compare": sp.compare(text, min(int(k or 5), K_MAX)) if len(sp.stores) > 1 else None}
 
-    def space_ask(self, text: str, role: str = "", principal: dict | None = None, folder: str = "") -> dict:
-        """One question over everything here, or over one folder's documents. The engine answers what it can, and says when
-        a model could go further."""
+    def space_ask(self, text: str, role: str = "", principal: dict | None = None, pick: dict | None = None,
+                  folder: str = "") -> dict:
+        """One question over everything here, or over one folder's documents. The engine answers what it can, and says
+        when a model could go further. `pick` is how a person corrected what the question was taken to be."""
         from xgen_space.tools import StudioTools
 
         self._sync_space()
         tools = StudioTools(self.studio, role=role or None, principal=principal, actor_id=self.who or "page")
         tools.terms = self._terms()
         try:
-            out = tools.answer_question(text, str(folder or ""))
+            out = tools.answer_question(text, pick if isinstance(pick, dict) else None, folder=str(folder or ""))
         except (VectorError, OSError, EmbedError) as e:
             raise ValueError(f"검색 엔진에서 찾지 못했습니다. {_human(e)}") from None
         except PermissionError:
@@ -185,6 +186,7 @@ class SpaceMixin:
         for s in out["sources"]:
             s["concepts"] = [c["label"] for c in sp.concepts_in(s["text"], onto, terms) if c.get("element")][:6]
         out["can_model"] = self.llm is not None
+        out["now"] = self.studio.now().isoformat(timespec="minutes")  # what "4 days since delivery" is counted to
         return plain(out)
 
     def space_ask_more(self, text: str, role: str = "", principal: dict | None = None, folder: str = "") -> dict:
@@ -192,7 +194,7 @@ class SpaceMixin:
         if self.llm is None:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 답변을 만들지 못했습니다. 찾은 근거를 확인해 주세요."}
         with self.lock:
-            found = self.space_ask(text, role, principal, folder)
+            found = self.space_ask(text, role, principal, folder=folder)
         if not found.get("ok"):
             return found
         llm, _ = self._budgeted()
