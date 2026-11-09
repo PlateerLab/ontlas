@@ -75,3 +75,50 @@ def test_the_inbox_holds_what_waits_on_a_person_and_says_who_asked(session):
     change = next(x for x in box["items"] if x["kind"] == "change")
     assert change["mine"] and change["gates"][1] >= 1 and box["counts"]["assigned"] == box["counts"]["all"] - box["counts"]["mine"]
     json.dumps(session.inbox())
+
+
+def _vip_window(days: int) -> dict:
+    return {"decision": "returnEligibility", "id": "vip-window", "cite": "ACME 운영 정책 4.2",
+            "when": {"days_since_delivery": f"<= {days}", "item_status": '"NORMAL"', "category_returnable": "true",
+                     "customer_grade": '"VIP"'},
+            "then": {"eligible": True, "reason": f"VIP 고객은 배송 완료 후 {days}일까지 반품할 수 있습니다"}}
+
+
+def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_now(session):
+    session.studio.changes.self_approve = False  # someone other than its author approves it
+    session.manage_edit("update_rule", _vip_window(21))
+    cid = session.manage_propose()["change"]["id"]
+    d = session.change_detail(cid)
+    rule = next(x for x in d["items"] if x["element"] == "rule:returnEligibility.vip-window")
+    cells = {f["field"]: (f["before"], f["after"]) for f in rule["fields"]}
+    assert cells["when.days_since_delivery"] == ("<= 14", "<= 21") and cells["cite"][1] == "ACME 운영 정책 4.2"
+    assert rule["fields"][0]["label"].startswith("조건 · ") and rule["change"] == "changed"
+    assert "액션 반품 신청" in rule["readers"]  # what the rule reaches
+    assert d["before"]["decide.min_agreement"] >= next(g["value"] for g in d["gates"] if g["stage"] == "decide")
+    assert not d["can_decide"] and d["can_mark"]  # its author cannot approve it
+    d = session.change_mark(cid, rule["element"], "fix")
+    d = session.change_comment(cid, rule["element"], "개정 문서를 올려 주세요")
+    assert d["marks"] == {rule["element"]: "fix"} and d["items"][0]["comments"][0]["text"] == "개정 문서를 올려 주세요"
+    session.who = "이도윤"  # another person
+    out = session.decide_change(cid, True)
+    assert not out["ok"] and "수정을 요청한 항목" in out["error"]
+    session.change_mark(cid, rule["element"], "ok")
+    out = session.decide_change(cid, True)  # the mark no longer holds it back; a validation question that now fails does
+    assert not out["ok"] and "수정을 요청한 항목" not in out["error"] and "검증 질문 정답률" in out["error"]
+    assert session.decide_change(cid, False)["ok"]
+    with pytest.raises(ValueError):
+        session.change_mark(cid, rule["element"], "ok")  # decided: no more marks
+
+
+def test_a_decision_is_tried_on_a_record_and_says_what_would_turn_it(session):
+    sim = session.simulate("returnEligibility", "I1001")
+    assert (sim["verdict"], sim["matched"]) == ("가능", ["vip-window"])
+    days = next(i for i in sim["inputs"] if i["name"] == "days_since_delivery")
+    assert days["value"] == 4 and days["type"] == "integer"
+    turn = next(o for o in sim["other"] if o["input"] == "days_since_delivery")
+    assert turn["value"] == 15 and turn["verdict"] == "불가"  # the first day past the VIP window
+    assert {(e["value"], e["verdict"]) for e in sim["edges"] if e["input"] == "days_since_delivery"} >= {(14, "가능"), (15, "불가")}
+    assert session.simulate("returnEligibility", "I1001", {"days_since_delivery": "20"})["verdict"] == "불가"
+    assert session.simulate("returnEligibility", "", {"days_since_delivery": "3", "item_status": "NORMAL",
+                                                      "category_returnable": "true", "customer_grade": "BASIC"})["matched"] == ["in-window"]
+    assert not session.studio.function_log and not session.studio.actions.audit  # trying writes nothing
