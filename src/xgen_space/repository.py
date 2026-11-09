@@ -191,7 +191,8 @@ class Repositories:
             before = r["files"].get(path)
             r["files"][path] = {"sha256": sha, "bytes": len(data), "uploaded": _now(),
                                 "included": before["included"] if before else True,
-                                "embed": before.get("embed", True) if before else True, **facts}
+                                "embed": before.get("embed", True) if before else True,
+                                "use": before.get("use", "") if before else "", **facts}
             if before and before["sha256"] != sha:
                 self._forget({before["sha256"]})
             self._log(r, "replace" if before else "upload", path, f"{len(data):,}바이트")
@@ -304,6 +305,19 @@ class Repositories:
             for x in paths:
                 self._log(r, "include" if on else "exclude", x)
             self._save()
+
+    def set_use(self, repo: str, path: str, use: str) -> dict:
+        """What a file is read as, when a person says so: data (rows), definition, document or raw; '' goes back to
+        what its content says."""
+        with self.lock:
+            r = self._repo(repo)
+            f = r["files"].get(path)
+            if f is None:
+                raise KeyError(path)
+            f["use"] = use
+            self._log(r, "use", path, use or "auto")
+            self._save()
+            return f
 
     def embed(self, repo: str, paths: list[str], on: bool) -> None:
         """Set whether the documents of files, or of everything in folders, are embedded into the vector stores."""

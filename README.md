@@ -69,7 +69,7 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 | Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xspace decide examples/library/studio.yaml returnEligibility I1001` |
 | Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xspace agreement examples/library/studio.yaml` |
 | Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xspace review examples/library/studio.yaml acme-1.1.0.yaml` |
-| Edits that say what they take | Removing a property or a relation on the management screens takes out the queries, decisions and questions that need it, and lists them before anything is filed | The page's 객체 관리, 속성 관리, 관계 관리 |
+| Edits that say what they take | Removing a property or a relation in the modelling workspace takes out the queries, decisions and questions that need it, and lists them before anything is filed; an element carries a status (초안 · 사용 중 · 폐기 예정) | The page's 모델링 › 작업 공간 |
 | Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
 | Nothing to run first | The core has no required dependencies. SQLite and an in-process RDF graph are enough to try everything, and values stay in the source unless you ask for a projection | `python examples/commerce/demo.py` |
 
@@ -90,10 +90,20 @@ refunds, shipping, coupons, reviews), a fashion extension and one customer's dif
 xspace serve examples/library/studio.yaml --samples examples/files --policies examples/policies
 ```
 
-Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written.
+Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written. The page's
+사용 안내 lists the same eight steps as below, in order, and the home's first steps lead through them.
 
-**2. Bring your own data.** On the page, open 데이터 카탈로그, drop files or whole folders, check 변환 결과, then make
-the draft on 초안 생성 (see [The data catalog](#the-data-catalog)). From the command line:
+**2. Bring data in (구축 › 데이터 가져오기 › 카탈로그).** Drop files or whole folders, or connect a database on DB 연결. Each
+file says what it became (table data, a definition sheet, a document, raw material) and where it goes, and the folder
+says what to do next. If a file was read as something it is not, set its 용도 from the row's menu and it is read again
+that way; the draft and the search follow.
+
+**3. Review the draft (초안 생성).** The draft is a set of proposals, reviewed step by step: 파일 선택, 객체 · 키, 속성 · 타입,
+관계, 질의, 상태 · 규칙, 검토 · 적용, each step counting what is still to settle. On 객체 · 키 every table is scored against
+the standards you compare with, and for each you choose 표준에 연결 or 새 객체로 유지; English names come from the
+standards and the glossaries, and a sample, the key evidence and the columns to hide sit beside the picked table.
+상태 · 규칙 draws a decision table from a column of past outcomes. 검토 · 적용 shows the module files that applying would
+write and the definition check, and applying adds a pipeline (in a team, an approver applies). From the command line:
 
 ```bash
 xspace draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
@@ -106,7 +116,29 @@ xspace serve my-studio/studio.yaml
 A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
-**3. Check it.**
+**4. Model (구축 › 모델링 › 작업 공간).** The objects of every module stand as cards on a canvas, with keys, computed properties
+and the relations' names and cardinality; the tree on the left lists them by module with what is wrong, and the
+inspector on the right holds the picked object's form, data, uses, YAML and comments, all of the same element. Draw a
+relation from a card's + to another card, drop a source column on a card to make a property, give an element a status
+(초안 · 사용 중 · 폐기 예정), take back any one edit, and try the pending edits on a copy of the space before filing them as a
+change request. Card positions are kept for everyone who opens the pipeline.
+
+**5. Rules and actions (구축 › 규칙 · 액션).** A decision table is edited where it stands: cells in place, rows by dragging,
+the hit policy and the modules in the header, overlaps and gaps above the table. The simulator decides a record or typed
+values on the table as edited and says which single change would turn the answer; the tests recompute past cases,
+generate boundary values and run the validation questions on the edited table. 액션 and 함수 are forms beside it.
+
+**6. Review and approve (구축 › 변경 요청).** A change request is reviewed element by element: each element's fields before
+and after (or the module file), what reads it, the pass conditions as the studio meets them now beside the trial copy,
+and comments that stay on the element. Every element is marked before the request can be approved, and the author cannot
+approve their own. The same review from the command line:
+
+```bash
+xspace review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
+```
+
+**7. Check it (운영 › 검증).** Validation questions with known answers, the definition against the database, and the flow's
+pass conditions, measured; the board (파이프라인 관제) shows where the flow stops and leads from each alert to its fix.
 
 ```bash
 xspace bindings my-studio/studio.yaml       # the definition against the database
@@ -115,7 +147,11 @@ xspace conformance my-studio/studio.yaml    # every registered query on every ba
 xspace gates my-studio/studio.yaml          # the flow's pass conditions, measured
 ```
 
-**4. Use it.**
+**8. Use it and plug it in (업무, 운영 › 저장소 · 연동).** The people who use the ontology start on 홈 with what waits on them;
+ask in one box and get the answer with how the question was read, where the answer came from and what to do next; open
+a record's page; grow the graph from one record and keep a perspective for the team. `xspace serve --users` gives a team
+one studio with roles (see [A team studio](#a-team-studio)), and `xspace mcp` and the token REST API give agents and
+platforms the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
 
 ```bash
 xspace run examples/library/studio.yaml revenueByCategory
@@ -123,39 +159,29 @@ xspace translate examples/commerce/ontology.yaml revenueByCategory --to cypher
 xspace decide examples/library/studio.yaml returnEligibility I1001
 ```
 
-**5. Adapt it.** Copy `examples/library/acme-overlay/1.0.0.yaml` to `acme-1.1.0.yaml`, set `version: 1.1.0`, change a
-rule, and review it on a copy of the studio. See [Adapt a domain](#adapt-a-domain) for the other ways in.
-
-```bash
-xspace review examples/library/studio.yaml acme-1.1.0.yaml
-```
-
-**6. Share it.** `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
-`xspace mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
-
 The sidebar has three sections: what a person comes to do (업무), what builds the definition (구축) and what keeps it
 running (운영). The page opens on 홈. A group's screens are tabs on its page, and `Ctrl K` jumps to any screen:
 
 | Section | Group | Screen | Use it to |
 |---|---|---|---|
 | 업무 | 홈 | 홈 | Search or ask from one box, see what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
-| | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick and edits not filed yet, each saying who asked and what it changes |
-| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question |
+| | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick, check warnings and edits not filed yet, each saying who asked, what changes and by how much against its automatic-approval limit |
+| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question; when nothing answers it says what it did understand and whom to ask |
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 온톨로지 | 도메인 | See objects and relations as a graph, and what is connected to a card gathered around it |
 | | | 문서 | See documents as documents, sections and concepts, and read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | 객체 탐색 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
-| | 그래프 탐색 | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
+| | 객체 탐색 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take (pick a role to see only what that role may request), its functions, the documents that name it and its history |
+| | 그래프 탐색 | 그래프 탐색 | Start from one record, grow the graph relation by relation, find the records that join two records, and keep a perspective (the types shown, each type's colour, the property that names its records) for everyone on the studio |
 | | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back; it and 규칙 · 지표 share one tab, 판정 · 규칙, with a switch |
 | | | 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
-| 구축 | 데이터 가져오기 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, and turn a file's or a folder's embedding on and off |
+| 구축 | 데이터 가져오기 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, say what a file is when it was read as something else, and turn a file's or a folder's embedding on and off |
 | | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
 | | | 결과 | See what each file came to, and the one JSON they roll up into |
 | | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
-| | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
-| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. One switch away, objects, properties and relations stand in three columns: pick an object and the other two follow it, and a row opens for editing where it stands |
+| | | 초안 생성 | Draft from the files in the catalog and review the proposals step by step: each table scored against the standards and bound to one or kept as a new object, English names from the standards and glossaries, a sample and the evidence beside the picked table; in a team an approver applies |
+| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them; each element carries a status (초안 · 사용 중 · 폐기 예정) and card positions are kept for everyone on the pipeline. One switch away, objects, properties and relations stand in three columns: pick an object and the other two follow it, and a row opens for editing where it stands |
 | | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables |
-| | 규칙 · 액션 | 규칙 | Head a decision table with its hit policy, change a cell where it stands and move rules by dragging; the form says how the table applies its rules and what the table check finds, and tries the table as edited on a record's or typed values |
+| | 규칙 · 액션 | 규칙 | Head a decision table with its hit policy, change a cell where it stands and move rules by dragging; the form says how the table applies its rules and what the table check finds, tries the table as edited on a record's or typed values, and decides past cases again by the edited table |
 | | | 액션 | Change actions on forms: their inputs, the decision and the state move they need, and whether a person approves them |
 | | | 함수 | Register calculations, decisions and outside models as functions with inputs, outputs, a version and an owner |
 | | 변경 요청 | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
@@ -173,22 +199,11 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 
 ## What it looks like
 
-The screens below are the studio page that `xspace preview` writes for the example library in `examples/library`
-(common concepts, commerce and its operations, a fashion extension, one customer's differences, and the bindings to
-one database). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the
-decision with its evidence and the reach of a column change are what the library computed for that example.
-
-`xspace serve` turns the same screens into a working page: plug modules in and out, edit any module as its file,
-run a query in eight languages or write one in SPARQL or Cypher yourself, decide, file an agent's request and
-approve it, run the questions and the database check. Management screens list the source's tables and the
-objects, properties and relations over them, and change any of them without editing a standard (see
-[Manage objects, properties and relations](#manage-objects-properties-and-relations)). A flow tab shows every stage (source, definition, database
-check, projection, queries, decisions, questions) with what it holds now, the catalog keeps raw files by repository
-and folder (see [The data catalog](#the-data-catalog)), 초안 생성 drafts a studio from them (see
-[Start from your own data](#start-from-your-own-data)), and a guide tab explains each screen, beside a
-demo video when `--video` gives one. Every visitor gets a studio of their own, built from the
-same studio file, so nothing one person does reaches another; with `--users`, a team signs in and shares one studio
-(see [A team studio](#a-team-studio)).
+The screens below are the example library in `examples/library` (common concepts, commerce and its operations, a
+fashion extension, one customer's differences, and the bindings to one database), rendered by `tools/render_screens.py`
+from `xspace preview` and from a running `xspace serve`. Nothing on them is drawn by hand: the modules, the compiled
+queries, the rows from both backends, the decision with its evidence and the reach of a column change are what the
+library computed for that example.
 
 <p align="center">
   <img src="assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
@@ -199,12 +214,20 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screens/ontology.png" alt="Ontology screen: knowledge graph coloured by the module each type comes from and sized by its connections, domain types hanging under common concepts, and the selected type's properties with their columns and modules"></td>
+    <td width="50%"><img src="assets/screens/ontology.png" alt="Ontology screen: every object as a card with its key, properties and computed properties, grouped by module, relations drawn between cards with their names and cardinality, and the selected object's definition beside"></td>
     <td width="50%"><img src="assets/screens/query.png" alt="Query screen: one ontology query, its text in eight backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
   </tr>
   <tr>
-    <td><b>Ontology.</b> A knowledge graph on WebGL: every type coloured by the module it comes from (by detected community when one module holds them all) and sized by its connections, with layouts to choose from, search, and a selected type lighting only its neighbours. Domain types hang under common concepts (customer and seller under party, order under agreement); each property shows its column and module, each type its standard alignments.</td>
+    <td><b>Ontology.</b> Every object as a card with its key, representative and computed properties, in a region per module, with relations named and sized; press a card and what it connects to gathers around it, the rest fading. Domain types hang under common concepts (customer and seller under party, order under agreement).</td>
     <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, SQL Server, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right"></td>
+    <td><img src="assets/screens/rules.png" alt="Rules screen: a decision table edited in place with its hit policy and modules in the header, overlaps and gaps above the table, and a simulator deciding one record on the edited table"></td>
+  </tr>
+  <tr>
+    <td><b>Model.</b> The workspace: cards on a canvas, a tree by module, and the picked object's form, data, uses, YAML and comments. Draw a relation from card to card, drop a column on a card, give an element a status, try the edits on a copy, file them.</td>
+    <td><b>Rules.</b> A decision table edited where it stands, checked for overlaps and gaps as it is edited, and tried on a record with what single change would turn the answer.</td>
   </tr>
   <tr>
     <td><img src="assets/screens/decision.png" alt="Decision screen: the decision table with the rule that fired, the evidence path to source columns, and an action request waiting for a person's approval"></td>
@@ -213,6 +236,14 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
   <tr>
     <td><b>Decide and act.</b> A decision table (here with the customer's own VIP rule plugged in ahead of the standard ones, each rule citing its policy), the source column behind every input, and an agent's action request waiting for a person.</td>
     <td><b>The data map.</b> What a column change touches, from property to agent; what one agent can reach; what nobody uses.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screens/home.png" alt="Home screen: one box to search or ask, what waits on the person in one list, the pass conditions in brief, the records opened last and the registered queries"></td>
+    <td><img src="assets/screens/record.png" alt="Record page: one record with its values and columns, its state and where it can go, linked records, what each decision says of it now, the documents that name it and its history"></td>
+  </tr>
+  <tr>
+    <td><b>Home.</b> Where the people who use the ontology start: a box to search or ask, what waits on them, the measured pass conditions, the records they opened last and the saved queries, laid out for the role they pick.</td>
+    <td><b>A record.</b> Values with their columns, the state machine's current and next steps, the actions a role may take, linked records, what the decisions say of it now, the documents that name it, and its history.</td>
   </tr>
 </table>
 
@@ -663,11 +694,10 @@ queries that need it. On the example commerce database it gives the bindings a p
 included.
 
 <p align="center">
-  <img src="assets/screens/draft.png" alt="Draft screen: the generation steps with their counts, the drafted schema graph, and the relations found in the example files, each with its cardinality, the reason it was inferred and a form to add one by hand" width="920">
+  <img src="assets/screens/draft.png" alt="Draft review: the steps across the top with what each still asks a person to settle, every source table scored against the standards with 표준에 연결 or 새 객체로 유지, an English API name for each, and the picked table's sample rows, key evidence and match evidence beside" width="920">
 </p>
 
-<p align="center"><b>A draft from the six files in <code>examples/files</code>.</b> Each step shows what it found; here the relations, each with the
-values that matched and an editable name and cardinality, and the definition check that clears the draft to be plugged in.</p>
+<p align="center"><b>A draft from the six files in <code>examples/files</code>, reviewed table by table.</b> Each source table is scored against the standards the draft compares with and bound to the standard object or kept as a new one, with an English name from the standards and the glossaries; the picked table shows its sample rows, why its key is a key and the match evidence. The later steps settle properties, relations, queries and rules the same way before the draft is applied.</p>
 
 ## Ask once
 
@@ -888,14 +918,16 @@ module files a change request and shows its review; `xspace review studio.yaml m
 
 ## Manage objects, properties and relations
 
-The page's data management screens come before the library: the source's tables with their rows, keys and
-references and the objects and relations that read each one; the objects with their tables, keys and parents; every
-property with its type, column, allowed values, unit, required flag and mask; the relations with the columns they
-join on, with the ones the source's foreign keys suggest; and, on the checks screen, the questions with known
-answers (add, remove, or import a YAML or JSON list).
+The modelling workspace (구축 › 모델링 › 작업 공간) is where the definition is changed: the objects of every module as
+cards on a canvas with their keys, properties and named relations; a tree by module with what is wrong; and the picked
+element's form, data, uses, YAML and comments, each a view of the same element. One switch away the same objects,
+properties and relations stand in three columns with a form under the picked row. Every element carries a status
+(초안 · 사용 중 · 폐기 예정), and a deprecated element that something still reads says so where its uses are listed. The
+source's tables with their rows, keys and references are on 데이터 소스, and the questions with known answers (add,
+remove, or import a YAML or JSON list) on 검증 질문.
 
 <p align="center">
-  <img src="assets/screens/manage.png" alt="Object management screen: every object with its source table, key, parent, property and relation counts and the module that defines it, a pending change waiting to be filed, and the selected object's form" width="920">
+  <img src="assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right" width="920">
 </p>
 
 Every edit goes into one overlay module, `workspace` ("관리 변경"). Saved to the library, it comes back at the next start

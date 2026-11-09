@@ -85,6 +85,8 @@ ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which 
 DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request waits on: at most 5 minutes in all
 POLICY_MAX = 12000  # characters of policy text a draft reads
 JSON_PREVIEW = 40_000  # characters of the one JSON the page shows; the download has it all
+USES = ("", "data", "definition", "document", "raw")  # what a person can say a file is; '' is what its content says
+USE_WORD = {"": "자동", "data": "테이블 데이터", "definition": "정의서", "document": "문서", "raw": "원본 보관"}
 RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".svg", ".ico", ".mp4", ".mov", ".avi",
              ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".zip", ".7z", ".rar", ".tar", ".gz", ".exe", ".dll", ".bin"}
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
@@ -139,6 +141,9 @@ EDIT_TEXT = [
     (r"^question id '(.*)' is empty or already used$",
      r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^object type '(.+)' is the parent of (.+)$",
+     r"하위 객체 \2이(가) \1을(를) 상위 객체로 두고 있어 제외하지 못했습니다. 하위 객체의 상위 객체를 먼저 바꿔 주세요."),
+    (r"^(\S+): parent '(.+)' is unknown$", r"\1의 상위 객체 '\2'이(가) 정의에 없습니다. 상위 객체를 바꾸거나 비워 주세요."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
@@ -294,6 +299,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         self._ws_sig: tuple = ()
         self._draft: dict | None = None  # the policy draft running or last finished, for the page to collect
         self._reading: dict | None = None  # the relation reading running or last finished, for the page to collect
+        self._graph_views: dict | None = None  # saved perspectives of the record graph (pages_api), read once
+        self._layouts: dict | None = None  # where the modelling cards stand, by pipeline (pages_api), read once
         self._adopt(studio)
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
@@ -968,8 +975,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                                  "rows": lim.rows, "columns": lim.columns},
                       "samples": [p.name for p in self._sample_files()], "connect": lim.allow_connect})
 
-    def _read(self, source: str, data: bytes) -> tuple[list, Any]:
-        """What a file holds: its tables, or its definitions. ValueError says why it could not be read."""
+    def _read(self, source: str, data: bytes, use: str = "") -> tuple[list, Any]:
+        """What a file holds: its tables, or its definitions. ValueError says why it could not be read. `use` is what a
+        person said the file is (data, definition, document), read that way instead of as its content looks."""
         from xgen_space.draft import ReadError, read_file
 
         lim = self.data
@@ -977,8 +985,18 @@ class StudioSession(SpaceMixin, PagesMixin):
         from xgen_space.ingest import EXPORT_ANY, IngestError, ingest, is_sheet
 
         if not is_sheet(data, source):  # everything but rows rolls up into the one definitions object
+            if use == "data":
+                raise ValueError(f"{source}: 표 형식 파일이 아니어서 테이블 데이터로 읽지 못했습니다. CSV, TSV, Excel 파일만 테이블 데이터가 됩니다.")
             try:
-                return [], ingest(data, source)
+                defs = ingest(data, source)
+                if use == "document":  # a person says it is a document: its tables and codes are not definitions
+                    defs.tables.clear()
+                    defs.codes.clear()
+                    defs.terms.clear()
+                    defs.messages.clear()
+                    if not defs.documents:
+                        raise ValueError(f"{source}: 본문이 없어 문서로 읽지 못했습니다.")
+                return [], defs
             except IngestError as e:
                 if e.reason == "format" and source.lower().endswith(".json"):
                     raise ValueError(f"{source}: tables 또는 codes 항목이 없어 정의서로 읽지 못했습니다. "
@@ -990,7 +1008,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         except ReadError as e:
             raise ValueError(f"{source}: " + READ_ERROR.get(
                 e.reason, "파일을 테이블로 읽지 못했습니다. 파일 형식을 확인해 주세요.")) from None
-        sheets = [t for t in tables if from_sheets([t]) is not None]  # definition sheets, not data
+        if use == "document":
+            raise ValueError(f"{source}: 표 형식 파일은 문서로 읽지 못했습니다. 테이블 데이터나 정의서로 지정해 주세요.")
+        sheets = [] if use == "data" else [t for t in tables if from_sheets([t]) is not None]  # definition sheets, not data
+        if use == "definition" and not sheets:
+            raise ValueError(f"{source}: 정의서 형식(테이블 정의서 · 코드 정의서 · 용어집)이 아니어서 정의서로 읽지 못했습니다.")
         if sheets:  # a definition workbook's cover and revision sheets are not data
             return [], from_sheets(sheets, source)
         wide = [t.name for t in tables if len(t.columns) > lim.columns]
@@ -1049,7 +1071,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         for p in fresh:
             f = wanted[p]
             try:
-                tables, defs = self._read(p.rsplit("/", 1)[-1], self.repositories.read(self.repo, p))
+                tables, defs = self._read(p.rsplit("/", 1)[-1], self.repositories.read(self.repo, p), f.get("use") or "")
             except ValueError:  # a limit that came down since: the row still says what the file is
                 continue
             self._take(p, f, tables, defs)
@@ -1271,13 +1293,14 @@ class StudioSession(SpaceMixin, PagesMixin):
             return {"ok": True, "skipped": True}
         self._room(path, len(data))
         name = path.rsplit("/", 1)[-1]
-        if Path(name).suffix.lower() in RAW_FILES:  # kept as it is: nothing to read into a draft
+        use = (self.repositories.files(self.repo).get(path) or {}).get("use") or ""  # a replaced file keeps what it was said to be
+        if use == "raw" or (not use and Path(name).suffix.lower() in RAW_FILES):  # kept as it is: nothing to read into a draft
             self.repositories.put(self.repo, path, data, facts={"kind": "raw"}, error="")
             self._release(path)
             self.event("upload", f"파일 업로드 · {name}")
             return {"ok": True, "skipped": False}
         try:
-            tables, defs = self._read(name, data)
+            tables, defs = self._read(name, data, use)
             self._keep(path, data, tables, defs)
         except ValueError as e:
             self._keep(path, data, [], None, str(e).removeprefix(name + ": "))
@@ -1311,6 +1334,33 @@ class StudioSession(SpaceMixin, PagesMixin):
     def catalog_include(self, paths: list, on: bool) -> dict:
         self.repositories.include(self.repo, [clean_path(p) for p in paths], on)
         self._hold()
+        return {"ok": True}
+
+    def catalog_use(self, path: str, use: str) -> dict:
+        """What a file is read as, said by a person: data, definition, document, raw, or '' for what its content says.
+        The file is read again that way, and the draft and the space follow."""
+        path = clean_path(path)
+        use = str(use or "")
+        if use not in USES:
+            raise ValueError("용도는 자동, 테이블 데이터, 정의서, 문서, 원본 보관 중에서 골라 주세요.")
+        files = self.repositories.files(self.repo)
+        if path not in files:
+            raise LookupError(path)
+        self.repositories.set_use(self.repo, path, use)
+        name = path.rsplit("/", 1)[-1]
+        data = self.repositories.read(self.repo, path)
+        if use == "raw" or (not use and Path(name).suffix.lower() in RAW_FILES):
+            self.repositories.put(self.repo, path, data, facts={"kind": "raw"}, error="")
+            self._release(path)
+            self.pending = None
+        else:
+            try:
+                tables, defs = self._read(name, data, use)
+                self._keep(path, data, tables, defs)
+            except ValueError as e:
+                self._keep(path, data, [], None, str(e).removeprefix(name + ": "))
+        self._sync_space()
+        self.event("use", f"파일 용도 변경 · {name} · {USE_WORD[use]}")
         return {"ok": True}
 
     def catalog_embed(self, paths: list, on: bool) -> dict:
@@ -2174,6 +2224,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
                 "rows": rows.get(t.table) if t.table else None, "states": bool(t.states), "series": bool(t.series),
+                "status": t.status,
                 "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"object:{t.name}", [])
                                 if x != comp.owner(f"object:{t.name}") and kinds.get(x) != "binding"],  # a binding only places it
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
@@ -2191,6 +2242,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                     "object": t.name, "name": pname, "label": p.label, "type": p.type, "column": p.col if not p.expr or p.transform else "",
                     "values": p.values, "labels": p.labels, "columns": p.columns, "required": p.required,
                     "mask": p.mask, "expr": "" if p.transform else p.expr, "transform": p.transform, "source_type": p.source_type,
+                    "status": p.status,
                     "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,
@@ -2201,7 +2253,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         links = [{"name": lk.name, "label": lk.label, "source": lk.source, "target": lk.target,
                   "on": list(lk.on) if lk.on else None,
                   "via": {"table": lk.via.table, "source": lk.via.source_column, "target": lk.via.target_column}
-                  if lk.via else None, "cardinality": lk.cardinality, "inverse": lk.inverse, "required": lk.required,
+                  if lk.via else None, "cardinality": lk.cardinality, "inverse": lk.inverse, "required": lk.required, "status": lk.status,
                   "pending": f"link:{lk.name}" in touched, "new": lk.name not in base.links, **owner(f"link:{lk.name}")}
                  for lk in o.links.values()]
         questions = [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
@@ -2280,6 +2332,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             "metrics": metrics, "identities": identities, "functions": functions,
             "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
             "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
+            "layout": self._layout_of(),
             "folders": self.studio.space.folders() if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
             "unread": [x["name"] for x in objects if not x["concept"] and not self._readers(f"object:{x['name']}")],
@@ -2625,17 +2678,26 @@ class StudioSession(SpaceMixin, PagesMixin):
         self._note("flow", "흐름 단계와 통과 조건을 저장했습니다.")
         return {"ok": True, "settings": fs.to_dict()}
 
-    def agreement(self) -> dict:
+    def agreement(self, pending: bool = False) -> dict:
+        """Past cases decided again; with `pending`, by the tables as the workspace's unfiled edits leave them."""
+        from xgen_space.review import agreement, trial
+
         st = self.studio
         if not st.flow.agreement:
             return {"ok": False, "error": "판정 일치율 설정이 없어 측정하지 못했습니다. 흐름 설정에서 비교할 결정표와 "
                                           "처리 기록 질의를 지정해 주세요."}
+        edited = pending and self.workspace is not None and self.workspace.dirty and st.composition is not None
         try:
-            a = st.agreement()
+            if edited:
+                ws = self.workspace
+                copy = trial(st, [*(m for m in st.composition.modules if m.name != WORKSPACE), ws.module], st.flow)
+                a = agreement(copy, st.flow.agreement)
+            else:
+                a = st.agreement()
         except Exception as e:
             return {"ok": False, "error": f"처리 기록을 판정하지 못했습니다. {type(e).__name__}: {e}"}
         d = st.onto.decisions[a["decision"]]
-        return plain({"ok": True, "label": d.label or d.name, **a})
+        return plain({"ok": True, "label": d.label or d.name, "pending": bool(edited), **a})
 
     def identities(self) -> dict:
         st = self.studio

@@ -106,11 +106,48 @@
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
   // the manual: one section per screen, in the order a first visit goes through them
   const GUIDE = [
+    ['home', '처리할 일, 운영 상태, 최근에 본 레코드와 저장한 질문을 한 화면에서 시작합니다.', [
+      '맨 위 검색 상자에 레코드 번호, 정의, 문서 내용, 질문을 넣습니다. 예: 주문상품 I1001 반품 되나요?',
+      '[보는 역할]에서 운영 담당, 도메인 전문가, 모델러를 고르면 홈의 카드 구성과 왼쪽 메뉴 순서가 그 역할에 맞게 바뀝니다.',
+      '할 일 카드는 액션 승인, 변경 요청, 출처 충돌, DB 대조 경고, 아직 요청하지 않은 정의 변경을 한 목록으로 보여 줍니다.',
+      '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [파이프라인 관제 열기]로 이어집니다.',
+      '자주 보는 레코드와 저장된 질의에서 바로 돌아갑니다. 등록 질의에는 검증됨, 지표에는 지표 표시가 붙습니다.']],
+    ['inbox', '승인할 액션, 검토할 변경 요청, 고를 출처 충돌, 점검 경고를 한 목록에서 처리합니다.', [
+      '나에게 할당, 내가 요청, 전체 탭으로 나눠 봅니다. 팀 스페이스에서는 다른 사람이 요청한 것이 나에게 할당에 옵니다.',
+      '액션 승인 행은 누가 요청했고 무엇이 얼마나 바뀌는지(예: 변화율 +16.9% · 자동 승인 한도 10% 초과)를 한 줄로 보여 주고, [승인] · [반려]로 바로 처리합니다.',
+      '변경 요청 행은 사본 시험 결과와 전보다 나빠진 통과 조건을 보여 주고, [검토]로 항목별 검토 화면을 엽니다.',
+      '출처 충돌은 [고르기]로 출처를 고릅니다. 고른 것은 대기 중인 변경이 되어 변경 요청과 승인을 거칩니다.',
+      '점검 경고는 [조치 보기]로 원인 · 영향 · 조치 패널을 엽니다.']],
+    ['records', '객체의 레코드를 번호나 이름으로 찾고, 한 건을 열어 속성, 연결, 판정, 문서, 이력을 한 페이지에서 봅니다.', [
+      '타입을 고르고 번호나 이름의 일부를 넣어 찾습니다. 이름이 없는 레코드는 그것이 속한 레코드의 이름으로 읽습니다.',
+      '레코드 페이지의 머리글은 핵심 값, 상태 전이의 지금 단계와 다음 단계, 할 수 있는 액션과 함수를 보여 줍니다. 역할을 고르면 그 역할이 요청할 수 있는 액션만 남습니다.',
+      '연결 탭은 따라간 레코드를 들여쓰기로 보여 주고 누르면 그 레코드로 이동합니다. 가림 속성은 가린 채로 보입니다.',
+      '판정 탭은 이 레코드에 적용되는 결정표와 함수를 열 때 계산해 보여 줍니다. 기록은 남기지 않습니다.',
+      '문서 탭은 이 레코드나 타입을 언급한 문서의 절을 모읍니다. 이력 탭은 원천의 날짜, 사람과 Agent의 요청, 승인을 한 시간순으로 보여 줍니다.']],
+    ['graph', '레코드 하나에서 출발해 관계 종류별 개수를 보고 펼치는 지식그래프 탐색입니다.', [
+      '검색 상자에 레코드를 적고 Enter로 시작합니다. 관계마다 연결된 레코드 수가 보이고, 고른 관계만 펼칩니다. 한 번에 25개까지 펼치고 넘으면 묶음으로 둡니다.',
+      '노드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색이 다릅니다.',
+      '경로 찾기에서 시작과 도착 레코드를 적으면 둘을 잇는 가장 짧은 관계 사슬을 찾아 주황색으로 강조합니다. 경로는 온톨로지 질의로 실행되므로 SQL 원천에서도 됩니다.',
+      '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있어 역할마다 다른 관점을 둡니다.',
+      '탐색 기록에서 지나온 단계로 돌아가고, [링크 복사]로 지금 시작 레코드를 다른 사람에게 보냅니다.']],
+    ['model', '객체 · 속성 · 관계를 캔버스, 표, 폼, YAML 어느 쪽에서 고쳐도 같은 요소에 반영되는 모델링 작업 공간입니다.', [
+      '왼쪽은 모듈별 객체 트리(객체 · 원천 · 문제 · 변경), 가운데는 캔버스, 오른쪽은 고른 객체의 폼 · 데이터 · 사용처 · YAML · 댓글입니다. [표]로 바꾸면 객체 · 속성 · 관계가 3열로 섭니다.',
+      '캔버스의 카드에는 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 카드 테두리의 +를 다른 카드에 끌어 놓으면 연결 기준을 제안받아 관계를 만들고, 원천의 컬럼을 카드에 끌어 놓으면 속성이 됩니다.',
+      '요소마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인데 읽는 곳이 남아 있으면 사용처에 표시됩니다.',
+      '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장한 변경은 대기 중인 변경에 쌓이고 하나씩 되돌리거나 다시 실행할 수 있습니다.',
+      '[사본에서 시험]은 대기 중인 변경을 사본 스페이스에 적용해 통과 조건을 전후로 비교합니다. [변경 요청 만들기]로 검토와 승인으로 보냅니다.',
+      '카드 위치는 스페이스에 저장되어 같은 파이프라인을 여는 모두가 같은 배치를 봅니다.']],
+    ['changes', '변경 요청을 항목별로 검토하고 전후 시험 결과를 보며 승인합니다.', [
+      '머리글에 상태, 작성자, 검토자, 진행률이 보입니다. 작성자는 자기 변경을 승인할 수 없습니다.',
+      '바뀐 항목마다 [확인] 또는 [수정 요청]을 남깁니다. 규칙, 속성, 관계는 칸별 의미 비교와 YAML 비교로 봅니다.',
+      '사본에서 시험한 결과는 통과 조건마다 전 → 후 숫자로 보여 주고, 실패한 검증 질문은 바로 열어 기대값 제안을 받을 수 있습니다.',
+      '댓글은 항목에 붙어 승인 뒤에도 남습니다. 모든 항목을 확인하고 통과 조건을 지켜야 승인 버튼이 켜집니다.',
+      '라이브러리 탭에서 모듈을 적용 · 해제하고 모듈 파일을 편집합니다.']],
     ['monitor', '원천 데이터부터 검증까지 파이프라인 상태를 단계별로 확인합니다.', [
       '원천 데이터, 변환, 온톨로지 구축, 저장소 어댑터, 활용, 검증 순서로 데이터를 처리합니다.',
       '단계별 수치는 2초마다 갱신합니다. 정의나 파일이 바뀌면 즉시, 그 밖에는 20초마다 파이프라인을 점검합니다.',
       '수치를 선택하면 해당 화면으로 이동합니다. 상단 탭에서 단계를 선택하면 해당 단계를 강조합니다.',
-      '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 연쇄 장애에서 원인 경로를 확인합니다.',
+      '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 알림을 누르면 원인 · 영향 · 조치 패널이 열리고, 고칠 칸으로 바로 이동한 뒤 다시 측정해 닫힙니다.',
       '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
       '사이드바 아래 [연결]은 저장소, 쿼리 언어, 연동 항목이 지금 응답하는지 30초마다 확인해 표시합니다. 초록은 응답, 빨강은 응답 없음, 회색은 사용하지 않거나 아직 호출하지 않은 항목입니다.',
       '[장애 테스트]를 선택하면 설정한 장애 시나리오를 적용해 알림과 원인 경로를 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
@@ -134,7 +171,9 @@
       '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
       '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다. 이미지, 영상, 압축 파일은 원본으로 보관합니다.',
       '초안 열의 선택을 해제하면 파일 또는 폴더를 초안, 변환 결과, 검색, 문서 온톨로지에서 모두 제외합니다.',
-      '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 삭제를 합니다.',
+      '파일마다 무엇이 될지(테이블 데이터, 정의서, 문서, 원본 보관)와 처리 경로가 업로드 직후 표시됩니다. 내용과 다르게 읽혔으면 작업 메뉴의 용도에서 바꿉니다. 바꾸면 그 용도로 다시 읽고 초안과 검색이 따라옵니다.',
+      '업로드가 끝나면 올린 파일이 무엇이 되었는지와 다음 단계(초안 검토)를 바로 안내합니다.',
+      '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 용도, 삭제를 합니다.',
       '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
     ['db', '데이터베이스를 연결해 온톨로지 초안을 생성합니다.', [
       'PostgreSQL, MySQL, Oracle, SQL Server 주소 또는 SQLite 파일 경로를 입력하고 [연결]을 선택합니다. 서버가 DB 주소 연결을 허용한 경우에 입력 칸이 표시됩니다.',
@@ -148,31 +187,35 @@
       '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
       '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 작업 공간에서 객체로 추가합니다.',
       '파일 업로드는 [데이터 카탈로그], DB 연결은 [DB 연결]에서 합니다.']],
-    ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 생성하고 스페이스에 적용합니다.', [
+    ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 만들고, 제안을 단계별로 검토해 스페이스에 적용합니다.', [
       '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
-      '생성 설정에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의를 지정하고 초안에 넣을 테이블을 선택합니다.',
-      '[초안 생성]을 선택하면 테이블 읽기, 객체와 키, 속성과 타입, 관계, 등록 질의, Binding 순서로 초안이 생성됩니다.',
+      '[생성 설정]에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의, 비교할 표준 모듈을 지정합니다.',
+      '[초안 생성]을 선택하면 파일 선택, 객체 · 키, 속성 · 타입, 관계, 질의, 상태 · 규칙, 검토 · 적용 순서의 단계가 생기고, 단계마다 사람이 확인할 개수가 붙습니다.',
+      '객체 · 키 단계에서 테이블마다 표준 객체와 얼마나 맞는지 점수가 보이고, [표준에 연결]과 [새 객체로 유지] 중에 고릅니다. 영문 이름은 표준과 용어사전의 말로 제안하고, 모르는 말만 로마자로 남깁니다.',
+      '행을 고르면 오른쪽에 샘플 값, 키 근거, 일치 근거, 가림 권장 속성이 보입니다. [남은 제안 모두 채택]으로 남은 것을 한 번에 채택합니다.',
       'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOC, DOCX, PPT, PPTX, HWP, HWPX, PDF 문서와 XLS, XLSX 파일을 함께 사용할 수 있습니다.',
       '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 통합합니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
-      '규칙 · 역할 · 검증 단계에서 상태 전이, 역할, 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
-      '[표준에 연결]에서 표준 모듈을 선택하면 테이블과 컬럼을 표준 객체와 속성에 Mapping한 제안이 표시됩니다. 내용을 확인하고 수정한 뒤 [표준에 연결해 적용]을 선택합니다.',
-      '[스페이스에 적용]을 선택하면 새 파이프라인으로 추가되고 모든 화면이 해당 데이터 기준으로 변경됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.']],
-    ['objects', '객체의 라벨, 원천 테이블, 키, 상위 객체를 관리합니다.', [
-      '[새 객체]에서 원천 테이블을 선택하면 키와 속성이 테이블 컬럼 기준으로 입력됩니다.',
-      '표준 모듈의 객체를 변경하면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 변경되지 않습니다. 키는 정의한 모듈에서만 바꿀 수 있습니다.',
-      '[객체 제외]를 선택하면 해당 객체를 사용하는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다.',
-      '관계가 없는 객체는 화면 위에 표시됩니다. [관계 관리]에서 관계를 추가하세요.',
-      '대기 중인 변경에서 [변경 요청]을 선택하면 사본 스페이스에서 흐름 통과 조건을 검토하고, 승인 후 모든 화면에 반영됩니다. [변경 취소]로 되돌립니다.']],
-    ['props', '객체별 속성의 라벨, 자료형, 원천 컬럼, 허용값, 단위, 필수, 가림을 관리합니다.', [
-      '객체를 선택하거나 검색어를 입력해 속성을 필터링합니다. 상위 객체의 속성은 상속으로 표시됩니다.',
+      '상태 · 규칙 단계에서 상태 전이와 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
+      '검토 · 적용 단계는 적용하면 만들어질 모듈 파일과 정의 검사 결과를 보여 줍니다. [스페이스에 적용]을 선택하면 표준에 연결한 테이블은 Binding으로, 새 객체는 표준 옆의 모듈로 들어가 새 파이프라인이 됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.',
+      '팀 스페이스에서는 적용이 공유 공간을 바꾸므로 승인자가 적용합니다. 편집자가 검토한 내용은 그대로 남습니다.']],
+    ['objects', '작업 공간의 표 보기입니다. 객체 · 속성 · 관계가 3열로 서고, 객체를 고르면 나머지 두 열이 따라옵니다.', [
+      '행을 누르면 그 아래에 수정 폼이 열립니다. [+ 객체]에서 원천 테이블을 고르면 키와 속성이 테이블 컬럼 기준으로 채워집니다.',
+      '표준 모듈의 객체를 바꾸면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 그대로입니다. 키는 정의한 모듈에서만 바꿉니다.',
+      '객체마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인 객체를 아직 읽는 질의 · 판정이 있으면 사용처에 표시됩니다.',
+      '[객체 제외]를 누르면 그 객체를 쓰는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다. 하위 객체가 있는 객체는 하위의 상위를 먼저 바꿔야 제외됩니다.',
+      '관계가 없는 객체는 왼쪽 트리와 카드에 표시됩니다. 캔버스나 [+ 관계]에서 관계를 추가하세요.',
+      '저장한 변경은 작업 공간 위쪽의 [변경] 패널에 쌓입니다. [사본에서 시험] 뒤 [변경 요청 만들기]로 검토와 승인에 보냅니다.']],
+    ['props', '작업 공간 표 보기의 속성 열입니다. 라벨, 자료형, 원천 컬럼, 변환식, 허용값, 단위, 필수, 가림, 상태를 고칩니다.', [
+      '객체를 고르거나 열 위의 검색 칸에 적어 속성을 거릅니다. 상위 객체의 속성은 상속으로 표시됩니다.',
       '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가합니다.',
+      '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장할 때가 아니라 적을 때 보입니다.',
       '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 객체에서 제외합니다.']],
-    ['links', '객체 사이의 관계와 연결 기준 컬럼, Cardinality, 역관계를 관리합니다.', [
-      '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 위에 표시됩니다. [관계 추가]로 바로 추가합니다.',
-      '[새 관계]에서 출발 객체와 속성, 도착 객체와 속성을 선택하면 두 속성 값이 같은 행끼리 연결됩니다.',
-      '표준 모듈의 관계는 라벨, Cardinality, 역관계, 필수 여부만 바꿀 수 있습니다.',
-      '관계 그래프는 [온톨로지]에서 확인합니다.']],
+    ['links', '작업 공간 표 보기의 관계 열입니다. 연결 기준 컬럼, Cardinality, 역관계, 필수 여부, 상태를 고칩니다.', [
+      '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 제안으로 표시됩니다. 캔버스에서는 카드 테두리의 +를 다른 카드에 끌어 놓아 만듭니다.',
+      '[+ 관계]에서 출발 객체와 속성, 도착 객체와 속성을 고르면 두 속성 값이 같은 행끼리 연결됩니다. 연결 기준 제안과 실제로 연결되는 행의 비율이 보입니다.',
+      '표준 모듈의 관계는 라벨, Cardinality, 역관계, 필수 여부, 상태만 바꿀 수 있습니다.',
+      '관계 전체 그림은 [온톨로지]에서, 레코드 사이의 실제 연결은 [그래프 탐색]에서 봅니다.']],
     ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, Binding, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
       '적용 스위치를 끄면 함께 해제되는 모듈과 제거되는 항목을 먼저 표시합니다.',
       '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 변경됩니다. 해제하면 스페이스 설정으로 복원됩니다.',
@@ -182,15 +225,13 @@
       '[편집]을 선택하면 모듈 정의 파일에서 객체, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
-    ['onto', '객체 간 관계를 그래프로 확인합니다.', [
-      'Node를 선택하면 이웃만 강조되고 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. 빈 영역을 선택하면 강조가 해제됩니다.',
-      '색은 모듈별입니다. 모듈이 하나면 데이터에서 찾은 Community별로 표시합니다. 크기는 연결 수입니다. 표시 설정에서 색상 기준과 라벨을 바꿉니다.',
-      'Node가 많으면 군집 묶음으로 표시합니다. 묶음을 선택하면 펼쳐지고, 왼쪽 도구에서 전체 접기와 펼치기를 선택합니다.',
-      'Node를 선택하면 1단계, 2단계 이웃만 표시합니다. [경로 보기]로 두 Node 사이의 경로를 확인합니다. 빈 영역을 선택하면 전체 보기로 돌아갑니다.',
-      'Node 검색에서 이름, 객체명, 테이블명으로 찾습니다. 왼쪽 도구에서 레이아웃 선택, 회전, 화면 맞춤, 확대, 전체 화면을 사용합니다. Node는 드래그로 이동할 수 있습니다.',
-      '식별 통합 객체를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.',
-      '관계를 선택하면 연결된 객체로 이동합니다.',
-      '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
+    ['onto', '객체와 관계 전체를 카드로 펼쳐 보고, 카드를 누르면 연결된 카드만 모아 봅니다.', [
+      '모듈마다 영역으로 묶인 카드에 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 확대 · 축소와 화면 맞춤으로 전체를 훑습니다.',
+      '카드를 누르면 그 카드가 가리키는 것은 오른쪽, 그것을 가리키는 것은 왼쪽, 상위는 위, 하위는 아래에 모이고 나머지는 흐려집니다. 다른 카드를 누르면 초점이 옮겨 가고, 빈 곳이나 Esc, [전체 보기]로 돌아옵니다.',
+      '오른쪽 정의에는 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. [작업 공간에서 열기]로 바로 고칩니다.',
+      '관계를 선택하면 연결된 객체로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
+      '레코드 단위의 지식그래프는 [그래프 탐색]에서, 파일 · 테이블 · 문서까지 아우르는 연결은 [자산 그래프]에서 봅니다.',
+      '식별 통합 객체를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.']],
     ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어와 연결됩니다.', [
       '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
       '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
@@ -227,11 +268,14 @@
       '다른 사용자나 Agent가 요청한 건은 승인 대기 요청에서 승인하거나 반려합니다.',
       '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
-    ['mgrules', '결정표의 규칙과 규칙이 참조하는 기준값을 입력 폼으로 관리합니다.', [
-      '규칙을 선택하면 입력값별 조건, 적용 결과, 출처를 수정합니다. 위에 있는 규칙이 먼저 적용됩니다.',
-      '[규칙 추가]로 새 규칙을 만들고, [새 결정표]로 새 판정을 만듭니다.',
-      '기준값을 선택하면 값을 변경합니다. 이 값을 참조하는 규칙이 함께 변경됩니다.',
-      '변경 내용은 대기 중인 변경에 쌓이고, [변경 요청]을 선택하면 사본에서 검토한 뒤 승인되면 판정에 반영됩니다. 표준 모듈은 변경되지 않습니다.']],
+    ['mgrules', '결정표를 편집하면서 바로 검사하고 시뮬레이션하고 시험합니다.', [
+      '머리글의 칩에 적용 방식(위에서 첫 규칙, 우선순위 등)과 규칙을 가져온 모듈이 보입니다. 적용 방식은 칩에서 바꿉니다.',
+      '표의 칸을 누르면 그 자리에서 고칩니다. 조건은 비교 방식과 값으로 적고 표에는 사람 말(예: 14일 이하)로 보입니다. 행은 끌어서 순서를 바꾸고, 규칙마다 출처 조항이 칩으로 붙습니다.',
+      '표 위의 검사는 겹침, 도달 불가, 빈 구간을 세고 해당 행을 같은 색으로 표시합니다.',
+      '시뮬레이션에서 레코드를 불러오거나 입력값을 바꿔 보면 어느 규칙이 답하는지와, 어떤 입력 하나를 바꾸면 다른 결과가 나오는지 알려 줍니다. 편집 중인 표 기준입니다.',
+      '테스트는 과거 판정 다시 계산(편집 중인 표로), 경계값 자동 생성, 이 결정표를 쓰는 검증 질문을 편집 중에 바로 돌립니다.',
+      '기준값을 바꾸면 그 값을 참조하는 규칙과 사유 문장({@이름})이 함께 바뀝니다. [규칙 추가]로 새 규칙을, [새 결정표]로 새 판정을 만들고, [ZEN 내보내기]로 GoRules 형식으로 내려받습니다.',
+      '변경 내용은 대기 중인 변경에 쌓이고, [변경 요청]을 누르면 사본에서 검토한 뒤 승인되면 판정에 반영됩니다. 표준 모듈은 변경되지 않습니다.']],
     ['mgfuncs', '계산, 판정, 외부 모델을 입출력 · 버전 · 담당이 있는 함수로 등록합니다.', [
       '[새 함수]에서 실행 방식을 선택합니다. 계산식은 저장소 언어로 변환되고, 결정표와 등록 질의는 이름으로 연결합니다.',
       'Python과 외부 호출은 설치 환경에서 허용한 항목만 실행합니다.',
@@ -275,6 +319,12 @@
   // why a screen works the way it does, next to what it does: the help drawer and the manual show it
   const WHY = {
     monitor: '앞 단계가 통과 조건을 충족하지 못하면 뒤 단계의 결과도 신뢰할 수 없습니다. 중단된 단계와 원인 경로를 먼저 확인합니다.',
+    home: '온톨로지를 쓰는 사람은 파이프라인이 아니라 할 일에서 시작합니다. 승인 · 검토 · 충돌 선택을 한곳에 모아 두어야 메뉴를 뒤지지 않습니다.',
+    inbox: '무엇이 왜 얼마나 바뀌는지를 한 줄로 보여야 승인하는 사람이 열어 보지 않고도 판단합니다.',
+    records: '레코드 한 건의 값 · 연결 · 판정 · 문서 · 이력을 한 페이지에 모아야 상담원과 승인자가 여러 화면을 오가지 않습니다.',
+    graph: '전체 그림 대신 레코드 하나에서 개수를 보고 펼쳐야 큰 데이터에서도 읽을 수 있습니다. 경로는 온톨로지 질의로 실행되어 저장소에 매이지 않습니다.',
+    model: '보는 곳과 고치는 곳이 같아야 바꾼 결과를 바로 확인합니다. 어느 쪽에서 고쳐도 같은 요소이고, 적용 전에 사본에서 시험합니다.',
+    changes: '변경을 항목별로 검토하고 전후 숫자를 봐야 어디가 나빠졌는지 알 수 있습니다. 댓글은 항목에 남아 승인 뒤에도 이유가 남습니다.',
     flow: '여기서 지정한 통과 조건은 변경 요청을 검토할 때도 같은 기준으로 적용됩니다.',
     explorer: '파일만이 아니라 스페이스가 담은 모든 데이터를 같은 탐색기와 같은 검색으로 다뤄, 무엇이 어디에 있고 어떤 처리를 거쳤는지 한 화면에서 확인합니다.',
     map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 객체, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
@@ -304,9 +354,15 @@
     check: '검증 질문은 정답이 정해진 질문입니다. 정의나 규칙을 바꾼 뒤에도 같은 답을 내는지 확인하는 기준이 됩니다.',
     bind: '정의와 원천이 어긋나면 질의가 빈 결과나 잘못된 값을 반환합니다. 모듈을 바꾼 뒤에는 원천과 대조합니다.',
   };
-  const START = [['monitor', '상태 확인', '원천부터 검증까지 단계별 상태를 확인합니다'], ['catalog', '데이터 업로드', '파일, 폴더, 문서를 업로드합니다'],
-    ['data', '온톨로지 구축', '파일 기준으로 초안을 생성하고 적용합니다'], ['search', '검색 · 질의', '문서 검색, 질의, 판정을 실행합니다'],
-    ['connect', '외부 연동', 'MCP와 REST로 외부 플랫폼과 연동합니다']];
+  // the order a person builds an ontology in, as the guide and the home's first steps show it
+  const START = [['catalog', '1 데이터 가져오기', '파일, 폴더, 문서를 올리거나 DB를 연결합니다. 파일마다 무엇이 될지 확인합니다'],
+    ['data', '2 초안 검토', '테이블마다 표준에 연결할지 새 객체로 둘지 고르고, 영문 이름 · 키 · 속성 · 관계 제안을 채택합니다'],
+    ['model', '3 모델링', '작업 공간의 캔버스에서 객체 · 속성 · 관계를 다듬고, 사본에서 시험합니다'],
+    ['mgrules', '4 규칙 · 액션', '결정표를 편집하면서 시뮬레이션하고, 액션과 권한을 정합니다'],
+    ['changes', '5 변경 요청', '항목별로 검토하고 전후 결과를 보며 승인합니다'],
+    ['check', '6 검증', '검증 질문 · DB 대조 · 흐름 통과 조건으로 지키는지 확인합니다'],
+    ['search', '7 사용', '홈에서 묻고, 레코드와 그래프로 찾고, 판정 · 처리합니다'],
+    ['connect', '8 연동', 'MCP와 REST로 Agent와 외부 플랫폼이 같은 공간을 씁니다']];
   const GUIDE_USE = [
     ['통합 관리', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 한 공간에서 관리합니다.'],
     ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
@@ -362,12 +418,12 @@
     cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false,
     mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
     home: { role: 'ops', box: null, busy: false, tab: 'assigned', q: '' },
-    rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', params: {}, fn: {}, tab: 'overview' },
+    rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', seeAs: '', params: {}, fn: {}, tab: 'overview' },
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
-      q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [] },
+      q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [], views: null, color: {}, labelBy: {} },
     ov: { sel: '', pos: {} },
     md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false,
       view: 'diagram', arrive: '', cq: { objects: '', props: '', links: '' }, left: 'objects', leftOff: false, rightOff: false, list: 'props', hot: null, draft: null, only: false, src: {}, data: null, wide: true, posFor: '' },
@@ -595,6 +651,7 @@
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
     if (S.tab === 'graph' && $('#gxcanvas')) { mountGx(); gxPaint(); }
+    if (S.tab === 'graph' && !S.gx.views) gxLoadViews();
     if (S.tab === 'model' && S.md.view === 'diagram') mountEr();
     if (S.tab === 'model') hotField();
     if (S.tab === 'model' && S.md.arrive && $(`#col-${S.md.arrive}`)) { $(`#col-${S.md.arrive}`).scrollIntoView({ block: 'nearest', inline: 'nearest' }); S.md.arrive = ''; }
@@ -703,7 +760,7 @@
     let meta = '', buttons = '';
     if (x.kind === 'action') {
       meta = [`${x.by}${x.by_kind === 'agent' && !/agent/i.test(x.by) ? ' · Agent' : ''} 요청`, x.change, x.failed.length ? `검사 미통과 ${x.failed.join(', ')}` : '판정 · 권한 검사 통과',
-        x.outside ? '자동 승인 한도 밖' : ''].filter(Boolean).join(' · ');
+        x.delta || (x.outside ? '자동 승인 한도 밖' : '')].filter(Boolean).join(' · ');
       buttons = `<button class="btn sm" data-act="rec" data-type="${esc(x.target)}" data-key="${esc(x.key)}">레코드</button>${x.mine && !S.home.box.alone ? ''
         : `<button class="btn sm primary" data-act="ibapprove" data-id="${esc(x.id)}">승인</button><button class="btn sm" data-act="ibreject" data-id="${esc(x.id)}">반려</button>`}`;
     } else if (x.kind === 'change') {
@@ -727,7 +784,7 @@
   function inboxCard(limit) {
     const h = S.home, box = h.box;
     if (!box) return '<div class="card"><div class="ch">할 일</div><div class="cb"><div class="empty"><span class="spin"></span>불러오는 중입니다.</div></div></div>';
-    const tabs = INBOX_TAB.map(([k, w]) => `<button class="${h.tab === k ? 'on' : ''}" data-act="ibtab" data-k="${k}">${w} ${box.counts[k]}</button>`).join('');
+    const tabs = INBOX_TAB.map(([k, w]) => `<button class="${h.tab === k ? 'on' : ''}" data-act="ibtab" data-k="${k}">${k === 'all' && S.me && S.me.team ? '팀 전체' : w} ${box.counts[k]}</button>`).join('');
     const shown = inboxShown(h.tab);
     const rows = (limit ? shown.slice(0, limit) : shown).map(inboxRow).join('');
     const more = limit && shown.length > limit ? `<div class="ibmore"><a href="#inbox">할 일 ${shown.length}건 모두 보기</a></div>` : '';
@@ -766,8 +823,11 @@
 
   function savedCard() {
     const checked = new Set(S.st.questions.map((q) => q.query).filter(Boolean));
+    if (!S.ru && !S.home.ruBusy) { S.home.ruBusy = true; api('rules').then((x) => { S.ru = x; if (S.tab === 'home') render(); }).catch(() => {}).finally(() => { S.home.ruBusy = false; }); }
+    const metrics = ((S.ru && S.ru.metrics) || []).slice(0, 3).map((m) => `<a class="hrow" href="#rules"><b>${esc(m.label || m.name)}</b><span class="chip sm" style="margin-left:auto">지표</span></a>`);
     const rows = [...askedBefore().slice(0, 2).map((q) => `<button class="hrow" data-act="homeask" data-q="${esc(q)}"><b>${esc(q)}</b><span class="chip sm" style="margin-left:auto">최근 질문</span></button>`),
-      ...S.st.queries.slice(0, 5).map((q) => `<button class="hrow" data-act="homeq2" data-q="${esc(q.name)}"><b>${esc(q.label)}</b><span class="chip sm ${checked.has(q.name) ? 'ok' : 'b'}" style="margin-left:auto">${checked.has(q.name) ? '검증됨' : '등록 질의'}</span></button>`)].join('');
+      ...S.st.queries.slice(0, 5).map((q) => `<button class="hrow" data-act="homeq2" data-q="${esc(q.name)}"><b>${esc(q.label)}</b><span class="chip sm ${checked.has(q.name) ? 'ok' : 'b'}" style="margin-left:auto">${checked.has(q.name) ? '검증됨' : '등록 질의'}</span></button>`),
+      ...metrics].join('');
     return `<div class="card"><div class="ch">저장된 질의<div class="right"><a class="btn sm ghost" href="#query">질의 ${S.st.queries.length}</a></div></div><div class="cb" style="padding:6px 8px">${rows || '<div class="empty" style="padding:8px">등록 질의가 없습니다.</div>'}</div></div>`;
   }
 
@@ -874,7 +934,12 @@
   function recordHead(d) {
     const st = d.state, r = S.rec;
     const shown = d.props.filter((p) => !p.key && p.name !== (st && st.property) && p.value !== null && p.value !== '' && typeof p.value !== 'boolean').slice(0, 4);
-    const acts = d.actions.map((a) => `<button class="btn sm${a.ready ? ' primary' : ''}" data-act="recact" data-name="${esc(a.name)}"${a.ready ? '' : ` disabled title="지금 상태 ${esc(st ? st.now : '')}에서는 할 수 없습니다"`}>${esc(a.label)}</button>`).join('');
+    // the actions a role may request: with a role picked, the others are not shown at all
+    const roles = [...new Map(d.actions.flatMap((a) => a.roles).map((x) => [x.name, x])).values()];
+    const allowed = d.actions.filter((a) => !r.seeAs || a.roles.some((x) => x.name === r.seeAs));
+    const acts = allowed.map((a) => `<button class="btn sm${a.ready ? ' primary' : ''}" data-act="recact" data-name="${esc(a.name)}"${a.ready ? '' : ` disabled title="지금 상태 ${esc(st ? st.now : '')}에서는 할 수 없습니다"`}>${esc(a.label)}</button>`).join('')
+      + (roles.length && d.actions.length ? `<select data-in="recrole" class="rrole" aria-label="보는 역할" title="역할을 고르면 그 역할이 요청할 수 있는 액션만 보입니다"><option value="">모든 역할</option>${roles.map((x) => `<option value="${esc(x.name)}"${r.seeAs === x.name ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>` : '')
+      + (r.seeAs && allowed.length < d.actions.length ? `<span class="muted" style="font-size:12px">이 역할에 없는 액션 ${d.actions.length - allowed.length}개는 숨겼습니다</span>` : '');
     const fns = d.functions.map((f) => `<button class="btn sm" data-act="recfn" data-name="${esc(f.name)}">${esc(f.label)}</button>`).join('');
     let steps = '';
     if (st) {
@@ -1047,8 +1112,11 @@
   }
 
   function unknownCard(res) {
+    const ask = (res.ask || []).map((a) => `<span class="chip warn">${esc(a.about)} 담당 ${esc(a.who)}에게 요청</span>`).join('');
     return `<div class="banner no"><span class="ic x" style="width:30px;height:30px;font-size:16px">?</span><div><div class="big">답하지 않았습니다</div>
-      <div class="why">${esc(res.answer)} 근거 없이 추측하지 않습니다.</div><div class="cite">번호, 이름, 정의된 용어를 넣어 다시 묻거나 <a href="#records">레코드 탐색</a>에서 찾아 주세요.</div></div></div>`;
+      <div class="why">${esc(res.reason || res.answer)} 근거 없이 추측하지 않습니다.</div>
+      <div class="chips" style="margin-top:8px"><span class="chip bad">모름 · 추측하지 않음</span>${ask}<button class="chip" data-act="srbuild">질의 직접 만들기</button><a class="chip" href="#records">레코드 탐색</a></div>
+      <div class="cite" style="margin-top:6px">번호, 이름, 정의된 용어를 넣어 다시 묻거나, 등록 질의를 만들어 두면 다음부터 데이터에서 바로 답합니다.</div></div></div>`;
   }
 
   // ---- a change request, element by element ------------------------------------------------------------------------
@@ -1311,18 +1379,52 @@
       <div class="rplist">${rows}${say}${r.more ? `<button class="btn sm" data-act="rpmore"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>' : '더 보기'}</button>` : ''}</div></div>`;
   }
 
-  // what this viewer keeps of how they like to see records: which types are shown, under a name
-  const gxViews = () => { try { return JSON.parse(localStorage.getItem('xspace-views') || '{}'); } catch (e) { return {}; } };
+  // how a group of people like to see records, under a name the studio keeps for everyone (graph/views): which types
+  // are shown, each type's colour, and the property that names a type's records
+  const gxViews = () => S.gx.views || {};
+  async function gxLoadViews() {
+    if (S.gx.views) return;
+    try { S.gx.views = (await api('graph/views')).views || {}; } catch (e) { S.gx.views = {}; }
+    if (S.tab === 'graph') render();
+  }
+  function gxApplyView(name) {
+    const v = gxViews()[name];
+    S.gx.view = v ? name : '';
+    S.gx.hide = v ? [...(v.hide || [])] : [];
+    S.gx.color = v ? { ...(v.color || {}) } : {};
+    S.gx.labelBy = v ? { ...(v.label || {}) } : {};
+    gxFetchLabels().then(() => { if (S.tab === 'graph') render(); });
+  }
+  async function gxFetchLabels() {  // the naming property of a perspective, read for the records on the canvas that lack it
+    const by = S.gx.labelBy || {};
+    const jobs = [];
+    for (const [type, prop] of Object.entries(by)) {
+      const keys = Object.values(S.gx.nodes).filter((n) => n.type === type && (n.altFor !== prop)).map((n) => n.key);
+      if (!keys.length) continue;
+      jobs.push(api(`records/labels?type=${encodeURIComponent(type)}&prop=${encodeURIComponent(prop)}&keys=${encodeURIComponent(keys.join(','))}`)
+        .then((r) => { for (const n of Object.values(S.gx.nodes)) if (n.type === type) { n.alt = r.labels[n.key] === undefined ? '' : String(r.labels[n.key]); n.altFor = prop; } }).catch(() => {}));
+    }
+    for (const n of Object.values(S.gx.nodes)) if (n.alt !== undefined && !by[n.type]) { delete n.alt; delete n.altFor; }
+    await Promise.all(jobs);
+  }
 
   function gxViewCard() {
     const g = S.gx, views = gxViews();
     const types = [...new Set(Object.values(g.nodes).map((n) => n.type))].filter((t) => t !== 'bundle');
-    const ticks = types.map((t) => `<label class="tick"><input type="checkbox" data-in="gxshow" data-t="${esc(t)}"${g.hide.includes(t) ? '' : ' checked'}>${esc((S.st.graph.nodes.find((x) => x.id === t) || {}).label || t)}</label>`).join('');
-    return `<div class="card"><div class="ch">관점</div><div class="cb">
-      ${Object.keys(views).length ? `<select data-in="gxview" aria-label="저장한 관점" style="width:100%;margin-bottom:8px"><option value="">저장한 관점 고르기</option>${Object.keys(views).map((k) => `<option value="${esc(k)}"${g.view === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
-      ${ticks ? `<div class="gxticks">${ticks}</div>` : '<div class="muted" style="font-size:12px">레코드를 펼치면 보여 줄 타입을 고를 수 있습니다.</div>'}
-      <div class="muted" style="font-size:11.5px;margin-top:6px">보여 줄 타입을 관점으로 저장해 역할마다 다르게 씁니다. 이 브라우저에만 저장됩니다.</div>
-      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm" data-act="gxviewsave"${ticks ? '' : ' disabled'}>관점 저장</button><button class="btn sm" data-act="gxlink"${g.seed.key ? '' : ' disabled'}>링크 복사</button></div></div></div>`;
+    const propsOf = (t) => ((S.mg.st && S.mg.st.properties) || []).filter((p) => p.object === t).map((p) => [p.name, p.label || p.name]);
+    const rows = types.map((t) => {
+      const [ink] = gxColor(t), node = S.st.graph.nodes.find((x) => x.id === t) || {};
+      const props = propsOf(t);
+      return `<div class="gxvrow"><label class="tick" style="margin:0"><input type="checkbox" data-in="gxshow" data-t="${esc(t)}"${g.hide.includes(t) ? '' : ' checked'}>${esc(node.label || t)}</label>
+        <input type="color" data-in="gxcolor" data-t="${esc(t)}" value="${esc(ink)}" aria-label="${esc(node.label || t)} 색" title="색">
+        ${props.length ? `<select data-in="gxlabel" data-t="${esc(t)}" aria-label="${esc(node.label || t)} 라벨 속성" title="레코드를 부를 속성"><option value="">기본 이름</option>${props.map(([n, l]) => `<option value="${esc(n)}"${(g.labelBy || {})[t] === n ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}</div>`;
+    }).join('');
+    if (!S.mg.st && types.length && !S.mg.busy) { S.mg.busy = true; api('manage').then((x) => { S.mg.st = x; }).catch(() => {}).finally(() => { S.mg.busy = false; if (S.tab === 'graph') render(); }); }
+    return `<div class="card"><div class="ch">관점${g.view ? `<span class="chip sm b" style="margin-left:6px">${esc(g.view)}</span>` : ''}</div><div class="cb">
+      ${Object.keys(views).length ? `<select data-in="gxview" aria-label="저장한 관점" style="width:100%;margin-bottom:8px"><option value="">저장한 관점 고르기</option>${Object.keys(views).map((k) => `<option value="${esc(k)}"${g.view === k ? ' selected' : ''}>${esc(k)}${views[k].by ? ` · ${esc(views[k].by)}` : ''}</option>`).join('')}</select>` : ''}
+      ${rows ? `<div class="gxticks">${rows}</div>` : '<div class="muted" style="font-size:12px">레코드를 펼치면 보여 줄 타입, 색, 레코드를 부를 속성을 고를 수 있습니다.</div>'}
+      <div class="muted" style="font-size:11.5px;margin-top:6px">보여 줄 타입, 색, 레코드를 부를 속성을 관점으로 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 역할마다 다른 관점을 둘 수 있습니다.</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" data-act="gxviewsave"${rows ? '' : ' disabled'}>관점 저장</button>${g.view ? '<button class="btn sm ghost danger" data-act="gxviewforget">이 관점 지우기</button>' : ''}<button class="btn sm" data-act="gxlink"${g.seed.key ? '' : ' disabled'}>링크 복사</button></div></div></div>`;
   }
 
   function gxInfo(id) {  // what the side says of a record: a few values and what the rules say of it now
@@ -1344,11 +1446,14 @@
 
   function gxColor(type) {
     if (type === 'bundle') return ['#667085', '#ffffff'];
+    const own = (S.gx.color || {})[type];
+    if (own) return [own, `${own}1f`];  // the perspective's colour, with a light fill of the same hue
     const i = S.st.graph.nodes.findIndex((n) => n.id === type);
     return GX_COLOR[(i < 0 ? 0 : i) % GX_COLOR.length];
   }
 
-  const gxWord = (n) => (n.type === 'bundle' ? `${n.label} ${n.key} · 펼치기` : `${n.label} ${n.key}${n.title ? ` ${String(n.title).length > 9 ? `${String(n.title).slice(0, 8)}…` : n.title}` : ''}`);
+  const gxName = (n) => (n.alt !== undefined && n.alt !== '' ? n.alt : n.title);  // a perspective may name records by another property
+  const gxWord = (n) => (n.type === 'bundle' ? `${n.label} ${n.key} · 펼치기` : `${n.label} ${n.key}${gxName(n) ? ` ${String(gxName(n)).length > 9 ? `${String(gxName(n)).slice(0, 8)}…` : gxName(n)}` : ''}`);
 
   function gxLayout() {
     const g = S.gx;
@@ -1491,6 +1596,7 @@
       S.gx.links[id] = r;
       gxAdd({ type: r.type, key: r.key, label: r.label, title: r.title || '' });
     } catch (e) { S.gx.links[id] = { links: [], error: e.message }; }
+    if (Object.keys(S.gx.labelBy || {}).length) await gxFetchLabels();
   }
 
   async function gxStart(type, key) {
@@ -1660,7 +1766,7 @@
     const groups = {};
     m.objects.forEach((o) => { const k = o.module_label || o.module || '정의'; (groups[k] = groups[k] || []).push(o); });
     const by = modelProblems().by;
-    const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
+    const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.status && o.status !== 'active' ? STATUS_WORD[o.status] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
       o.series ? ['', '시계열'] : null, (o.extended_by || []).length ? ['', `+ ${shortMod(o.extended_by[0])}`] : null, (m.comments || {})[`object:${o.name}`] ? ['', `댓글 ${m.comments[`object:${o.name}`]}`] : null]
       .filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
     return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">객체가 없습니다.</div>';
@@ -1934,7 +2040,7 @@
       const o = b.o, on = md.sel === o.name;
       const rows = erRows(o).map((r, i) => `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${esc(r.text.length > 27 ? `${r.text.slice(0, 26)}…` : r.text)}</text>`).join('');
       const bad = (prob[o.name] || []).length;
-      const tag = bad ? `문제 ${bad}` : o.new ? '새 객체' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
+      const tag = bad ? `문제 ${bad}` : o.status === 'deprecated' ? '폐기 예정' : o.status === 'draft' ? '초안' : o.new ? '새 객체' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
       const plus = live && !F ? `<g class="erplus" data-from="${esc(o.name)}"><circle cx="${b.x + b.w}" cy="${b.y + b.h / 2}" r="9"/><text x="${b.x + b.w}" y="${b.y + b.h / 2 + 4}" text-anchor="middle">+</text></g>` : '';
       return `<g class="ernode${on ? ' on' : ''}${o.new ? ' fresh' : o.pending ? ' pend' : ''}${bad ? ' problem' : ''}${quiet(o.name) ? ' erdim' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
         <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 14 + o.label.length * 13}" y="${b.y + 21}">${esc(o.name)}</text>
@@ -2135,7 +2241,7 @@
   function objectStatus(o) {  // where an object comes from, who adds to it, whether anything reads it, whether it is being changed
     const u = S.md.uses && S.md.uses.id === `object:${o.name}` ? S.md.uses.list : null;
     return `<div class="chips mdstat"><span class="chip sm b">정의 · ${esc(shortMod(o.module_label || o.module))}</span>${(o.extended_by || []).map((x) => `<span class="chip sm warn">확장 · ${esc(shortMod(x))}</span>`).join('')}
-      ${o.new ? '<span class="chip sm warn">새로 추가</span>' : o.pending ? '<span class="chip sm warn">변경 대기</span>' : u ? (u.length ? '<span class="chip sm ok">사용 중</span>' : '<span class="chip sm">사용처 없음</span>') : ''}
+      ${statusChip(o)}${o.new ? '<span class="chip sm warn">새로 추가</span>' : o.pending ? '<span class="chip sm warn">변경 대기</span>' : ''}${u ? (u.length ? `<span class="chip sm${o.status === 'deprecated' ? ' bad' : ''}" title="${o.status === 'deprecated' ? '폐기 예정인데 아직 읽는 곳이 있습니다' : ''}">읽는 곳 ${u.length}</span>` : '<span class="chip sm">사용처 없음</span>') : ''}
       ${S.mg.st.unlinked.includes(o.name) ? '<span class="chip sm warn">관계 없음</span>' : ''}</div>`;
   }
 
@@ -2336,14 +2442,26 @@
 
   const wsMain = () => (S.md.view === 'table' ? modelCols() : `<div id="ercard">${erCard()}</div><div id="erpop">${draftBox()}</div>`);
 
+  // where the cards stand: the studio keeps one layout per pipeline for everyone (workspace/layout); this browser
+  // keeps a copy so the canvas opens where it was before the state arrives
   function erPosKey() { return `xspace-er-pos:${S.st.pipeline || ''}`; }
   function erPosLoad() {
     const md = S.md, key = erPosKey();
-    if (md.posFor === key) return;
+    const shared = S.mg.st && S.mg.st.layout && Object.keys(S.mg.st.layout).length ? S.mg.st.layout : null;
+    if (md.posFor === key && !(shared && md.posFrom !== 'studio')) return;
     md.posFor = key;
+    if (shared) { md.pos = { ...shared }; md.posFrom = 'studio'; return; }
+    md.posFrom = 'browser';
     try { md.pos = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { md.pos = {}; }
   }
-  function erPosSave() { try { localStorage.setItem(erPosKey(), JSON.stringify(S.md.pos)); } catch (e) { /* kept for this visit */ } }
+  let erPosTimer = 0;
+  function erPosSave() {
+    try { localStorage.setItem(erPosKey(), JSON.stringify(S.md.pos)); } catch (e) { /* kept for this visit */ }
+    clearTimeout(erPosTimer);
+    erPosTimer = setTimeout(() => {
+      api('workspace/layout', { pipeline: S.st.pipeline || '', positions: S.md.pos }).then(() => { if (S.mg.st) S.mg.st.layout = { ...S.md.pos }; S.md.posFrom = 'studio'; }).catch(() => { /* this browser keeps it */ });
+    }, 600);
+  }
 
   async function linkDraft(source, target, ev) {
     const wrap = $('#wscenter').getBoundingClientRect();
@@ -2934,7 +3052,9 @@
   function relatedCard(res) {
     const defs = res.definitions.length ? res.definitions.map((c) => (c.element.startsWith('object:')
       ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.title)} · ${esc(c.kind_label)}</button>`
-      : `<span class="chip">${esc(c.title)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">관련 정의가 없습니다.</span>';
+      : c.element.startsWith('decision:') ? `<button class="chip ok" data-act="srdec" data-name="${esc(c.element.slice(9))}">${esc(c.title)} · ${esc(c.kind_label)}</button>`
+        : c.element.startsWith('metric:') ? `<a class="chip" href="#rules">${esc(c.title)} · ${esc(c.kind_label)}</a>`
+          : `<span class="chip">${esc(c.title)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">관련 정의가 없습니다.</span>';
     const rel = res.relations.length ? `<div class="sec">연결 관계</div><div class="muted" style="font-size:12.5px;line-height:1.7">${res.relations.slice(0, 6).map((x) => esc(x)).join('<br>')}</div>` : '';
     return `<div class="card"><div class="ch">관련 정의</div><div class="cb"><div class="chips">${defs}</div>${rel}
       <div class="sec">검색 엔진</div><div class="muted" style="font-size:12.5px"><span class="mono">${esc(res.engine)}</span></div></div></div>`;
@@ -3801,9 +3921,9 @@ ${controls}${body}`;
     return `<div class="card"><div class="ch">실행한 요청<div class="right"><span class="chip sm">${list.length}건</span></div></div><div class="cb">${list.map(row).join('')}<div class="hint">실행 뒤 다른 변경이 없으면 실행 전 값으로 되돌릴 수 있습니다.</div></div></div>`;
   }
 
-  async function loadAgreement() {
+  async function loadAgreement() {  // on 규칙 the past cases are decided by the tables as the pending edits leave them
     S.agree = { busy: true };
-    try { S.agree = await api('agreement'); } catch (e) { S.agree = { ok: false, error: e.message }; }
+    try { S.agree = await api(S.tab === 'mgrules' ? 'agreement?pending=1' : 'agreement'); } catch (e) { S.agree = { ok: false, error: e.message }; }
     if (S.tab === 'decide' || S.tab === 'mgrules') render();
   }
 
@@ -4598,8 +4718,8 @@ ${controls}${body}`;
     const hint = nst ? `<span class="muted">다음 단계에서 ${esc(REVIEW[i + 1][1])} ${esc(stepTotal(nst))}를 검토합니다</span>` : '';
     const all = left ? '<button class="btn" data-act="dokall">남은 제안 모두 채택</button>' : '';
     const go = next ? `<button class="btn primary" data-act="dview" data-view="${next[0]}">다음: ${next[1]}</button>`
-      : `<button class="btn primary" data-act="dapply"${S.dr.busy || !S.dr.plan || S.dr.plan.busy || (S.dr.plan.issues || []).length ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>적용 중' : '스페이스에 적용'}</button>`;
-    return `<div class="rvfoot">${say}${hint}<span style="flex:1"></span>${all}${go}</div>`;
+      : `<button class="btn primary" data-act="dapply"${S.dr.busy || !S.dr.plan || S.dr.plan.busy || (S.dr.plan.issues || []).length || !canApplyDraft() ? ' disabled' : ''}${canApplyDraft() ? '' : ' title="적용은 승인자가 합니다. 검토한 내용은 그대로 남습니다."'}>${S.dr.busy ? '<span class="spin"></span>적용 중' : '스페이스에 적용'}</button>`;
+    return `<div class="rvfoot">${say}${hint}<span style="flex:1"></span>${all}${go}${canApplyDraft() ? '' : '<span class="muted" style="font-size:12px">적용은 승인자가 합니다</span>'}</div>`;
   }
 
   function draftBody() {
@@ -4683,13 +4803,16 @@ ${controls}${body}`;
   const dayOf = (v) => String(v || '').slice(0, 16).replace('T', ' ');
   const baseName = (p) => p.split('/').pop();
 
+  const USE_WORD = { '': '자동 · 내용대로', data: '테이블 데이터', definition: '정의서', document: '문서', raw: '원본 보관' };
   function kindChip(f) {
-    if (f.error) return '<span class="chip sm bad">읽기 실패</span>';
+    const set = f.use ? ' title="사람이 지정한 용도입니다"' : '';  // what a person said the file is, over what its content looked like
+    const pin = f.use ? ' <span class="muted" style="font-size:10.5px">지정</span>' : '';
+    if (f.error) return `<span class="chip sm bad"${set}>읽기 실패</span>${pin}`;
     const k = (f.facts || {}).kind;
-    if (k === 'raw') return '<span class="chip sm">원본 보관</span>';
-    if (k === 'data') return '<span class="chip sm b">테이블 데이터</span>';
-    if (k === 'definition') return '<span class="chip sm ok">정의서</span>';
-    if (k === 'document') return `<span class="chip sm">${DOC_WORD[f.facts.doc_kind] || '문서'}</span>`;
+    if (k === 'raw') return `<span class="chip sm"${set}>원본 보관</span>${pin}`;
+    if (k === 'data') return `<span class="chip sm b"${set}>테이블 데이터</span>${pin}`;
+    if (k === 'definition') return `<span class="chip sm ok"${set}>정의서</span>${pin}`;
+    if (k === 'document') return `<span class="chip sm"${set}>${DOC_WORD[f.facts.doc_kind] || '문서'}</span>${pin}`;
     return '<span class="chip sm">내용 없음</span>';
   }
 
@@ -4811,7 +4934,7 @@ ${controls}${body}`;
       : `<button class="fname" data-act="${folder ? 'copen' : 'cview'}" data-path="${esc(x.path)}">${folder ? ui('catalog2') : ''}<span>${esc(x.name)}</span></button>`;
     const on = !!c.sel[x.path];
     const pick = `<input type="checkbox" data-in="csel" data-path="${esc(x.path)}"${on ? ' checked' : ''} aria-label="${esc(x.name)} 선택">`;
-    const more = `<button class="iconbtn" data-act="cmenu" data-path="${esc(x.path)}" data-folder="${folder ? 1 : ''}" aria-label="${esc(x.name)} 작업">${ui('more')}</button>`;
+    const more = `<button class="iconbtn" data-act="cmenu" data-path="${esc(x.path)}" data-folder="${folder ? 1 : ''}" data-use="${esc(x.use || '')}" aria-label="${esc(x.name)} 작업">${ui('more')}</button>`;
     if (folder) {
       const inc = x.files ? `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included === x.files ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">${x.included && x.included < x.files ? `<span class="muted"> ${x.included}/${x.files}</span>` : ''}` : '<span class="muted">-</span>';
       const emb = x.files ? `<input type="checkbox" data-in="cemb" data-path="${esc(x.path)}"${x.embedded === x.files ? ' checked' : ''} aria-label="${esc(x.name)} 임베딩">${x.embedded && x.embedded < x.files ? `<span class="muted"> ${x.embedded}/${x.files}</span>` : ''}` : '<span class="muted">-</span>';
@@ -4898,7 +5021,7 @@ ${controls}${body}`;
       html += `<div class="menu" style="top:${S.menu.top}px;right:${S.menu.right}px" role="menu">${S.menu.folder
         ? `<button data-act="copen" data-path="${p}">열기</button>`
         : `<button data-act="cview" data-path="${p}">보기</button><a href="/api/catalog/download?path=${encodeURIComponent(S.menu.path)}">내려받기</a>`}
-        <button data-act="crename" data-path="${p}">이름 변경</button><button class="bad" data-act="cdelete" data-path="${p}">삭제</button></div>`;
+        <button data-act="crename" data-path="${p}">이름 변경</button>${S.menu.folder ? '' : `<div class="msub"><span class="muted">용도</span>${Object.entries(USE_WORD).map(([k, w]) => `<button data-act="cuse" data-path="${p}" data-v="${k}"${(S.menu.use || '') === k ? ' class="on"' : ''}>${w}</button>`).join('')}</div>`}<button class="bad" data-act="cdelete" data-path="${p}">삭제</button></div>`;
     }
     if (c.file) html += fileDrawer(c);
     if (S.pal) html += paletteBox();
@@ -5176,7 +5299,13 @@ ${controls}${body}`;
   }
 
   const ownerChip = (x) => `<span class="chip sm${own(x) ? ' b' : ''}">${esc(x.module_label || x.module || '-')}</span>`;
-  const stateChips = (x) => (x.new ? '<span class="chip sm warn">새로 추가</span>' : (x.pending ? '<span class="chip sm warn">변경 대기</span>' : ''));
+  // an element's life, as its definition says it: being drafted, in use, going out of use
+  const STATUS_WORD = { draft: ['warn', '초안'], active: ['ok', '사용 중'], deprecated: ['bad', '폐기 예정'] };
+  const statusChip = (x) => { const s = STATUS_WORD[x && x.status] || STATUS_WORD.active; return `<span class="chip sm ${s[0]}">${s[1]}</span>`; };
+  const statusSelect = (v) => `<select data-in="mgf" data-f="status">${Object.entries(STATUS_WORD).map(([k, [, w]]) => opt(k, w, v || 'active')).join('')}</select>`;
+  // a reviewed draft replaces the shared space, so in a team an approver applies it; a visitor's own page is theirs
+  const canApplyDraft = () => !(S.me && S.me.team) || !!(S.me.user && (S.me.user.roles || []).some((r) => r === 'approver' || r === 'admin'));
+  const stateChips = (x) => `${statusChip(x)}${x.new ? '<span class="chip sm warn">새로 추가</span>' : (x.pending ? '<span class="chip sm warn">변경 대기</span>' : '')}`;
 
   // ---- data sources
 
@@ -5274,7 +5403,7 @@ ${controls}${body}`;
       ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
       ${field('원천 테이블', tableSel)}
       ${field('키', keyField, own(o) ? '' : '키는 정의한 모듈에서만 바꿀 수 있습니다.')}
-      ${field('상위 객체', parents)}
+      <div class="rgrid two">${field('상위 객체', parents)}${field('상태', statusSelect(v.status), '폐기 예정으로 두면 읽는 곳이 남아 있는지 사용처에 표시됩니다.')}</div>
       ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button><button class="btn ghost wsonly" data-act="mgcancel">접기</button>
 
@@ -5316,6 +5445,7 @@ ${controls}${body}`;
       ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 지정합니다.')}${fieldErr(iss.values)}
       <div class="rgrid two">${field('단위', `<input type="text" data-in="mgf" data-f="unit" value="${esc(v.unit)}" placeholder="예: 원">`)}
         ${field('가림', `<select data-in="mgf" data-f="mask">${Object.entries(MASK_WORD).map(([k, l]) => opt(k, l, v.mask)).join('')}</select>`)}</div>
+      ${field('상태', statusSelect(v.status))}
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 값</label>
       ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}`;
     if (f.mode === 'new') {
@@ -5378,6 +5508,7 @@ ${controls}${body}`;
       <div class="rgrid two">${field('도착 객체', objSel('target'))}${field('도착 속성', propSel('tp', v.target))}</div>
       ${ends ? '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">출발 속성 값과 도착 속성 값이 같은 행끼리 연결합니다.</div>' : '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">양 끝 객체와 연결 기준은 정의한 모듈에서만 바꿀 수 있습니다.</div>'}
       <div class="rgrid two">${field('Cardinality', cards)}${field('역관계 이름', `<input type="text" data-in="mgf" data-f="inverse" value="${esc(v.inverse)}" placeholder="예: couponUsedBy">`)}</div>
+      ${f.mode === 'new' ? '' : field('상태', statusSelect(v.status))}
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 관계</label>`;
     if (f.mode === 'new') {
       return `<div class="card"><div class="ch">새 관계<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">${body}
@@ -5616,10 +5747,11 @@ ${controls}${body}`;
     return `<td class="celltd" data-act="celledit" data-rule="${esc(r.id)}" data-k="${esc(i.name)}" title="눌러서 고치기">${esc(r.said[i.name])}</td>`;
   }
 
-  function rulesEdited() {  // a table edited: tried and checked again as it now stands
+  function rulesEdited() {  // a table edited: tried and checked again as it now stands, past cases included
     S.ru = null;
     if (S.sim.key) simulateNow(S.sim.key, S.sim.vals);
     api('rules').then((x) => { S.ru = x; if (S.tab === 'mgrules') render(); }).catch(fail);
+    if (S.agree && S.agree.ok !== false) loadAgreement();
   }
 
   async function moveRule(id, to) {
@@ -6059,6 +6191,7 @@ ${controls}${body}`;
     if (f.kind === 'object') {
       const o = f.orig, args = { name: v.name };
       for (const k of ['label', 'description', 'table', 'parent']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
       if (own(mgObj(v.name)) && v.key !== o.key) args.key = v.key;
       if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return; }
       mgEdit('update_object', args, `객체 ${v.label || v.name}을 바꿨습니다.`);
@@ -6067,7 +6200,7 @@ ${controls}${body}`;
     if (f.kind === 'prop') {
       const pairs = list(v.values).map((x) => { const i = x.indexOf('='); return i > 0 ? [x.slice(0, i).trim(), x.slice(i + 1).trim()] : [x, '']; });
       const spec = { label: v.label, description: v.description, type: v.type, unit: v.unit, values: pairs.map(([c]) => c),
-        labels: Object.fromEntries(pairs.filter(([, n]) => n)), required: !!v.required, mask: v.mask || '' };
+        labels: Object.fromEntries(pairs.filter(([, n]) => n)), required: !!v.required, mask: v.mask || '', status: v.status || 'active' };
       if (v.expr) spec.expr = v.expr; else { spec.column = v.column || ''; spec.transform = (v.transform || '').trim(); spec.source_type = v.transform ? (v.source_type || '') : ''; }
       if (f.mode === 'new') {
         if (!IDENT.test(v.name || '')) { toast('이름은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있습니다.', true); return; }
@@ -6091,6 +6224,7 @@ ${controls}${body}`;
       }
       const o = f.orig, args = { name: v.name };
       for (const k of ['label', 'cardinality', 'inverse']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
       if (!!v.required !== !!o.required) args.required = !!v.required;
       if (own(o)) {
         if (v.source !== o.source) args.source = v.source;
@@ -6134,16 +6268,16 @@ ${controls}${body}`;
     S.mg.sel = key;
     if (kind === 'object') {
       const o = mgObj(key);
-      S.mg.form = { kind, mode: 'edit', orig: o, v: { name: o.name, label: o.label, description: o.description, table: o.table, key: o.key, parent: o.parent } };
+      S.mg.form = { kind, mode: 'edit', orig: o, v: { name: o.name, label: o.label, description: o.description, table: o.table, key: o.key, parent: o.parent, status: o.status || 'active' } };
     }
     if (kind === 'prop') {
       const [obj, name] = key.split('.');
       const p = m.properties.find((x) => x.object === obj && x.name === name);
-      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', transform: p.transform || '', source_type: p.source_type || '', values: valueText(p, ', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr } };
+      S.mg.form = { kind, mode: 'edit', orig: { ...p, column: p.column || '', status: p.status || 'active' }, v: { object: obj, name, label: p.label, description: p.description, type: p.type, column: p.column || '', transform: p.transform || '', source_type: p.source_type || '', values: valueText(p, ', '), unit: p.unit, required: p.required, mask: p.mask, expr: p.expr, status: p.status || 'active' } };
     }
     if (kind === 'link') {
       const l = m.links.find((x) => x.name === key);
-      const v = { name: l.name, label: l.label, source: l.source, target: l.target, sp: l.on ? l.on[0] : '', tp: l.on ? l.on[1] : '', cardinality: l.cardinality, inverse: l.inverse, required: l.required };
+      const v = { name: l.name, label: l.label, source: l.source, target: l.target, sp: l.on ? l.on[0] : '', tp: l.on ? l.on[1] : '', cardinality: l.cardinality, inverse: l.inverse, required: l.required, status: l.status || 'active' };
       S.mg.form = { kind, mode: 'edit', orig: { ...v, module: l.module }, v: { ...v } };
     }
     if (!quiet) render();
@@ -6418,11 +6552,26 @@ ${controls}${body}`;
     gxzoom: (t) => gxZoom(Number(t.dataset.z)),
     gxfound: (t) => gxChoose(t.dataset.w, { type: t.dataset.type, key: t.dataset.key, type_label: t.dataset.label, title: t.dataset.title }),
     gxreset: () => { S.gx.pos = {}; S.gx.hide = []; S.gx.zoom = 1; S.gx.zoomed = false; gxStart(S.gx.seed.type, S.gx.seed.key); },
-    gxviewsave: () => {
+    gxviewsave: async () => {
       const name = (window.prompt('관점 이름', S.gx.view || '고객 상담') || '').trim();
       if (!name) return;
-      try { localStorage.setItem('xspace-views', JSON.stringify({ ...gxViews(), [name]: { hide: S.gx.hide } })); } catch (e) { fail(e); return; }
-      S.gx.view = name; toast(`관점 '${name}'을 저장했습니다.`); render();
+      try {
+        const r = await api('graph/view', { name, hide: S.gx.hide, color: S.gx.color, label: S.gx.labelBy });
+        S.gx.views = r.views; S.gx.view = name; toast(`관점 '${name}'을 저장했습니다. 이 스페이스를 여는 모두가 고를 수 있습니다.`);
+      } catch (e) { fail(e); return; }
+      render();
+    },
+    gxviewforget: async () => {
+      if (!S.gx.view) return;
+      try { const r = await api('graph/view/forget', { name: S.gx.view }); S.gx.views = r.views; S.gx.view = ''; toast('관점을 지웠습니다.'); } catch (e) { fail(e); }
+      render();
+    },
+    srdec: (t) => { S.mg.dec = t.dataset.name; location.hash = '#mgrules'; },
+    srbuild: () => { S.q.mode = 'build'; location.hash = '#query'; },
+    cuse: async (t) => {
+      S.menu = null;
+      try { await api('catalog/use', { path: t.dataset.path, use: t.dataset.v }); S.cat.st = null; toast(t.dataset.v ? '파일 용도를 바꿔 다시 읽었습니다.' : '파일 용도를 내용대로 되돌렸습니다.'); } catch (e) { fail(e); }
+      stale(); render();
     },
     gxlink: async () => {
       const u = `${location.origin}${location.pathname}?gx=${encodeURIComponent(`${S.gx.seed.type}:${S.gx.seed.key}`)}#graph`;
@@ -6981,7 +7130,7 @@ ${controls}${body}`;
       const r = t.getBoundingClientRect();
       const same = S.menu && S.menu.path === t.dataset.path;
       closeFloats();
-      S.menu = same ? null : { path: t.dataset.path, folder: !!t.dataset.folder, top: Math.min(r.bottom + 4, window.innerHeight - 160), right: Math.max(window.innerWidth - r.right, 8) };
+      S.menu = same ? null : { path: t.dataset.path, folder: !!t.dataset.folder, use: t.dataset.use || '', top: Math.min(r.bottom + 4, window.innerHeight - 300), right: Math.max(window.innerWidth - r.right, 8) };
       paintLayer();
     },
     cview: async (t) => {
@@ -7380,7 +7529,10 @@ ${controls}${body}`;
     gxlayout: (t) => { S.gx.layout = t.value; S.gx.pos = {}; S.gx.zoomed = false; gxRedraw(); },
     gxrel: (t) => { if (t.checked) gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); else gxShrink(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); },
     gxshow: (t) => { S.gx.hide = t.checked ? S.gx.hide.filter((x) => x !== t.dataset.t) : [...S.gx.hide, t.dataset.t]; S.gx.view = ''; render(); },
-    gxview: (t) => { S.gx.view = t.value; S.gx.hide = t.value ? [...((gxViews()[t.value] || {}).hide || [])] : []; render(); },
+    gxview: (t) => { gxApplyView(t.value); render(); },
+    gxcolor: (t) => { S.gx.color = { ...S.gx.color, [t.dataset.t]: t.value }; S.gx.view = ''; render(); },
+    gxlabel: (t) => { S.gx.labelBy = { ...S.gx.labelBy }; if (t.value) S.gx.labelBy[t.dataset.t] = t.value; else delete S.gx.labelBy[t.dataset.t]; S.gx.view = ''; gxFetchLabels().then(render); },
+    recrole: (t) => { S.rec.seeAs = t.value; render(); },
     simkey: (t) => { S.sim.key = t.value; S.sim.vals = {}; simulateNow(t.value, {}); },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
     rltype: (t) => { S.rl.type = t.value; S.rl.q = ''; S.rl.res = null; render(); },

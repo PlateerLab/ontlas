@@ -23,16 +23,17 @@ LEVELS = ("viewer", "editor", "approver", "admin")
 # what each POST route needs; every GET and anything not listed needs viewer
 NEEDS = {
     "attach": "editor", "detach": "editor", "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
-    "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor",
-    "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor",
-    "draft": "editor", "draft/preview": "editor", "draft/apply": "editor", "connect": "editor",
+    "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor", "catalog/use": "editor",
+    "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "catalog/move": "editor", "catalog/trash": "editor",
+    "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "editor",
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
-    "draft/map/apply": "editor", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
+    "draft/map/apply": "approver", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
-    "draft/table": "editor", "draft/review/apply": "editor", "draft/review/preview": "editor",
+    "draft/table": "editor", "draft/review/apply": "approver", "draft/review/preview": "editor",  # a reviewed draft replaces the shared space: an approver applies it
     "manage/undo": "editor", "manage/trial": "editor", "manage/yaml": "editor", "element/comment": "editor",
+    "graph/view": "editor", "graph/view/forget": "editor", "workspace/layout": "editor",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
     "manage/redo": "editor", "manage/revert": "editor",
     "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",

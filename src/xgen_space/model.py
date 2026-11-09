@@ -22,6 +22,7 @@ CURRENT_SUFFIX = "__current"  # a period row's value while the row is valid, els
 RAW_SUFFIX = "__raw"          # the stored value of a property that a transform changes on its way in
 FUNCTION_RUNTIMES = ("expr", "decision", "query", "python", "http")
 FUNCTION_STATUS = ("draft", "active", "retired")
+STATUSES = ("draft", "active", "deprecated")  # an object, property or relation: being drafted, in use, going out of use
 
 
 @dataclass
@@ -43,6 +44,7 @@ class Property:
     format: str = ""  # a date stored as text in this layout, such as YYYYMMDD (see expr.date_format)
     transform: str = ""  # how the column becomes this value, over `value`: value / 100, value = 'Y'
     source_type: str = ""  # the column's own type where a transform changes it; the property's type otherwise
+    status: str = "active"  # draft | active | deprecated (STATUSES)
     internal: bool = False  # made while loading, so not part of the definition: it is left out when written back
 
     @property
@@ -103,6 +105,7 @@ class ObjectType:
     series: dict[str, str] = field(default_factory=dict)  # observations over time: {time: property, of: link}
     period: dict[str, Any] = field(default_factory=dict)  # rows valid for a time: {start, end, of: link, end_exclusive}
     view: dict[str, Any] = field(default_factory=dict)  # defined by a query, not a table: {name, query} (decide.views)
+    status: str = "active"  # draft | active | deprecated (STATUSES)
 
     @property
     def abstract(self) -> bool:
@@ -146,6 +149,7 @@ class LinkType:
     required: bool = False
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
+    status: str = "active"  # draft | active | deprecated (STATUSES)
 
     @property
     def bound(self) -> bool:
@@ -511,7 +515,7 @@ def _prop(name: str, d: Any) -> Property:
                     cite=d.get("cite", ""), aligned=list(d.get("aligned", [])), expr=str(d.get("expr", "") or ""),
                     mask=str(d.get("mask", "") or ""), labels=labels, columns=columns,
                     format=str(d.get("format", "") or ""), transform=str(d.get("transform", "") or ""),
-                    source_type=str(d.get("source_type", "") or ""))
+                    source_type=str(d.get("source_type", "") or ""), status=str(d.get("status") or "active"))
 
 
 def _states(d: dict | None) -> StateMachine | None:
@@ -566,7 +570,8 @@ def _object(name: str, d: dict) -> ObjectType:
                       table=source.get("table", d.get("table", "")), title=d.get("title", ""),
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
-                      series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}))
+                      series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}),
+                      status=str(d.get("status") or "active"))
     if t.view and not t.table:  # bound to the view it makes, as to a table
         t.table = t.view_name
     return t
@@ -585,7 +590,7 @@ def _link(name: str, d: dict) -> LinkType:
                     label=d.get("label", ""), description=d.get("description", ""), inverse=d.get("inverse", ""),
                     transitive=bool(d.get("transitive", False)), symmetric=bool(d.get("symmetric", False)),
                     required=bool(d.get("required", False)), cite=d.get("cite", ""),
-                    aligned=list(d.get("aligned", [])))
+                    aligned=list(d.get("aligned", [])), status=str(d.get("status") or "active"))
 
 
 def _decision(name: str, d: dict) -> DecisionTable:
@@ -835,7 +840,7 @@ def _to_dict(o: Ontology) -> dict:
                                  "cite": p.cite, "aligned": p.aligned, "mask": p.mask, "labels": p.labels,
                                  "expr": "" if p.transform or p.name + TEXT_SUFFIX in t.properties else p.expr,
                                  "columns": p.columns, "format": p.format, "transform": p.transform,
-                                 "source_type": p.source_type})
+                                 "source_type": p.source_type, "status": None if p.status == "active" else p.status})
                  for p in t.properties.values() if not p.internal}
         sm = None
         if t.states:
@@ -848,7 +853,7 @@ def _to_dict(o: Ontology) -> dict:
                                   "source": {"table": t.table} if bound else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
                                   "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
-                                  "view": t.view,
+                                  "view": t.view, "status": None if t.status == "active" else t.status,
                                   "series": t.series and {**t.series, "time": t.series["time"].removesuffix(TEXT_SUFFIX)}})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,
@@ -856,7 +861,7 @@ def _to_dict(o: Ontology) -> dict:
                                       "target": lk.via.target_column} if lk.via else None,
                               "label": lk.label, "description": lk.description, "inverse": lk.inverse,
                               "transitive": lk.transitive, "symmetric": lk.symmetric, "required": lk.required,
-                              "cite": lk.cite, "aligned": lk.aligned})
+                              "cite": lk.cite, "aligned": lk.aligned, "status": None if lk.status == "active" else lk.status})
              for lk in o.links.values() if lk.name not in generated_links}
     decisions = {}
     for dt in o.decisions.values():

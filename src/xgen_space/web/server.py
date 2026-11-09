@@ -479,6 +479,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.change_detail(a["id"])
                 if route == "record/links":
                     return s.record_links(a["type"], a["key"])
+                if route == "records/labels":
+                    return s.record_labels(a["type"], str(a.get("keys", "")).split(","), a.get("prop", ""))
+                if route == "graph/views":
+                    return s.graph_views()
                 if route == "record/path":
                     return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
                 if route == "element/readers":
@@ -529,7 +533,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "changes":
                     return s.changes_state()
                 if route == "agreement":
-                    return s.agreement()
+                    return s.agreement(pending=a.get("pending") in ("1", "true"))
                 if route == "identities":
                     return s.identities()
                 if route == "standards":
@@ -632,6 +636,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.catalog_rename(str(a.get("path", "")), str(a.get("name", "")))
             if route == "catalog/include":
                 return s.catalog_include(list(a.get("paths") or []), bool(a.get("on")))
+            if route == "catalog/use":
+                return s.catalog_use(str(a.get("path", "")), str(a.get("use", "")))
             if route == "catalog/embed":
                 return s.catalog_embed(list(a.get("paths") or []), bool(a.get("on")))
             if route == "catalog/move":
@@ -693,6 +699,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_yaml(str(a.get("id", "")), str(a.get("text", "")))
             if route == "element/comment":
                 return s.element_comment(str(a.get("id", "")), str(a.get("text", "")))
+            if route == "graph/view":
+                return s.graph_view_save(str(a.get("name", "")), a.get("hide") or [], a.get("color"), a.get("label"))
+            if route == "graph/view/forget":
+                return s.graph_view_forget(str(a.get("name", "")))
+            if route == "workspace/layout":
+                return s.workspace_layout(str(a.get("pipeline", "")), a.get("positions") or {})
             if route == "manage/propose":
                 return s.manage_propose()
             if route == "change/mark":
