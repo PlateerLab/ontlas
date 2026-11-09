@@ -394,6 +394,23 @@ class Workspace:
         patch.setdefault("rules_replace", {})[spec["id"]] = spec
         return f"rule:{name}.{spec['id']}"
 
+    def _add_query(self, a: dict) -> str:
+        """A query people run by its name, put together on the page."""
+        from xgen_space.ir import IRError, Query
+
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"query name '{name}' must be letters, digits and _ starting with a letter")
+        if name in self.composed().ontology.queries:
+            raise EditError(f"query '{name}' already exists")
+        q = a.get("query")
+        try:
+            Query.from_dict(q)
+        except (IRError, TypeError, ValueError) as e:
+            raise EditError(f"query {name}: {e}") from None
+        self._section("body", "queries")[name] = {"label": str(a.get("label") or name), "query": q}
+        return f"query:{name}"
+
     def _update_decision(self, a: dict) -> str:
         """A table's label, its clause, or how it picks among the rules that hold."""
         name = str(a.get("decision") or a.get("name") or "")

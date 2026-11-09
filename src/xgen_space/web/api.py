@@ -96,6 +96,8 @@ IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "qu
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
+    (r"^query '(.+)' already exists$", r"질의 '\1'이(가) 이미 있어 저장하지 못했습니다. 다른 영문 이름을 입력해 주세요."),
+    (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^hit policy priority needs a priority on every rule; (.+) have none$", r"우선순위 방식은 규칙마다 우선순위가 있어야 합니다. \1에 우선순위를 먼저 정해 주세요."),
     (r"^hit policy '(.+)' is not one of .*$", r"적용 방식 '\1'은 쓸 수 없습니다."),
     (r"^type '(.+)' is not one of .*$", r"자료형 '\1'은 쓸 수 없습니다. 문자열, 정수, 소수, 참 · 거짓, 날짜, 일시, 허용값 중에서 골라 주세요."),
