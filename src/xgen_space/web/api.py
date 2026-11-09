@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -272,6 +272,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.origin = origin or {"kind": "config"}
         self.lock = threading.RLock()
         self.log: list[dict] = []
+        self._measured: dict = {}  # what the last look at the flow found, item by item
+        self._issue_open: dict | None = None  # issue id -> when it opened and what it was called
         self.used = time.time()
         if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
             studio.library = OverlayLibrary(studio.library, [])  # a visitor's edited modules are kept here
@@ -310,7 +312,7 @@ class StudioSession(SpaceMixin, PagesMixin):
     # ---- helpers -------------------------------------------------------------------------------------------
 
     def _note(self, kind: str, text: str, **detail) -> None:
-        self.log.insert(0, {"kind": kind, "text": text, **plain(detail)})
+        self.log.insert(0, {"kind": kind, "text": text, "at": datetime.now().isoformat(timespec="seconds"), **plain(detail)})
         del self.log[30:]
         self.event(kind, text)
 
@@ -1129,9 +1131,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 tuple(f["sha256"] for f in self.repositories.files(self.repo).values()), tuple(self.space.stores),
                 id(self.log[0]) if self.log else 0, sum(c.status == "pending" for c in st.changes.requests.values()))
 
-    def monitor(self) -> dict:
-        """The board: measured when something changed or a while has passed, and read at every look."""
-        from xgen_space.web.monitor import board, failed
+    def _watched(self) -> tuple[dict, bool]:
+        """The last measurement, taken again when something changed or a while has passed; whether it is new."""
+        from xgen_space.web.monitor import failed
 
         sig, now = self._monitor_sig(), time.time()
         w = self._watch
@@ -1142,10 +1144,79 @@ class StudioSession(SpaceMixin, PagesMixin):
             bind = next(s for s in flow["steps"] if s["id"] == "bind")
             findings = self.bindings()["findings"] if failed(bind) else []
             took = round((time.perf_counter() - started) * 1000)
-            w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took,
+            w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took, "measured": self._measured,
                                "stamp": datetime.now().isoformat(timespec="seconds")}
             gates = [g for s in flow["steps"] for g in s["gates"]]
             self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
+        return w, fresh
+
+    def _issues(self, w: dict, *, changes: int, actions: int, dirty: bool) -> list[dict]:
+        """What is wrong as things stand: built once per measurement, with what waits on a person read every time."""
+        from xgen_space.web import issues
+
+        if "built" not in w:
+            w["built"] = plain(issues.build(self, w))
+        out = [*w["built"], *plain(issues.waiting(self, dirty=dirty, changes=changes, actions=actions))]
+        self._track_issues(out)
+        return sorted(out, key=lambda x: (x["level"] != "bad", not x["members"]))
+
+    def _track_issues(self, issues: list[dict]) -> None:
+        """When each issue opened and closed, in the journal so a restart still knows how long it has been open."""
+        journal = self.studio.changes.journal
+        if self._issue_open is None:
+            self._issue_open = {}
+            for r in journal.read() if journal is not None else []:
+                if r.get("kind") == "issue" and r.get("event") == "open":
+                    self._issue_open[r["id"]] = {"at": r.get("at", ""), "title": r.get("title", "")}
+                elif r.get("kind") == "issue":
+                    self._issue_open.pop(r.get("id"), None)
+        now = datetime.now().isoformat(timespec="seconds")
+        here = {x["id"] for x in issues if not x["direct"]}
+        for x in issues:
+            if x["direct"]:
+                continue
+            if x["id"] not in self._issue_open:
+                self._issue_open[x["id"]] = {"at": now, "title": x["title"]}
+                if journal is not None:
+                    journal.write("issue", {"event": "open", "id": x["id"], "at": now, "title": x["title"], "level": x["level"]})
+            x["since"] = self._issue_open[x["id"]]["at"]
+        for gone in [k for k in self._issue_open if k not in here]:
+            if journal is not None:
+                journal.write("issue", {"event": "resolved", "id": gone, "at": now, "title": self._issue_open[gone]["title"]})
+            self.event("issue", f"해결됨 · {self._issue_open[gone]['title']}")
+            del self._issue_open[gone]
+
+    def issues(self) -> dict:
+        """What is wrong right now and how to fix it, for every page that says so."""
+        st = self.studio
+        w, _ = self._watched()
+        gates = [g for s in w["flow"]["steps"] for g in s["gates"]]
+        return plain({"issues": self._issues(w, changes=sum(c.status == "pending" for c in st.changes.requests.values()),
+                                             actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
+                                             dirty=bool(self.workspace and self.workspace.dirty)),
+                      "measured_at": w["stamp"], "gates": {"met": sum(g["passed"] for g in gates), "all": len(gates)}})
+
+    def module_preview(self, name: str) -> dict:
+        """What taking a module off would do, tried on a copy before it is done."""
+        from xgen_space.review import gates, measure, trial
+
+        st = self.studio
+        imp = st.detach_impact(name)
+        out = {"module": name, "label": self._label(name), "impact": imp.to_dict(), "removed": [self._element_label(x) for x in imp.removed]}
+        if imp.ok and st.composition is not None:
+            try:
+                copy = trial(st, [m for m in st.composition.modules if m.name != name], st.flow)
+                results = gates(measure(copy, copy.flow), copy.flow)
+                out["gates"] = {"met": sum(g.passed for g in results), "all": len(results), "failed": [g.condition for g in results if not g.passed]}
+            except Exception as e:  # a copy that cannot be measured: the page says what would be removed and no more
+                out["error"] = str(e)
+        return plain(out)
+
+    def monitor(self) -> dict:
+        """The board: measured when something changed or a while has passed, and read at every look."""
+        from xgen_space.web.monitor import board
+
+        w, fresh = self._watched()
         st = self.studio
         comp = st.composition
         on = {m.name for m in comp.modules} if comp else set()
@@ -1156,13 +1227,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         def owner(element: str) -> str:
             return self._label(comp.owner(element)) if comp else ""
 
+        changes = sum(c.status == "pending" for c in st.changes.requests.values())
+        actions = sum(p.status == "pending" for p in st.actions.proposals.values())
+        dirty = bool(self.workspace and self.workspace.dirty)
         out = board(w["flow"], files=self.repositories.files(self.repo), onto=st.onto, owner_label=owner,
                     reasoners=[r.name for r in st.reasoners.values()], graphs=[{"name": n, "language": b.capabilities.language}
                                                                                 for n, b in st.backends.items() if b.capabilities.load],
-                    modules=[], findings=w["findings"], faults=faults,
-                    changes=sum(c.status == "pending" for c in st.changes.requests.values()),
-                    actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
-                    dirty=bool(self.workspace and self.workspace.dirty))
+                    modules=[], findings=w["findings"], faults=faults, changes=changes, actions=actions, dirty=dirty)
+        out["issues"] = [x for x in self._issues(w, changes=changes, actions=actions, dirty=dirty) if x["alert"]]
         return plain({**out, "now": datetime.now().isoformat(timespec="seconds"), "measured_at": w["stamp"],
                       "measured": fresh, "took": w["took"], "events": list(self.events)[:12],
                       "repository": self._repository_row()["label"], "notice": self.origin.get("notice", "")})
@@ -2045,7 +2117,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             old = self.workspace
             ws = Workspace(list(comp.modules), current, compose_kw=self.studio._compose_kw)
             if old is not None and old.dirty:  # unsent edits carry over to the new modules; they are checked again
-                ws.module, ws.edits = old.module, old.edits
+                ws.module, ws.edits, ws._before, ws._undone = old.module, old.edits, old._before, old._undone
             self.workspace, self._ws_sig = ws, sig
         return self.workspace
 
@@ -2065,6 +2137,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         o, base = comp.ontology, self.studio.onto
         issues += list(comp.issues)
         mine = ws.module
+        pending_check = []
+        if ws.dirty and self.studio.source and not comp.issues:  # whether the unsent edits already mend what the source lacks
+            try:
+                from xgen_space.bindings import check_bindings
+
+                pending_check = [asdict(f) for f in check_bindings(o, self.studio.backends[self.studio.source], data=False).findings]
+            except Exception:  # the source could not be read: the page goes by the last measurement
+                pending_check = []
         diff = element_diff(base, o) if ws.dirty else {"added": [], "removed": [], "changed": []}
         touched = set(diff["changed"])  # what the unsent edits change; what they add is marked new
 
@@ -2109,6 +2189,8 @@ class StudioSession(SpaceMixin, PagesMixin):
                     "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,
+                    "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"property:{from_type}.{pname}", [])
+                                    if x != comp.owner(f"property:{from_type}.{pname}") and kinds.get(x) != "binding"],
                     "new": t.name not in base.objects or pname not in all_props(base, t.name),
                     **owner(f"property:{from_type}.{pname}")})
         links = [{"name": lk.name, "label": lk.label, "source": lk.source, "target": lk.target,
@@ -2195,6 +2277,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
             "folders": self.studio.space.folders() if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
+            "unread": [x["name"] for x in objects if not x["concept"] and not self._readers(f"object:{x['name']}")],
             "comments": {k: len(v) for k, v in self._notes().items() if v},
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,
@@ -2203,8 +2286,8 @@ class StudioSession(SpaceMixin, PagesMixin):
                                    for n, b in self.studio.backends.items() if n != self.studio.source]},
             "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label,
                           "version": ws.current.version if ws.current else "",
-                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits],
-                          "issues": issues, "diff": diff, "impact": self._impact(diff),
+                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits], "redo": len(ws._undone),
+                          "issues": issues, "diff": diff, "impact": self._impact(diff), "findings": pending_check,
                           "yaml": yaml.safe_dump(mine.to_dict(), allow_unicode=True, sort_keys=False)},
         })
 
@@ -2226,6 +2309,95 @@ class StudioSession(SpaceMixin, PagesMixin):
         if ws.undo() is None:
             raise ValueError("되돌릴 변경이 없습니다.")
         return {"ok": True, **self.manage_state()}
+
+    def manage_redo(self) -> dict:
+        from xgen_space.manage import EditError
+
+        try:
+            if self._ws().redo() is None:
+                raise ValueError("다시 실행할 변경이 없습니다.")
+        except EditError as e:
+            raise ValueError(_edit_text(str(e))) from None
+        return {"ok": True, **self.manage_state()}
+
+    def manage_revert(self, index: int) -> dict:
+        """One pending edit taken back, the ones after it kept."""
+        from xgen_space.manage import EditError
+
+        try:
+            self._ws().revert(int(index))
+        except EditError as e:
+            raise ValueError(f"뒤에 있는 변경({e})이 이 변경에 기대고 있어 되돌리지 못했습니다. 그 변경을 먼저 되돌려 주세요.") from None
+        return {"ok": True, **self.manage_state()}
+
+    def link_suggest(self, source: str, target: str) -> dict:
+        """How two objects would join, from the names and references the source shows, and how many rows would meet."""
+        from xgen_space.check import columns_of
+        from xgen_space.compile.sql import qi
+
+        o, _ = self._pending_onto()
+        if source not in o.objects or target not in o.objects:
+            raise ValueError("객체를 찾지 못해 관계를 제안하지 못했습니다. 카드를 다시 선택해 주세요.")
+        a, b = o.objects[source], o.objects[target]
+        pa, pb = all_props(o, source), all_props(o, target)
+        fields = {p: find_prop(o, source, p) for p in pa}, {p: find_prop(o, target, p) for p in pb}
+        same = lambda p, x: p in x and not fields[x is pb][p].expr  # noqa: E731
+        options: list[tuple[str, str, str]] = []
+        if same(b.key, pa):
+            options.append((b.key, b.key, "many_to_one"))
+        if same(a.key, pb) and (a.key, a.key, "one_to_many") not in options:
+            options.append((a.key, a.key, "one_to_many"))
+        for p in pa:  # a column named for the other table's key: order_no for an Order keyed by no, buyer_id for Buyer
+            if (p == f"{target.lower()}_{b.key}" or p == f"{target.lower()}_id") and p != b.key and same(b.key, pb):
+                options.append((p, b.key, "many_to_one"))
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+        met = []
+        for sp, tp, card in options[:4]:
+            row = {"sp": sp, "tp": tp, "cardinality": card, "ratio": None, "matched": None, "total": None}
+            if src is not None and a.table and b.table:
+                try:
+                    s, t = columns_of(o, source, sp)[0], columns_of(o, target, tp)[0]
+                    many, m_col, one, o_col = (a.table, s, b.table, t) if card == "many_to_one" else (b.table, t, a.table, s)  # counted from the side that points
+                    got = src.fetch(f"SELECT COUNT(m.{qi(m_col)}), COUNT(u.{qi(o_col)}) FROM {qi(many)} m LEFT JOIN {qi(one)} u ON m.{qi(m_col)} = u.{qi(o_col)} "
+                                    f"WHERE m.{qi(m_col)} IS NOT NULL")[0]
+                    row.update({"total": got[0], "matched": got[1], "ratio": got[1] / got[0] if got[0] else None})
+                except Exception:  # columns that cannot be joined have no ratio to show
+                    row["ratio"] = None
+            met.append(row)
+        met.sort(key=lambda r: -(r["ratio"] or 0))
+        taken = {lk.name for lk in o.links.values()} | {lk.inverse for lk in o.links.values() if lk.inverse}
+        first = target[:1].lower() + target[1:]
+        name = first if first not in taken else f"{source[:1].lower()}{source[1:]}{target}"
+        return plain({"source": source, "target": target, "name": name, "label": b.label or target, "options": met,
+                      "props": {"source": [{"name": p, "label": f.label or p} for p, f in fields[0].items() if not f.expr],
+                                "target": [{"name": p, "label": f.label or p} for p, f in fields[1].items() if not f.expr]}})
+
+    def object_profile(self, name: str) -> dict:
+        """A few rows of an object as the source holds them, and for each column how full and how varied it is."""
+        from xgen_space.check import columns_of
+        from xgen_space.compile.sql import qi
+
+        o, _ = self._pending_onto()
+        t = o.objects.get(name)
+        if t is None or not t.table:
+            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+        if src is None:
+            return {"ok": False, "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다."}
+        have = src.columns(t.table) or {}
+        props = [p for p in all_props(o, name) if not find_prop(o, name, p).expr
+                 and len(columns_of(o, name, p)) == 1 and columns_of(o, name, p)[0].lower() in have][:14]
+        if not props:
+            return {"ok": False, "error": f"{t.table} 테이블에서 읽을 수 있는 컬럼이 없습니다."}
+        cols = [columns_of(o, name, p)[0] for p in props]
+        dialect = src.capabilities.dialect
+        top, first = ("TOP 6 " if dialect == "tsql" else ""), {"oracle": " FETCH FIRST 6 ROWS ONLY", "tsql": ""}.get(dialect, " LIMIT 6")
+        rows = src.fetch(f"SELECT {top}{', '.join(qi(c) for c in cols)} FROM {qi(t.table)}{first}")
+        counts = src.fetch(f"SELECT COUNT(*), {', '.join(f'COUNT({qi(c)}), COUNT(DISTINCT {qi(c)})' for c in cols)} FROM {qi(t.table)}")[0]
+        total = counts[0]
+        stats = [{"name": p, "label": find_prop(o, name, p).label or p, "column": c, "filled": counts[1 + i * 2], "distinct": counts[2 + i * 2],
+                  "empty": 1 - counts[1 + i * 2] / total if total else 0} for i, (p, c) in enumerate(zip(props, cols))]
+        return plain({"ok": True, "name": name, "table": t.table, "total": total, "columns": props, "rows": [list(r) for r in rows], "stats": stats})
 
     def manage_trial(self) -> dict:
         """The pending edits tried on a copy of the space, as a change request would be, without filing one: each pass
@@ -2512,7 +2684,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         from xgen_space.review import measure
 
         settings = st.flow
-        measured = measure(st, settings)
+        measured = self._measured = measure(st, settings)
         by = st.raised_gates()
         results = [{**g.__dict__, "label": GATE_LABEL.get((g.stage, g.condition), g.condition),
                     "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else ""}

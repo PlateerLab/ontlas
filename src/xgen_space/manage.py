@@ -39,6 +39,7 @@ class Edit:
     op: str
     target: str
     took_out: list[str] = field(default_factory=list)
+    args: dict[str, Any] = field(default_factory=dict)  # what it was asked with, to make it again
 
 
 class Workspace:
@@ -53,7 +54,8 @@ class Workspace:
         start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
-        self._before: list[dict] = []  # the module before each edit, to take the last one back
+        self._before: list[dict] = []  # the module before each edit, to take any one back
+        self._undone: list[Edit] = []  # what was taken back and can be made again
         self._base_onto = compose(self.base, **self.kw).ontology
 
     # ---- reading ------------------------------------------------------------------------------------------------
@@ -83,7 +85,7 @@ class Workspace:
 
     # ---- edits --------------------------------------------------------------------------------------------------
 
-    def apply(self, op: str, a: dict[str, Any]) -> Edit:
+    def apply(self, op: str, a: dict[str, Any], *, again: bool = False) -> Edit:
         fn = getattr(self, f"_{op}", None)
         if fn is None or op.startswith("_"):
             raise EditError(f"unknown edit '{op}'")
@@ -103,9 +105,11 @@ class Workspace:
         except (ModuleError, KeyError, TypeError, ValueError) as e:  # the edit does not hold: nothing changes
             self.module = Module.from_dict(before)
             raise EditError(str(e)) from None
-        edit = Edit(op, target, took)
+        edit = Edit(op, target, took, copy.deepcopy(a))
         self.edits.append(edit)
         self._before.append(before)
+        if not again:
+            self._undone.clear()
         return edit
 
     def undo(self) -> Edit | None:
@@ -113,7 +117,33 @@ class Workspace:
         if not self.edits:
             return None
         self.module = Module.from_dict(self._before.pop())
-        return self.edits.pop()
+        edit = self.edits.pop()
+        self._undone.append(edit)
+        return edit
+
+    def redo(self) -> Edit | None:
+        """Make the edit last taken back again."""
+        if not self._undone:
+            return None
+        edit = self._undone.pop()
+        return self.apply(edit.op, edit.args, again=True)
+
+    def revert(self, index: int) -> Edit:
+        """Take back one edit, however far back: the module goes back to before it and the later edits are made again.
+        When a later edit leans on it, nothing changes and the message names that edit."""
+        if not 0 <= index < len(self.edits):
+            raise EditError("edit not found")
+        module, edits, before = self.module, list(self.edits), list(self._before)
+        gone, later = edits[index], edits[index + 1:]
+        self.module, self.edits, self._before = Module.from_dict(before[index]), edits[:index], before[:index]
+        for edit in later:
+            try:
+                self.apply(edit.op, edit.args, again=True)
+            except EditError:
+                self.module, self.edits, self._before = module, edits, before
+                raise EditError(edit.target) from None
+        self._undone.clear()
+        return gone
 
     def _section(self, part: str, section: str) -> dict:
         holder = self.module.body if part == "body" else self.module.extend
@@ -308,6 +338,26 @@ class Workspace:
             q.update({"query": a.get("query"), "params": dict(a.get("params") or {})})
         q["expect"] = a.get("expect") or {}
         self.module.body.setdefault("questions", []).append(q)
+        return f"question:{qid}"
+
+    def _update_question(self, a: dict) -> str:
+        """Another expected answer for a question: what the module brought is taken out and written here anew."""
+        qid = str(a.get("id") or "")
+        current = next((q for q in self.composed().ontology.questions if q.id == qid), None)
+        if current is None:
+            raise EditError(f"question '{qid}' is unknown")
+        own = self.module.body.setdefault("questions", [])
+        mine = next((q for q in own if q.get("id") == qid), None)
+        if mine is None:
+            if qid not in self._removed("questions"):
+                self._removed("questions").append(qid)
+            mine = {"id": qid, "text": current.text}
+            if current.decision:
+                mine.update({"decision": current.decision, "key": current.key})
+            else:
+                mine.update({"query": current.query, "params": dict(current.params or {})})
+            own.append(mine)
+        mine["expect"] = dict(a.get("expect") or {})
         return f"question:{qid}"
 
     def _delete_question(self, a: dict) -> str:

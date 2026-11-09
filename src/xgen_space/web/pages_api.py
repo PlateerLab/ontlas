@@ -439,6 +439,7 @@ class PagesMixin:
                           "mine": p.requested_by.id == self.who, "change": change, "failed": failed,
                           "outside": len(outside), "waits": v["waits"]})
         from xgen_space.web.api import GATE_LABEL
+        from xgen_space.web.monitor import FINDING
 
         standing = self._standing_gates() if any(c.status == "pending" for c in st.changes.requests.values()) else {}
         for c in st.changes.requests.values():
@@ -466,7 +467,7 @@ class PagesMixin:
         warned = [f for f in bind.get("findings") or [] if f.get("severity") in ("warning", "error")]
         if warned:  # what the last check of the source against the definition found, for whoever looks after it
             items.append({"kind": "check", "id": "bind", "title": f"DB 대조 {'오류' if bind.get('errors') else '경고'} {len(warned)}건",
-                          "detail": " · ".join(str(f.get("detail") or f.get("message") or "") for f in warned[:2])[:160],
+                          "detail": " · ".join(f"{str(f.get('element', '')).split(':', 1)[-1]} {FINDING.get(f.get('kind'), f.get('kind'))}" for f in warned[:3])[:160],
                           "mine": False})
         ws = self.workspace
         if ws is not None and ws.dirty:

@@ -486,7 +486,9 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                         _forget_in_roles(acc, prop=f"{t}.{p}")
                 continue
             if s == "questions":
-                acc["questions"] = [q for q in acc["questions"] if q["id"] not in items]
+                own = {q.get("id") for q in m.body.get("questions") or []}  # one it takes over and writes itself stays
+                last = {q["id"]: i for i, q in enumerate(acc["questions"])}
+                acc["questions"] = [q for i, q in enumerate(acc["questions"]) if q["id"] not in items or (q["id"] in own and last[q["id"]] == i)]
                 removed.update({f"question:{q}": m.name for q in items})
                 continue
             if s == "states":  # a type's state machine, when the source has no state column

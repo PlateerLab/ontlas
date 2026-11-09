@@ -151,9 +151,9 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | | 결과 | See what each file came to, and the one JSON they roll up into |
 | | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
 | | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
-| | 모델링 | 작업 공간 | Pick an object from a tree of modules or the schema graph and change it on its form, read it in its module file, or see what uses it |
+| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. The same objects, properties and relations as tables, one switch away |
 | | | 온톨로지 | See objects and relations as a graph, and documents as documents, sections and concepts; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | | 정의 관리 | Change objects, properties, relations, states, rules, functions, actions and roles on forms; the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
+| | | 정의 관리 | Change states and roles on forms; rules, functions and actions are under 규칙 · 액션, where the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
 | | 라이브러리 · 변경 | 라이브러리 | Apply and remove modules and edit a module's file |
 | | | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
 | 운영 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
@@ -512,6 +512,14 @@ returns `Definitions`, loaded with `xspace ingest --adapter FILE` or `XSPACE_ADA
 refused with what to export it to.
 
 ## The pipeline board
+
+What is wrong is said as something to act on (`GET issues`), the same on the board, the home, 할 일, 흐름 and 검증. An alert opens a
+panel where it was pressed: the items behind it, why they came to be, what they reach and the ways to fix each, marked as fixed
+here (in the workspace, then a change request), applied at once (taking a module off, shown first on a copy, or reading the source
+again) or fixed at the source (with the list to hand over). Alerts that read the same broken column stand under one cause; a
+failure is only gathered under another when what failed reads what is broken. Choosing a fix opens the field that mends it, with
+a bar saying which problem this is and what is next, and when the change goes in the board measures again and the issue closes.
+When each opened and closed is written to the journal.
 
 파이프라인 관제, under 운영, draws the pipeline as a building: raw data at the bottom, then conversion,
 the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
