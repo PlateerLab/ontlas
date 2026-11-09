@@ -97,6 +97,10 @@
   not hold yet is drawn first, and a window lists many records by type with paging.
 - 모델링 › 온톨로지 draws the whole ontology as the workspace's cards, every module a region, beside the picked object's
   definition.
+- On 모델링 › 온톨로지 a pressed card gathers what it connects to around it at reading size, in one view: what points at it
+  on the left, what it points at on the right, its parent above and its kinds below, on top of the rest of the ontology,
+  which stays faint where it was. Another card moves the focus; an empty spot, Esc or 전체 보기 comes back to where the
+  person was looking.
 - The README's table of screens follows the new sidebar.
 
 ## 0.13.0

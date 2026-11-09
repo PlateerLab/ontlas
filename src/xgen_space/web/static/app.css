@@ -925,3 +925,14 @@ label.gxrow.off { color:var(--muted); cursor:default; }
 .rprow:hover { border-color:var(--blue-line); background:#f8fbff; }
 .rprow span:last-child { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width: 640px) { .rpform { grid-template-columns:1fr; } .rprow { grid-template-columns:auto 1fr; } .rprow span:nth-child(n+3) { grid-column:2; } }
+
+/* the picked card with what it connects to, on top; the rest of the ontology faint behind */
+.erdim { opacity:.16; }
+.ered.top text { fill:#1d3f8f; font-weight:700; }
+.ered.top { animation:erfade .28s ease; }
+#erhot path { fill:var(--blue); }
+.ercanvas.focused .ernode.on rect { filter:drop-shadow(0 3px 10px rgba(37, 99, 235, .28)); }
+.erside { font-size:11.5px; font-weight:700; fill:var(--muted); }
+.ercanvas.focused .ernode { cursor:pointer; }
+@keyframes erfade { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .ered.top { animation:none; } }
