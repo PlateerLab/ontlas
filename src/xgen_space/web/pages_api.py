@@ -442,14 +442,28 @@ class PagesMixin:
 
     # ---- a decision table tried before it is filed ------------------------------------------------------------------
 
+    def _pending_onto(self):
+        """The definition as the pending edits leave it, which a table being edited is tried on."""
+        ws = self._ws()
+        if not ws.dirty:
+            return self.studio.onto, False
+        try:
+            return ws.composed().ontology, True
+        except Exception:  # edits that no longer compose are tried as the studio stands
+            return self.studio.onto, False
+
     def simulate(self, name: str, key: str = "", inputs: dict | None = None) -> dict:
         """Decide once on given values (a record's, with any of them changed), then say which single change of one input
-        would give another answer, and what the table answers at each threshold its rules name."""
+        would give another answer, and what the table answers at each threshold its rules name. The table is the one
+        being edited: the pending edits are in it before they are filed. The validation questions on the table are
+        answered by it too."""
+        from xgen_space.decide.table import DecisionError, evaluate_table
         from xgen_space.decide.words import input_label, verdict
         from xgen_space.values import coerce
 
         st = self.studio
-        table = st.onto.decisions[name]
+        onto, pending = self._pending_onto()
+        table = onto.decisions[name]
         base: dict[str, Any] = {}
         if key:
             base = dict(st.decide(name, key).inputs)
@@ -459,23 +473,38 @@ class PagesMixin:
         values = {i: base.get(i) for i in table.inputs}
 
         def run(vals: dict) -> dict:
-            res = st.decide(name, inputs=vals)
-            word, good = verdict(table, res.outputs)
-            return {"outputs": res.outputs, "matched": list(res.matched), "verdict": word, "yes": good}
+            try:
+                outs, matched, _ = evaluate_table(table, vals)
+            except DecisionError as e:
+                return {"outputs": {}, "matched": [], "verdict": "판정 불가", "yes": False, "error": str(e)}
+            word, good = verdict(table, outs)
+            return {"outputs": outs, "matched": list(matched), "verdict": word, "yes": good}
+
+        questions = []
+        for q in onto.questions:
+            if q.decision != name:
+                continue
+            try:
+                got = run(dict(st.decide(name, q.key, q.params).inputs))["outputs"]
+            except Exception as e:  # a question on a record the source no longer has
+                questions.append({"id": q.id, "text": q.text, "key": q.key, "passed": False, "error": str(e)})
+                continue
+            passed = isinstance(got, dict) and all(got.get(k) == v for k, v in q.expect.items())
+            questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "got": got, "passed": passed})
 
         now = run(values)
         tries = self._candidates(table, values)
         other, edges = [], []
         for i, vals in tries:
             got = run({**values, i: vals})
-            row = {"input": i, "label": input_label(st.onto, table, i), "value": vals, **got}
+            row = {"input": i, "label": input_label(onto, table, i), "value": vals, **got}
             edges.append(row)
             if got["verdict"] != now["verdict"] and not any(x["input"] == i for x in other):
                 other.append(row)
         return plain({"name": name, "label": table.label or name, "key": key, "hit_policy": table.hit_policy,
-                      "inputs": [{"name": i, "label": input_label(st.onto, table, i), "type": table.inputs[i].type,
+                      "inputs": [{"name": i, "label": input_label(onto, table, i), "type": table.inputs[i].type,
                                   "value": values[i]} for i in table.inputs],
-                      **now, "other": other, "edges": edges[:24]})
+                      **now, "other": other, "edges": edges[:24], "questions": questions, "pending": pending})
 
     @staticmethod
     def _candidates(table, values: dict) -> list[tuple[str, Any]]:

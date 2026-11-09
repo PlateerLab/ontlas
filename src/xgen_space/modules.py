@@ -570,7 +570,7 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
                        "link": "links", "identity": "identities", "metric": "metrics",
                        "conflict": "conflicts", "function": "functions"}.get(kind)
             if kind == "decision":
-                ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
+                ident = ident.split(".", 1)[0].split(" ", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
             if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:
                 if ident not in module.remove.get(section, []):
                     module.remove.setdefault(section, []).append(ident)

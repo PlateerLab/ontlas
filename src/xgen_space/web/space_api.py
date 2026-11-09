@@ -517,7 +517,8 @@ class SpaceMixin:
             periods = []
         due = [asdict(d) for d in st.actions.due()] if st.source else []
         views = [{"name": t.name, "label": t.label or t.name, "view": t.view_name, "inline": bool(t.view.get("inline"))} for t in o.objects.values() if t.view]
-        findings = [{**f.to_dict(), "label": o.decisions[f.decision].label or f.decision} for f in decision_findings(o)]
+        edited, _ = self._pending_onto()  # a table being edited is checked as it is being edited
+        findings = [{**f.to_dict(), "label": edited.decisions[f.decision].label or f.decision} for f in decision_findings(edited)]
         return plain({"parameters": params, "metrics": dictionary(o), "findings": findings,
                       "conflicts": [conflict_view(c) for c in o.source_conflicts()], "periods": periods, "due": due, "views": views})
 

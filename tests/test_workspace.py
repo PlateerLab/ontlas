@@ -74,3 +74,25 @@ def test_a_comment_stays_on_its_element(session):
 def test_an_object_says_who_adds_to_it_but_not_where_it_is_bound(session):
     objs = {o["name"]: o for o in session.manage_state()["objects"]}
     assert all("Binding" not in x for o in objs.values() for x in o["extended_by"])
+
+
+def test_a_rule_moves_and_the_table_is_tried_as_edited(session):
+    before = session.simulate("returnEligibility", "I1001")
+    assert before["matched"][0] == "vip-window" and not before["pending"] and all(q["passed"] for q in before["questions"])
+    session.manage_edit("move_rule", {"decision": "returnEligibility", "id": "in-window", "to": 0})
+    order = [r["id"] for d in session.manage_state()["decisions"] if d["name"] == "returnEligibility" for r in d["rules"]]
+    assert order[:2] == ["in-window", "vip-window"]
+    after = session.simulate("returnEligibility", "I1001")
+    assert after["pending"] and after["matched"] == ["in-window"]
+    assert any(not q["passed"] for q in after["questions"])  # the VIP question no longer gets its rule
+    assert session.studio.decide("returnEligibility", "I1001").matched[0] == "vip-window"  # the studio is unchanged
+
+
+def test_a_table_takes_another_hit_policy_only_when_its_rules_allow_it(session):
+    with pytest.raises(ValueError, match="우선순위"):
+        session.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "priority"})
+    session.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "collect"})
+    d = next(d for d in session.manage_state()["decisions"] if d["name"] == "returnEligibility")
+    assert d["hit_policy"] == "collect" and any(r["module"] == "acme-overlay" for r in d["rules"])
+    edited = [f for f in session.rules_state()["findings"] if f["decision"] == "returnEligibility"]
+    assert not edited  # a collected table has nothing to overlap
