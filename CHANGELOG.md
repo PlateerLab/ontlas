@@ -90,6 +90,13 @@
 - The modelling diagram follows a pick in the tree, scrolls, pans by dragging the empty canvas, zooms (Ctrl + wheel)
   and fits the width on opening; the modules it reaches stand beside it.
 - 초안 생성 opens at its first step, the files and the settings, in the same stepper as the review.
+- A record is found as a person would say it (`GET records/find`): a key or part of one in any case, a name, or a
+  definition, that is a type's name with words its values hold ("VIP 고객", "취소된 주문": Korean words reach English
+  codes through the library's words), a page at a time. On the graph the start and both ends of a path are found as
+  they are typed, Enter takes the best match and draws it, a picked box becomes the path's start, a start the graph does
+  not hold yet is drawn first, and a window lists many records by type with paging.
+- 모델링 › 온톨로지 draws the whole ontology as the workspace's cards, every module a region, beside the picked object's
+  definition.
 - The README's table of screens follows the new sidebar.
 
 ## 0.13.0

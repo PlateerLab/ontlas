@@ -40,6 +40,24 @@ def _title(onto, type_name: str) -> str:
     return ""
 
 
+ENDINGS = ("에서", "으로", "된", "한", "인", "의", "을", "를", "은", "는", "이", "가", "로")  # what a Korean word carries on
+
+
+def _forms(word: str) -> list[str]:
+    """The ways a word may stand in a value: as typed, in capitals and small letters, and without a Korean ending."""
+    out = [word, word.upper(), word.lower()]
+    for e in ENDINGS:
+        if len(word) > len(e) + 1 and word.endswith(e):
+            out.append(word[:-len(e)])
+            break
+    return list(dict.fromkeys(out))
+
+
+def find_prop_of(onto, type_name: str, code: str) -> str:
+    """The property of a type whose allowed values carry `code`."""
+    return next((p for p in all_props(onto, type_name) if code in (find_prop(onto, type_name, p).labels or {})), "")
+
+
 def _lineage(onto, name: str) -> list[str]:
     out, t = [], name
     while t and t in onto.objects and t not in out:
@@ -138,7 +156,7 @@ class PagesMixin:
         for p in all_props(o, type_name):
             prop = find_prop(o, type_name, p)
             v = row.get(p)
-            if p in (t.key, tp) or v in (None, "") or prop.expr or prop.mask or p.endswith("_id"):
+            if p in (t.key, tp) or v in (None, "") or prop.expr or prop.mask or p.endswith("_id") or prop.type == "boolean":
                 continue
             rank = 0 if prop.type == "enum" or (t.states and p == t.states.property) else 1 if prop.type in ("date", "datetime") else 2
             picks.append((rank, str(v)[:16].replace("T", " ") if prop.type in ("date", "datetime") else str(v)))
@@ -302,28 +320,104 @@ class PagesMixin:
                       "labels": labels, "total": total[0][0] if total else len(rows), "q": q,
                       "rows": [{"key": str(r[0]), "fields": dict(zip(show[1:], r[1:]))} for r in rows]})
 
-    def record_find(self, q: str, limit: int = 10) -> dict:
-        """Records of any type whose key is the words or whose name holds them: where a graph or a search starts."""
+    def record_find(self, q: str, limit: int = 10, type_name: str = "", offset: int = 0) -> dict:
+        """Records found by what a person would say of them: a key or part of one, a name, or a definition, that is a
+        type's name with words its values hold ("VIP 고객" is a customer whose grade is VIP, "고객" every customer).
+        `type_name` keeps to one type; `offset` pages through many."""
         st, o = self.studio, self.studio.onto
-        q = " ".join(str(q or "").split())[:60]
-        if not q:
-            return {"q": q, "items": []}
-        out = []
-        for name, t in o.objects.items():
-            if not t.table or len(out) >= limit:
+        q = " ".join(str(q or "").split())[:80]
+        limit, offset = max(1, min(int(limit or 10), LIST_ROWS)), max(0, int(offset or 0))
+        words = q.split()
+        kinds = [type_name] if type_name in o.objects else [n for n, t in o.objects.items() if t.table]
+        said = self._type_words(q) if not type_name else None
+        if said:  # the definition names the type: the rest of the words are what its values hold
+            kinds, words = [said[0]], [w for w in words if w not in said[1]]
+        if not words and not said and not type_name:
+            return {"q": q, "type": "", "items": [], "total": 0, "more": False}
+        out, total = [], 0
+        for name in kinds:
+            t = o.objects[name]
+            if not t.table:
                 continue
             tp = _title(o, name)
-            parts = [Cmp(Ref("x", t.key), "eq", q)] + ([Contains(Ref("x", tp), q)] if tp and tp != t.key else [])
+            text = [p for p in all_props(o, name) if find_prop(o, name, p).type in ("string", "enum") and not find_prop(o, name, p).expr
+                    and not find_prop(o, name, p).mask]
+            conds = []
+            i = 0
+            while i < len(words):
+                w = words[i]
+                pair = self._coded(name, text, _forms(w)[-1] + _forms(words[i + 1])[-1]) if i + 1 < len(words) else []
+                if pair:  # two words that say one value together: 배송 완료 is DELIVERED
+                    conds.append(Or(pair) if len(pair) > 1 else pair[0])
+                    i += 2
+                    continue
+                forms = _forms(w)
+                either = [Contains(Ref("x", p), f) for p in text for f in forms] + self._coded(name, text, forms[-1])
+                if t.key not in text:
+                    either += [Cmp(Ref("x", t.key), "eq", f) for f in forms]
+                conds.append(Or(either) if len(either) > 1 else either[0])
+                i += 1
+            where = (And(conds) if len(conds) > 1 else conds[0]) if conds else None
             cols = [Column(Ref("x", t.key), "k")] + ([Column(Ref("x", tp), "t")] if tp and tp != t.key else [])
             try:
-                rows = st.run(Query(nodes={"x": name}, where=Or(parts) if len(parts) > 1 else parts[0], columns=cols,
-                                    order=[Order("k")], limit=3)).rows
+                rows = st.run(Query(nodes={"x": name}, where=where, columns=cols, order=[Order("k")],
+                                    limit=offset + limit + 1 if len(kinds) == 1 else 4)).rows
+                if len(kinds) == 1:
+                    n = st.run(Query(nodes={"x": name}, where=where, columns=[Column(Agg("count", node="x"), "n")])).rows
+                    total = int(n[0][0]) if n else len(rows)
+                    rows = rows[offset:offset + limit + 1]
             except Exception:  # a type the source cannot search is passed over
                 continue
             out += [{"type": name, "type_label": t.label or name, "key": str(r[0]), "title": r[1] if len(r) > 1 else None}
                     for r in rows]
-        exact = [x for x in out if x["key"] == q]
-        return plain({"q": q, "items": (exact + [x for x in out if x["key"] != q])[:limit]})
+            if len(kinds) > 1 and len(out) > limit * 3:
+                break
+        exact = [x for x in out if x["key"].lower() == q.lower()]
+        items = exact + [x for x in out if x not in exact]
+        for x in items[:limit]:  # what tells a record without a name apart: its state, a date, a grade
+            x["sub"] = self._summary(x["type"], st.fetch(x["type"], x["key"]) or {})
+        one = len(kinds) == 1
+        return plain({"q": q, "type": kinds[0] if one else "", "type_label": (o.objects[kinds[0]].label or kinds[0]) if one else "",
+                      "items": items[:limit], "total": total if one else len(items), "more": len(items) > limit,
+                      "offset": offset})
+
+    def _coded(self, type_name: str, props: list[str], word: str) -> list:
+        """Conditions for the coded values a Korean word stands for: by the names the codes carry, or by the English
+        word it is (취소 is Cancellation, so CANCELLED)."""
+        from xgen_space.naming import stem, vocabulary
+
+        o = self.studio.onto
+        if getattr(self, "_vocab", None) is None or self._vocab[0] is not o:
+            self._vocab = (o, vocabulary([o], getattr(self, "_terms", lambda: [])() or []))
+        en = self._vocab[1].get(word)
+        out = []
+        for p in props:
+            d = find_prop(o, type_name, p)
+            named = [c for c, label in (d.labels or {}).items() if word in str(label)]
+            by_word = [str(v) for v in d.values or [] if en and len(stem(en)) >= 4 and stem(en) in str(v).upper()]
+            out += [Cmp(Ref("x", p), "eq", c) for c in dict.fromkeys(named + by_word)]
+        return out
+
+    _vocab = None
+
+    def _type_words(self, q: str) -> tuple[str, list[str]] | None:
+        """The type a definition names, and the words that named it: the longest label, name or glossary word in it."""
+        o = self.studio.onto
+        words = q.split()
+        names: list[tuple[str, str]] = []
+        for n, t in o.objects.items():
+            if t.table:
+                names += [(n, x) for x in {t.label or "", n} if x]
+        for term in getattr(self, "_terms", lambda: [])() or []:
+            hit = next((n for n, x in names if x == term.get("term")), None)
+            if hit:
+                names += [(hit, str(s)) for s in term.get("synonyms") or [] if s]
+        best = None
+        for n, x in names:
+            used = [w for w in words if w.lower() == x.lower() or (len(x) > 1 and w.startswith(x) and len(w) - len(x) <= 2)]
+            if used and (best is None or len(x) > len(best[2])):
+                best = (n, used, x)
+        return (best[0], best[1]) if best else None
 
     # ---- what waits on a person ------------------------------------------------------------------------------------
 
