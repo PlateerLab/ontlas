@@ -190,7 +190,8 @@ class Repositories:
                 blob.write_bytes(data)
             before = r["files"].get(path)
             r["files"][path] = {"sha256": sha, "bytes": len(data), "uploaded": _now(),
-                                "included": before["included"] if before else True, **facts}
+                                "included": before["included"] if before else True,
+                                "embed": before.get("embed", True) if before else True, **facts}
             if before and before["sha256"] != sha:
                 self._forget({before["sha256"]})
             self._log(r, "replace" if before else "upload", path, f"{len(data):,}바이트")
@@ -304,6 +305,17 @@ class Repositories:
                 self._log(r, "include" if on else "exclude", x)
             self._save()
 
+    def embed(self, repo: str, paths: list[str], on: bool) -> None:
+        """Set whether the documents of files, or of everything in folders, are embedded into the vector stores."""
+        with self.lock:
+            r = self._repo(repo)
+            for p, f in r["files"].items():
+                if any(_under(p, x) for x in paths):
+                    f["embed"] = on
+            for x in paths:
+                self._log(r, "embed" if on else "unembed", x)
+            self._save()
+
     def listing(self, repo: str, folder: str = "") -> tuple[list[dict], list[dict]]:
         """What a folder shows: its folders with what they hold, and its files."""
         with self.lock:
@@ -315,9 +327,10 @@ class Repositories:
                 inside = [f for k, f in r["files"].items() if _under(k, p)]
                 folders.append({"path": p, "name": p.rsplit("/", 1)[-1], "files": len(inside),
                                 "bytes": sum(f["bytes"] for f in inside),
-                                "included": sum(bool(f["included"]) for f in inside)})
-            files = [{"path": k, "name": k.rsplit("/", 1)[-1], **f} for k, f in sorted(r["files"].items())
-                     if parent(k) == folder]
+                                "included": sum(bool(f["included"]) for f in inside),
+                                "embedded": sum(f.get("embed", True) is not False for f in inside)})
+            files = [{"path": k, "name": k.rsplit("/", 1)[-1], **f, "embed": f.get("embed", True) is not False}
+                     for k, f in sorted(r["files"].items()) if parent(k) == folder]
             return folders, files
 
 

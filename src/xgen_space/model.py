@@ -249,15 +249,15 @@ class Role:
     scope: dict[str, Any] = field(default_factory=dict)  # {attribute: seller_id, types: {Type: property | {via, property}}}
     scoped: dict[str, dict] = field(default_factory=dict)  # made from scope: the row filter each type gets
     closed: set[str] = field(default_factory=set)  # decisions that read a scoped row with no regard for the scope
-    documents: list[str] | None = None  # document names or patterns this role reads; None reads every document
+    documents: list[str] | None = None  # document names, file paths or patterns (정책/*) this role reads; None reads every one
 
     def can_read(self, type_name: str) -> bool:
         return "*" in self.read or type_name in self.read
 
-    def can_read_document(self, name: str) -> bool:
+    def can_read_document(self, name: str, path: str = "") -> bool:
         from fnmatch import fnmatchcase
 
-        return self.documents is None or any(fnmatchcase(str(name), p) for p in self.documents)
+        return self.documents is None or any(fnmatchcase(str(name), p) or (path and fnmatchcase(path, p)) for p in self.documents)
 
     def can(self, verb: str, name: str) -> bool:
         if verb == "run" and name in self.closed:  # roles.decide_in_scope asks them inside the scope

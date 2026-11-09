@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from xgen_space.embed import shared_wording
 
@@ -17,6 +17,7 @@ SPACES = re.compile(r"\s+")
 ARTICLE = re.compile(r"(\d+)(?:\.\d+)?\s*조")
 KEPT_FROM_STORE = 2  # passages the vector store ranks highest stay among the found, whatever the fusion made of them
 KEPT_SCORE = 0.5  # of the best score: below what fusion ranked, above what is noise
+RELATIONS_SHOWN = 12
 
 
 @dataclass
@@ -68,10 +69,14 @@ def entries(onto, space=None, terms: list[dict] | None = None) -> list[Entry]:
                                [f"object:{a.target}"]))
     if space is not None:
         made = space.concepts(onto, terms)
+        stated: dict[str, set[str]] = {}
+        for s, _, o, chunk in space.relation_triples(onto, terms):
+            stated.setdefault(chunk, set()).update((s, o))
         for c in space.chunks.values():
             found = made["sections"].get((c.document, c.section), {})
-            about = sorted({made["concepts"][i].element for i in found if i in made["concepts"] and made["concepts"][i].element})
-            items.append(Entry(c.id, "document", f"{c.document} {c.section}", c.text, "", about, {"document": c.document, "section": c.section}))
+            about = {made["concepts"][i].element for i in found if i in made["concepts"] and made["concepts"][i].element}
+            items.append(Entry(c.id, "document", f"{c.document} {c.section}", c.text, "", sorted(about | stated.get(c.id, set())),
+                               {"document": c.document, "section": c.section}))
     return items
 
 
@@ -79,12 +84,16 @@ def _tight(text: str) -> str:
     return SPACES.sub("", text or "")
 
 
-def links_between(onto, items: list[Entry]) -> list[tuple[str, str, str]]:
-    """The graph between entries. A rule's citation ties it to the clause it comes from."""
+def links_between(onto, items: list[Entry], space=None, terms: list[dict] | None = None) -> list[tuple[str, str, str]]:
+    """The graph between entries. A rule's citation ties it to the clause it comes from, and a relation read in a passage
+    ties the two things it names."""
     out: list[tuple[str, str, str]] = []
     if onto is not None:
         for lk in onto.links.values():
             out.append((f"object:{lk.source}", lk.label or lk.name, f"object:{lk.target}"))
+    if space is not None:
+        held = {e.id for e in items if e.kind == "document"}
+        out += list(dict.fromkeys((s, p, o) for s, p, o, chunk in space.relation_triples(onto, terms) if chunk in held and s != o))
     docs = [e for e in items if e.kind == "document"]
     for e in items:
         out += [(e.id, "언급", m) for m in e.mentions if m != e.id]
@@ -149,7 +158,7 @@ class OmniFuseRetriever:
         return found[:max(k, len(found))]
 
     def relations(self, text: str) -> list[str]:
-        return list(self.fuse.search(text, synthesize=False).relations)[:12]
+        return list(self.fuse.search(text, synthesize=False).relations)[:RELATIONS_SHOWN]
 
 
 RETRIEVERS: dict[str, Callable] = {"words": WordsRetriever, "omnifuse": OmniFuseRetriever}
@@ -178,15 +187,16 @@ def default_retriever() -> str:
 
 class Knowledge:
     def __init__(self, items: list[Entry], links: list[tuple[str, str, str]], retriever, keep: Any = None,
-                 hidden: frozenset[str] = frozenset()):
+                 hidden: frozenset[str] = frozenset(), stated: dict[str, set[str]] | None = None):
         self.items, self.links, self.retriever = items, links, retriever
         self._keep = keep  # the ontology this was built from: its identity is the cache key
         self.hidden = hidden  # passages of documents the reader may not read: never found, never cited
+        self.stated = stated or {}  # a relation read in documents, as it is said -> the passages that state it
 
     def only(self, allowed: Callable[[str], bool]) -> Knowledge:
         """The same index for a reader of some documents. The index is shared; what comes back is not."""
         hidden = frozenset(e.id for e in self.items if e.kind == "document" and not allowed(e.meta.get("document", "")))
-        return self if not hidden else Knowledge(self.items, self.links, self.retriever, self._keep, hidden)
+        return self if not hidden else Knowledge(self.items, self.links, self.retriever, self._keep, hidden, self.stated)
 
     def find(self, text: str, k: int = 8, kinds: tuple[str, ...] = ()) -> list[dict]:
         wide = max(k * 4, 24) if kinds or self.hidden else k
@@ -197,10 +207,15 @@ class Knowledge:
             out.append(self._said(e, score))
         return out[:k]
 
-    def relations(self, text: str) -> list[str]:
+    def relations(self, text: str, found: Iterable[str] = ()) -> list[str]:
+        """Relations about a question. One read in documents is said only when a passage found for the question states it,
+        so it explains what was found, and never from a passage the reader may not read."""
         gone = {e.meta.get("document", "") for e in self.items if e.id in self.hidden} - {""}
-        return [r for r in self.retriever.relations(text) if " → 언급 → " not in r  # that a text names a thing is no relation
-                and not any(d in r for d in gone)]
+        here = set(found) - self.hidden
+        out = [r for r in self.retriever.relations(text) if " → 언급 → " not in r  # that a text names a thing is no relation
+               and not any(d in r for d in gone) and (r not in self.stated or self.stated[r] & here)]
+        out += [r for r, chunks in self.stated.items() if chunks & here and r not in out]
+        return out[:RELATIONS_SHOWN]
 
     def _said(self, e: Entry, score: float = 1.0) -> dict:
         return {"id": e.id, "kind": e.kind, "kind_label": KIND_WORD.get(e.kind, e.kind), "title": e.title, "text": e.text,
@@ -224,12 +239,18 @@ class Knowledge:
 
 def build(onto, space=None, terms: list[dict] | None = None, kind: str = "") -> Knowledge:
     items = entries(onto, space, terms)
-    links = links_between(onto, items)
+    links = links_between(onto, items, space, terms)
+    stated: dict[str, set[str]] = {}
+    if space is not None:
+        title = {e.id: e.title for e in items}
+        label = lambda i: title.get(i, i.split(":", 1)[-1])  # noqa: E731 - as both retrievers say a relation
+        for s, p, o, chunk in space.relation_triples(onto, terms):
+            stated.setdefault(f"{label(s)} → {p} → {label(o)}", set()).add(chunk)
     embed = None
     if space is not None and getattr(space.embedder, "semantic", False):
         embed = space.embedder.embed
     make = RETRIEVERS[kind or default_retriever()]
-    return Knowledge(items, links, make(items, links, space=space, embed=embed), keep=onto)
+    return Knowledge(items, links, make(items, links, space=space, embed=embed), keep=onto, stated=stated)
 
 
 __all__ = ["Entry", "KIND_WORD", "Knowledge", "OmniFuseRetriever", "WordsRetriever", "build", "default_retriever", "entries",

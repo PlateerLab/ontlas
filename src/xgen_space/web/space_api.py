@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -51,9 +53,12 @@ class SpaceMixin:
         return self.studio.space
 
     def _sync_space(self) -> None:
-        """The catalog says which documents are in the space: what a file holds goes in, what left the catalog goes out."""
+        """The catalog says which documents are in the space: what a file holds goes in with the file's path and whether
+        it is embedded, and what left the catalog goes out."""
         self._hold()
-        docs = [d for defs in self.definitions.values() for d in (getattr(defs, "documents", None) or [])]
+        files = self.repositories.files(self.repo)
+        docs = [{**d, "path": path, "embed": files.get(path, {}).get("embed", True) is not False}
+                for path, defs in self.definitions.items() for d in (getattr(defs, "documents", None) or [])]
         self.space.set_uploaded(docs)
 
     def _mentions(self, name: str) -> list[dict]:
@@ -70,7 +75,10 @@ class SpaceMixin:
             c = counts.setdefault(doc, {"sections": 0, "mentions": 0})
             c["sections"] += 1
             c["mentions"] += sum(found.values())
-        docs = [{"name": n, "kind": d.get("kind", ""), "chunks": len(made["chunks"].get(n, [])), "fixed": n in sp.fixed, **counts.get(n, {"sections": 0, "mentions": 0})}
+        held = {r["name"]: r for r in sp.document_rows()}
+        docs = [{"name": n, "kind": d.get("kind", ""), "chunks": held[n]["indexed"], "passages": held[n]["passages"], "fixed": n in sp.fixed,
+                 "path": held[n]["path"], "folder": held[n]["folder"], "embed": held[n]["embed"], "state": held[n]["state"],
+                 **counts.get(n, {"sections": 0, "mentions": 0})}
                 for n, d in sp.documents().items()]
         check = None
         try:
@@ -81,17 +89,74 @@ class SpaceMixin:
         decided = [q.text for q in onto.questions if q.decision][:2]
         totals = [q.label for q in onto.queries.values() if q.label and not q.params and "sum" in str(q.query.get("return"))]  # a query that adds up says most
         named = (totals or [q.label for q in onto.queries.values() if q.label and not q.params])[:1]
-        return {**st, "items": docs, "concepts": len(made["concepts"]), "check": check, "can_connect": self.data.allow_connect,
-                "kinds": known_kinds(), "examples": decided + named + [c["text"] for c in (check or {}).get("results", [])[:2]]}
+        from xgen_space.relations import default_reader, known_readers
 
-    def space_search(self, text: str, k: int = 5, store: str = "") -> dict:
+        return {**st, "items": docs, "concepts": len(made["concepts"]), "check": check, "can_connect": self.data.allow_connect,
+                "kinds": known_kinds(), "examples": decided + named + [c["text"] for c in (check or {}).get("results", [])[:2]],
+                "folders": sp.folders(), "reading": sp.reading(), "readers": known_readers(), "reader": default_reader(),
+                "embedders": self._embedder_choices(), "can_read": self.llm is not None}
+
+    # ---- the model the documents are embedded with ---------------------------------------------------------------
+
+    def _embedder_choices(self) -> list[dict]:
+        """The models this space may switch to: those the server has open already, and on an install that allows
+        connections any kind with its default model."""
+        from xgen_space.embed import _KINDS, _OPEN
+
+        out, seen = [], set()
+        for key, e in list(_OPEN.items()):
+            d = e.describe()
+            if (d["kind"], d["name"]) not in seen:
+                seen.add((d["kind"], d["name"]))
+                out.append({"spec": json.loads(key), "kind": d["kind"], "name": d["name"], "dim": d["dim"], "semantic": d["semantic"]})
+        if self.data.allow_connect:
+            out += [{"spec": {"kind": k}, "kind": k, "name": "", "dim": None, "semantic": k != "hash"}
+                    for k in sorted(_KINDS) if k != "openai" and all(o["kind"] != k for o in out)]
+        if all(o["kind"] != "hash" for o in out):
+            out.append({"spec": {"kind": "hash"}, "kind": "hash", "name": "hash-512", "dim": 512, "semantic": False})
+        return out
+
+    def _open_choice(self, spec: Any):
+        from xgen_space.embed import _OPEN, open_embedder
+
+        spec = dict(spec or {})
+        known = {json.dumps(json.loads(k), sort_keys=True) for k in _OPEN}
+        wanted = json.dumps(spec, sort_keys=True, default=str)
+        if wanted not in known and spec.get("kind") != "hash" and not self.data.allow_connect:
+            raise PermissionError("공개 데모에서는 서버에 준비된 임베딩 모델만 선택할 수 있어 변경하지 못했습니다.")
+        try:
+            return open_embedder(spec)
+        except ImportError:
+            raise ValueError(f"{spec.get('kind', '')} 임베딩 모델의 패키지가 설치되어 있지 않아 변경하지 못했습니다.") from None
+        except (KeyError, ValueError, EmbedError, OSError) as e:
+            raise ValueError(f"임베딩 모델을 열지 못했습니다. {_human(e)}") from None
+
+    def space_embedder(self, op: str, spec: Any) -> dict:
+        """Before a change of model, what it embeds again and about how long; on the change, the stores are refilled."""
+        self._sync_space()
+        e = self._open_choice(spec)
+        if op == "plan":
+            try:
+                return plain({"ok": True, **self.space.reembed_plan(e)})
+            except (EmbedError, OSError) as x:
+                raise ValueError(f"새 임베딩 모델로 시간을 재지 못했습니다. {_human(x)}") from None
+        if op != "use":
+            raise ValueError("요청 형식이 올바르지 않아 처리하지 못했습니다.")
+        before = self.space.embedder.describe()
+        r = self.space.use_embedder(e)
+        if r.get("embed_error"):
+            raise ValueError(f"새 임베딩 모델로 문서를 임베딩하지 못했습니다. {r['embed_error']}")
+        self.event("adapter", f"임베딩 모델 변경 · {before['name']} → {e.describe()['name']}")
+        return self.space_state()
+
+    def space_search(self, text: str, k: int = 5, store: str = "", folder: str = "") -> dict:
         text = str(text or "").strip()[:SEARCH_MAX]
         if not text:
             raise ValueError("검색어가 없어 찾지 못했습니다. 찾을 내용을 입력해 주세요.")
         self._sync_space()
         sp = self.space
         try:
-            hits = sp.search(text, max(1, min(int(k or 5), K_MAX)), store=store)
+            hits = sp.search(text, max(1, min(int(k or 5), K_MAX)), store=store, folder=str(folder or ""))
         except (VectorError, OSError, EmbedError) as e:
             raise ValueError(f"벡터 저장소에서 찾지 못했습니다. {_human(e)}") from None
         onto, terms = self.studio.onto, self._terms()
@@ -102,15 +167,16 @@ class SpaceMixin:
                 "store": hits[0]["store"] if hits else sp.primary(), "can_answer": self.llm is not None,
                 "compare": sp.compare(text, min(int(k or 5), K_MAX)) if len(sp.stores) > 1 else None}
 
-    def space_ask(self, text: str, role: str = "", principal: dict | None = None) -> dict:
-        """One question over everything here. The engine answers what it can, and says when a model could go further."""
+    def space_ask(self, text: str, role: str = "", principal: dict | None = None, folder: str = "") -> dict:
+        """One question over everything here, or over one folder's documents. The engine answers what it can, and says when
+        a model could go further."""
         from xgen_space.tools import StudioTools
 
         self._sync_space()
         tools = StudioTools(self.studio, role=role or None, principal=principal, actor_id=self.who or "page")
         tools.terms = self._terms()
         try:
-            out = tools.answer_question(text)
+            out = tools.answer_question(text, str(folder or ""))
         except (VectorError, OSError, EmbedError) as e:
             raise ValueError(f"검색 엔진에서 찾지 못했습니다. {_human(e)}") from None
         except PermissionError:
@@ -121,12 +187,12 @@ class SpaceMixin:
         out["can_model"] = self.llm is not None
         return plain(out)
 
-    def space_ask_more(self, text: str, role: str = "", principal: dict | None = None) -> dict:
+    def space_ask_more(self, text: str, role: str = "", principal: dict | None = None, folder: str = "") -> dict:
         """What the engine could not settle alone: a model picks data or documents, and words only what was found."""
         if self.llm is None:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 답변을 만들지 못했습니다. 찾은 근거를 확인해 주세요."}
         with self.lock:
-            found = self.space_ask(text, role, principal)
+            found = self.space_ask(text, role, principal, folder)
         if not found.get("ok"):
             return found
         llm, _ = self._budgeted()
@@ -174,31 +240,113 @@ class SpaceMixin:
             return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 문서를 확인해 주세요."}
         return {"ok": True, "answer": answer, "hits": found["hits"]}
 
-    def space_graph(self) -> dict:
+    def space_graph(self, folder: str = "") -> dict:
         self._sync_space()
-        return self.space.graph(self.studio.onto, self._terms())
+        return self.space.graph(self.studio.onto, self._terms(), str(folder or ""))
 
-    def space_read(self) -> dict:
-        """One section per request: a model takes tens of seconds, and the page shows each result as it comes."""
+    # ---- relation reading: a server job over a folder's passages, collected by the page --------------------------------
+
+    def relations_start(self, folder: str = "", reader: str = "", gate=None) -> dict:
+        """Read the passages of a folder (or of everything) a reader has not gone through. It runs on the server for
+        minutes, longer than a proxy waits for a page request; the page collects its progress by relations_status."""
+        from xgen_space.policy import CALL_SECONDS, CALL_TOKENS
+        from xgen_space.relations import Busy, open_reader
+
         if self.llm is None:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 관계를 추출하지 못했습니다."}
+        job = self._reading
+        if job and job["out"] is None:
+            return {"ok": True, "job": job["id"]}
         self._sync_space()
-        sp = self.space
-        key = sp.next_to_read(self.studio.onto, self._terms())
-        if key is None:
-            return {"ok": True, "done": True, "read": len(sp.relations), "relations": sum(len(v) for v in sp.relations.values())}
-        llm, _ = self._budgeted()
+        folder = str(folder or "")
+        sp, onto, terms = self.space, self.studio.onto, self._terms()
+        if not sp.to_read(folder):
+            return {"ok": True, "job": "", "done": True, **sp.reading(folder)}
+        roomier = getattr(self.llm, "roomier", None)
+        model = roomier(CALL_TOKENS, CALL_SECONDS) if roomier else self.llm
+
+        def llm(system: str, user: str) -> str:
+            if gate is not None and not gate():
+                raise Busy("the site's model calls for this minute are used")
+            return model(system, user)
+
         try:
-            rows = sp.read_section(llm, key)
-        except (TimeoutError, OSError, RuntimeError):
-            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 다시 시도해 주세요."}
-        left = sp.next_to_read(self.studio.onto, self._terms())
-        return {"ok": True, "done": left is None, "section": key[1], "document": key[0], "found": len(rows), "read": len(sp.relations),
-                "relations": sum(len(v) for v in sp.relations.values())}
+            r = open_reader(str(reader or ""), llm)
+        except ImportError:
+            raise ValueError(f"{reader} 관계 추출 엔진이 설치되어 있지 않아 시작하지 못했습니다.") from None
+        job = {"id": uuid.uuid4().hex, "out": None, "folder": folder, "reader": r.kind, "done": 0, "total": 0, "stop": False,
+               "started": time.time()}
+        self._reading = job
+
+        def progress(done: int, total: int) -> None:
+            job["done"], job["total"] = done, total
+
+        def run() -> None:
+            try:
+                out = {"ok": True, **sp.read_relations(r, onto, terms, folder=folder, should_stop=lambda: job["stop"],
+                                                       progress=progress)}
+            except Exception:  # a thread has no caller to report to: the page must still end its wait
+                out = {"ok": False, "error": "관계를 추출하지 못했습니다. 다시 시도해 주세요."}
+            try:
+                self.save_relations()
+            except OSError:
+                out["error"] = "추출한 관계를 저장하지 못했습니다. 레포지토리 폴더의 쓰기 권한을 확인해 주세요."
+            job["out"] = out  # last: the page stops waiting once this is set
+
+        threading.Thread(target=run, name="relation-reading", daemon=True).start()
+        return {"ok": True, "job": job["id"]}
+
+    def relations_status(self, job: str) -> dict:
+        r = self._reading
+        if not r or r["id"] != job:
+            return {"ok": False, "error": "진행 중인 관계 추출을 찾지 못했습니다. 다시 시작해 주세요."}
+        out = {"ok": True, "running": r["out"] is None, "done": r["done"], "total": r["total"], "reader": r["reader"],
+               "folder": r["folder"], "seconds": round(time.time() - r["started"]), **self.space.reading(r["folder"])}
+        return {**out, "result": r["out"]} if r["out"] is not None else out
+
+    def relations_stop(self) -> dict:
+        if self._reading and self._reading["out"] is None:
+            self._reading["stop"] = True
+        return {"ok": True}
+
+    def relations_forget(self, folder: str = "") -> dict:
+        if self._reading and self._reading["out"] is None:
+            raise ValueError("관계 추출이 진행 중이어서 초기화하지 못했습니다. 추출을 중지한 뒤 다시 시도해 주세요.")
+        n = self.space.forget_relations(str(folder or ""))
+        self.save_relations()
+        return {"ok": True, "forgot": n}
+
+    def relations_list(self, folder: str = "", concept: str = "") -> dict:
+        """The relations read in a folder, with the sentence that says each; with a concept, only those it is an end of."""
+        self._sync_space()
+        rows = [r.to_dict() for r in self.space.live_relations(str(folder or ""))
+                if not concept or concept in (r.source, r.target)]
+        rows.sort(key=lambda r: (r["source"], r["predicate"], r["target"]))
+        return {"relations": rows[:500], "total": len(rows), "vocabulary": dict(self.space.vocabulary),
+                "reading": self.space.reading(str(folder or ""))}
+
+    def _relations_file(self) -> Path | None:
+        return Path(self.data.repositories) / "relations.json" if self.data.repositories else None
+
+    def save_relations(self) -> None:
+        """What readers found, next to the repositories it was read from: a model's minutes are not spent twice."""
+        f = self._relations_file()
+        if f is None:
+            return
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(self.space.relations_dump(), ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, f)
+
+    def load_relations(self) -> None:
+        f = self._relations_file()
+        if f is not None and f.is_file():
+            self.space.relations_load(json.loads(f.read_text(encoding="utf-8")))
 
     def space_section(self, document: str, section: str) -> dict:
         self._sync_space()
-        rows = [c for c in self.space.chunks.values() if c.document == document and c.section == section]
+        self.space.index()
+        rows = [c for c in self.space.passages.values() if c.document == document and c.section == section]
         rows.sort(key=lambda c: c.ordinal)
         made = self.space.concepts(self.studio.onto, self._terms())
         ids = made["sections"].get((document, section), {})
@@ -638,6 +786,8 @@ class SpaceMixin:
             n = sum(chunks[d] for d in made.get(path, []))
             if n:
                 mark({"text": f"문서 색인 · 청크 {n}", "tone": "ok"})
+            elif made.get(path) and f.get("embed", True) is False:
+                mark({"text": "임베딩 꺼짐", "tone": ""})
             if fx.get("kind") not in ("raw", None) and not f.get("error"):
                 mark({"text": "초안 포함" if f.get("included") else "초안 제외", "tone": "b" if f.get("included") else ""})
         elif a.kind == "document":

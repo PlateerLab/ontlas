@@ -279,11 +279,13 @@ class StudioSession(SpaceMixin):
         self.workspace = None  # the management screens' pending edits (manage.Workspace), until filed
         self._ws_sig: tuple = ()
         self._draft: dict | None = None  # the policy draft running or last finished, for the page to collect
+        self._reading: dict | None = None  # the relation reading running or last finished, for the page to collect
         self._adopt(studio)
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
         self.load_pipelines()
+        self.load_relations()
 
     def _adopt(self, studio: Studio) -> None:
         """Make a studio this session's: its change requests follow the session's approval and storage."""
@@ -1164,8 +1166,10 @@ class StudioSession(SpaceMixin):
         lim = self.data
         count, total = self.repositories.usage()
         everything = self.repositories.files(self.repo)
+        index = self._index_of()
         return plain({"repository": self._repository_row(), "repositories": self.repositories.rows(), "folder": folder,
-                      "folders": folders, "files": [{**f, "ext": Path(f["name"]).suffix.lower().lstrip(".")} for f in files],
+                      "folders": folders, "files": [{**f, "ext": Path(f["name"]).suffix.lower().lstrip("."), "index": index.get(f["path"])}
+                                                    for f in files],
                       "included": sum(1 for f in everything.values() if f["included"] and not f.get("error")
                                       and (f.get("facts") or {}).get("kind") != "raw"),
                       "unread": sum(1 for f in everything.values() if f.get("error")),
@@ -1224,6 +1228,32 @@ class StudioSession(SpaceMixin):
         self.repositories.include(self.repo, [clean_path(p) for p in paths], on)
         self._hold()
         return {"ok": True}
+
+    def catalog_embed(self, paths: list, on: bool) -> dict:
+        """Embed the documents of files, or of everything in folders, into the vector stores, or take them out. They stay in
+        the draft and in the document ontology either way."""
+        self.repositories.embed(self.repo, [clean_path(p) for p in paths], on)
+        self._sync_space()
+        r = self.space.index()
+        if r.get("embed_error"):
+            raise ValueError(f"문서를 임베딩하지 못했습니다. {r['embed_error']}")
+        return {"ok": True}
+
+    def _index_of(self) -> dict[str, dict]:
+        """Each file's documents as the vector stores hold them: embedded, off, waiting or failed, with passage counts."""
+        self._sync_space()
+        self.space.index()
+        rows = {r["name"]: r for r in self.space.document_rows()}
+        out = {}
+        for path, defs in self.definitions.items():
+            mine = [rows[d["name"]] for d in (getattr(defs, "documents", None) or [])
+                    if d["name"] in rows and rows[d["name"]]["path"] == path and rows[d["name"]]["state"] != "none"]
+            if not mine:
+                continue
+            states = {r["state"] for r in mine}
+            state = "off" if states == {"off"} else next((s for s in ("failed", "pending") if s in states), "embedded")
+            out[path] = {"state": state, "chunks": sum(r["indexed"] for r in mine), "passages": sum(r["passages"] for r in mine)}
+        return out
 
     def catalog_move(self, paths: list, folder: str) -> dict:
         """Files and folders into another folder of the repository, keeping their names."""
@@ -1987,6 +2017,7 @@ class StudioSession(SpaceMixin):
             "metrics": metrics, "identities": identities, "functions": functions,
             "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
             "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
+            "folders": self.studio.space.folders() if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,

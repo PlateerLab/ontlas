@@ -286,7 +286,7 @@ def test_the_page_shows_ports_map_and_document_ontology(session):
     node = session.space_map_node("document:배송안내")
     assert any(x["kind"] == "vector_store" for x in node["impact"])
     q = session.space_queries()
-    assert q["conformance"]["agree"] == 3 and q["queries"][0]["rows"]
+    assert q["conformance"]["agree"] == q["conformance"]["queries"] == 5 and q["queries"][0]["rows"]
     assert session.object("Order")["documents"]
     g = session.space_graph()
     sec = next(n for n in g["nodes"] if n["module"] == "section")

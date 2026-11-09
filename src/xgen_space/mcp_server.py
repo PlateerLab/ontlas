@@ -112,9 +112,10 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         return tools.describe()
 
     @server.tool()
-    def answer_question(text: str) -> dict:
-        """Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause."""
-        return tools.answer_question(text)
+    def answer_question(text: str, folder: str = "") -> dict:
+        """Answer one question from the decisions, the data and the documents, with the rule, the source values and the clause.
+        With a folder, only the documents of that folder are read."""
+        return tools.answer_question(text, folder)
 
     @server.tool()
     def agent_context(text: str, k: int = 8) -> dict:
@@ -193,10 +194,10 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         return tools.list_documents()
 
     @server.tool()
-    def search_documents(text: str, k: int = 5, store: str = "") -> dict:
+    def search_documents(text: str, k: int = 5, store: str = "", folder: str = "") -> dict:
         """Search the space's documents by meaning: passages with their document and section, and the ontology elements
-        the question names, so an answer can go on to run_query or decide."""
-        return tools.search_documents(text, k, store)
+        the question names, so an answer can go on to run_query or decide. With a folder, only that folder's documents."""
+        return tools.search_documents(text, k, store, folder=folder)
 
     @server.tool()
     def list_proposals() -> list[dict]:

@@ -29,9 +29,11 @@ class StudioTools:
     def _role(self):
         return self.studio.onto.roles[self.role] if self.role else None
 
-    def documents_allowed(self, name: str) -> bool:
-        r = self._role()
-        return r is None or r.can_read_document(name)
+    def documents_allowed(self, name: str, folder: str = "") -> bool:
+        """A document this role reads, and with a folder, one of that folder or of a folder under it."""
+        r, space = self._role(), self.studio.space
+        path = space.path_of(name) if space is not None else ""
+        return (r is None or r.can_read_document(name, path)) and (not folder or space is None or space.in_folder(name, folder))
 
     def describe(self) -> dict:
         d = self.studio.describe()
@@ -92,14 +94,17 @@ class StudioTools:
                 "decisions": [k for k in d["decisions"] if onto.decisions[k].target == name],
                 "actions": [k for k in d["actions"] if onto.actions[k].target == name]}
 
-    def knowledge(self):
-        """Definitions, rules and passages in one index; a role reads only the passages of its documents."""
+    def knowledge(self, folder: str = ""):
+        """Definitions, rules and passages in one index; a role reads only the passages of its documents, and a question
+        kept to a folder only those of the folder."""
         from xgen_space.knowledge import build
 
         space = self.studio.space
         know = space.knowledge(self.studio.onto, self.terms) if space is not None else build(self.studio.onto)
         r = self._role()
-        return know if r is None or r.documents is None else know.only(lambda doc: r.can_read_document(doc))
+        if (r is None or r.documents is None) and not folder:
+            return know
+        return know.only(lambda doc: self.documents_allowed(doc, folder))
 
     def find_definitions(self, text: str, k: int = 8) -> dict:
         """The definitions a question is about, so an agent reads these rather than all of them."""
@@ -118,11 +123,11 @@ class StudioTools:
         head = "이 정의와 규칙을 기준으로 답합니다. 판정은 decide 도구로 확인합니다."
         return {"text": "\n".join([head, *lines, *words]), "found": found}
 
-    def answer_question(self, text: str) -> dict:
+    def answer_question(self, text: str, folder: str = "") -> dict:
         """One question to a decision, a record, a query or the documents, with what the answer stands on."""
         from xgen_space.answer import answer_question
 
-        out = _plain(answer_question(self, text))
+        out = _plain(answer_question(self, text, folder=str(folder or "")))
         d = (out.get("decisions") or [{}])[0]
         self._note("answered", d.get("target", ""), d.get("key", ""), question=out["question"], route=out["route"],
                    answer=out["answer"], sources=[s.get("id") for s in out.get("sources") or []])
@@ -209,11 +214,12 @@ class StudioTools:
                               for n, d in space.documents().items() if self.documents_allowed(n)],
                 "concepts": len(made["concepts"])}
 
-    def search_documents(self, text: str, k: int = 5, store: str = "", where: dict | None = None) -> dict:
+    def search_documents(self, text: str, k: int = 5, store: str = "", where: dict | None = None, folder: str = "") -> dict:
         space = self._space()
         k = max(1, min(int(k), 50))
         r = self._role()
-        hits = space.search(str(text), k if r is None or r.documents is None else k * 4, store=store, where=where)
+        hits = space.search(str(text), k if r is None or r.documents is None else k * 4, store=store, where=where,
+                            folder=str(folder or ""))
         hits = [h for h in hits if self.documents_allowed(h["document"])][:k]
         return {"embedder": space.embedder.describe(), "store": hits[0]["store"] if hits else space.primary(), "hits": hits,
                 "ontology": space.concepts_in(str(text), self.studio.onto)}

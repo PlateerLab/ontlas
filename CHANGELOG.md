@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.13.0
+
+- A file's embedding is turned on and off on its own, or for a whole folder: its documents leave the vector stores and the search, and
+  stay in the draft and in the document ontology. The catalog says per file whether it is embedded, waiting, failed or off, and the
+  work record notes each change.
+- Every vector carries its file's folder and the model that made it. A model that fails to embed leaves the stores as they were and the
+  files it could not embed say so, where it used to stop every search.
+- Folders are ranges: a search, a question, the document graph and a relation reading keep to a folder and the folders under it
+  (`folder` on `/v1/search`, `/v1/answer` and the MCP tools). A role's `documents` take file paths and patterns such as `정책/*`, and the
+  role form offers folders.
+- A change of embedding model first lists the documents and passages it embeds again and the time, measured with the new model; the
+  stores are refilled only when the change goes ahead. `Space.reembed_plan`, `Space.use_embedder`.
+- Relations between a document's concepts are read by a reader port: `basic`, or xgen-ontology-build's relation formation with the new
+  `build` extra. Only sentences naming two concepts or more are sent, numbered, so a relation's ends are always concepts its sentence
+  names; each relation keeps that sentence. They are rows of the document ontology (`Relation`, `relationsOf`, `relationNames`) and edges
+  of its graph, and a named relation replaces the co-mention between the same two concepts. An answer lists the relations its shown
+  passages state, and none from a passage the reader may not read.
+- A word that is only an ending (하는, 되는) is no longer taken for a document's keyword.
+- A reading runs on the server with its progress, stops and resumes, covers a folder or everything, and is kept with the repositories.
+  A passage that changes is read again. It replaces reading one section per request, which kept nothing across restarts and stayed
+  out of search.
+
 ## 0.12.0
 
 - An interface is queried like a parent type: `{match: {x: Named}}` reads every type that implements it, on every store. A role reads

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xgen-space"
-version = "0.12.0"
+version = "0.13.0"
 description = "One space for every kind of data an AI can use: files, documents, vectors, graphs and ontologies, tied to no store, model, domain or platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -60,9 +60,11 @@ xlsx = ["openpyxl>=3.1"]
 pdf = ["pypdf>=4"]
 # A small multilingual embedding model on the CPU. The hash embedder needs nothing; an OpenAI-shaped service needs nothing here.
 embed = ["fastembed==0.7.3"]
+# xgen-ontology-build's relation formation as the reader of relations between a document's concepts.
+build = ["xgen-ontology-build>=0.17.1"]
 # A second OWL 2 RL engine, compared with owlrl by `xspace reasoners`.
 reasonable = ["reasonable==0.4.4", "rdflib>=7"]
-all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4", "xgen-omnifuse>=0.8.4"]
+all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4", "xgen-omnifuse>=0.8.4", "xgen-ontology-build>=0.17.1"]
 # The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
 live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]
 dev = ["pytest>=7", "ruff>=0.4"]

@@ -261,13 +261,13 @@ def test_names_are_matched_longest_first_and_keywords_skip_verbs():
 def test_the_document_ontology_is_an_ontology():
     s = _space()
     st = s.studio(_Onto)
-    assert {"Document", "Section", "Concept"} <= set(st.onto.objects)
+    assert {"Document", "Section", "Concept", "Relation"} <= set(st.onto.objects)
     assert st.run("allDocuments").rows[0][0] == "반품"
     rows = st.run("sectionsAbout", {"concept": "주문상품"}).rows
     assert ("반품", "반품 기간") in rows
     assert "SELECT" in st.translate("allDocuments", "sql:postgres").text and "MATCH" in st.translate("allDocuments", "cypher").text
     if len(st.backends) > 1:
-        assert st.conformance().summary()["agree"] == 3
+        assert st.conformance().summary()["agree"] == len(st.onto.queries) == 5
 
 
 def test_a_definition_finds_its_documents_and_a_question_its_definition():
@@ -285,26 +285,6 @@ def test_a_space_comes_from_the_studio_file():
                     "checks": [{"text": "x", "document": "y"}]}, ROOT / "examples" / "library")
     assert len(s.fixed) == 6 and list(s.stores) == ["one", "two"] and s.collection == "docs" and s.embedder.dim == 128
     assert s.state()["chunks"] > 10 and open_space(None).state()["documents"] == 0
-
-
-def test_a_model_may_read_relations_but_not_invent_them():
-    s = _space()
-    s.index()
-
-    def llm(system, user):
-        return '''설명입니다. [{"from": "주문상품", "to": "반품", "label": "대상"},
-                 {"from": "주문상품", "to": "우주선", "label": "지어냄"}, {"from": "속옷", "to": "속옷", "label": "자기"}, "엉뚱함"]'''
-
-    key = s.next_to_read(_Onto)
-    assert key is not None
-    rows = s.read_section(llm, ("반품", "반품 기간"))
-    assert [(r["from"], r["to"]) for r in rows] == [("주문상품", "반품")]
-    assert s.read_section(lambda a, b: "모르겠습니다", ("배송", "택배사")) == []
-    g = s.graph(_Onto)
-    assert any(e["label"] == "대상" for e in g["edges"])
-    while (k := s.next_to_read(_Onto)) is not None:
-        s.read_section(lambda a, b: "[]", k)
-    assert s.next_to_read(_Onto) is None
 
 
 LIVE = [("XSPACE_LIVE_QDRANT", lambda v: {"kind": "qdrant", "url": v, "prefix": "xspace_test_"}),

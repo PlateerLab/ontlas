@@ -471,7 +471,11 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "space":
                     return s.space_state()
                 if route == "space/graph":
-                    return s.space_graph()
+                    return s.space_graph(str(a.get("folder", "")))
+                if route == "space/relations":
+                    return s.relations_list(str(a.get("folder", "")), str(a.get("concept", "")))
+                if route == "space/relations/status":
+                    return s.relations_status(str(a.get("job", "")))
                 if route == "space/queries":
                     return s.space_queries()
                 if route == "space/section":
@@ -529,23 +533,29 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "transitions/advance":
                 return s.transitions_advance()
             if route == "space/search":
-                return s.space_search(a.get("text", ""), a.get("k", 5), a.get("store", ""))
+                return s.space_search(a.get("text", ""), a.get("k", 5), a.get("store", ""), str(a.get("folder", "")))
+            if route == "space/embedder":
+                return s.space_embedder(str(a.get("op", "plan")), a.get("spec") or {})
             if route == "space/store":
                 return s.space_store(a.get("op", "add"), a.get("name", ""), a.get("kind", ""), a.get("url", ""))
             if route == "adapters/check":
                 return s.adapters_check()
             if route == "reasoner":
                 return s.reasoner_run(a.get("name", ""))
-            if route == "space/read":
-                if not ask_limit.allow():
-                    return {"ok": False, "error": "요청이 많아 처리하지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
-                return s.space_read()
+            if route == "space/relations/start":
+                return s.relations_start(str(a.get("folder", "")), str(a.get("reader", "")), gate=ask_limit.allow)
+            if route == "space/relations/stop":
+                return s.relations_stop()
+            if route == "space/relations/forget":
+                return s.relations_forget(str(a.get("folder", "")))
             if route == "space/ask":
-                return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None)
+                return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None,
+                                   str(a.get("folder", "")))
             if route == "space/ask/more":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."}
-                return s.space_ask_more(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None)
+                return s.space_ask_more(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None,
+                                        str(a.get("folder", "")))
             if route == "space/answer":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
@@ -594,6 +604,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.catalog_rename(str(a.get("path", "")), str(a.get("name", "")))
             if route == "catalog/include":
                 return s.catalog_include(list(a.get("paths") or []), bool(a.get("on")))
+            if route == "catalog/embed":
+                return s.catalog_embed(list(a.get("paths") or []), bool(a.get("on")))
             if route == "catalog/move":
                 return s.catalog_move(list(a.get("paths") or []), str(a.get("folder", "")))
             if route == "catalog/trash":

@@ -102,14 +102,15 @@ def _query(tools, text: str, found: list[dict]) -> dict | None:
     return None
 
 
-def answer_question(tools, text: str, *, k: int = 6) -> dict[str, Any]:
+def answer_question(tools, text: str, *, k: int = 6, folder: str = "") -> dict[str, Any]:
     text = " ".join(str(text or "").split())[:300]
     if not text:
         raise ValueError("질문이 없어 답변하지 못했습니다. 질문을 입력해 주세요.")
-    know = tools.knowledge()
+    know = tools.knowledge(folder) if folder else tools.knowledge()
     found = know.find(text, max(k * 4, 24))
     out: dict[str, Any] = {"ok": True, "question": text, "route": "documents", "answer": "", "engine": know.retriever.kind,
-                           "sources": _sources(found, k), "definitions": _definitions(found), "relations": know.relations(text)}
+                           "sources": _sources(found, k), "definitions": _definitions(found),
+                           "relations": know.relations(text, [f["id"] for f in found[:k]])}
     hit = find_record(tools, text)
     if hit:
         type_name, key = hit

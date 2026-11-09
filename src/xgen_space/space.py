@@ -10,7 +10,6 @@ Nothing here depends on a store, a model or a domain: those arrive as adapters.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import threading
 import time
@@ -19,7 +18,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from xgen_space.embed import Embedder, open_embedder, shared_wording
+from xgen_space.embed import Embedder, EmbedError, open_embedder, shared_wording
+from xgen_space.relations import Busy, Relation
 from xgen_space.vectors import MemoryStore, Point, VectorError, VectorStore, open_vector_store
 
 CHUNK = 520  # characters: a paragraph or two, what a person reads as one passage
@@ -36,9 +36,7 @@ _ENDINGS = ("합니다", "습니다", "됩니다", "입니다", "있습니다", 
             "할", "된", "될")
 _STOP = {"경우", "대한", "관한", "위한", "따라", "다음", "해당", "이상", "이내", "이하", "미만", "각호", "사항", "내용", "기준", "가능", "모든", "또는",
          "그리고", "있는", "없는", "있다", "없다", "같은", "등의", "다시", "돌려", "보내", "받은", "받습", "the", "and", "for", "with", "that", "this", "from"}
-RELATIONS_PER_SECTION = 6
-EXTRACT_SYSTEM = ("문서의 한 절에서 개념 사이의 관계를 뽑습니다. JSON 배열만 답합니다. 항목은 {\"from\": 개념, \"to\": 개념, \"label\": 관계}이고, "
-                  "from과 to는 본문에 쓰인 말 그대로, label은 두세 단어로 씁니다. 관계가 없으면 []만 답합니다.")
+SAMPLE = 6  # passages a change of model is timed on
 KIND_WORD = {"object": "객체", "property": "속성", "value": "허용값", "decision": "결정", "action": "Action", "term": "용어",
              "keyword": "키워드"}
 
@@ -156,7 +154,8 @@ def keywords(chunks: list[Chunk], known: dict[str, Concept], limit: int = KEYWOR
     total: Counter = Counter()
     for sec in {c.section for c in chunks}:
         words = [_stem(w) for c in chunks if c.section == sec for w in _WORD.findall(c.text) if not _verb(w)]
-        words = [w for w in words if len(w) >= 2 and w.lower() not in _STOP and not w.isdigit() and w not in known]
+        words = [w for w in words if len(w) >= 2 and w.lower() not in _STOP and not w.isdigit() and w not in known
+                 and w not in _ENDINGS and w not in _JOSA]  # an ending on its own (하는, 되는) names nothing
         total.update(words)
         spread.update(set(words))
     ranked = sorted(total, key=lambda w: (-spread[w], -total[w], w))
@@ -179,6 +178,11 @@ DOCUMENT_MODULE = {
         "Concept": {"label": "개념", "key": "concept_id", "title": "label", "table": "concepts", "properties": {
             "concept_id": {"type": "string", "label": "개념 번호", "required": True}, "label": {"type": "string", "label": "이름"},
             "kind": {"type": "string", "label": "종류"}, "element": {"type": "string", "label": "온톨로지 요소"}}},
+        "Relation": {"label": "관계", "key": "relation_id", "title": "label", "table": "relations", "properties": {
+            "relation_id": {"type": "string", "label": "관계 번호", "required": True},
+            "source_id": {"type": "string", "label": "주어 개념"}, "target_id": {"type": "string", "label": "목적어 개념"},
+            "predicate": {"type": "string", "label": "관계 이름"}, "label": {"type": "string", "label": "표시 이름"},
+            "section_id": {"type": "string", "label": "근거 절"}, "evidence": {"type": "string", "label": "근거 문장"}}},
     },
     "links": {
         "hasSection": {"from": "Document", "to": "Section", "cardinality": "one_to_many", "inverse": "sectionOf", "label": "절",
@@ -187,6 +191,12 @@ DOCUMENT_MODULE = {
                      "via": {"table": "section_concepts", "source": "section_id", "target": "concept_id"}},
         "relatedTo": {"from": "Concept", "to": "Concept", "label": "함께 언급",
                       "via": {"table": "concept_links", "source": "source_id", "target": "target_id"}},
+        "relationFrom": {"from": "Relation", "to": "Concept", "cardinality": "many_to_one", "label": "주어",
+                         "on": {"source_id": "concept_id"}},
+        "relationTo": {"from": "Relation", "to": "Concept", "cardinality": "many_to_one", "label": "목적어",
+                       "on": {"target_id": "concept_id"}},
+        "statedIn": {"from": "Relation", "to": "Section", "cardinality": "many_to_one", "label": "근거 절",
+                     "on": {"section_id": "section_id"}},
     },
     "queries": {
         "allDocuments": {"label": "문서 목록", "query": {"match": {"d": "Document"}, "return": ["d.title", "d.kind", "d.sections", "d.chars"],
@@ -199,8 +209,33 @@ DOCUMENT_MODULE = {
             "match": {"s": "Section", "c": "Concept"}, "edges": [["s", "mentions", "c"]],
             "return": [{"col": "c.label", "as": "concept"}, {"col": "c.kind", "as": "kind"}, {"count": "s", "as": "sections"}],
             "order": ["-sections", "concept"]}},
+        "relationsOf": {"label": "개념의 관계", "params": {"concept": "string"}, "example": {"concept": "반품"}, "query": {
+            "match": {"r": "Relation", "a": "Concept", "b": "Concept", "s": "Section", "d": "Document"},
+            "edges": [["r", "relationFrom", "a"], ["r", "relationTo", "b"], ["r", "statedIn", "s"], ["d", "hasSection", "s"]],
+            "where": {"or": [{"eq": ["a.label", {"param": "concept"}]}, {"eq": ["b.label", {"param": "concept"}]}]},
+            "return": [{"col": "a.label", "as": "subject"}, {"col": "r.label", "as": "relation"}, {"col": "r.predicate", "as": "name"},
+                       {"col": "b.label", "as": "object"}, {"col": "d.title", "as": "document"}, {"col": "s.title", "as": "section"}],
+            "order": ["subject", "name", "object"]}},
+        "relationNames": {"label": "관계 이름별 수", "query": {
+            "match": {"r": "Relation"}, "return": [{"col": "r.predicate", "as": "name"}, {"count": "r", "as": "relations"}],
+            "order": ["-relations", "name"]}},
     },
 }
+
+
+def signature(embedder: Embedder) -> str:
+    """Which model made a vector: vectors of two models do not compare."""
+    d = embedder.describe()
+    return f"{d['kind']}:{d['name']}:{d['dim']}"
+
+
+def folder_of(document: dict) -> str:
+    path = str(document.get("path") or "")
+    return path.rsplit("/", 1)[0] if "/" in path else ""
+
+
+def _under(folder: str, scope: str) -> bool:
+    return not scope or folder == scope or folder.startswith(scope + "/")
 
 
 WIDER = 4  # a model's nearest passage is not always the one that says it, so a search looks at more than it returns
@@ -219,7 +254,10 @@ class Space:
         self.checks = list(checks or [])
         self.fixed: dict[str, dict] = {}  # documents a space is configured with, by name
         self.uploaded: dict[str, dict] = {}  # documents from the catalog, by name
-        self.chunks: dict[str, Chunk] = {}
+        self.passages: dict[str, Chunk] = {}  # every passage of every document: what the document ontology reads
+        self.chunks: dict[str, Chunk] = {}  # the passages the stores hold: those of documents whose embedding is on
+        self.model = ""  # the embedder the stores' vectors were made by
+        self.embed_error = ""  # why the last passages could not be embedded; they are asked again on the next round
         self.errors: dict[str, str] = {}  # store -> why it is behind the others
         self.indexed_at = 0.0
         self.took = 0
@@ -227,7 +265,10 @@ class Space:
         self._made: dict[str, Any] = {}
         self.retriever = ""  # the port a question goes through; with nothing said, the best one installed
         self._knowledge: tuple | None = None
-        self.relations: dict[tuple[str, str], list[dict]] = {}  # (document, section) -> what a model read there
+        self.relations: dict[str, list[Relation]] = {}  # passage -> what a reader found there
+        self.read_by: dict[str, str] = {}  # passage -> the reader that went through it
+        self.vocabulary: dict[str, str] = {}  # relation name -> what it means, so later readings use the same names
+        self.relations_version = 0
 
     # ---- documents ---------------------------------------------------------------------------------------------
 
@@ -238,37 +279,54 @@ class Space:
         (self.fixed if fixed else self.uploaded)[document["name"]] = document
 
     def set_uploaded(self, documents: list[dict]) -> None:
-        """The catalog says what is in the space now."""
+        """The catalog says what is in the space now: each document with its file's path and whether it is embedded."""
         self.uploaded = {d["name"]: d for d in documents}
 
     def index(self) -> dict:
-        """Bring every store in line with the documents: only what changed is embedded and written."""
+        """Bring every store in line with the documents: only what changed, or what another model embedded, is embedded
+        and written. A document whose embedding is off stays in the document ontology and leaves the stores."""
         with self.lock:
             started = time.perf_counter()
-            wanted = {c.id: c for d in self.documents().values() for c in split(d)}
-            new = [c for i, c in wanted.items() if i not in self.chunks]
+            docs = self.documents()
+            every = {c.id: c for d in docs.values() for c in split(d)}
+            if every.keys() != self.passages.keys():
+                self.passages = every
+                self._made.clear()
+            wanted = {i: c for i, c in every.items() if docs[c.document].get("embed", True) is not False}
+            sig = signature(self.embedder)
+            new = [c for i, c in wanted.items() if sig != self.model or i not in self.chunks]
             gone = [i for i in self.chunks if i not in wanted]
             behind = [n for n in self.stores if n in self.errors]
             if new or gone or behind:
-                self._write(new, gone, wanted, behind)
-                self.chunks = wanted
-                self._made.clear()
+                try:
+                    self._write(new, gone, wanted, behind, docs, sig)
+                except EmbedError as e:  # the stores were not touched: what they held is still searched
+                    self.embed_error = str(e)
+                    return {"added": 0, "removed": 0, "chunks": len(self.chunks), "errors": dict(self.errors),
+                            "embed_error": self.embed_error}
+                self.embed_error = ""
+                self.chunks, self.model = wanted, sig
                 self.indexed_at = time.time()
                 self.took = round((time.perf_counter() - started) * 1000)
             return {"added": len(new), "removed": len(gone), "chunks": len(wanted), "errors": dict(self.errors)}
 
-    def _point(self, c: Chunk, vector: list[float]) -> Point:
-        return Point(c.id, vector, {"document": c.document, "section": c.section, "ordinal": c.ordinal, "text": c.text})
+    def _point(self, c: Chunk, vector: list[float], docs: dict[str, dict], sig: str) -> Point:
+        return Point(c.id, vector, {"document": c.document, "section": c.section, "ordinal": c.ordinal, "text": c.text,
+                                    "folder": folder_of(docs.get(c.document, {})), "embedder": sig})
 
-    def _write(self, new: list[Chunk], gone: list[str], wanted: dict[str, Chunk], behind: list[str]) -> None:
-        points = [self._point(c, v) for c, v in zip(new, self.embedder.embed([c.text for c in new]))] if new else []
-        full: list[Point] | None = None
+    def _write(self, new: list[Chunk], gone: list[str], wanted: dict[str, Chunk], behind: list[str], docs: dict[str, dict],
+               sig: str) -> None:
+        """Every vector is made before any store is written, so a model that fails leaves the stores as they were."""
+        points = [self._point(c, v, docs, sig) for c, v in zip(new, self.embedder.embed([c.text for c in new]))] if new else []
+        full: list[Point] = []
+        if behind:  # a store that missed a round gets everything again
+            made = {p.id: p for p in points}
+            rest = [c for i, c in wanted.items() if i not in made]
+            full = list(made.values()) + ([self._point(c, v, docs, sig) for c, v in zip(rest, self.embedder.embed([c.text for c in rest]))]
+                                          if rest else [])
         for name, store in self.stores.items():
             try:
-                if name in behind:  # a store that missed a round gets everything again
-                    if full is None:
-                        rows = list(wanted.values())
-                        full = [self._point(c, v) for c, v in zip(rows, self.embedder.embed([c.text for c in rows]))]
+                if name in behind:
                     store.drop(self.collection)
                     batch = full
                 else:
@@ -297,21 +355,102 @@ class Space:
             self.stores.pop(name, None)
             self.errors.pop(name, None)
 
+    # ---- the model: which one made the vectors, and what another one would embed again --------------------------
+
+    def reembed_plan(self, embedder: Embedder) -> dict:
+        """What a change of model embeds again, before anything changes: every passage of every embedded document, since
+        a question the new model embeds compares with none of the old vectors. The time is the new model's, on a few passages."""
+        self.index()
+        docs = self.documents()
+        held = [c for c in self.passages.values() if docs[c.document].get("embed", True) is not False]
+        rows: dict[str, dict] = {}
+        for c in held:
+            r = rows.setdefault(c.document, {"document": c.document, "path": str(docs[c.document].get("path") or ""), "chunks": 0,
+                                             "chars": 0})
+            r["chunks"] += 1
+            r["chars"] += len(c.text)
+        sample = [c.text for c in held[:SAMPLE]]
+        started = time.perf_counter()
+        if sample:
+            embedder.embed(sample)
+        per_char = (time.perf_counter() - started) / max(1, sum(len(x) for x in sample))
+        chars = sum(r["chars"] for r in rows.values())
+        return {"from": self.embedder.describe(), "to": embedder.describe(), "same": signature(embedder) == self.model,
+                "files": sorted(rows.values(), key=lambda r: (-r["chunks"], r["document"])), "chunks": len(held), "chars": chars,
+                "seconds": round(per_char * chars, 1)}
+
+    def use_embedder(self, embedder: Embedder) -> dict:
+        """Another model for the whole space. The stores let go of the old vectors and every passage is embedded again."""
+        with self.lock:
+            if signature(embedder) == self.model:
+                self.embedder = embedder
+                return self.index()
+            for name, store in self.stores.items():
+                try:
+                    store.drop(self.collection)
+                except (VectorError, OSError) as e:
+                    self.errors[name] = str(e)
+            self.embedder, self.chunks, self.model = embedder, {}, ""
+            return self.index()
+
+    def document_rows(self) -> list[dict]:
+        """Each document with its file, whether it is embedded, and how many of its passages the stores hold."""
+        held = Counter(c.document for c in self.chunks.values())
+        every = Counter(c.document for c in self.passages.values())
+        current = self.model == signature(self.embedder)
+        out = []
+        for name, d in self.documents().items():
+            on = d.get("embed", True) is not False
+            if not on:
+                state = "off"
+            elif not every[name]:
+                state = "none"
+            elif current and held[name] == every[name]:
+                state = "embedded"
+            else:
+                state = "failed" if self.embed_error else "pending"
+            out.append({"name": name, "path": str(d.get("path") or ""), "folder": folder_of(d), "embed": on, "passages": every[name],
+                        "indexed": held[name], "state": state})
+        return out
+
+    def folders(self) -> list[str]:
+        """The folders documents came from, each with the folders above it."""
+        out = set()
+        for d in self.documents().values():
+            f = folder_of(d)
+            while f:
+                out.add(f)
+                f = f.rsplit("/", 1)[0] if "/" in f else ""
+        return sorted(out)
+
+    def in_folder(self, name: str, scope: str) -> bool:
+        d = self.documents().get(name)
+        return d is not None and _under(folder_of(d), scope)
+
+    def path_of(self, name: str) -> str:
+        return str((self.documents().get(name) or {}).get("path") or "")
+
     # ---- search ------------------------------------------------------------------------------------------------
 
     def primary(self) -> str:
         return next((n for n in self.stores if n not in self.errors), next(iter(self.stores)))
 
-    def search(self, text: str, k: int = 5, *, store: str = "", where: dict | None = None) -> list[dict]:
+    def search(self, text: str, k: int = 5, *, store: str = "", where: dict | None = None, folder: str = "") -> list[dict]:
+        """The passages nearest a question; with a folder, only those of documents in it or in a folder under it."""
         self.index()
         name = store or self.primary()
         if name not in self.stores:
             raise LookupError(f"벡터 저장소 {name}")
+        if folder:
+            inside = sorted({folder_of(d) for d in self.documents().values() if _under(folder_of(d), folder)})
+            if not inside:
+                return []
+            where = {**(where or {}), "folder": inside}
         vector = self.embedder.embed([text])[0]
         semantic = self.embedder.semantic  # a wording embedder has counted the words already
         found = self.stores[name].search(self.collection, vector, max(k * WIDER, k) if semantic else k, where)
         hits = [{"id": h.id, "score": round(h.score, 4), "document": h.payload.get("document", ""), "section": h.payload.get("section", ""),
-                 "text": h.payload.get("text", ""), "store": name} for h in found]
+                 "text": h.payload.get("text", ""), "folder": h.payload.get("folder", ""), "store": name} for h in found]
         if semantic:
             for h in hits:
                 h["score"] = round((1 - WORDING) * h["score"] + WORDING * shared_wording(text, h["text"]), 4)
@@ -350,23 +489,25 @@ class Space:
     # ---- the document ontology ---------------------------------------------------------------------------------
 
     def concepts(self, onto=None, terms: list[dict] | None = None) -> dict:
-        """Who mentions what. Cached until the documents or the names change."""
+        """Who mentions what, over every passage whether embedded or not. Cached until the documents or the names change."""
         self.index()
         names = dictionary(onto, terms)
-        key = _id("concepts", *sorted(self.chunks), *sorted(names))
+        key = _id("concepts", *sorted(self.passages), *sorted(names))
         if key in self._made:
             return self._made[key]
         by_doc: dict[str, list[Chunk]] = {}
-        for c in self.chunks.values():
+        for c in self.passages.values():
             by_doc.setdefault(c.document, []).append(c)
         words = dict(names)
         for chunks in by_doc.values():
             for w in keywords(chunks, names):
                 words.setdefault(w, Concept(_id("keyword", w), w, "keyword"))
         ordered = dict(sorted(words.items(), key=lambda kv: -len(kv[0])))
-        section_of = {}  # (document, section) -> Counter of concept ids
-        for c in self.chunks.values():
-            section_of.setdefault((c.document, c.section), Counter()).update(_find(c.text, ordered))
+        section_of: dict[tuple[str, str], Counter] = {}
+        per_chunk: dict[str, Counter] = {}
+        for c in self.passages.values():
+            per_chunk[c.id] = _find(c.text, ordered)
+            section_of.setdefault((c.document, c.section), Counter()).update(per_chunk[c.id])
         by_id = {c.id: c for c in ordered.values()}
         used = {i for found in section_of.values() for i in found}
         pairs: Counter = Counter()
@@ -380,14 +521,17 @@ class Space:
                 links.append((a, b, n))
                 degree[a] += 1
                 degree[b] += 1
-        out = {"concepts": {i: by_id[i] for i in used}, "sections": section_of, "links": links, "chunks": by_doc}
+        out = {"concepts": {i: by_id[i] for i in used}, "sections": section_of, "links": links, "chunks": by_doc,
+               "per_chunk": per_chunk}
         self._made[key] = out
         return out
 
-    def _rows(self, onto, terms) -> dict[str, list[tuple]]:
+    def _rows(self, onto, terms, folder: str = "") -> dict[str, list[tuple]]:
         made = self.concepts(onto, terms)
         docs, secs, mentions = [], [], []
         for name, doc in self.documents().items():
+            if folder and not _under(folder_of(doc), folder):
+                continue
             parts = made["chunks"].get(name, [])
             titles = list(dict.fromkeys(c.section for c in parts))
             did = _id("doc", name)
@@ -397,9 +541,19 @@ class Space:
                 first = next(c for c in parts if c.section == title)
                 secs.append((sid, did, i + 1, title, first.text[:160]))
                 mentions += [(sid, cid) for cid in made["sections"].get((name, title), {})]
-        concepts = [(c.id, c.label, c.kind, c.element) for c in made["concepts"].values()]
-        return {"documents": docs, "sections": secs, "concepts": concepts, "section_concepts": mentions,
-                "concept_links": [(a, b) for a, b, _ in made["links"]]}
+        seen = {cid for _, cid in mentions}
+        concepts = [(c.id, c.label, c.kind, c.element) for c in made["concepts"].values() if c.id in seen]
+        by_label = {c.label: c.id for c in made["concepts"].values() if c.id in seen}
+        relations, said = [], set()
+        for r in self.live_relations(folder):
+            a, b = by_label.get(r.source), by_label.get(r.target)
+            if a and b:  # a concept the names no longer give is no end of a relation
+                relations.append((_id("rel", r.chunk, r.source, r.predicate, r.target), a, b, r.predicate, r.label or r.predicate,
+                                  _id("sec", r.document, r.section), r.evidence))
+                said |= {(a, b), (b, a)}
+        co = [(a, b) for a, b, _ in made["links"] if a in seen and b in seen and (a, b) not in said]  # a named relation says more
+        return {"documents": docs, "sections": secs, "concepts": concepts, "section_concepts": mentions, "concept_links": co,
+                "relations": list({r[0]: r for r in relations}.values())}
 
     def studio(self, onto=None, terms: list[dict] | None = None):
         """The document ontology as a studio of its own: the compilers, the graph stores and the checks all apply."""
@@ -408,7 +562,7 @@ class Space:
         from xgen_space.studio import Studio
 
         rows = self._rows(onto, terms)
-        key = _id("studio", *[len(v) for v in rows.values()], *sorted(self.chunks))
+        key = _id("studio", *[len(v) for v in rows.values()], *sorted(self.passages), self.relations_version)
         if key in self._made:
             return self._made[key]
         st = Studio.from_modules([Module.from_dict(DOCUMENT_MODULE)], name="documents")
@@ -417,7 +571,9 @@ class Space:
 CREATE TABLE sections (section_id TEXT PRIMARY KEY, doc_id TEXT, ordinal INTEGER, title TEXT, excerpt TEXT);
 CREATE TABLE concepts (concept_id TEXT PRIMARY KEY, label TEXT, kind TEXT, element TEXT);
 CREATE TABLE section_concepts (section_id TEXT, concept_id TEXT);
-CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
+CREATE TABLE concept_links (source_id TEXT, target_id TEXT);
+CREATE TABLE relations (relation_id TEXT PRIMARY KEY, source_id TEXT, target_id TEXT, predicate TEXT, label TEXT, section_id TEXT,
+                        evidence TEXT);""")
         for table, values in rows.items():
             if values:
                 marks = ", ".join("?" * len(values[0]))
@@ -434,35 +590,99 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
         self._made[key] = st
         return st
 
-    def next_to_read(self, onto=None, terms: list[dict] | None = None) -> tuple[str, str] | None:
-        """The section with the most concepts that a model has not read yet."""
-        made = self.concepts(onto, terms)
-        left = [(k, len(found)) for k, found in made["sections"].items() if k not in self.relations]
-        return max(left, key=lambda x: (x[1], x[0]))[0] if left else None
+    # ---- relations a model reads between the concepts a passage names -------------------------------------------
 
-    def read_section(self, llm, key: tuple[str, str]) -> list[dict]:
-        """One section through a model. A relation stays only if both ends are words of that text: a model may read, not invent."""
-        text = "\n".join(c.text for c in sorted(self.chunks.values(), key=lambda c: c.ordinal) if (c.document, c.section) == key)
-        raw = llm(EXTRACT_SYSTEM, f"제목: {key[1]}\n\n{text}")
-        start, end = raw.find("["), raw.rfind("]")
+    def live_relations(self, folder: str = "") -> list[Relation]:
+        """The relations of passages still in the space: a passage that changed is a new passage, read again."""
+        self.index()
+        docs = self.documents()
+        return [r for cid, rows in self.relations.items() if cid in self.passages for r in rows
+                if not folder or _under(folder_of(docs.get(r.document, {})), folder)]
+
+    def to_read(self, folder: str = "") -> list[Chunk]:
+        """Passages no reader has gone through yet, in document order."""
+        self.index()
+        docs = self.documents()
+        return [c for c in sorted(self.passages.values(), key=lambda c: (c.document, c.ordinal))
+                if c.id not in self.read_by and (not folder or _under(folder_of(docs.get(c.document, {})), folder))]
+
+    def reading(self, folder: str = "") -> dict:
+        """How far the reading of a folder (or of everything) has come."""
+        self.index()
+        docs = self.documents()
+        scope = [c for c in self.passages.values() if not folder or _under(folder_of(docs.get(c.document, {})), folder)]
+        found = self.live_relations(folder)
+        return {"folder": folder, "passages": len(scope), "read": sum(1 for c in scope if c.id in self.read_by),
+                "relations": len(found), "names": len({r.predicate for r in found}),
+                "readers": sorted({self.read_by[c.id] for c in scope if c.id in self.read_by})}
+
+    def read_relations(self, reader, onto=None, terms: list[dict] | None = None, *, folder: str = "",
+                       should_stop=None, progress=None) -> dict:
+        """Passages not read yet go through a reader. Each one comes back read in full or is left for the next run."""
+        made = self.concepts(onto, terms)
+        chunks = self.to_read(folder)
+        labels = {c.id: [made["concepts"][i].label for i in made["per_chunk"].get(c.id, {}) if i in made["concepts"]] for c in chunks}
+        vocabulary = {**{r.predicate: r.label for r in self.live_relations() if r.label}, **self.vocabulary}
         try:
-            rows = json.loads(raw[start:end + 1]) if start >= 0 else []
-        except ValueError:
-            rows = []
-        kept = []
-        for r in rows if isinstance(rows, list) else []:
-            if not isinstance(r, dict):
-                continue
-            a, b, label = (str(r.get(k, "")).strip() for k in ("from", "to", "label"))
-            if a and b and a != b and a in text and b in text and label:
-                kept.append({"from": a, "to": b, "label": label[:30], "document": key[0], "section": key[1]})
-        self.relations[key] = kept[:RELATIONS_PER_SECTION]
-        return self.relations[key]
+            out = reader.read(chunks, labels, vocabulary, should_stop=should_stop, progress=progress)
+        except Busy:  # a reader that keeps nothing when it is stopped
+            out = {"relations": [], "answered": set(), "calls": 0, "vocabulary": {}, "busy": True}
+        with self.lock:
+            for c in chunks:
+                if c.id in out["answered"]:
+                    self.read_by[c.id] = reader.kind
+                    self.relations[c.id] = [r for r in out["relations"] if r.chunk == c.id]
+            self.vocabulary.update(out.get("vocabulary") or {})
+            self.relations_version += 1
+            self._made.clear()
+        answered = sum(1 for c in chunks if c.id in out["answered"])
+        return {"reader": reader.kind, "read": answered, "left": len(chunks) - answered, "calls": out["calls"],
+                "found": sum(len(self.relations.get(c.id, [])) for c in chunks), "busy": bool(out.get("busy"))}
 
-    def graph(self, onto=None, terms: list[dict] | None = None) -> dict:
-        """The picture of it, in the shape the page's graph takes."""
+    def forget_relations(self, folder: str = "") -> int:
+        """Read a folder again from the start: what readers found there goes."""
+        with self.lock:
+            docs = self.documents()
+            gone = [cid for cid, c in self.passages.items() if cid in self.read_by
+                    and (not folder or _under(folder_of(docs.get(c.document, {})), folder))]
+            for cid in gone:
+                self.read_by.pop(cid, None)
+                self.relations.pop(cid, None)
+            self.relations_version += 1
+            self._made.clear()
+            return len(gone)
+
+    def relations_dump(self) -> dict:
+        """What readers found, for a space kept across restarts. Passages that left the space are not kept."""
+        live = [cid for cid in self.read_by if cid in self.passages]
+        return {"read_by": {cid: self.read_by[cid] for cid in live},
+                "relations": {cid: [r.to_dict() for r in self.relations.get(cid, [])] for cid in live},
+                "vocabulary": dict(self.vocabulary)}
+
+    def relations_load(self, data: dict) -> None:
+        with self.lock:
+            self.read_by.update({str(k): str(v) for k, v in (data.get("read_by") or {}).items()})
+            for cid, rows in (data.get("relations") or {}).items():
+                self.relations[str(cid)] = [Relation(**{k: str(r.get(k, "")) for k in Relation.__dataclass_fields__}) for r in rows]
+            self.vocabulary.update(data.get("vocabulary") or {})
+            self.relations_version += 1
+            self._made.clear()
+
+    def relation_triples(self, onto=None, terms: list[dict] | None = None) -> list[tuple[str, str, str, str]]:
+        """(subject, relation, object, passage) with the object's or action's id where a concept is one, so a relation the
+        documents state joins the definition it is about; any other concept goes by its name."""
         made = self.concepts(onto, terms)
-        rows = self._rows(onto, terms)
+        by_label = {c.label: c for c in made["concepts"].values()}
+
+        def end(label: str) -> str:
+            c = by_label.get(label)
+            return c.element if c is not None and c.element.startswith(("object:", "action:")) else f"concept:{label}"
+
+        return [(end(r.source), r.label or r.predicate, end(r.target), r.chunk) for r in self.live_relations()]
+
+    def graph(self, onto=None, terms: list[dict] | None = None, folder: str = "") -> dict:
+        """The picture of it, in the shape the page's graph takes; with a folder, only the documents in it."""
+        rows = self._rows(onto, terms, folder)
         with_sections = len(rows["sections"]) <= GRAPH_SECTIONS_MAX
         nodes = [{"id": r[0], "label": r[1], "module": "document", "abstract": False, "table": r[2], "key": ""} for r in rows["documents"]]
         edges = []
@@ -471,30 +691,21 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
         if with_sections:
             nodes += [{"id": r[0], "label": r[3], "module": "section", "abstract": False, "table": "", "key": ""} for r in rows["sections"]]
             edges += [{"source": r[1], "target": r[0], "label": "절", "subtype": False} for r in rows["sections"]]
-        for c in made["concepts"].values():
-            nodes.append({"id": c.id, "label": c.label, "module": "ontology" if c.element else c.kind, "abstract": False,
-                          "table": c.element, "key": ""})
+        for cid, label, kind, element in rows["concepts"]:
+            nodes.append({"id": cid, "label": label, "module": "ontology" if element else kind, "abstract": False, "table": element, "key": ""})
         seen = set()
         for sid, cid in rows["section_concepts"]:
             src = sid if with_sections else parent.get(sid, sid)
             if (src, cid) not in seen:
                 seen.add((src, cid))
                 edges.append({"source": src, "target": cid, "label": "언급", "subtype": False})
-        edges += [{"source": a, "target": b, "label": "함께 언급", "subtype": True} for a, b, _ in made["links"]]
-        by_label = {c.label: c.id for c in made["concepts"].values()}
-        for rows in self.relations.values():
-            for r in rows:
-                ends = []
-                for word in (r["from"], r["to"]):
-                    if word not in by_label:  # a phrase the definitions and the word count did not know
-                        by_label[word] = _id("read", word)
-                        nodes.append({"id": by_label[word], "label": word, "module": "read", "abstract": False, "table": "", "key": ""})
-                    ends.append(by_label[word])
-                edges.append({"source": ends[0], "target": ends[1], "label": r["label"], "subtype": False})
+        edges += [{"source": a, "target": b, "label": "함께 언급", "subtype": True} for a, b in rows["concept_links"]]
+        edges += [{"source": r[1], "target": r[2], "label": r[4], "subtype": False, "relation": r[3], "evidence": r[6]}
+                  for r in rows["relations"]]
         kinds = {n["module"] for n in nodes}
-        words = {"document": "문서", "section": "절", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드", "read": "모델이 읽은 개념"}
+        words = {"document": "문서", "section": "절", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드"}
         return {"nodes": nodes, "edges": edges, "clusters": [{"id": k, "label": v} for k, v in words.items() if k in kinds],
-                "sections_shown": with_sections, "titles": title}
+                "sections_shown": with_sections, "titles": title, "relations": len(rows["relations"]), "folder": folder}
 
     def mentions_of(self, element: str, onto=None, terms: list[dict] | None = None, limit: int = 6) -> list[dict]:
         """The sections that speak of one definition, for the object screen and an agent's evidence."""
@@ -509,11 +720,11 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
         return sorted(out, key=lambda x: (-x["count"], x["document"], x["section"]))[:limit]
 
     def knowledge(self, onto=None, terms: list[dict] | None = None):
-        """Definitions, rules and passages in one index, built again when any of them changes."""
+        """Definitions, rules, passages and the relations read between them in one index, built again when any changes."""
         from xgen_space.knowledge import build
 
         self.index()
-        key = (id(onto), tuple(sorted(self.chunks)), len(terms or []), self.retriever)
+        key = (id(onto), tuple(sorted(self.chunks)), len(terms or []), self.retriever, self.relations_version)
         if self._knowledge is None or self._knowledge[0] != key:
             self._knowledge = (key, build(onto, self, terms, self.retriever))
         return self._knowledge[1]
@@ -537,9 +748,9 @@ CREATE TABLE concept_links (source_id TEXT, target_id TEXT);""")
             stores.append({**s.describe(), "name": name, "count": held, "error": self.errors.get(name, ""), "primary": name == self.primary()})
         docs = self.documents()
         return {"embedder": self.embedder.describe(), "stores": stores, "collection": self.collection, "documents": len(docs),
-                "fixed": len(self.fixed), "uploaded": len(self.uploaded), "chunks": len(self.chunks),
+                "fixed": len(self.fixed), "uploaded": len(self.uploaded), "chunks": len(self.chunks), "passages": len(self.passages),
                 "sections": len({(c.document, c.section) for c in self.chunks.values()}), "took": self.took, "checks": len(self.checks),
-                "ok": not self.errors}
+                "embed_error": self.embed_error, "ok": not self.errors and not self.embed_error}
 
 
 def _read_documents(patterns: list[str], base: Path) -> list[dict]:

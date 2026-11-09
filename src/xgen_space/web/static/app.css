@@ -416,7 +416,8 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 @media (min-width: 1600px) { .adgrid { grid-template-columns:minmax(0, 1.1fr) minmax(0, 1fr); } }
 .adcol { display:flex; flex-direction:column; gap:14px; min-width:0; }
 .adcol .cwrap > table { min-width:560px; }
-.ctable { font-size:12.5px; min-width:880px; }
+.ctable { font-size:12.5px; min-width:980px; }
+.cemb { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 .ctable th { background:var(--panel); color:#475467; font-size:12px; letter-spacing:0; padding:8px 8px; white-space:nowrap; }
 .ctable th.sort { cursor:pointer; user-select:none; }
 .ctable th.sort.on { color:var(--blue); }

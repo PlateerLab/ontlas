@@ -141,13 +141,13 @@ The sidebar follows the data from raw files to checked answers. A stage's screen
 | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
 | 데이터 지도 | 탐색기 | Browse everything the space holds as folders (repositories, databases, documents, ontology, stores, queries and decisions), with what each part went through; search names, paths, definitions and document text at once and see which of them found each hit; move, rename and delete files, with a trash and a work record |
 | | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
-| ① 원천 데이터 | 카탈로그 | Upload files and folders into repositories, and see each file's kind, size and where it goes |
+| ① 원천 데이터 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, and turn a file's or a folder's embedding on and off |
 | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
 | ② 변환 | 결과 | See what each file came to, and the one JSON they roll up into |
 | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
 | ③ 온톨로지 구축 | 초안 생성 | Draft from the files in the catalog, step by step, and bind to a standard |
 | | 온톨로지 · 도메인 | See objects and relations as a graph |
-| | 온톨로지 · 문서 | See documents as documents, sections and concepts, tied to the definitions they mention |
+| | 온톨로지 · 문서 | See documents as documents, sections and concepts, tied to the definitions they mention; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
 | | 정의 관리 · 객체 | Change an object's table, key and parent, or add one from a table |
 | | 정의 관리 · 속성 | Change a property's type, column, allowed values and their names, required flag and mask |
 | | 정의 관리 · 관계 | Change relations and their join columns, and add the ones foreign keys suggest |
@@ -156,7 +156,7 @@ The sidebar follows the data from raw files to checked answers. A stage's screen
 | | 정의 관리 · 액션 | Change what a request takes, the decision it must pass, the state it leads to and whether a person approves it |
 | | 정의 관리 · 권한 | Change what each role reads, runs and requests, and which properties it sees masked |
 | | 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
-| ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores and whether questions find their documents |
+| ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores, each document's embedding and whether questions find their documents; see what a change of model embeds again, and change it |
 | | 구성 | See every swappable part as measured on opening: the registered queries each language compiles, whether the stores return the same rows, what each reasoner derives, and the modules the pipeline is built from |
 | ⑤ 활용 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause |
 | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
@@ -326,6 +326,7 @@ changed nothing.
 | Vector stores | memory (exact), Qdrant, pgvector | `register_vector_store` | `xspace vectors`: every store against exact search |
 | Embedders | hash (no model), any OpenAI-shaped service, fastembed (a local multilingual model) | `register_embedder` | Search checks in `space.checks`, a pass condition of the flow |
 | Reasoners | rules, owlrl, shacl, reasonable, any HTTP service that takes and returns turtle | `register_reasoner` | `xspace reasoners`: engines of one logic must derive the same facts |
+| Relation readers | basic (any chat model), xgen-ontology-build's relation formation | `register_reader` | Both read the same passages; every relation's two ends are concepts its sentence names |
 | Domains | modules in a library | a package | Validation questions and the flow's conditions |
 
 Two OWL 2 RL engines run side by side is how `reasonable` 0.4.4 was found to join every subject of an inverse functional
@@ -349,8 +350,9 @@ reasoners:
 
 A document that comes in, through the catalog or `space.documents`, goes two ways at once.
 
-- **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one.
+- **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one. Every vector carries the folder its file is in and the model that made it. A file's embedding can be turned off in the catalog: its documents leave the stores, and so the search, and stay in the document ontology.
 - **Document ontology.** It becomes rows of document, section and concept. Concepts are the names the definitions give (objects, properties, allowed values, decisions, glossary terms) plus the words a document keeps returning to, found without a model. The rows run on the same engine as the domain ontology, so the same compilers and the same conformance apply.
+- **Relations, when asked.** With a model connected, 관계 추출 sends the sentences that name two concepts or more to a reader, their concepts numbered, and keeps a relation only between concepts its sentence names, with that sentence. Relations join the document ontology (`relationsOf`, `relationNames`) and its graph, and an answer lists the ones its shown passages state. They do not change which passages a search finds: on a set of 100 relation questions the ranks were the same with and without them. Readers are a port: `basic` needs only the model, `ontology-build` is xgen-ontology-build's relation formation (`pip install "xgen-space[build]"`). A reading runs on the server, stops and resumes, covers a folder or everything, and with `--repositories` is kept next to them; a passage that changes is read again.
 
 <table>
   <tr>
@@ -363,8 +365,17 @@ A search takes more passages from the store than it returns and orders them by t
 words, since the nearest passage to a model is not always the one that says it.
 
 Concepts tie the two together. `xspace search` returns the passages and the definitions a question names, the object screen
-shows the sections that mention an object, and the map shows which queries a document touches. Relations between concepts are
-co-mentions, not extracted meaning: they say two things appear together.
+shows the sections that mention an object, and the map shows which queries a document touches. Without a reading, concepts are tied
+by co-mention only: two names in one section. A relation a reader found replaces the co-mention between its two concepts.
+
+Folders are ranges. A search, a question (`folder` on `POST /v1/search` and `POST /v1/answer`, and on the MCP tools), the document
+graph and a reading keep to one folder and the folders under it, and a role's `documents` take file paths and patterns such as
+`정책/*` besides document names.
+
+Vectors of two models do not compare, so changing the embedding model embeds every passage again. On 벡터 · 임베딩 a change first
+lists what it embeds again (documents, passages, characters) and the time it takes, measured on a few passages with the new model;
+the stores are emptied and filled again only when you go ahead. A model that fails leaves the stores as they were, and the files
+it could not embed say so.
 
 ## One question over everything
 
@@ -547,7 +558,8 @@ Raw material comes first. 데이터 카탈로그 keeps files in repositories, by
 | Upload something it cannot read | Keeps the file and says why on its row. Images, video and archives are kept as they are, so a repository can hold everything a project has |
 | Look at a row | Kind, size, rows or sections, and where it goes: a table or a definition sheet to the domain and binding modules, a code sheet to value names and decision tables, a glossary to the term dictionary, a document to the policy draft |
 | Open a file | First rows or sections, its share of the JSON, and a download |
-| Clear a file's or folder's 초안 box | Leaves it out of 변환 결과 and of the next draft, and keeps it in the catalog |
+| Clear a file's or folder's 초안 box | Leaves it out of 변환 결과, the next draft, the search and the document ontology, and keeps it in the catalog |
+| Clear a file's or folder's 임베딩 box | Takes its documents out of the vector stores, and so out of search; they stay in the draft and in the document ontology. Each row says 임베딩됨, 임베딩 대기, 임베딩 실패 or 꺼짐 |
 | Switch repository | The draft reads that repository's files from then on |
 
 A path in a repository is a name in an index, never a path on disk: the bytes are stored under their SHA-256, so nothing

@@ -107,16 +107,17 @@
       '왼쪽 탐색기에서 항목을 선택하면 그 안의 항목과 처리 상태를 표시합니다. 폴더는 문서 색인과 초안 포함 수를, 파일은 변환 결과, 문서 색인 청크, 초안 포함 여부를 표시합니다.',
       '검색은 이름과 경로, 온톨로지 정의, 문서 내용을 함께 찾고, 결과마다 찾은 곳(이름, 경로, 정의, 단어 일치, 의미 유사)을 표시합니다.',
       '레포지토리의 파일과 폴더는 새 폴더, 업로드, 이름 변경, 이동, 삭제를 할 수 있습니다. 삭제한 항목은 휴지통으로 이동하고 [휴지통]에서 복원하거나 영구 삭제합니다.',
-      '[작업 기록]에서 업로드, 이동, 삭제, 복원, 초안 포함 변경을 시각 순으로 확인합니다.']],
+      '[작업 기록]에서 업로드, 이동, 삭제, 복원, 초안 포함 변경, 임베딩 변경을 시각 순으로 확인합니다.']],
     ['map', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계를 그래프로 확인합니다.', [
       'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
       '범례를 선택하면 해당 그룹을 숨기거나 다시 표시합니다.',
       '미사용 자산은 객체, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
     ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
-      '문서 파일을 올리면 벡터 저장소에 색인되고 문서 온톨로지에 추가됩니다. 초안 열의 선택을 해제하면 색인에서도 제외됩니다.',
+      '문서 파일을 올리면 벡터 저장소에 임베딩되고 문서 온톨로지에 추가됩니다. 임베딩 열의 선택을 해제하면 검색에서 제외되고 문서 온톨로지에는 남습니다.',
+      '임베딩 열은 파일별 상태를 임베딩됨, 임베딩 대기, 임베딩 실패, 꺼짐으로 표시합니다. 폴더에서 선택을 바꾸면 하위 파일 전체에 적용됩니다.',
       '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
       '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다. 이미지, 영상, 압축 파일은 원본으로 보관합니다.',
-      '초안 열의 선택을 해제하면 파일 또는 폴더를 초안과 변환 결과에서 제외합니다.',
+      '초안 열의 선택을 해제하면 파일 또는 폴더를 초안, 변환 결과, 검색, 문서 온톨로지에서 모두 제외합니다.',
       '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 삭제를 합니다.',
       '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
     ['db', '데이터베이스를 연결해 온톨로지 초안을 생성합니다.', [
@@ -176,11 +177,15 @@
       '[OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.']],
     ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어와 연결됩니다.', [
       '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
-      '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 절의 관계를 추가합니다. 본문에 없는 내용은 추가하지 않습니다.',
+      '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
+      '문서 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서만 그래프에 표시하고 [관계 추출]도 그 범위만 읽습니다. 추출은 서버에서 진행되며 [중지]로 멈춘 뒤 다시 선택하면 이어서 읽습니다.',
+      '[다시 추출]은 선택한 범위의 추출 결과를 지우고 처음부터 다시 읽습니다. 추출한 관계는 문서 온톨로지 질의와 통합 검색의 연결 관계에 사용합니다.',
       '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. 객체 개념을 선택하면 온톨로지 화면으로 이동합니다.',
       '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
     ['vectors', '임베딩 모델과 벡터 저장소의 구성을 확인합니다.', [
       '글자 비교는 모델 없이 동작하는 기본 방식입니다. 의미 비교는 구성 파일의 space.embedder 항목에서 모델을 지정합니다.',
+      '모델 변경에서 모델을 선택하고 [영향 확인]을 선택하면 다시 임베딩할 문서, 청크 수, 예상 시간을 표시합니다. [변경하고 다시 임베딩]을 선택해야 변경됩니다. 공개 데모에서는 서버에 준비된 모델만 선택할 수 있습니다.',
+      '문서별 임베딩에서 문서마다 색인한 청크 수와 상태를 확인합니다. 임베딩은 데이터 카탈로그에서 파일 또는 폴더 단위로 켜고 끕니다.',
       '설치형에서는 Qdrant, pgvector 주소를 입력해 저장소를 추가합니다. 추가한 저장소에 문서를 색인합니다.',
       '문서 검색 검증은 질문별 정답 문서가 상위 결과에 포함되는지 확인합니다. 질문은 구성 파일의 space.checks 항목에서 지정합니다.']],
     ['adapters', '교체 가능한 구성 요소를 확인합니다.', [
@@ -193,6 +198,7 @@
       '질문에 주문상품 번호나 주문 번호가 있으면 결정표로 판정하고 적용 규칙, 원천 값, 관련 조항을 표시합니다. 판정에는 언어 모델을 사용하지 않습니다.',
       '번호만 있으면 해당 값을 표시하고, 등록 질의 이름이면 질의를 실행합니다.',
       '그 밖의 질문은 규칙과 문서에서 찾은 근거로 답합니다. 언어 모델이 연결된 경우 찾은 근거로만 답변을 작성합니다.',
+      '검색 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서에서만 근거를 찾습니다. 규칙과 정의는 범위와 관계없이 찾습니다.',
       '관련 정의에서 객체를 선택하면 온톨로지로 이동합니다.']],
     ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
       '등록 질의를 선택하면 바로 실행됩니다.',
@@ -228,6 +234,7 @@
       '가림 속성은 일부 가림 또는 전체 가림으로 지정합니다.',
       '행 범위는 객체별로 볼 수 있는 행을 지정합니다. 사용자 속성과 비교하거나 고정 값과 비교합니다.',
       '조직 범위는 로그인한 조직의 행으로 조회와 요청을 함께 제한합니다.',
+      '열람 문서에서 폴더 또는 문서를 선택하면 이 역할로 검색하고 답할 때 그 문서만 근거로 사용합니다.',
       'Agent와 외부 플랫폼은 지정한 역할의 범위 안에서만 조회하고 요청합니다.']],
     ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
       '[규칙 수정]을 선택하면 규칙 관리로 이동합니다. 규칙과 기준값을 입력 폼에서 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
@@ -255,7 +262,7 @@
     flow: '여기서 지정한 통과 조건은 변경 요청을 검토할 때도 같은 기준으로 적용됩니다.',
     explorer: '파일만이 아니라 스페이스가 담은 모든 데이터를 같은 탐색기와 같은 검색으로 다뤄, 무엇이 어디에 있고 어떤 처리를 거쳤는지 한 화면에서 확인합니다.',
     map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 객체, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
-    catalog: '초안과 검색은 레포지토리의 파일을 기준으로 만듭니다. 초안에서 제외한 파일은 정의와 색인에 반영되지 않습니다.',
+    catalog: '초안과 검색은 레포지토리의 파일을 기준으로 만듭니다. 임베딩을 끈 파일은 검색에서 빠지고 문서 온톨로지의 개념과 관계에는 남습니다.',
     db: '데이터를 복사하지 않고 원본 DB를 읽으므로, 정의와 판정이 운영 데이터와 같은 값을 기준으로 합니다.',
     convert: '파일 형식이 달라도 같은 구조로 변환해, 이후 단계가 형식마다 다르게 처리하지 않습니다.',
     sources: '객체에 연결되지 않은 테이블은 질의와 판정에서 사용할 수 없습니다.',
@@ -270,8 +277,8 @@
     roles: '역할에 필요한 범위만 열어 두어야 다른 고객의 행이나 내부 문서가 Agent의 답변에 포함되지 않습니다.',
     library: '표준 모듈은 직접 수정하지 않고 달라지는 내용만 별도 모듈로 추가합니다. 표준 버전이 바뀌어도 차이 모듈만 다시 적용합니다.',
     onto: '그래프 저장소에는 원천 데이터를 정의 기준으로 반영하므로, 화면의 연결은 원천의 값과 일치합니다.',
-    docs: '문서의 절과 개념을 온톨로지와 연결해 두어야 답변이 규칙과 그 근거 조항을 함께 제시합니다.',
-    vectors: '임베딩 모델이나 벡터 저장소를 바꿔도 같은 질문에 같은 문서가 상위에 오는지 문서 검색 검증으로 확인합니다.',
+    docs: '문서의 절과 개념을 온톨로지와 연결해 두어야 답변이 규칙과 그 근거 조항을 함께 제시합니다. 관계는 근거 문장이 있는 것만 추가해 연결마다 원문을 확인할 수 있습니다.',
+    vectors: '임베딩 모델이 다르면 벡터를 서로 비교할 수 없어 모델을 바꾸면 모든 청크를 다시 임베딩합니다. 바꾼 뒤에는 문서 검색 검증으로 같은 질문에 같은 문서가 상위에 오는지 확인합니다.',
     adapters: '저장소와 쿼리 언어는 교체할 수 있지만, 같은 질의가 같은 결과를 내는지 적합성 시험을 통과한 구성만 사용합니다.',
     search: '판정은 결정표로만 내리고 언어 모델은 찾은 근거를 문장으로 옮기는 데만 사용합니다. 같은 질문에는 같은 판정이 나옵니다.',
     query: '같은 질의를 저장소마다 실행해 결과를 비교하므로, 저장소를 교체해도 결과가 같은지 확인합니다.',
@@ -320,7 +327,7 @@
 
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
-    ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
+    ru: null, met: {}, sp: null, sr: { text: '', folder: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {}, dfolder: '', drel: null, djob: null, dreader: '',
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
     ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
@@ -954,12 +961,18 @@
     return `${(res.decisions || []).map(askDecision).join('')}${words}${wait}${failed}${res.record ? askRecord(res.record) : ''}${query ? askTable(query) : ''}`;
   }
 
+  function folderPick(key, value, sp, label) {
+    const folders = (sp && sp.folders) || [];
+    if (!folders.length) return '';
+    return `<select class="inline" data-in="${key}" aria-label="${esc(label)}"><option value="">전체 문서</option>${folders.map((f) => `<option value="${esc(f)}"${value === f ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select>`;
+  }
+
   function viewSearch() {
     const r = S.sr;
     const sp = S.sp && !S.sp.busy && !S.sp.error ? S.sp : null;
     const head = pageHead('통합 검색', '판정, 데이터, 문서를 한 번에 찾고 근거를 확인합니다');
     const examples = sp ? (sp.examples || []).slice(0, 4).map((c) => `<button class="chip" data-act="srex" data-text="${esc(c)}">${esc(c)}</button>`).join('') : '';
-    const form = `<div class="card"><div class="cb"><div class="srform"><input type="search" id="srtext" data-in="srtext" value="${esc(r.text)}" placeholder="질문을 입력해 주세요" aria-label="질문"><button class="btn primary" data-act="srgo"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>검색 중' : '검색'}</button></div>
+    const form = `<div class="card"><div class="cb"><div class="srform"><input type="search" id="srtext" data-in="srtext" value="${esc(r.text)}" placeholder="질문을 입력해 주세요" aria-label="질문">${folderPick('srfolder', r.folder, sp, '검색 범위')}<button class="btn primary" data-act="srgo"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>검색 중' : '검색'}</button></div>
       ${examples ? `<div class="chips" style="margin-top:10px"><span class="muted" style="font-size:12px">예시</span>${examples}</div>` : ''}</div></div>`;
     if (!r.res) return head + form;
     if (r.res.error) return head + form + `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.res.error)}</div></div>`;
@@ -982,7 +995,7 @@
     const asked = r.text;
     r.busy = true; r.more = null; r.moreBusy = false;
     render();
-    try { r.res = await api('space/ask', { text: asked }); } catch (e) { r.res = { error: e.message }; }
+    try { r.res = await api('space/ask', { text: asked, folder: r.folder }); } catch (e) { r.res = { error: e.message }; }
     if (r.res && r.res.ok === false) r.res = { error: r.res.error };
     r.busy = false;
     render();
@@ -990,7 +1003,7 @@
       r.moreBusy = true;
       render();
       let more;
-      try { more = await api('space/ask/more', { text: asked }); } catch (e) { more = { ok: false, error: e.message }; }
+      try { more = await api('space/ask/more', { text: asked, folder: r.folder }); } catch (e) { more = { ok: false, error: e.message }; }
       if (r.text === asked) r.more = more;
       r.moreBusy = false;
       if (S.tab === 'search') render();
@@ -998,30 +1011,89 @@
     return null;
   }
 
+  const READER_WORD = { basic: '기본', 'ontology-build': 'xgen-ontology-build' };
+
+  function readCard() {
+    const sp = S.sp, j = S.djob, rd = (j && j.folder === S.dfolder ? j : null) || (S.drel && S.drel.reading) || (S.dfolder ? { read: 0, passages: 0, relations: 0, names: 0 } : sp.reading);
+    const running = j && j.running;
+    const share = rd.passages ? Math.round(rd.read / rd.passages * 100) : 0;
+    const readers = (sp.readers || []).length > 1 ? `<select class="inline" data-in="dreader" aria-label="관계 추출 엔진"${running ? ' disabled' : ''}>${sp.readers.map((k) => `<option value="${esc(k)}"${(S.dreader || sp.reader) === k ? ' selected' : ''}>${esc(READER_WORD[k] || k)}</option>`).join('')}</select>` : '';
+    const acts = !sp.can_read ? '<span class="muted" style="font-size:12.5px">언어 모델이 연결된 설치형에서 사용합니다</span>'
+      : running ? `<button class="btn sm" data-act="dstop"${j.stop ? ' disabled' : ''}>${j.stop ? '중지하는 중' : '중지'}</button>`
+        : `${readers}<button class="btn sm primary" data-act="dread"${rd.read >= rd.passages ? ' disabled' : ''}>${rd.read ? '이어서 추출' : '관계 추출'}</button>${rd.read ? '<button class="btn sm ghost" data-act="dforget">다시 추출</button>' : ''}`;
+    const bar = running ? `<div class="cprog" style="margin-top:10px"><span class="spin"></span><b>${j.total ? `${j.done} / ${j.total}` : '준비 중'}</b><span class="muted">${esc(READER_WORD[j.reader] || j.reader)} · ${j.seconds}초 경과</span><div class="bar"><i style="width:${j.total ? Math.round(j.done / j.total * 100) : 0}%"></i></div></div>` : '';
+    return `<div class="ch">관계 추출<div class="right">${acts}</div></div><div class="cb">
+      <div class="chips"><span class="chip">읽은 청크 ${count(rd.read)} / ${count(rd.passages)} (${share}%)</span><span class="chip ${rd.relations ? 'ok' : ''}">관계 ${count(rd.relations)}</span><span class="chip">관계 이름 ${count(rd.names)}</span>${(rd.readers || []).map((k) => `<span class="chip sm">${esc(READER_WORD[k] || k)}</span>`).join('')}</div>
+      ${bar}<div class="hint" style="margin-top:8px">청크마다 개념이 둘 이상 나오는 문장만 언어 모델에 보내고, 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.</div></div>`;
+  }
+
+  function relationCard() {
+    const r = S.drel;
+    if (!r || !r.total) return '';
+    const meaning = (x) => (x.label ? `<div class="muted mono" style="font-size:11px">${esc(x.predicate)}</div>` : (r.vocabulary || {})[x.predicate] ? `<div class="muted" style="font-size:11px">${esc(r.vocabulary[x.predicate])}</div>` : '');
+    const rows = r.relations.slice(0, 60).map((x) => `<tr><td><b>${esc(x.source)}</b></td><td><span class="chip sm b">${esc(x.label || x.predicate)}</span>${meaning(x)}</td><td><b>${esc(x.target)}</b></td><td style="font-size:12px">${esc(x.evidence)}<div class="muted" style="font-size:11px">${esc(x.document)} · ${esc(x.section)}</div></td></tr>`).join('');
+    return `<div class="card" style="margin-top:14px"><div class="ch">추출한 관계<div class="right muted" style="font-size:12px;font-weight:600">${count(r.total)}개${r.total > 60 ? ' · 앞 60개 표시' : ''}</div></div><div class="cb scroll" style="max-height:420px">
+      <table class="tight"><tr><th>주어</th><th>관계</th><th>목적어</th><th>근거 문장</th></tr>${rows}</table></div></div>`;
+  }
+
   function viewDocs() {
     const sp = S.sp;
-    const read = S.st.ask ? `<button class="btn" data-act="dread"${S.dread ? ' disabled' : ''}>${S.dread ? `<span class="spin"></span>${esc(S.dread)}` : '관계 추출'}</button>` : '';
-    const head = pageHead('문서 온톨로지', '문서를 문서, 절, 개념으로 구성하고 도메인 온톨로지와 연결합니다', `${read}<a class="btn" href="#catalog">문서 추가</a>`);
+    const pick = sp && !sp.busy && !sp.error ? folderPick('dfolder', S.dfolder, sp, '문서 범위') : '';
+    const head = pageHead('문서 온톨로지', '문서를 문서, 절, 개념으로 구성하고 도메인 온톨로지와 연결합니다', `${pick}<a class="btn" href="#catalog">문서 추가</a>`);
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>문서를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
-    const stats = [[sp.documents, '문서'], [sp.sections, '절'], [sp.concepts, '개념'], [sp.chunks, '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
+    const g = S.dg && !S.dg.busy ? S.dg : null;
+    const inScope = sp.items.filter(inDocScope);
+    const inGraph = (kinds) => (g.nodes || []).filter((n) => kinds.includes(n.module)).length;
+    const stats = [[inScope.length, '문서'], [g && g.sections_shown ? inGraph(['section']) : sp.sections, '절'], [g ? (g.nodes || []).length - inGraph(['document', 'section']) : sp.concepts, '개념'],
+      [g ? g.relations : (sp.reading || {}).relations || 0, '관계'], [inScope.reduce((n, d) => n + d.chunks, 0), '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
     const qs = S.dq;
     const queries = !qs ? '' : `<div class="card" style="margin-top:14px"><div class="ch">문서 온톨로지 질의${qs.conformance ? `<div class="right"><span class="chip ${qs.conformance.agree === qs.conformance.queries ? 'ok' : 'bad'}">SQL · 그래프 결과 일치 ${qs.conformance.agree} / ${qs.conformance.queries}</span></div>` : ''}</div><div class="cb">
         ${qs.queries.map((q) => `<div class="sec" style="margin-top:6px">${esc(q.label)} <span class="mono muted">${esc(q.name)}</span></div>${q.error ? `<div class="hint warn">${esc(q.error)}</div>` : `<table class="tight"><tr>${q.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${q.rows.slice(0, 5).map((row) => `<tr>${row.map((v) => `<td>${esc(cellWord(v))}</td>`).join('')}</tr>`).join('')}</table><div class="muted" style="font-size:11.5px;margin-top:4px">전체 ${q.total}행</div>`}`).join('')}
       </div></div>`;
     return `${head}<div class="stats">${stats}</div>
+      <div class="card" id="dreadcard" style="margin-bottom:14px">${readCard()}</div>
       <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr)">
         <div class="card"><div class="ch">문서 그래프</div><div class="cb" style="padding:0"><div class="kg" id="docgraph"></div></div></div>
         <div class="card" id="docside">${docSide()}</div>
-      </div>${queries}`;
+      </div>${relationCard()}${queries}`;
   }
+
+  async function readRelations() {
+    if (S.djob && S.djob.running) return;
+    let r;
+    try { r = await api('space/relations/start', { folder: S.dfolder, reader: S.dreader }); } catch (e) { return fail(e); }
+    if (!r.ok) return toast(r.error, true);
+    if (r.done) return toast('추출할 청크가 없습니다. 이 범위의 청크를 모두 읽었습니다.');
+    S.djob = { id: r.job, running: true, done: 0, total: 0, seconds: 0, folder: S.dfolder, reader: S.dreader || S.sp.reader, read: 0, passages: 0, relations: 0, names: 0 };
+    render();
+    while (S.djob && S.djob.id === r.job && S.djob.running) {
+      await new Promise((ok) => { setTimeout(ok, 2000); });
+      let st;
+      try { st = await api(`space/relations/status?job=${encodeURIComponent(r.job)}`); } catch (e) { st = { ok: false, error: e.message }; }
+      if (!st.ok) { S.djob = null; toast(st.error, true); break; }
+      S.djob = { ...S.djob, ...st, stop: S.djob.stop };
+      const card = $('#dreadcard');
+      if (card && S.tab === 'docs') card.innerHTML = readCard();
+      if (!st.running) {
+        const out = st.result || {};
+        if (!out.ok || out.error) toast(out.error || '관계를 추출하지 못했습니다.', true);
+        else toast(out.busy ? `모델 호출 한도로 멈췄습니다. 청크 ${out.read}개를 읽고 관계 ${out.found}개를 추가했습니다. 다시 선택하면 이어서 추출합니다.`
+          : `청크 ${out.read}개를 읽고 관계 ${out.found}개를 추가했습니다.${out.left ? ` 남은 청크 ${out.left}개는 다시 선택하면 이어서 추출합니다.` : ''}`);
+        S.djob = null; S.dg = null; S.drel = null; S.dq = null; S.sp = null;
+        if (S.tab === 'docs') { loadSpace(); render(); }
+      }
+    }
+  }
+
+  const inDocScope = (d) => !S.dfolder || d.folder === S.dfolder || (d.folder || '').startsWith(S.dfolder + '/');
 
   function docSide() {
     const sp = S.sp, sel = S.dsec;
     const detail = sel ? `<b style="font-size:15px">${esc(sel.section)}</b><div class="muted" style="font-size:12px;margin:2px 0 10px">${esc(sel.document)}</div>
         <div class="hit-text" style="white-space:pre-wrap">${esc(sel.text)}</div>
         ${sel.concepts.length ? `<div class="sec">이 절의 개념</div><div class="chips">${sel.concepts.map((c) => (c.element.startsWith('object:') ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)}</button>` : `<span class="chip">${esc(c.label)} · ${esc(KIND_LABEL[c.kind] || c.kind)}</span>`)).join('')}</div>` : ''}`
-      : `<table class="tight"><tr><th>문서</th><th>절</th><th>언급</th></tr>${sp.items.map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
+      : `<table class="tight"><tr><th>문서</th><th>절</th><th>언급</th></tr>${sp.items.filter(inDocScope).map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
         <div class="hint" style="margin-top:10px">그래프에서 절을 선택하면 본문과 개념이 표시됩니다.</div>`;
     return `<div class="ch">${sel ? '절 내용' : '문서 목록'}${sel ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${detail}</div>`;
   }
@@ -1031,7 +1103,13 @@
     if (S.sp && !S.sp.busy && !S.sp.error) {
       if (!S.dg) {
         S.dg = { busy: true };
-        try { S.dg = await api('space/graph'); } catch (e) { S.dg = { nodes: [], edges: [], clusters: [], error: e.message }; }
+        try { S.dg = await api(`space/graph?folder=${encodeURIComponent(S.dfolder)}`); } catch (e) { S.dg = { nodes: [], edges: [], clusters: [], error: e.message }; }
+        if (S.tab === 'docs') { render(); return; }
+      }
+      if (S.drel === null) {
+        S.drel = 0;
+        try { S.drel = await api(`space/relations?folder=${encodeURIComponent(S.dfolder)}`); } catch (e) { S.drel = { total: 0, relations: [] }; }
+        if (S.drel.total && S.tab === 'docs') { render(); return; }
       }
       if (S.dg && !S.dg.busy) {
         const titles = S.dg.titles || {};
@@ -1056,19 +1134,31 @@
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>색인 상태를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const e = sp.embedder;
+    const v = S.vemb;
+    const choices = (sp.embedders || []).filter((c) => !(c.kind === e.kind && (c.name || '') === e.name));
+    const plan = v && v.plan ? `<div class="sec">다시 임베딩할 문서</div><div class="chips" style="margin-bottom:6px"><span class="chip">문서 ${count(v.plan.files.length)}개</span><span class="chip">청크 ${count(v.plan.chunks)}개</span><span class="chip">${count(v.plan.chars)}자</span><span class="chip warn">예상 ${v.plan.seconds < 1 ? '1초 미만' : `약 ${Math.ceil(v.plan.seconds)}초`}</span></div>
+      <table class="tight" style="font-size:12px"><tr><th>문서</th><th>경로</th><th>청크</th></tr>${v.plan.files.slice(0, 12).map((f) => `<tr><td>${esc(f.document)}</td><td class="mono muted">${esc(f.path || '기본 문서')}</td><td>${f.chunks}</td></tr>`).join('')}</table>${v.plan.files.length > 12 ? `<div class="muted" style="font-size:11.5px">외 ${v.plan.files.length - 12}개 문서</div>` : ''}
+      <div class="hint" style="margin-top:8px">임베딩 모델이 다르면 벡터를 비교할 수 없어 벡터 저장소를 비우고 모든 청크를 다시 임베딩합니다. 예상 시간은 새 모델로 청크 ${Math.min(6, v.plan.chunks)}개를 임베딩해 측정했습니다.</div>
+      <div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm primary" data-act="vembuse"${v.busy ? ' disabled' : ''}>${v.busy ? '<span class="spin"></span>임베딩 중' : '변경하고 다시 임베딩'}</button><button class="btn sm ghost" data-act="vembcancel">취소</button></div>` : '';
+    const change = choices.length ? `<div class="sec">모델 변경</div><div class="srform"><select class="inline" data-in="vemb" aria-label="임베딩 모델"><option value="">모델 선택</option>${choices.map((c) => `<option value="${(sp.embedders || []).indexOf(c)}"${v && String(v.pick) === String((sp.embedders || []).indexOf(c)) ? ' selected' : ''}>${esc(c.name || c.kind)}${c.dim ? ` · ${c.dim}차원` : ''}</option>`).join('')}</select><button class="btn sm" data-act="vembplan"${!v || v.pick === '' || v.busy ? ' disabled' : ''}>${v && v.busy && !v.plan ? '<span class="spin"></span>측정 중' : '영향 확인'}</button></div>${plan}` : '';
     const embed = `<div class="card"><div class="ch">임베딩 모델</div><div class="cb"><div style="font-size:15px"><b>${esc(e.name)}</b></div><div class="chips" style="margin:8px 0"><span class="chip">${esc(e.kind)}</span><span class="chip">${e.dim}차원</span><span class="chip ${e.semantic ? 'ok' : 'warn'}">${e.semantic ? '의미 비교' : '글자 비교'}</span></div>
-      <div class="muted" style="font-size:12.5px">${e.semantic ? '문장 의미를 기준으로 검색합니다.' : '글자 기준으로 검색합니다. 표현이 다른 문장은 검색되지 않을 수 있습니다.'}</div></div></div>`;
+      <div class="muted" style="font-size:12.5px">${e.semantic ? '문장 의미를 기준으로 검색합니다.' : '글자 기준으로 검색합니다. 표현이 다른 문장은 검색되지 않을 수 있습니다.'}</div>${change}</div></div>`;
+    const failed = sp.embed_error ? `<div class="banner no" style="margin-bottom:12px"><div class="why">임베딩하지 못한 문서가 있습니다. ${esc(sp.embed_error)} 임베딩 모델 연결을 확인하면 다음 색인에서 다시 임베딩합니다.</div></div>` : '';
     const rows = sp.stores.map((s) => `<tr><td><b>${esc(s.name)}</b>${s.primary ? ' <span class="chip sm b">기본</span>' : ''}</td><td class="mono">${esc(s.kind)}</td><td>${show(s.count)}</td><td>${s.exact ? '정확' : '근사'}</td><td>${s.persistent ? '유지' : '메모리'}</td><td>${s.error ? `<span class="chip sm bad">${esc(s.error)}</span>` : '<span class="chip sm ok">정상</span>'}</td>${sp.can_connect ? `<td>${sp.stores.length > 1 ? `<button class="btn sm ghost" data-act="vstoredel" data-name="${esc(s.name)}">제거</button>` : ''}</td>` : ''}</tr>`).join('');
     const add = sp.can_connect ? `<div class="srform" style="margin-top:12px"><select class="inline" data-in="vkind" aria-label="저장소 종류">${sp.kinds.filter((k) => k !== 'memory').map((k) => `<option value="${esc(k)}"${S.vs.kind === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select><input type="text" data-in="vurl" value="${esc(S.vs.url)}" placeholder="${S.vs.kind === 'pgvector' ? 'postgresql://...' : 'http://localhost:6333'}" aria-label="저장소 주소"><button class="btn" data-act="vstoreadd">저장소 추가</button></div>
       <div class="hint" style="margin-top:8px">추가한 저장소에 문서를 색인합니다.</div>`
       : '<div class="hint" style="margin-top:10px">Qdrant, pgvector 같은 외부 저장소는 설치형에서 추가합니다. 공개 데모는 메모리 저장소만 사용합니다.</div>';
-    const docs = sp.items.map((d) => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.fixed ? '기본 문서' : '업로드')}</td><td>${d.sections}</td><td>${d.chunks}</td></tr>`).join('');
+    const docs = sp.items.map((d) => {
+      const [tone, word] = EMBED_STATE[d.state] || ['', d.state === 'none' ? '내용 없음' : d.state];
+      return `<tr class="${d.embed ? '' : 'off'}"><td><b>${esc(d.name)}</b></td><td class="mono muted">${esc(d.path || '기본 문서')}</td><td>${d.sections}</td><td>${d.chunks} / ${d.passages}</td><td><span class="chip sm ${tone}">${word}</span></td></tr>`;
+    }).join('');
     const c = sp.check;
     const check = c ? `<div class="card" style="margin-top:14px"><div class="ch">문서 검색 검증<div class="right"><span class="chip ${c.found === c.questions ? 'ok' : 'warn'}">적중 ${c.found} / ${c.questions}</span></div></div><div class="cb"><div class="muted" style="font-size:12.5px;margin-bottom:8px">질문별 정답 문서가 상위 ${c.k}건에 포함되는지 확인합니다.</div>
       <table class="tight"><tr><th>질문</th><th>정답 문서</th><th>순위</th></tr>${c.results.map((x) => `<tr><td>${esc(x.text)}</td><td>${esc(x.document)}</td><td>${x.rank ? `${x.rank}위` : '<span class="chip sm bad">미포함</span>'}</td></tr>`).join('')}</table></div></div>` : '';
-    return `${head}<div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(0,2fr);align-items:start">${embed}
+    return `${head}${failed}<div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(0,2fr);align-items:start">${embed}
       <div class="card"><div class="ch">벡터 저장소<div class="right muted" style="font-size:12px;font-weight:600">컬렉션 ${esc(sp.collection)}</div></div><div class="cb"><table class="tight"><tr><th>이름</th><th>종류</th><th>청크</th><th>검색</th><th>보관</th><th>상태</th>${sp.can_connect ? '<th></th>' : ''}</tr>${rows}</table>${add}</div></div></div>
-      <div class="card" style="margin-top:14px"><div class="ch">색인한 문서<div class="right"><a class="btn sm" href="#catalog">문서 추가</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>출처</th><th>절</th><th>청크</th></tr>${docs}</table></div></div>${check}`;
+      <div class="card" style="margin-top:14px"><div class="ch">문서별 임베딩<div class="right"><a class="btn sm" href="#catalog">임베딩 설정</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>경로</th><th>절</th><th>색인 청크</th><th>상태</th></tr>${docs}</table>
+      <div class="hint" style="margin-top:8px">데이터 카탈로그의 임베딩 열에서 파일 또는 폴더 단위로 임베딩을 켜고 끕니다. 임베딩을 끈 문서는 검색에서 제외되고 문서 온톨로지에는 남습니다.</div></div></div>${check}`;
   }
 
   async function adCheck(say) {  // the page runs it once on opening; the button runs it again
@@ -1156,7 +1246,7 @@
   // ---- data explorer: every asset of the space as folders, searched and managed in one place ------------------------
 
   const EX_ACTION = { upload: '업로드', replace: '교체', folder: '폴더 생성', rename: '이름 변경', move: '이동', trash: '휴지통으로 이동',
-    restore: '복원', purge: '영구 삭제', include: '초안 포함', exclude: '초안 제외' };
+    restore: '복원', purge: '영구 삭제', include: '초안 포함', exclude: '초안 제외', embed: '임베딩 켜기', unembed: '임베딩 끄기' };
   const EX_NODE = { group: '분류', repo: '레포지토리', dir: '폴더', kind: '분류' };
   const EX_FOUND = { 이름: 'b', 경로: 'b', 정의: 'ok', '단어 일치': '', '의미 유사': '' };
   const exHolds = (id) => /^(group|repo|dir|kind|database|collection|table|object):/.test(id);  // what opens into a list
@@ -2536,10 +2626,21 @@ ${controls}${body}`;
     const more = `<button class="iconbtn" data-act="cmenu" data-path="${esc(x.path)}" data-folder="${folder ? 1 : ''}" aria-label="${esc(x.name)} 작업">${ui('more')}</button>`;
     if (folder) {
       const inc = x.files ? `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included === x.files ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">${x.included && x.included < x.files ? `<span class="muted"> ${x.included}/${x.files}</span>` : ''}` : '<span class="muted">-</span>';
-      return `<tr class="crow"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td><span class="chip sm folder">폴더</span></td><td class="muted">-</td><td>${x.files ? fileSize(x.bytes) : '<span class="muted">-</span>'}</td><td class="muted">-</td><td class="muted">${count(x.files)}개 파일</td><td class="muted">-</td><td>${inc}</td><td>${more}</td></tr>`;
+      const emb = x.files ? `<input type="checkbox" data-in="cemb" data-path="${esc(x.path)}"${x.embedded === x.files ? ' checked' : ''} aria-label="${esc(x.name)} 임베딩">${x.embedded && x.embedded < x.files ? `<span class="muted"> ${x.embedded}/${x.files}</span>` : ''}` : '<span class="muted">-</span>';
+      return `<tr class="crow"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td><span class="chip sm folder">폴더</span></td><td class="muted">-</td><td>${x.files ? fileSize(x.bytes) : '<span class="muted">-</span>'}</td><td class="muted">-</td><td class="muted">${count(x.files)}개 파일</td><td class="muted">-</td><td>${inc}</td><td>${emb}</td><td>${more}</td></tr>`;
     }
     return `<tr class="crow${x.included && !x.error ? '' : ' out'}"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td>${kindChip(x)}</td><td class="mono muted">${esc(x.ext || '-')}</td><td>${fileSize(x.bytes)}</td><td>${amount(x)}</td><td class="muted">${esc(dayOf(x.uploaded))}</td><td class="route">${esc(routeOf(x))}</td>
-      <td>${x.error || (x.facts || {}).kind === 'raw' ? '<span class="muted">-</span>' : `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">`}</td><td>${more}</td></tr>`;
+      <td>${x.error || (x.facts || {}).kind === 'raw' ? '<span class="muted">-</span>' : `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">`}</td><td>${embedCell(x)}</td><td>${more}</td></tr>`;
+  }
+
+  const EMBED_STATE = { embedded: ['ok', '임베딩됨'], off: ['', '꺼짐'], pending: ['warn', '임베딩 대기'], failed: ['bad', '임베딩 실패'] };
+
+  function embedCell(x) {  // only a file that holds documents has passages to embed
+    const ix = x.index;
+    if (!ix || !x.included) return '<span class="muted">-</span>';
+    const [tone, word] = EMBED_STATE[ix.state] || ['', ix.state];
+    const tip = ix.state === 'embedded' ? `청크 ${ix.chunks}` : ix.state === 'off' ? `문서 온톨로지에는 포함 · 청크 ${ix.passages}` : '';
+    return `<label class="cemb"><input type="checkbox" data-in="cemb" data-path="${esc(x.path)}"${x.embed ? ' checked' : ''} aria-label="${esc(x.name)} 임베딩"><span class="chip sm ${tone}" title="${esc(tip)}">${word}</span></label>`;
   }
 
   function viewCatalog() {
@@ -2555,9 +2656,9 @@ ${controls}${body}`;
     const arrow = (k) => (c.sort === k ? `<span class="arrow">${c.dir > 0 ? '↑' : '↓'}</span>` : '');
     const th = (k, l) => `<th class="sort${c.sort === k ? ' on' : ''}" data-act="csort" data-k="${k}">${l} ${arrow(k)}</th>`;
     const picked = Object.keys(c.sel).filter((k) => c.sel[k]);
-    const bulk = picked.length ? `<div class="cbulk"><b>${picked.length}개 선택</b><button class="btn sm" data-act="cbulk" data-on="1">초안 포함</button><button class="btn sm" data-act="cbulk" data-on="">초안 제외</button><button class="btn sm danger" data-act="cdelete">삭제</button><button class="btn sm ghost" data-act="cclear">선택 해제</button></div>` : '';
-    const adding = c.edit && c.edit.path === '' ? `<tr class="crow"><td></td><td></td><td colspan="9"><input type="text" id="cedit" data-in="cedit" value="${esc(c.edit.value)}" placeholder="새 폴더 이름" aria-label="새 폴더 이름"></td></tr>` : '';
-    const table = rows.length || adding ? `<div class="cwrap"><table class="ctable"><thead><tr><th style="width:34px"><input type="checkbox" data-in="call"${rows.length && picked.length === rows.length ? ' checked' : ''} aria-label="전체 선택"></th><th style="width:44px">No.</th>${th('name', '파일명')}<th>유형</th><th>형식</th>${th('bytes', '크기')}<th>규모</th>${th('uploaded', '업로드일')}<th>처리 경로</th><th style="width:52px">초안</th><th style="width:48px">작업</th></tr></thead>
+    const bulk = picked.length ? `<div class="cbulk"><b>${picked.length}개 선택</b><button class="btn sm" data-act="cbulk" data-on="1">초안 포함</button><button class="btn sm" data-act="cbulk" data-on="">초안 제외</button><button class="btn sm" data-act="cembulk" data-on="1">임베딩 켜기</button><button class="btn sm" data-act="cembulk" data-on="">임베딩 끄기</button><button class="btn sm danger" data-act="cdelete">삭제</button><button class="btn sm ghost" data-act="cclear">선택 해제</button></div>` : '';
+    const adding = c.edit && c.edit.path === '' ? `<tr class="crow"><td></td><td></td><td colspan="10"><input type="text" id="cedit" data-in="cedit" value="${esc(c.edit.value)}" placeholder="새 폴더 이름" aria-label="새 폴더 이름"></td></tr>` : '';
+    const table = rows.length || adding ? `<div class="cwrap"><table class="ctable"><thead><tr><th style="width:34px"><input type="checkbox" data-in="call"${rows.length && picked.length === rows.length ? ' checked' : ''} aria-label="전체 선택"></th><th style="width:44px">No.</th>${th('name', '파일명')}<th>유형</th><th>형식</th>${th('bytes', '크기')}<th>규모</th>${th('uploaded', '업로드일')}<th>처리 경로</th><th style="width:52px">초안</th><th style="width:118px">임베딩</th><th style="width:48px">작업</th></tr></thead>
       <tbody>${adding}${rows.map((x, i) => catalogRow(x, i, c)).join('')}</tbody></table></div>`
       : `<div class="cempty"><b>${c.folder ? '폴더가 비어 있습니다' : '업로드한 파일이 없습니다'}</b><span class="muted">파일이나 폴더를 위 영역으로 드래그하세요.</span>${st.samples && !c.folder ? '<button class="btn sm" data-act="fsample">샘플 데이터 불러오기</button>' : ''}</div>`;
     const up = c.up ? `<div class="cprog"><span class="spin"></span><b>${count(c.up.done)} / ${count(c.up.total)}</b><span class="muted">${esc(c.up.name)}</span><div class="bar"><i style="width:${Math.round(c.up.done / c.up.total * 100)}%"></i></div></div>`
@@ -3511,7 +3612,7 @@ ${controls}${body}`;
       <div class="sec">조회 객체</div><div class="mgticks">${ticks('read', m.objects.map((o) => [o.name, o.label]))}</div>
       <div class="sec">실행 질의 · 결정 · 함수</div><div class="mgticks">${ticks('run', [...m.decisions.map((d) => [d.name, d.label]), ...m.functions.map((x) => [x.name, x.label]), ...m.queries.map((q) => [q.name, q.label])])}</div>
       <div class="sec">요청 액션</div><div class="mgticks">${ticks('request', m.actions.map((a) => [a.name, a.label]))}</div>
-      ${m.documents.length ? `<div class="sec">열람 문서</div><div class="mgticks">${ticks('docs', m.documents.map((d) => [d, d]))}</div><div class="hint">Agent가 이 역할로 검색하고 답할 때 선택한 문서만 근거로 사용합니다.</div>` : ''}
+      ${m.documents.length ? `<div class="sec">열람 문서</div><div class="mgticks">${ticks('docs', [...(m.folders || []).map((f) => [`${f}/*`, `${f} 폴더`]), ...m.documents.map((d) => [d, d])])}</div><div class="hint">Agent가 이 역할로 검색하고 답할 때 선택한 폴더와 문서만 근거로 사용합니다. 폴더를 선택하면 하위 폴더의 문서도 포함합니다.</div>` : ''}
       <div class="sec">가림 속성</div>${mgRows('mask', (r, i) => `${rowSelect('mask', i, 'prop', [['', '선택'], ...propsOf], r.prop)}${rowSelect('mask', i, 'style', [['partial', '일부 가림'], ['full', '전체 가림']], r.style)}`, v.mask)}
       <div class="sec">행 범위</div>${mgRows('rows', rowRule, v.rows)}
       <div class="sec">조직 범위</div>${mgField('사용자 속성', mgInput('scope_attr', v.scope_attr, 'placeholder="예: seller_id"'), '지정하면 아래 객체의 조회와 요청을 로그인한 조직의 행으로 제한합니다.')}
@@ -3832,7 +3933,7 @@ ${controls}${body}`;
     } catch (e) { fail(e); }
   }
 
-  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
+  const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, drel: null, vemb: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
     helpopen: () => { S.help = true; paintLayer(); },
     helpclose: () => { S.help = false; paintLayer(); },
@@ -3851,17 +3952,36 @@ ${controls}${body}`;
     srobj: (t) => { location.hash = '#onto'; selectObject(t.dataset.obj); },
     srdecide: async (t) => { S.d.name = t.dataset.name; S.d.key = t.dataset.key; S.d.proposal = null; S.d.res = null; location.hash = '#decide'; },
     dsecclose: () => { S.dsec = null; S.dgsel = null; drawGraph(); $('#docside').innerHTML = docSide(); },
-    dread: async () => {
-      for (let i = 0; i < 5; i += 1) {  // a few sections per press: each takes the model tens of seconds
-        S.dread = `추출 중 ${i + 1} / 5`; render();
-        let r;
-        try { r = await api('space/read', {}); } catch (e) { r = { ok: false, error: e.message }; }
-        if (!r.ok) { toast(r.error, true); break; }
-        S.dg = null;
-        if (r.done) { toast(`모든 절을 읽었습니다. 관계 ${r.relations}개`); break; }
-        if (i === 4) toast(`${r.read}개 절을 읽었습니다. 관계 ${r.relations}개. 다시 선택하면 이어서 읽습니다.`);
-      }
-      S.dread = ''; render();
+    dread: () => readRelations(),
+    dstop: async () => {
+      if (!S.djob) return;
+      S.djob.stop = true;
+      const card = $('#dreadcard');
+      if (card) card.innerHTML = readCard();
+      try { await api('space/relations/stop', {}); } catch (e) { fail(e); }
+    },
+    vembplan: async () => {
+      const v = S.vemb, c = (S.sp.embedders || [])[Number(v.pick)];
+      if (!c) return;
+      v.busy = true; v.plan = null; render();
+      try { v.plan = await api('space/embedder', { op: 'plan', spec: c.spec }); } catch (e) { fail(e); }
+      v.busy = false; render();
+    },
+    vembuse: async () => {
+      const v = S.vemb, c = (S.sp.embedders || [])[Number(v.pick)];
+      if (!c) return;
+      v.busy = true; render();
+      try {
+        const st = await api('space/embedder', { op: 'use', spec: c.spec });
+        spaceChanged(); S.sp = st; toast(`임베딩 모델을 ${st.embedder.name}(으)로 바꾸고 청크 ${count(st.chunks)}개를 다시 임베딩했습니다.`);
+      } catch (e) { v.busy = false; fail(e); }
+      render();
+    },
+    vembcancel: () => { S.vemb = null; render(); },
+    dforget: async () => {
+      if (!window.confirm(`${S.dfolder ? `${S.dfolder} 폴더` : '전체 문서'}에서 추출한 관계를 지우고 처음부터 다시 추출할까요?`)) return;
+      try { const r = await api('space/relations/forget', { folder: S.dfolder }); toast(`청크 ${r.forgot}개의 관계를 지웠습니다. [관계 추출]을 선택하면 다시 추출합니다.`); } catch (e) { return fail(e); }
+      S.dg = null; S.drel = null; S.dq = null; S.sp = null; loadSpace(); render();
     },
     vstoreadd: async () => {
       try { S.sp = await api('space/store', { op: 'add', kind: S.vs.kind, name: S.vs.kind, url: S.vs.url }); S.ad = null; S.adrep = null; toast('벡터 저장소를 추가하고 문서를 색인했습니다.'); render(); } catch (e) { fail(e); }
@@ -4161,6 +4281,7 @@ ${controls}${body}`;
       await catalogCall('catalog/remove', { paths });
     },
     cbulk: (t) => catalogCall('catalog/include', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
+    cembulk: (t) => catalogCall('catalog/embed', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
     cclear: () => { S.cat.sel = {}; render(); },
     copybase: async (t) => {
       try { await navigator.clipboard.writeText(t.dataset.v); toast('주소를 복사했습니다.'); } catch (_) { toast(t.dataset.v); }
@@ -4408,7 +4529,11 @@ ${controls}${body}`;
     gwdialect: (t) => { S.gw.dialect = t.value; },
     gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
+    srfolder: (t) => { S.sr.folder = t.value; },
     vkind: (t) => { S.vs.kind = t.value; render(); },
+    dfolder: (t) => { S.dfolder = t.value; S.dg = null; S.drel = null; S.dsec = null; S.dgsel = null; render(); },
+    dreader: (t) => { S.dreader = t.value; },
+    vemb: (t) => { S.vemb = { pick: t.value, plan: null, busy: false }; render(); },
     vurl: (t) => { S.vs.url = t.value; },
     cedit: (t) => { if (S.cat.edit) S.cat.edit.value = t.value; },
     cpath: (t) => { S.cat.paste = t.value; },
@@ -4590,6 +4715,7 @@ ${controls}${body}`;
       render();
     },
     cinc: (t) => catalogCall('catalog/include', { paths: [t.dataset.path], on: t.checked }),
+    cemb: (t) => catalogCall('catalog/embed', { paths: [t.dataset.path], on: t.checked }),
     cext: (t) => { S.cat.ext = t.value; render(); },
     mfault: (t) => { S.mon.fault = Number(t.value); },
   };

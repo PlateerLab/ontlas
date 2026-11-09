@@ -23,13 +23,14 @@ LEVELS = ("viewer", "editor", "approver", "admin")
 # what each POST route needs; every GET and anything not listed needs viewer
 NEEDS = {
     "attach": "editor", "detach": "editor", "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
-    "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor",
+    "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor",
     "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor",
     "draft": "editor", "draft/preview": "editor", "draft/apply": "editor", "connect": "editor",
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
     "draft/map/apply": "editor", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
-    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/read": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
+    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
+    "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
     "change/decide": "approver", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
