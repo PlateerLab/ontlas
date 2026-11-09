@@ -555,7 +555,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return {"ok": False, "error": "요청이 많아 처리하지 못했습니다. 1분 뒤에 다시 시도해 주세요."}
                 return s.space_read()
             if route == "space/ask":
-                return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None)
+                return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None, a.get("pick") or None)
             if route == "space/ask/more":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."}

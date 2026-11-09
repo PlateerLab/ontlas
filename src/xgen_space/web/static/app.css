@@ -650,8 +650,47 @@ tr.click { cursor:pointer; } tr.click:hover td { background:#f5f8ff; }
 .lgh .muted { font-size:12px; }
 .understood { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:14px; }
 .understood .label { margin-right:4px; }
-.fbrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; padding:10px 14px; border:1px solid var(--line); border-radius:10px; font-size:13px; }
+.understood button.chip { cursor:pointer; font:inherit; font-size:12px; font-weight:600; }
+.understood button.chip span { font-size:9px; margin-left:2px; opacity:.7; }
+.understood button.chip[aria-expanded=true] { border-color:var(--blue); }
+.srfix { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; margin-top:10px; padding:12px 14px; border:1px solid var(--blue-line); background:var(--blue-soft); border-radius:10px; }
+.srfix .field { margin:0; }
+.srfix label { font-size:12px; font-weight:700; color:var(--muted); }
+.srfix input[type=text], .srfix input[type=datetime-local], .srfix select { height:32px; box-sizing:border-box; min-width:150px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; background:#fff; font:inherit; font-size:12.5px; }
+.srfixgo { display:flex; gap:6px; }
+.srfixnote { flex-basis:100%; font-size:12px; }
+.fbrow { display:flex; gap:8px; }
 .fbrow .btn.on { background:var(--blue-soft); border-color:var(--blue-line); color:#15509f; }
+.agrid { grid-template-columns:minmax(0, 1fr) 340px; margin-top:14px; align-items:start; }
+.acol { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.acol > .hint, .acol > .banner { margin:0; }
+.acard > .cb { display:flex; align-items:flex-start; gap:14px; padding:16px 18px; }
+.acard.ok { border-color:#bfe5cf; }
+.acard.no { border-color:#f5c6c2; }
+.aic { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; flex:none; color:#fff; font-size:19px; font-weight:800; }
+.aic.y { background:var(--ok); }
+.aic.x { background:var(--bad); }
+.amain { flex:1; min-width:0; }
+.akey { font-size:12.5px; font-weight:700; color:var(--muted); }
+.averdict { font-size:22px; font-weight:800; line-height:1.3; margin-top:2px; }
+.areason { font-size:14px; color:#2c3644; margin-top:2px; }
+.abadges { margin-top:10px; }
+.aacts { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.atext { font-size:13.5px; line-height:1.7; white-space:pre-wrap; }
+.atabs { display:flex; gap:2px; padding:0 10px; border-bottom:1px solid var(--line); overflow-x:auto; }
+.atabs button { display:inline-flex; align-items:center; gap:6px; padding:11px 10px 10px; margin-bottom:-1px; border:0; border-bottom:2px solid transparent; background:none; font:inherit; font-size:13px; font-weight:600; color:#475467; white-space:nowrap; cursor:pointer; }
+.atabs button:hover { color:var(--navy); }
+.atabs button.on { color:var(--navy); font-weight:800; border-bottom-color:var(--navy); }
+.atabs button:focus-visible { outline:2px solid var(--blue); outline-offset:-2px; }
+.atabs .n { color:#98a2b3; font-size:12px; font-weight:500; }
+.asteps { list-style:none; margin:0; padding:0; display:grid; gap:10px; font-size:13px; line-height:1.6; }
+.asteps li { display:flex; align-items:flex-start; gap:10px; }
+.asteps .sno { width:22px; height:22px; border-radius:6px; display:grid; place-items:center; flex:none; background:var(--panel); border:1px solid var(--line); color:#475467; font-size:11.5px; font-weight:800; }
+.asteps .mono { font-size:11.5px; margin-left:4px; }
+.acode { margin:6px 0 8px; padding:10px 12px; max-height:280px; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; font-family:"JetBrains Mono","IBM Plex Mono",Consolas,monospace; font-size:12px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+.alist { display:grid; gap:6px; }
+.arow { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.arow.on { border-color:var(--blue); background:var(--blue-soft); }
 @media (max-width: 1100px) { .hgrid, .rgrid { grid-template-columns:minmax(0, 1fr); } .ibrow { flex-wrap:wrap; } }
 
 /* a change request element by element, a decision table tried while edited, a draft against the standards */

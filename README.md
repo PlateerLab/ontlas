@@ -140,7 +140,7 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 |---|---|---|---|
 | 업무 | 홈 | 홈 | Search or ask from one box, see what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
 | | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick and edits not filed yet, each saying who asked and what it changes |
-| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be and where the answer came from, and keeps an answer judged right as a validation question |
+| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question |
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 레코드 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
 | | | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
