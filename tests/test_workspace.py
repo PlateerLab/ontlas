@@ -96,3 +96,14 @@ def test_a_table_takes_another_hit_policy_only_when_its_rules_allow_it(session):
     assert d["hit_policy"] == "collect" and any(r["module"] == "acme-overlay" for r in d["rules"])
     edited = [f for f in session.rules_state()["findings"] if f["decision"] == "returnEligibility"]
     assert not edited  # a collected table has nothing to overlap
+
+
+def test_a_query_put_together_on_the_page_is_kept_by_its_name(session):
+    q = {"match": {"x": "OrderItem", "y": "Order"}, "edges": [["y", "hasItem", "x"]],
+         "where": {"eq": ["x.item_status", "NORMAL"]}, "return": ["x.item_id", "y.status"], "limit": 100}
+    state = session.manage_edit("add_query", {"name": "normalItems", "label": "정상 주문상품", "query": q})
+    assert "normalItems" in [x["name"] for x in state["queries"]]
+    with pytest.raises(ValueError, match="이미 있어"):
+        session.manage_edit("add_query", {"name": "normalItems", "query": q})
+    with pytest.raises(ValueError):
+        session.manage_edit("add_query", {"name": "broken", "query": {"match": {}}})

@@ -59,7 +59,7 @@
   const SECTION = [['use', '업무'], ['build', '구축'], ['run', '운영']];
   const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '탐색기', map: '자산 그래프' };
+  const TAB_WORD = { model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '자산 탐색기', map: '자산 그래프' };
   const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
@@ -340,7 +340,8 @@
     ru: null, met: {}, sp: null, sr: { text: '', folder: '', res: null, busy: false, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: '' }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {}, dfolder: '', drel: null, djob: null, dreader: '',
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
     ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
-    q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
+    q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null, code: false, props: {},
+      b: { type: '', link: '', fields: [], conds: [], name: '', label: '' },
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
     qa: null, bind: null, fl: null, files: null, dpos: {}, guide: null,
@@ -2484,6 +2485,7 @@
     const tab = !holds && r.kind !== 'file' ? KIND_TAB[r.kind] : '';
     const acts = [r.kind === 'file' ? `<button class="btn sm ghost" data-act="exview" data-path="${esc(r.path)}">보기</button><a class="btn sm ghost" href="/api/catalog/download?path=${encodeURIComponent(r.path)}">내려받기</a>` : '',
       tab ? `<a class="btn sm ghost" href="#${tab}">${esc(navLabel(tab))} 열기</a>` : '',
+      r.kind === 'object' ? `<button class="btn sm ghost" data-act="exrecords" data-type="${esc(r.id.split(':').pop())}">레코드 보기</button>` : '',
       r.manage ? `<button class="btn sm ghost" data-act="exrename" data-id="${esc(r.id)}">이름 변경</button>` : ''].join('');
     const where = search ? `<td class="muted" style="font-size:12px;white-space:nowrap">${(r.trail || []).map((t) => `<button class="plink" data-act="exgo" data-id="${esc(t.id)}">${esc(t.label)}</button>`).join(' › ') || '-'}</td>
       <td><div class="chips">${r.found.map((f) => `<span class="chip sm ${EX_FOUND[f] || ''}">${esc(f)}</span>`).join('')}</div></td>` : `<td class="muted">${r.bytes !== undefined ? fileSize(r.bytes) : '-'}</td>`;
@@ -2503,7 +2505,7 @@
     const x = S.ex;
     const seg = `<div class="seg">${[['store', '보관함'], ['log', '작업 기록'], ['trash', `휴지통${x.tree && x.tree.summary.trash ? ` ${x.tree.summary.trash}` : ''}`]]
       .map(([k, l]) => `<button class="${x.tab === k ? 'on' : ''}" data-act="extab" data-k="${k}">${esc(l)}</button>`).join('')}</div>`;
-    const head = pageHead('데이터 탐색기', '레포지토리의 파일부터 DB, 문서, 온톨로지, 저장소, 활용까지 스페이스의 데이터를 한곳에서 찾고 관리합니다', seg);
+    const head = pageHead('자산 탐색기', '파일, 테이블, 문서, 객체처럼 스페이스를 이루는 자산을 한곳에서 찾고 관리합니다. 레코드 한 건은 레코드 탐색에서 봅니다', seg);
     if (x.error && !x.tree) return `${head}<div class="banner no"><div class="why">${esc(x.error)}</div></div>`;
     if (!x.tree || !x.items) return `${head}<div class="empty"><span class="spin"></span>스페이스를 읽는 중입니다.</div>`;
     const s = x.tree.summary;
@@ -2702,9 +2704,61 @@
     return `<div class="field"><label>실행 역할</label><select data-in="role">${opts.join('')}</select></div>${keys}`;
   }
 
+  // ---- a query put together without code: an object, a relation to follow, the values to show, conditions as chips --
+
+  const QB_OPS = [['eq', '='], ['ne', '≠'], ['gt', '>'], ['gte', '≥'], ['lt', '<'], ['lte', '≤'], ['contains', '포함']];
+
+  function qbProps(type) {  // an object's properties, read once
+    const c = S.q.props;
+    if (!type) return [];
+    if (!c[type]) {
+      c[type] = { busy: true, list: [] };
+      api(`object?name=${encodeURIComponent(type)}`).then((o) => { c[type] = { list: o.properties.map((p) => ({ name: p.name, label: p.label, type: p.type })) }; if (S.tab === 'query') render(); }).catch(() => { c[type] = { list: [] }; });
+    }
+    return c[type].list;
+  }
+
+  function qbRelations(type) {
+    return S.st.graph.edges.filter((e) => !e.subtype && (e.source === type || e.target === type))
+      .map((e) => ({ name: e.id, label: e.label, other: e.source === type ? e.target : e.source, forward: e.source === type }));
+  }
+
+  function qbQuery() {  // what the builder says, as the query IR
+    const b = S.q.b;
+    const rel = qbRelations(b.type).find((r) => `${r.name}:${r.forward ? 1 : 0}` === b.link);
+    const match = { x: b.type, ...(rel ? { y: rel.other } : {}) };
+    const fields = b.fields.length ? b.fields : [`x.${(S.st.graph.nodes.find((n) => n.id === b.type) || {}).key}`];
+    const conds = b.conds.filter((c) => c.prop && c.value !== '').map((c) => {
+      const t = (qbProps(c.prop.split('.')[0] === 'y' && rel ? rel.other : b.type).find((p) => p.name === c.prop.split('.')[1]) || {}).type;
+      const v = ['integer', 'decimal'].includes(t) && !Number.isNaN(Number(c.value)) ? Number(c.value) : (t === 'boolean' ? c.value === 'true' : c.value);
+      return { [c.op]: [c.prop, v] };
+    });
+    return { match, ...(rel ? { edges: [rel.forward ? ['x', rel.name, 'y'] : ['y', rel.name, 'x']] } : {}),
+      ...(conds.length ? { where: conds.length > 1 ? { and: conds } : conds[0] } : {}), return: fields, limit: 200 };
+  }
+
+  function qbForm() {
+    const b = S.q.b, types = recordTypes();
+    if (!b.type) b.type = (S.st.decisions[0] || {}).target || (types[0] || {}).id || '';
+    const rels = qbRelations(b.type);
+    const rel = rels.find((r) => `${r.name}:${r.forward ? 1 : 0}` === b.link);
+    const label = (t) => (S.st.graph.nodes.find((n) => n.id === t) || {}).label || t;
+    const props = [...qbProps(b.type).map((p) => [`x.${p.name}`, `${label(b.type)} · ${p.label || p.name}`]), ...(rel ? qbProps(rel.other).map((p) => [`y.${p.name}`, `${label(rel.other)} · ${p.label || p.name}`]) : [])];
+    const ticks = props.map(([k, w]) => `<label class="tick"><input type="checkbox" data-in="qbfield" data-k="${esc(k)}"${b.fields.includes(k) ? ' checked' : ''}>${esc(w)}</label>`).join('');
+    const conds = b.conds.map((c, i) => `<div class="qbcond"><select data-in="qbc" data-i="${i}" data-f="prop"><option value="">값 고르기</option>${props.map(([k, w]) => opt(k, w, c.prop)).join('')}</select>
+      <select data-in="qbc" data-i="${i}" data-f="op">${QB_OPS.map(([k, w]) => opt(k, w, c.op)).join('')}</select><input type="text" data-in="qbcv" data-i="${i}" value="${esc(c.value)}" placeholder="값"><button class="iconbtn" data-act="qbdel" data-i="${i}" aria-label="조건 빼기">×</button></div>`).join('');
+    const chips = b.conds.filter((c) => c.prop && c.value !== '').map((c) => `<span class="chip sm b">${esc((props.find((p) => p[0] === c.prop) || [0, c.prop])[1])} ${esc((QB_OPS.find((o) => o[0] === c.op) || [0, c.op])[1])} ${esc(c.value)}</span>`).join('');
+    return `<div class="field"><label>무엇을 볼까요</label><select data-in="qbtype">${types.map((n) => opt(n.id, n.label, b.type)).join('')}</select></div>
+      <div class="field"><label>관계 따라가기</label><select data-in="qblink"><option value="">따라가지 않음</option>${rels.map((r) => opt(`${r.name}:${r.forward ? 1 : 0}`, `${r.label} → ${label(r.other)}`, b.link)).join('')}</select></div>
+      <div class="field"><label>보여 줄 값</label><div class="qbticks">${ticks || '<span class="muted" style="font-size:12px"><span class="spin"></span></span>'}</div></div>
+      <div class="field"><label>조건</label>${conds}<button class="btn sm" data-act="qbadd">+ 조건</button>${chips ? `<div class="chips" style="margin-top:6px">${chips}</div>` : ''}</div>
+      ${S.q.res && S.q.res.ok && S.q.mode === 'build' ? `<div class="qbsave"><div class="label">등록 질의로 저장</div><div class="rgrid two"><input type="text" data-in="qbname" value="${esc(b.name)}" placeholder="영문 이름, 예: normalItems"><input type="text" data-in="qblabel" value="${esc(b.label)}" placeholder="이름, 예: 정상 주문상품"></div>
+        <button class="btn sm" data-act="qbsave" style="margin-top:6px">대기 중인 변경에 추가</button><div class="muted" style="font-size:11.5px;margin-top:4px">변경 요청으로 승인되면 누구나 이 이름으로 실행합니다.</div></div>` : ''}`;
+  }
+
   function viewQuery() {
     const st = S.st, q = S.q;
-    const modes = [['list', '등록 질의'], ['text', '쿼리 입력']].concat(st.ask ? [['ask', '자연어 질문']] : []);
+    const modes = [['list', '등록 질의'], ['build', '직접 만들기'], ['text', '쿼리 입력']].concat(st.ask ? [['ask', '자연어 질문']] : []);
     const seg = `<div class="seg">${modes.map(([k, l]) => `<button class="${q.mode === k ? 'on' : ''}" data-act="qmode" data-mode="${k}">${l}</button>`).join('')}</div>`;
     let left = '';
     if (q.mode === 'list') {
@@ -2713,6 +2767,8 @@
       const asked = sel ? st.questions.filter((x) => x.query === sel.name) : [];
       left = `<div class="qlist">${st.queries.map((x) => `<button class="qitem${x.name === q.name ? ' on' : ''}" data-act="pick" data-q="${esc(x.name)}"><b>${esc(x.label)}</b><span>${esc(x.name)}</span></button>`).join('')}</div>
         ${params}${asked.length ? `<div class="hint" style="margin-bottom:12px">검증 질문 · ${asked.map((x) => esc(x.text)).join('<br>')}</div>` : ''}`;
+    } else if (q.mode === 'build') {
+      left = qbForm();
     } else if (q.mode === 'text') {
       left = `<div class="field"><label>언어</label><select data-in="lang">${TEXT_LANG.map(([k, l]) => `<option value="${k}"${q.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><textarea class="code" data-in="text" spellcheck="false">${esc(q.text)}</textarea></div>
@@ -2725,7 +2781,7 @@
     const run = `<button class="btn primary" style="width:100%" data-act="run"${q.busy ? ' disabled' : ''}>${q.busy ? '<span class="spin"></span>실행 중' : '실행'}</button>${q.res && !q.res.ok ? `<div class="hint warn" style="margin-top:8px">${esc(q.res.error)}</div>` : ''}`;
     return `
 <div class="head"><div><h1>질의</h1><div class="sub">온톨로지 질의를 Backend별 쿼리로 변환해 실행합니다</div></div>
-  <div class="right">${q.res && q.res.ok ? (q.res.agree ? '<span class="chip ok">✓ Backend 결과 일치</span>' : '<span class="chip warn">Backend 결과 불일치</span>') : ''}</div></div>
+  <div class="right">${q.res && q.res.ok ? (q.res.results.filter((b) => b.ok).length < 2 ? '<span class="chip">비교 대상 없음 · 저장소 1개</span>' : q.res.agree ? '<span class="chip ok">✓ 저장소 간 결과 일치</span>' : '<span class="chip warn">저장소 간 결과 불일치</span>') : ''}</div></div>
 <div class="grid" style="grid-template-columns:320px minmax(0,1fr);align-items:start">
   <div class="card"><div class="ch">질의</div><div class="cb">${seg}${left}${roleFields(q)}${run}</div></div>
   <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${queryResult()}</div>
@@ -2747,14 +2803,15 @@
         <div class="cb scroll" style="padding:0;max-height:340px"><table>${b.rows.length ? `<tr>${head}</tr>${body}` : '<tr><td class="muted">결과가 없습니다.</td></tr>'}</table></div></div>`;
     }).join('');
     const params = Object.keys(r.params || {}).length ? Object.entries(r.params).map(([k, v]) => `${esc(k)} = ${show(v)}`).join(' · ') : '없음';
-    return `
+    const code = S.q.code ? `
 <div class="grid" style="grid-template-columns:minmax(0,0.8fr) minmax(0,1.2fr);flex:none">
   <div class="card"><div class="ch">온톨로지 질의 IR${r.attempts ? `<div class="right"><span class="chip b">생성 시도 ${r.attempts}회</span></div>` : ''}</div><div class="cb"><pre class="code ir" style="max-height:340px;overflow:auto">${esc(r.ir)}</pre></div></div>
   <div class="card"><div class="ch">Backend 쿼리</div><div class="cb"><div class="tabs" style="margin-bottom:10px">${tabs}</div>
     <pre class="code" style="max-height:300px;overflow:auto">${cur ? cur.html : ''}</pre>
     <div class="muted" style="font-size:12px;margin-top:6px">Parameter ${params}</div></div></div>
-</div>
-<div class="grid" style="grid-template-columns:repeat(${Math.max(r.results.length, 1)}, minmax(0,1fr));flex:none">${results}</div>`;
+</div>` : '';
+    return `<div class="grid" style="grid-template-columns:repeat(${Math.max(r.results.length, 1)}, minmax(0,1fr));flex:none">${results}</div>
+<div class="card"><button class="qcode" data-act="qcode" aria-expanded="${!!S.q.code}">${S.q.code ? '▾' : '▸'} 언어별 보기 · 온톨로지 질의 IR과 저장소별 쿼리 (SQL, Cypher, SPARQL …)</button></div>${code}`;
   }
 
   function pickQuery(name) {
@@ -2785,6 +2842,7 @@
     const ctx = { role: q.role, principal: q.principal };
     try {
       if (q.mode === 'text') q.res = await api('text', { language: q.lang, text: q.text, ...ctx });
+      else if (q.mode === 'build') q.res = await api('text', { language: 'ir', text: JSON.stringify(qbQuery()), ...ctx });
       else if (q.mode === 'ask') q.res = await api('ask', { question: q.question, ...ctx });
       else if (q.name) q.res = await api('query', { name: q.name, params: q.params, ...ctx });
       if (q.mode !== 'text' && q.res && q.res.ok && !q.dirty) q.text = textFor(q.lang) || q.text;
@@ -3897,7 +3955,7 @@ ${controls}${body}`;
     }
     c.up = null;
     await catalogChanged();
-    if (sent) toast(`파일 ${count(sent)}개를 업로드했습니다.${skipped ? ` 시스템 파일 ${skipped}개는 제외했습니다.` : ''}`);
+    if (sent) { c.next = { files: sent }; toast(`파일 ${count(sent)}개를 업로드했습니다.${skipped ? ` 시스템 파일 ${skipped}개는 제외했습니다.` : ''}`); render(); }
   }
 
   // a dropped folder arrives as entries: walk them, keeping each file's path below the drop
@@ -3965,6 +4023,19 @@ ${controls}${body}`;
     return `<label class="cemb"><input type="checkbox" data-in="cemb" data-path="${esc(x.path)}"${x.embed ? ' checked' : ''} aria-label="${esc(x.name)} 임베딩"><span class="chip sm ${tone}" title="${esc(tip)}">${word}</span></label>`;
   }
 
+  // what the files just brought in turned out to be, and the step each kind leads to
+  function catalogNext(st) {
+    const n = S.cat.next;
+    if (!n) return '';
+    const kinds = { data: 0, definition: 0, document: 0 };
+    (st.files || []).forEach((f) => { const k = (f.facts || {}).kind; if (k in kinds) kinds[k] += 1; });
+    const said = [[kinds.data, '테이블 데이터'], [kinds.definition, '정의서'], [kinds.document, '문서']].filter(([k]) => k).map(([k, w]) => `${w} ${k}개`).join(' · ');
+    const steps = [kinds.data || kinds.definition ? '<a class="btn sm primary" href="#data">초안 생성</a>' : '', '<a class="btn sm" href="#convert">변환 결과 보기</a>',
+      kinds.document ? '<a class="btn sm" href="#docs">문서 온톨로지 보기</a>' : ''].join('');
+    return `<div class="banner plain cnext"><div style="flex:1"><b>${n.files ? `파일 ${count(n.files)}개를 읽었습니다` : '샘플 파일을 불러왔습니다'}</b><div class="muted" style="font-size:12.5px">이 레포지토리는 ${esc(said || '아직 읽은 파일이 없습니다')}로 읽혔습니다. 각 파일이 무엇이 될지는 아래 '처리 경로'에서, 초안에 넣을지는 '초안'에서 정합니다.</div></div>
+      <div class="chips">${steps}<button class="btn sm ghost" data-act="cnextx" aria-label="닫기">닫기</button></div></div>`;
+  }
+
   function viewCatalog() {
     const c = S.cat;
     const title = (right) => `<div class="chead"><h1>데이터 카탈로그</h1><div class="sub">파일을 레포지토리 단위로 관리하고 유형, 규모, 처리 경로를 표시합니다</div>${right}</div>`;
@@ -3989,7 +4060,7 @@ ${controls}${body}`;
     const paste = c.paste !== null ? `<div class="cpaste"><input type="text" data-in="cpath" value="${esc(c.paste)}" placeholder="서버의 파일 또는 폴더 경로"><button class="btn sm primary" data-act="cimport">가져오기</button><button class="btn sm ghost" data-act="cpaste">취소</button></div>` : '';
     const rule = st.persistent ? `파일당 ${bytes(lim.file_bytes)} · 사용 ${count(lim.used_files)} / ${count(lim.files)}개 · ${fileSize(lim.used_bytes)} / ${bytes(lim.total_bytes)}`
       : `파일당 ${bytes(lim.file_bytes)} · 사용 ${count(lim.used_files)} / ${count(lim.files)}개 · ${fileSize(lim.used_bytes)} / ${bytes(lim.total_bytes)}. 업로드한 파일은 세션 종료 시 삭제됩니다. 개인정보가 포함된 파일은 업로드하지 마세요.`;
-    return `${title(right)}<div class="card cmain">
+    return `${title(right)}${catalogNext(st)}<div class="card cmain">
       <input type="file" id="fileinput" multiple hidden><input type="file" id="dirinput" webkitdirectory multiple hidden>
       <div class="cacts">${st.samples && st.repository.files ? '<button class="btn sm" data-act="fsample">샘플 데이터 불러오기</button>' : ''}<a class="btn sm" href="#convert">변환 결과</a><a class="btn sm primary" href="#data">초안 생성</a></div>
       <div class="cdrop" data-drop="1" data-act="cfile">${up}</div>${paste}<div class="crule">${rule}</div>
@@ -5581,6 +5652,14 @@ ${controls}${body}`;
     detach: (t) => detach(t.dataset.mod, t.dataset.cascade === '1'),
     'cancel-impact': () => { S.impact = null; render(); },
     select: (t) => selectObject(t.dataset.obj),
+    qcode: () => { S.q.code = !S.q.code; render(); },
+    qbadd: () => { S.q.b.conds.push({ prop: '', op: 'eq', value: '' }); render(); },
+    qbdel: (t) => { S.q.b.conds.splice(Number(t.dataset.i), 1); render(); },
+    qbsave: () => {
+      const b = S.q.b;
+      if (!b.name.trim()) { toast('영문 이름을 입력해 주세요.', true); return; }
+      mgEdit('add_query', { name: b.name.trim(), label: b.label.trim() || b.name.trim(), query: qbQuery() }, `질의 '${b.label || b.name}'를 대기 중인 변경에 추가했습니다.`);
+    },
     qmode: (t) => {
       S.q.mode = t.dataset.mode;
       if (S.q.mode === 'text' && !S.q.dirty) S.q.text = textFor(S.q.lang) || S.q.text;
@@ -5685,7 +5764,9 @@ ${controls}${body}`;
       render();
       window.SpaceScene.sweep();
     },
-    fsample: () => catalogCall('files/sample', {}),
+    fsample: () => catalogCall('files/sample', {}, () => { S.cat.next = { files: 0 }; }),
+    cnextx: () => { S.cat.next = null; render(); },
+    exrecords: (t) => { Object.assign(S.rl, { type: t.dataset.type, q: '', res: null }); location.hash = '#records'; },
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
     ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
@@ -6138,6 +6219,9 @@ ${controls}${body}`;
     gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
     srfolder: (t) => { S.sr.folder = t.value; },
+    qbcv: (t) => { S.q.b.conds[Number(t.dataset.i)].value = t.value; },
+    qbname: (t) => { S.q.b.name = t.value; },
+    qblabel: (t) => { S.q.b.label = t.value; },
     cellv: (t) => { if (S.mg.cell) S.mg.cell.part.value = t.value; },
     mdyaml: (t) => { if (S.md.yaml) S.md.yaml.text = t.value; const b = $('[data-act=mdyamlsave]'); if (b) b.disabled = S.md.yaml.text === S.md.yaml.was; },
     mdnote: (t) => { S.md.note = t.value; },
@@ -6220,6 +6304,10 @@ ${controls}${body}`;
     pdoc: (t) => loadDocument(t.value, ''),
     psec: (t) => loadDocument(S.pol.doc, t.value),
     mgpobj: (t) => { S.mg.obj = t.value; S.mg.form = null; S.mg.sel = ''; render(); },
+    qbtype: (t) => { Object.assign(S.q.b, { type: t.value, link: '', fields: [], conds: [] }); render(); },
+    qblink: (t) => { S.q.b.link = t.value; S.q.b.fields = S.q.b.fields.filter((f) => f.startsWith('x.')); S.q.b.conds = S.q.b.conds.filter((c) => c.prop.startsWith('x.')); render(); },
+    qbfield: (t) => { const b = S.q.b; b.fields = t.checked ? [...b.fields, t.dataset.k] : b.fields.filter((f) => f !== t.dataset.k); },
+    qbc: (t) => { S.q.b.conds[Number(t.dataset.i)][t.dataset.f] = t.value; render(); },
     mgdec: (t) => { S.mg.dec = t.value; S.mg.form = null; S.mg.sel = ''; S.mg.cell = null; render(); },
     mgpolicy: (t) => mgEdit('update_decision', { decision: S.mg.dec, hit_policy: t.value }, `적용 방식을 '${POLICY_WORD[t.value]}'(으)로 바꿨습니다.`).then(rulesEdited),
     cellop: (t) => { S.mg.cell.part.op = t.value; render(); },

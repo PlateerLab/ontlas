@@ -49,6 +49,39 @@
 - 모델링 · 작업 공간: the modules and their objects as a tree, the schema graph, and the picked object's form, its lines in
   its module file, and what reads it (`GET element/readers`), side by side. Edits go to the pending changes as on the
   definition screens.
+- 초안 생성 is a review of proposals: a stepper that counts what each step still asks a person to settle, each source
+  table with the standard object it matches and how well, an English API name from the library's words and the
+  glossaries (`주문상태이력` is `OrderStatusHistory`; a name is romanized only when a part of it is no known word), and
+  beside the picked table its rows, why its key is a key, the match evidence and the columns to hide
+  (`POST draft/table`). Each table is bound to the standard or kept as a new object; the rest are adopted from the
+  bar at the foot. The last step shows what applying writes (`POST draft/review/preview`), and applying binds the
+  chosen tables to the standard and keeps the others as new objects beside it, joined to the standard's objects where
+  the draft found the tables joined (`POST draft/review/apply`). A draft takes object names as an edit (`names`).
+- 모델링 · 작업 공간 draws the picked object's module as an entity diagram (keys, computed properties, what other modules
+  add, relation names and cardinality, the modules it reaches in their own folding region; cards move by dragging). The
+  inspector has the form, the object's YAML as the pending edits leave it, which writes back as the same edits
+  (`GET element/yaml`, `POST manage/yaml`), what reads it, and comments kept in the journal (`GET element/comments`,
+  `POST element/comment`). A property's form says under the field what the definition check would refuse, with the fix
+  as a button. At the foot: the pending edits and what they reach, the last one taken back (`POST manage/undo`), a
+  trial on a copy of the space (`POST manage/trial`) and the change request.
+- 규칙 관리 heads each table with its hit policy (a choice; `update_decision`), its target, its module and the rules
+  other modules add; a cell is changed in place; rows move by dragging (`move_rule`). The simulator opens on a record,
+  and it, the boundary cases, the validation questions and the table check run on the table as edited.
+- 변경 요청 says who reviews and that the author cannot approve, marks each element not yet looked at, lists what the
+  change reaches, compares an element field by field or as the module file before and after, and answers a broken
+  validation question with a proposal to its author.
+- 홈 says when the space was last checked, keeps recent questions, shows which pass conditions a change makes worse and a
+  source check that warns as a task, offers records before any was opened, and orders the sidebar for the role.
+- 레코드 is read by what it belongs with when it has no name, lists those records a level deeper, has tabs, works out
+  read-only functions on opening without logging them, and has the source's own dates in its history.
+- 그래프 탐색 starts from a record found by key or name (`GET records/find`), keeps names on nodes and relations, folds a
+  relation with many records into one node, saves the shown types as a perspective, lists the steps and copies a link.
+- 질의 shows the results first with the code folded below, builds a query without code (an object, a relation, the values,
+  conditions) and keeps it as a registered query (`add_query`), and says there is nothing to compare with one store.
+- 데이터 카탈로그 says what the files just brought in turned out to be and leads to the next step; the data map's explorer
+  is the 자산 탐색기 and an object there leads to its records.
+- An edit with an unknown property type or a hit policy the rules cannot take is refused; a rule-level issue no longer
+  reads as a decision called "x rule y" when a module is settled.
 - The README's table of screens follows the new sidebar.
 
 ## 0.13.0
