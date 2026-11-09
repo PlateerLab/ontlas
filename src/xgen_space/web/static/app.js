@@ -360,7 +360,7 @@
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {} },
-    md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null },
+    md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
   S.cat = NEW_CAT();
@@ -391,6 +391,7 @@
     const [kind, ...rest] = String(id).split(':');
     return `<span class="chip sm">${esc(ELEMENT[kind] || kind)} <span class="mono">${esc(rest.join(':'))}</span></span>`;
   };
+  const elementText = (id) => { const [kind, ...rest] = String(id).split(':'); return `${ELEMENT[kind] || kind} ${rest.join(':')}`; };
   const modLabel = (name) => (S.st.library.find((r) => r.name === name) || {}).label || name;
 
   async function api(path, body) {
@@ -575,7 +576,7 @@
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
     if (S.tab === 'graph' && $('#gxgraph')) mountGraph($('#gxgraph'), gxData(), { key: 'records', pos: S.gx.pos, sel: () => S.gx.sel, pick: (id) => gxPick(id), clear: () => {} });
-    if (S.tab === 'model' && $('#mdgraph')) mountGraph($('#mdgraph'), S.st.graph, { key: 'model', pos: S.pos, sel: () => S.md.sel, pick: (id) => modelPick(id), clear: () => {} });
+    if (S.tab === 'model') mountEr();
     if (S.tab === 'record' && !S.rec.res && !S.rec.busy && !S.rec.err) loadRecord();
     if (S.tab === 'guide') mountGuide();
     if (S.tab === 'docs') mountDocs();
@@ -1264,33 +1265,18 @@
       const k = o.module_label || o.module || '정의';
       (groups[k] = groups[k] || []).push(o);
     });
-    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${!o.links && !o.concept ? '<span class="chip sm warn">관계 없음</span>' : ''}${o.pending ? '<span class="chip sm b">변경</span>' : ''}</button>`).join('')}</div>`).join('') || '<div class="empty">찾은 객체가 없습니다.</div>';
-  }
-
-  function modelFile(o) {
-    const f = S.md.file;
-    if (!f || f.module !== o.module) {
-      if (!S.md.fileBusy) {
-        S.md.fileBusy = true;
-        api(`module?name=${encodeURIComponent(o.module)}`).then((x) => { S.md.file = { module: o.module, yaml: x.yaml || '' }; }).catch((e) => { S.md.file = { module: o.module, error: e.message }; })
-          .finally(() => { S.md.fileBusy = false; const box = $('#mdside'); if (box) { box.innerHTML = modelSide(); mdScroll(); } });
-      }
-      return '<div class="empty"><span class="spin"></span>정의 파일을 읽는 중입니다.</div>';
-    }
-    if (f.error) return `<div class="hint warn">${esc(f.error)}</div>`;
-    const lines = f.yaml.split('\n');
-    const at = lines.findIndex((l) => new RegExp(`^\\s{2}${o.name}:`).test(l));
-    let end = at;
-    if (at >= 0) { const pad = lines[at].search(/\S/); end = at + 1; while (end < lines.length && (lines[end].trim() === '' || lines[end].search(/\S/) > pad)) end += 1; }
-    const shown = lines.map((l, i) => `<span class="${i >= at && i < end && at >= 0 ? 'mdhi' : ''}">${esc(l) || ' '}</span>`).join('\n');
-    return `<div class="muted" style="font-size:12px;margin-bottom:6px">${esc(o.module_label || o.module)} 모듈 파일 · ${at >= 0 ? `${o.name} 정의를 표시했습니다` : '이 객체는 다른 모듈에서 확장됩니다'}</div>
-      <pre class="code mdcode">${shown}</pre><div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" data-act="mdedit" data-module="${esc(o.module)}">라이브러리에서 파일 편집</button></div>`;
+    const marks = (o) => [o.new ? ['warn', '새로 추가'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
+      o.series ? ['', '시계열'] : null, (o.extended_by || []).length ? ['', `+ ${shortMod(o.extended_by[0])}`] : null, (m.comments || {})[`object:${o.name}`] ? ['', `댓글 ${m.comments[`object:${o.name}`]}`] : null]
+      .filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
+    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">찾은 객체가 없습니다.</div>';
   }
 
   function modelUses(o) {
     const u = S.md.uses;
     if (!u || u.id !== `object:${o.name}`) {
-      api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail);
+      if (S.md.usesFor === o.name) return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
+      S.md.usesFor = o.name;
+      api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail).finally(() => { S.md.usesFor = ''; });
       return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
     }
     return u.list.length ? `<div class="chips">${u.list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div><div class="hint" style="margin-top:10px">이 객체를 바꾸면 위 요소가 함께 영향을 받습니다. 지우면 정의 관리가 함께 제외되는 항목을 알려 줍니다.</div>` : '<div class="empty">이 객체를 읽는 질의, 결정, 액션이 없습니다.</div>';
@@ -1299,19 +1285,265 @@
   function modelSide() {
     const m = S.mg.st, md = S.md, o = mgObj(md.sel);
     if (!o) return '<div class="card"><div class="cb"><div class="empty">트리나 그래프에서 객체를 고르세요.</div></div></div>';
-    const tabs = [['form', '폼'], ['file', '정의 파일'], ['uses', '사용처']].map(([k, w]) => `<button class="${md.tab === k ? 'on' : ''}" data-act="mdtab" data-k="${k}">${w}</button>`).join('');
+    const uses = md.uses && md.uses.id === `object:${o.name}` ? md.uses.list.length : null;
+    if (uses === null && md.tab !== 'uses') modelUses(o);  // whether anything reads it is said on every tab
+    const notes = (m.comments || {})[`object:${o.name}`] || 0;
+    const tabs = [['form', '폼', ''], ['yaml', 'YAML', ''], ['uses', '사용처', uses || ''], ['notes', '댓글', notes || '']]
+      .map(([k, w, n]) => `<button class="${md.tab === k ? 'on' : ''}" data-act="mdtab" data-k="${k}">${w}${n ? ` <span class="muted">${n}</span>` : ''}</button>`).join('');
     let body = '';
-    if (md.tab === 'file') body = `<div class="card"><div class="cb">${modelFile(o)}</div></div>`;
-    else if (md.tab === 'uses') body = `<div class="card"><div class="cb">${modelUses(o)}</div></div>`;
+    if (md.tab === 'yaml') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelYaml(o)}</div></div>`;
+    else if (md.tab === 'uses') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelUses(o)}</div></div>`;
+    else if (md.tab === 'notes') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelComments(o)}</div></div>`;
     else {
       const props = mgProps(o.name).map((p) => `<tr class="${S.mg.sel === `${o.name}.${p.name}` ? 'sel' : ''}" data-act="mdprop" data-name="${esc(`${o.name}.${p.name}`)}" style="cursor:pointer"><td>${esc(p.label || p.name)}<div class="muted mono">${esc(p.name)}</div></td><td><span class="chip sm${p.expr ? ' b' : ''}">${p.expr ? '계산' : esc(p.type)}</span></td><td class="mono muted" style="font-size:11.5px">${esc(p.column || '')}</td></tr>`).join('');
       const links = m.links.filter((l) => l.source === o.name || l.target === o.name).map((l) => `<tr class="${S.mg.sel === l.name ? 'sel' : ''}" data-act="mdlink" data-name="${esc(l.name)}" style="cursor:pointer"><td>${esc(l.label || l.name)}<div class="muted mono">${esc(l.name)}</div></td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="mono">${esc(CARD[l.cardinality] || l.cardinality)}</td></tr>`).join('');
       const f = S.mg.form;
       const form = f && f.kind === 'prop' ? propForm() : f && f.kind === 'link' ? linkForm() : objectForm();
-      body = `${form}<div class="card"><div class="ch">속성 ${mgProps(o.name).length}</div><div class="cb scroll" style="padding:0;max-height:260px"><table class="tight">${props}</table></div></div>
+      body = `${f && f.kind === 'object' && f.mode === 'edit' ? `<div class="mdstatwrap">${objectStatus(o)}</div>` : ''}${form}<div class="card"><div class="ch">속성 ${mgProps(o.name).length}</div><div class="cb scroll" style="padding:0;max-height:260px"><table class="tight">${props}</table></div></div>
         <div class="card"><div class="ch">관계</div><div class="cb scroll" style="padding:0">${links ? `<table class="tight">${links}</table>` : '<div class="empty" style="padding:12px">관계가 없습니다.</div>'}</div></div>`;
     }
     return `<div class="seg" style="margin:0 0 12px">${tabs}</div>${body}`;
+  }
+
+  // ---- the schema as an entity diagram: each object with its key, its main and computed properties, each relation
+  //      with its name and cardinality; the picked object's module as a region, the modules it reaches beside it ------
+
+  const ER = { w: 190, row: 17, head: 34, gapX: 70, gapY: 46, cols: 2, pad: 16, regionPad: 18, title: 26 };
+  const CARD_WORD = { many_to_one: 'N : 1', one_to_many: '1 : N', one_to_one: '1 : 1', many_to_many: 'N : M' };
+  const shortMod = (x) => String(x || '').replace(/\s*온톨로지$/, '').replace(/^이커머스\s+/, '').replace(/^고객사 차이 · /, '');
+
+  function erRows(o) {
+    const props = mgProps(o.name);
+    const key = props.find((p) => p.key);
+    const rest = props.filter((p) => !p.key && !p.inherited);
+    const pick = [...rest.filter((p) => p.expr), ...rest.filter((p) => p.module && p.module !== o.module), ...rest.filter((p) => p.mask), ...rest]
+      .filter((p, i, a) => a.indexOf(p) === i).slice(0, 3);
+    const rows = [];
+    if (key) rows.push({ kind: 'key', text: `🔑 ${key.name}` });
+    pick.forEach((p) => rows.push(p.expr ? { kind: 'expr', text: `${p.name} = ${p.expr}` }
+      : p.module && p.module !== o.module ? { kind: 'ext', text: `${p.name} · ${shortMod(p.module_label || p.module)}` }
+        : { kind: p.mask ? 'mask' : '', text: `${p.name}${p.mask ? ' · 가림' : ''}` }));
+    const more = rest.length - pick.length;
+    if (more > 0) rows.push({ kind: 'more', text: `외 속성 ${more}개` });
+    return rows;
+  }
+
+  function erLayout() {
+    const m = S.mg.st, md = S.md, sel = mgObj(md.sel);
+    if (!sel) return null;
+    const modOf = (x) => x.module_label || x.module || '정의';
+    const home = modOf(sel);
+    const inMod = m.objects.filter((x) => modOf(x) === home);
+    const names = new Set(inMod.map((x) => x.name));
+    const near = new Set();
+    m.links.forEach((l) => {
+      if (names.has(l.source) && !names.has(l.target)) near.add(l.target);
+      if (names.has(l.target) && !names.has(l.source)) near.add(l.source);
+    });
+    inMod.forEach((x) => { if (x.parent && !names.has(x.parent)) near.add(x.parent); });
+    // neighbours sit next to each other: breadth first from the most connected object of the module
+    const deg = (n) => m.links.filter((l) => l.source === n || l.target === n).length;
+    const order = [];
+    const left = [...inMod].sort((a, b) => deg(b.name) - deg(a.name));
+    while (left.length) {
+      const queue = [left.shift()];
+      while (queue.length) {
+        const x = queue.shift();
+        order.push(x);
+        m.links.filter((l) => l.source === x.name || l.target === x.name).forEach((l) => {
+          const other = l.source === x.name ? l.target : l.source;
+          const i = left.findIndex((y) => y.name === other);
+          if (i >= 0) queue.push(left.splice(i, 1)[0]);
+        });
+      }
+    }
+    const boxes = {}, regions = [];
+    const place = (list, x0, y0, cols, label, fold) => {
+      if (fold) {
+        const r = { label, x: x0, y: y0, w: 260, h: 54, fold: true, n: list.length, names: list.map((x) => x.name) };
+        list.forEach((x) => { boxes[x.name] = { x: x0 + 14, y: y0 + 14, w: 232, h: 30, o: x, folded: r }; });
+        regions.push(r);
+        return r;
+      }
+      let rowH = [], y = y0 + ER.title + ER.regionPad, maxW = 0;
+      list.forEach((x, i) => {
+        const c = i % cols, r = Math.floor(i / cols);
+        if (!rowH[r]) rowH[r] = 0;
+        const h = ER.head + erRows(x).length * ER.row + 10;
+        rowH[r] = Math.max(rowH[r], h);
+        boxes[x.name] = { x: x0 + ER.regionPad + c * (ER.w + ER.gapX), y: 0, w: ER.w, h, o: x, r };
+      });
+      const tops = rowH.map((_, r) => y + rowH.slice(0, r).reduce((a, h) => a + h + ER.gapY, 0));
+      list.forEach((x) => { const b = boxes[x.name]; b.y = tops[b.r]; const p = md.pos[x.name]; if (p) { b.x = p.x; b.y = p.y; } maxW = Math.max(maxW, b.x + b.w - x0); });
+      const bottom = Math.max(...list.map((x) => boxes[x.name].y + boxes[x.name].h), y0 + 60);
+      const r = { label, x: x0, y: y0, w: Math.max(maxW + ER.regionPad, 240), h: bottom - y0 + ER.regionPad, n: list.length };
+      regions.push(r);
+      return r;
+    };
+    const top = place(order, ER.pad, ER.pad, ER.cols, home, false);
+    let y = top.y + top.h + 28;
+    const byMod = {};
+    [...near].map((n) => mgObj(n)).filter(Boolean).forEach((x) => { (byMod[modOf(x)] = byMod[modOf(x)] || []).push(x); });
+    let x = ER.pad;
+    Object.entries(byMod).forEach(([label, list]) => {
+      const r = place(list, x, y, Math.min(list.length, 2), label, md.fold);
+      x += r.w + 24;
+      if (x > 900) { x = ER.pad; y += r.h + 24; }
+    });
+    return { boxes, regions, home };
+  }
+
+  function erEdge(a, b) {  // where the straight line between two boxes leaves each of them
+    const ca = [a.x + a.w / 2, a.y + a.h / 2], cb = [b.x + b.w / 2, b.y + b.h / 2];
+    const cut = (box, from, to) => {
+      const dx = to[0] - from[0], dy = to[1] - from[1];
+      const sx = dx ? (box.w / 2) / Math.abs(dx) : Infinity, sy = dy ? (box.h / 2) / Math.abs(dy) : Infinity;
+      const s = Math.min(sx, sy);
+      return [from[0] + dx * s, from[1] + dy * s];
+    };
+    return [cut(a, ca, cb), cut(b, cb, ca)];
+  }
+
+  function erSvg() {
+    const L = erLayout();
+    if (!L) return '<div class="empty">트리에서 객체를 고르세요.</div>';
+    const m = S.mg.st, md = S.md;
+    const W = Math.max(...Object.values(L.boxes).map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad;
+    const H = Math.max(...Object.values(L.boxes).map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
+    const regions = L.regions.map((r, i) => `<g class="erreg${i ? ' near' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
+    const edges = [];
+    m.links.forEach((l) => {
+      const a = L.boxes[l.source], b = L.boxes[l.target];
+      if (!a || !b || l.source === l.target || (a.folded && b.folded)) return;
+      const [p, q] = erEdge(a.folded ? { ...a.folded } : a, b.folded ? { ...b.folded } : b);
+      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      const on = md.sel === l.source || md.sel === l.target;
+      edges.push(`<g class="ered${on ? ' on' : ''}"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#erarrow)"/>
+        <text x="${mx + 6}" y="${my - 4}">${esc(l.label || l.name)}</text><text class="card" x="${mx + 6}" y="${my + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`);
+    });
+    m.objects.forEach((o) => {
+      const a = L.boxes[o.name], b = o.parent && L.boxes[o.parent];
+      if (!a || !b || a.folded) return;
+      const [p, q] = erEdge(a, b.folded ? b.folded : b);
+      edges.push(`<g class="ered isa"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#erarrow)"/><text x="${(p[0] + q[0]) / 2 + 6}" y="${(p[1] + q[1]) / 2}">↑ 상위</text></g>`);
+    });
+    const nodes = Object.values(L.boxes).filter((b) => !b.folded).map((b) => {
+      const o = b.o, on = md.sel === o.name;
+      const rows = erRows(o).map((r, i) => `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${esc(r.text.length > 27 ? `${r.text.slice(0, 26)}…` : r.text)}</text>`).join('');
+      const tag = o.new ? '새로 추가' : o.pending ? '변경 대기' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
+      return `<g class="ernode${on ? ' on' : ''}${o.new || o.pending ? ' pend' : ''}" data-er="${esc(o.name)}" transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
+        <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 14 + o.label.length * 13}" y="${b.y + 21}">${esc(o.name)}</text>
+        ${tag ? `<text class="tag" x="${b.x + b.w - 10}" y="${b.y + 21}" text-anchor="end">${esc(tag)}</text>` : ''}
+        <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}</g>`;
+    }).join('');
+    return `<svg class="ersvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 객체와 관계">
+      <defs><marker id="erarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+      ${regions}${edges.join('')}${nodes}</svg>`;
+  }
+
+  function erCard() {
+    const md = S.md, o = mgObj(md.sel);
+    const ver = o ? (S.st.layers || []).flatMap((l) => l.modules).find((x) => x.label === (o.module_label || o.module)) : null;
+    return `<div class="card"><div class="ch">${esc(o ? (o.module_label || o.module) : '스키마')}${ver ? ` <span class="muted mono" style="font-weight:600">${esc(ver.version)}</span>` : ''}
+      <div class="right"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button><button class="btn sm" data-act="erfold" aria-pressed="${!!md.fold}">${md.fold ? '모듈 펼치기' : '모듈 접기'}</button></div></div>
+      <div class="cb ercanvas" id="ercanvas">${erSvg()}</div><div class="cb ernote muted">카드를 끌어 옮기고, 눌러 오른쪽에서 고칩니다. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+  }
+
+  function mountEr() {
+    const box = $('#ercanvas');
+    if (!box || box.dataset.on) return;
+    box.dataset.on = '1';
+    let drag = null;
+    box.addEventListener('pointerdown', (ev) => {
+      const g = ev.target.closest('[data-er]');
+      if (!g) return;
+      const L = erLayout(), b = L && L.boxes[g.dataset.er];
+      if (!b || b.folded) return;
+      drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
+      g.setPointerCapture(ev.pointerId);
+    });
+    box.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      drag.moved = true;
+      S.md.pos[drag.name] = { x: Math.max(4, drag.bx + dx), y: Math.max(30, drag.by + dy) };
+      box.innerHTML = erSvg();
+    });
+    box.addEventListener('pointerup', () => {
+      if (drag && !drag.moved) modelPick(drag.name);
+      drag = null;
+    });
+  }
+
+  // what the definition check would refuse in a property, said under its field, with the way to fix it
+  function propIssues(v, mode) {
+    const out = {};
+    const other = S.mg.st.properties.find((x) => v.name && x.name === v.name && x.object !== v.object && !x.inherited && x.type !== v.type);
+    if (other && !v.expr) out.type = { text: `이름이 같으면 타입도 같아야 합니다. 속성 '${v.name}'은 ${mgLabel(other.object)}에서 ${other.type}, 여기서는 ${v.type}입니다.`, fix: ['type', other.type, `${other.type}으로 맞추기`] };
+    if (mode === 'new' && v.name && !/^[a-z][a-z0-9_]*$/.test(v.name)) out.name = { text: '영문 이름은 소문자로 시작하고 소문자, 숫자, _만 씁니다.' };
+    if (mode === 'new' && v.name && mgProps(v.object).some((p) => p.name === v.name)) out.name = { text: `${mgLabel(v.object)}에 '${v.name}' 속성이 이미 있습니다.` };
+    if (v.type === 'enum' && !String(v.values || '').trim()) out.values = { text: '허용값 타입은 허용값이 하나 이상 있어야 합니다.' };
+    return out;
+  }
+  const fieldErr = (e) => (e ? `<div class="ferr" role="alert">${esc(e.text)}${e.fix ? ` <button class="btn sm" data-act="mgfix" data-f="${esc(e.fix[0])}" data-v="${esc(e.fix[1])}">${esc(e.fix[2])}</button>` : ''}</div>` : '');
+
+  function objectStatus(o) {  // where an object comes from, who adds to it, whether anything reads it, whether it is being changed
+    const u = S.md.uses && S.md.uses.id === `object:${o.name}` ? S.md.uses.list : null;
+    return `<div class="chips mdstat"><span class="chip sm b">정의 · ${esc(shortMod(o.module_label || o.module))}</span>${(o.extended_by || []).map((x) => `<span class="chip sm warn">확장 · ${esc(shortMod(x))}</span>`).join('')}
+      ${o.new ? '<span class="chip sm warn">새로 추가</span>' : o.pending ? '<span class="chip sm warn">변경 대기</span>' : u ? (u.length ? '<span class="chip sm ok">사용 중</span>' : '<span class="chip sm">사용처 없음</span>') : ''}
+      ${S.mg.st.unlinked.includes(o.name) ? '<span class="chip sm warn">관계 없음</span>' : ''}</div>`;
+  }
+
+  function modelYaml(o) {
+    const y = S.md.yaml;
+    const id = `object:${o.name}`;
+    if (!y || y.id !== id) {
+      if (!S.md.yamlBusy) {
+        S.md.yamlBusy = true;
+        api(`element/yaml?id=${encodeURIComponent(id)}`).then((x) => { S.md.yaml = { id, text: x.yaml, was: x.yaml }; }).catch((e) => { S.md.yaml = { id, error: e.message }; })
+          .finally(() => { S.md.yamlBusy = false; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); });
+      }
+      return '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>';
+    }
+    if (y.error) return `<div class="hint warn">${esc(y.error)}</div>`;
+    return `<div class="muted" style="font-size:12px;margin-bottom:6px">대기 중인 변경까지 반영한 ${esc(o.label)} 정의입니다. 여기서 고치면 폼에도, 폼에서 고치면 여기에도 바로 반영됩니다.</div>
+      <textarea class="mono mdyaml" data-in="mdyaml" spellcheck="false" aria-label="${esc(o.label)} YAML">${esc(y.text)}</textarea>
+      ${y.err ? `<div class="ferr" role="alert">${esc(y.err)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm primary" data-act="mdyamlsave"${y.text === y.was || S.mg.busy ? ' disabled' : ''}>YAML 반영</button><button class="btn sm" data-act="mdyamlreset"${y.text === y.was ? ' disabled' : ''}>되돌리기</button>
+      <button class="btn sm ghost" data-act="mdedit" data-module="${esc(o.module)}">모듈 파일 전체 편집</button></div>`;
+  }
+
+  function modelComments(o) {
+    const id = `object:${o.name}`, c = S.md.notes;
+    if (!c || c.id !== id) {
+      api(`element/comments?id=${encodeURIComponent(id)}`).then((x) => { S.md.notes = { id, list: x.comments }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail);
+      return '<div class="empty"><span class="spin"></span></div>';
+    }
+    const list = c.list.map((x) => `<div class="cmt"><span class="av">${esc(String(x.by || '?').slice(0, 1))}</span><div><div class="muted" style="font-size:12px"><b style="color:var(--ink)">${esc(x.by)}</b> · ${esc(String(x.at || '').replace('T', ' '))}</div><div style="font-size:13px;margin-top:2px">${esc(x.text)}</div></div></div>`).join('');
+    return `${list || '<div class="muted" style="font-size:12.5px">아직 댓글이 없습니다. 왜 이렇게 정의했는지, 무엇을 확인해야 하는지 남겨 두세요.</div>'}
+      <textarea data-in="mdnote" rows="2" placeholder="댓글 쓰기" style="width:100%;margin-top:10px;box-sizing:border-box">${esc(S.md.note || '')}</textarea>
+      <button class="btn sm primary" data-act="mdnotesave" style="margin-top:6px">댓글 남기기</button>`;
+  }
+
+  // the edits waiting, what they reach, and the way to try them, take the last one back or file them
+  function modelFoot() {
+    const w = S.mg.st.workspace;
+    if (!w.dirty) return '';
+    const d = w.diff, imp = w.impact || {};
+    const says = w.edits.slice(-3).map((e) => `${OP_WORD[e.op] || e.op} ${elementText(e.target)}`).join(' · ');
+    const reach = [['queries', '질의'], ['decisions', '판정'], ['questions', '검증 질문'], ['actions', '액션']].map(([k, l]) => `${l} ${imp[k] || 0}`).join(' · ');
+    const t = S.md.trial;
+    const trial = t ? (t.busy ? '<span class="chip"><span class="spin"></span>사본에서 시험 중</span>'
+      : t.error ? `<span class="chip bad">${esc(t.error)}</span>` : `<button class="chip ${t.passed ? 'ok' : 'bad'}" data-act="mdtrialopen">${t.passed ? '✓ 사본 시험 통과' : '사본 시험 실패'} ${t.gates.filter((g) => g.passed).length}/${t.gates.length}</button>`) : '';
+    return `<div class="rvfoot mdfoot"><span class="chip warn">변경 ${w.edits.length || d.added.length + d.changed.length + d.removed.length}건</span><span style="font-size:12.5px">${esc(says)}</span>
+      <span class="muted">영향: ${esc(reach)}</span>${trial}<span style="flex:1"></span>
+      <button class="btn sm" data-act="mdundo"${w.edits.length ? '' : ' disabled'}>되돌리기</button><button class="btn sm" data-act="mdtrial"${t && t.busy ? ' disabled' : ''}>사본에서 시험</button>
+      <button class="btn sm primary" data-act="mgpropose"${S.mg.busy || w.issues.length ? ' disabled' : ''}>변경 요청 만들기</button></div>${S.md.trialOpen && t && t.gates ? trialPanel(t) : ''}`;
+  }
+
+  function trialPanel(t) {
+    return `<div style="margin-top:10px">${changeGates(t)}</div>`;
   }
 
   function viewModel() {
@@ -1322,14 +1554,8 @@
     if (!md.sel || !mgObj(md.sel)) md.sel = (S.st.decisions[0] && mgObj(S.st.decisions[0].target) ? S.st.decisions[0].target : (S.mg.st.objects[0] || {}).name) || '';
     if (md.sel && !S.mg.form) mgOpen('object', md.sel, true);
     const head = mgHead(title, sub, '<a class="btn sm" href="#objects">표로 보기</a><button class="btn sm primary" data-act="mgobjnew">새 객체</button>');
-    return `${head}${pendingBar()}<div class="grid mdgrid"><div class="card"><div class="cb" style="padding:10px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 테이블 검색" aria-label="객체 검색"></div><div class="cb mdtree" id="mdtree">${modelTree()}</div></div>
-      <div class="card"><div class="ch">스키마 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span></div></div><div class="cb" style="padding:0"><div class="kg" id="mdgraph"></div></div></div>
-      <div id="mdside">${modelSide()}</div></div>`;
-  }
-
-  function mdScroll() {  // the object's own lines in its module file come into view
-    const pre = $('#mdside .mdcode'), hi = pre && pre.querySelector('.mdhi');
-    if (hi) pre.scrollTop = Math.max(0, hi.offsetTop - pre.offsetTop - 12);
+    return `${head}<div class="grid mdgrid"><div class="card"><div class="cb" style="padding:10px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 테이블 검색" aria-label="객체 검색"></div><div class="cb mdtree" id="mdtree">${modelTree()}</div></div>
+      ${erCard()}<div id="mdside">${modelSide()}</div></div>${modelFoot()}`;
   }
 
   function modelPick(name) {
@@ -1341,7 +1567,7 @@
     drawGraph();
     const tree = $('#mdtree'), side = $('#mdside');
     if (tree) tree.innerHTML = modelTree();
-    if (side) { side.innerHTML = modelSide(); mdScroll(); }
+    if (side) side.innerHTML = modelSide();
   }
 
   // ---- library -------------------------------------------------------------------------------------------------
@@ -3917,6 +4143,7 @@ ${controls}${body}`;
       const r = await api('manage/edit', { op, args });
       S.mg.st = r;
       S.mg.form = null;
+      S.md.yaml = null; S.md.trial = null;
       S.mg.review = null;
       const out = r.edit.took_out.length;
       toast(`${done} ${out ? `함께 제외된 항목 ${out}개는 대기 중인 변경에서 확인하세요.` : '변경 요청 후 승인되면 모든 화면에 반영됩니다.'}`);
@@ -4130,18 +4357,19 @@ ${controls}${body}`;
     const p = f.mode === 'edit' ? m.properties.find((x) => x.object === v.object && x.name === v.name) : null;
     const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
     const typeOk = !p || p.new || own(p);
-    const types = `<select data-in="mgf" data-f="type"${typeOk ? '' : ' disabled'}>${TYPES.map((t) => opt(t, `${TYPE_WORD[t]} (${t})`, v.type)).join('')}</select>`;
+    const iss = propIssues(v, f.mode);
+    const types = `<select data-in="mgf" data-f="type" data-re="1"${typeOk ? '' : ' disabled'}>${TYPES.map((t) => opt(t, `${TYPE_WORD[t]} (${t})`, v.type)).join('')}</select>`;
     const cols = columnsOf(v.object);
     const used = new Set(mgProps(v.object).map((x) => (x.column || '').toLowerCase()));
     const colSel = cols.length ? `<select data-in="mgf" data-f="column" data-re="1"><option value="">${f.mode === 'new' ? '선택' : '이름과 같은 컬럼'}</option>${cols.map((c) => opt(c.name, `${c.name} · ${c.type}${used.has(c.name.toLowerCase()) && c.name !== v.column ? ' · 사용 중' : ''}`, v.column)).join('')}</select>`
       : `<input type="text" data-in="mgf" data-f="column" value="${esc(v.column)}" placeholder="원천 컬럼 이름">`;
     const common = `${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}">`)}
-      ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}
+      ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}${fieldErr(iss.type)}
       ${v.expr ? field('계산식', `<input type="text" data-in="mgf" data-f="expr" value="${esc(v.expr)}" class="mono">`)
         : (p && p.columns.length ? field('원천 컬럼', `<input type="text" value="${esc(p.columns.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field('원천 컬럼', colSel))}
       ${v.expr || (p && p.columns.length) ? '' : `<div class="rgrid two">${field('변환식', `<input type="text" data-in="mgf" data-f="transform" value="${esc(v.transform || '')}" class="mono" placeholder="예: value / 100">`, '원천 값을 value로 참조합니다. 비워 두면 그대로 읽습니다.')}
         ${field('원천 자료형', `<select data-in="mgf" data-f="source_type"><option value="">속성과 동일</option>${TYPES.filter((t) => t !== 'enum').map((t) => opt(t, TYPE_WORD[t], v.source_type || '')).join('')}</select>`)}</div>`}
-      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 지정합니다.')}
+      ${field('허용값', `<input type="text" data-in="mgf" data-f="values" value="${esc(v.values)}" placeholder="쉼표로 구분, 예: BASIC, SILVER, VIP 또는 10=주문, 20=취소">`, '값=이름으로 적으면 코드값에 이름을 지정합니다.')}${fieldErr(iss.values)}
       <div class="rgrid two">${field('단위', `<input type="text" data-in="mgf" data-f="unit" value="${esc(v.unit)}" placeholder="예: 원">`)}
         ${field('가림', `<select data-in="mgf" data-f="mask">${Object.entries(MASK_WORD).map(([k, l]) => opt(k, l, v.mask)).join('')}</select>`)}</div>
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 값</label>
@@ -4149,7 +4377,7 @@ ${controls}${body}`;
     if (f.mode === 'new') {
       const objSel = `<select data-in="mgf" data-f="object" data-re="1">${m.objects.map((o) => opt(o.name, `${o.label} (${o.name})`, v.object)).join('')}</select>`;
       return `<div class="card"><div class="ch">새 속성<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
-        ${field('객체', objSel)}${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: nickname">`)}${common}
+        ${field('객체', objSel)}${field('영문 이름', `<input type="text" data-in="mgf" data-f="name" data-re="1" value="${esc(v.name)}" placeholder="예: nickname">`)}${fieldErr(iss.name)}${common}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>속성 추가</button></div></div>`;
     }
     const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 객체 ${mgLabel(p.inherited)}에서 상속한 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
@@ -4931,9 +5159,44 @@ ${controls}${body}`;
     gxroot: (t) => { const n = S.gx.nodes[t.dataset.id]; if (n) gxStart(n.type, n.key); },
     recgraph: () => { const r = S.rec; S.gx.seed = { type: r.type, key: r.key }; location.hash = '#graph'; gxStart(r.type, r.key); },
     mdpick: (t) => modelPick(t.dataset.name),
+    mdobjnew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.mg.form = { kind: 'object', mode: 'new', v: { table: '', name: '', label: '', key: '', parent: '', description: '', cols: true } }; render(); },
+    mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
+    erreset: () => { S.md.pos = {}; const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
+    erfold: () => { S.md.fold = !S.md.fold; render(); },
+    mgfix: (t) => { if (S.mg.form) { S.mg.form.v[t.dataset.f] = t.dataset.v; render(); } },
+    mdyamlreset: () => { const y = S.md.yaml; if (y) { y.text = y.was; y.err = ''; } render(); },
+    mdyamlsave: async () => {
+      const y = S.md.yaml;
+      S.mg.busy = true;
+      try {
+        S.mg.st = await api('manage/yaml', { id: y.id, text: y.text });
+        S.md.yaml = null; S.md.trial = null; S.mg.form = null;
+        toast('YAML의 변경을 대기 중인 변경에 반영했습니다. 폼에도 같은 내용이 보입니다.');
+      } catch (e) { y.err = e.message; }
+      S.mg.busy = false;
+      render();
+    },
+    mdnotesave: async () => {
+      const id = `object:${S.md.sel}`;
+      try {
+        const r = await api('element/comment', { id, text: S.md.note || '' });
+        S.md.notes = { id, list: r.comments }; S.md.note = '';
+        S.mg.st.comments = { ...(S.mg.st.comments || {}), [id]: r.comments.length };
+        render();
+      } catch (e) { fail(e); }
+    },
+    mdundo: async () => {
+      try { S.mg.st = await api('manage/undo', {}); S.mg.form = null; S.md.yaml = null; S.md.trial = null; toast('마지막 변경을 되돌렸습니다.'); render(); } catch (e) { fail(e); }
+    },
+    mdtrial: async () => {
+      S.md.trial = { busy: true }; render();
+      try { S.md.trial = await api('manage/trial', {}); S.md.trialOpen = true; } catch (e) { S.md.trial = { error: e.message }; }
+      render();
+    },
+    mdtrialopen: () => { S.md.trialOpen = !S.md.trialOpen; render(); },
     mdprop: (t) => { mgOpen('prop', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
     mdlink: (t) => { mgOpen('link', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
-    mdtab: (t) => { S.md.tab = t.dataset.k; const b = $('#mdside'); if (b) { b.innerHTML = modelSide(); mdScroll(); } },
+    mdtab: (t) => { S.md.tab = t.dataset.k; const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
     mdedit: async (t) => { location.hash = '#library'; await openModule(t.dataset.module).catch(fail); },
     ibchange: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },
     chgsel: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; S.chg.text = ''; render(); },
@@ -5616,6 +5879,8 @@ ${controls}${body}`;
     gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
     srfolder: (t) => { S.sr.folder = t.value; },
+    mdyaml: (t) => { if (S.md.yaml) S.md.yaml.text = t.value; const b = $('[data-act=mdyamlsave]'); if (b) b.disabled = S.md.yaml.text === S.md.yaml.was; },
+    mdnote: (t) => { S.md.note = t.value; },
     srfkey: (t) => { S.sr.fix.key = t.value; },
     srfat: (t) => { S.sr.fix.at = t.value; },
     vkind: (t) => { S.vs.kind = t.value; render(); },
