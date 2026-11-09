@@ -1701,7 +1701,7 @@
 
   const ER_VIEW = {
     model: { state: () => S.md, box: 'ercanvas', card: 'ercard', pick: (n) => modelPick(n), html: () => erCard() },
-    onto: { state: () => S.ov, box: 'ontocanvas', card: 'ontocard', pick: (n) => ontoPick(n), html: () => ontoCard(), all: true },
+    onto: { state: () => S.ov, box: 'ontocanvas', card: 'ontocard', pick: (n) => ontoPick(n), html: () => ontoCard(), all: true, clear: () => ontoClear() },
   };
 
   function erLayout(v = 'model') {
@@ -1807,43 +1807,102 @@
     return [cut(a, ca, cb), cut(b, cb, ca)];
   }
 
+  // a picked card with everything it connects to, gathered at reading size around where the person was looking: what
+  // points at it on the left, what it points at on the right, what it is a kind of above, its kinds below
+  const FOCUS = { rows: 5, gapX: 120, gapY: 20 };
+
+  function erFocus(v, L) {
+    const m = S.mg.st, md = ER_VIEW[v].state(), sel = md.focus, base = L.boxes;
+    if (!sel || !base[sel]) return null;
+    const ids = new Set([sel]), inc = [], out = [];
+    m.links.forEach((l) => {
+      const other = l.source === sel ? l.target : l.target === sel ? l.source : '';
+      if (!other || ids.has(other) || !base[other]) return;
+      ids.add(other);
+      (l.target === sel ? inc : out).push(other);
+    });
+    const parent = mgObj(sel).parent;
+    const up = parent && base[parent] && !ids.has(parent) ? [parent] : [];
+    const down = m.objects.filter((o) => o.parent === sel && base[o.name] && !ids.has(o.name)).map((o) => o.name);
+    [...up, ...down].forEach((n) => ids.add(n));
+    const chunk = (list) => { const c = []; for (let i = 0; i < list.length; i += FOCUS.rows) c.push(list.slice(i, i + FOCUS.rows)); return c; };
+    // the nearest column is the first, so the rest of a long side stands further out
+    const columns = [...chunk(inc).reverse(), [...up, sel, ...down], ...chunk(out)];
+    const leftN = chunk(inc).length;
+    const tall = (c) => c.reduce((a, n) => a + base[n].h, 0) + (c.length - 1) * FOCUS.gapY;
+    const w = columns.length * ER.w + (columns.length - 1) * FOCUS.gapX;
+    const h = Math.max(...columns.map(tall));
+    const at = md.anchor || { x: base[sel].x + ER.w / 2, y: base[sel].y + base[sel].h / 2 };
+    const x0 = Math.max(8, at.x - w / 2), y0 = Math.max(34, at.y - h / 2);
+    const boxes = {}, from = {};
+    columns.forEach((c, i) => {
+      const x = x0 + i * (ER.w + FOCUS.gapX);
+      let y = y0 + (h - tall(c)) / 2;
+      c.forEach((n) => {
+        boxes[n] = { ...base[n], x, y };
+        const was = (md.last && md.last[n]) || base[n];
+        from[n] = [was.x - x, was.y - y];
+        y += base[n].h + FOCUS.gapY;
+      });
+    });
+    const heads = [];
+    if (inc.length) heads.push({ x: x0, text: `들어오는 관계 ${inc.length}` });
+    if (out.length) heads.push({ x: x0 + (leftN + 1) * (ER.w + FOCUS.gapX), text: `나가는 관계 ${out.length}` });
+    return { sel, ids, base, boxes, from, heads, w, h, y0, cx: x0 + w / 2, cy: y0 + h / 2 };
+  }
+
   function erSvg(v = 'model') {
     const L = erLayout(v);
     if (!L) return '<div class="empty">트리에서 객체를 고르세요.</div>';
     const m = S.mg.st, md = ER_VIEW[v].state();
-    const W = Math.max(...Object.values(L.boxes).map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad;
-    const H = Math.max(...Object.values(L.boxes).map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
-    const regions = L.regions.map((r, i) => `<g class="erreg${i && !ER_VIEW[v].all ? ' near' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
-    const edges = [];
-    const drawn = m.links.filter((l) => { const a = L.boxes[l.source], b = L.boxes[l.target]; return a && b && l.source !== l.target && !(a.folded && b.folded); });
-    const place = pairs(drawn, (l) => [L.boxes[l.source].folded ? L.boxes[l.source].folded.label : l.source, L.boxes[l.target].folded ? L.boxes[l.target].folded.label : l.target]);
-    drawn.forEach((l) => {
-      const a = L.boxes[l.source], b = L.boxes[l.target];
-      const [p, q] = erEdge(a.folded ? { ...a.folded } : a, b.folded ? { ...b.folded } : b);
-      const c = bend(p, q, ...place(l));
-      const on = md.sel === l.source || md.sel === l.target;
-      edges.push(`<g class="ered${on ? ' on' : ''}"><path d="${c.d}" marker-end="url(#erarrow)"/>
-        <text x="${c.x + 6}" y="${c.y - 4}">${esc(l.label || l.name)}</text><text class="card" x="${c.x + 6}" y="${c.y + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`);
-    });
-    m.objects.forEach((o) => {
-      const a = L.boxes[o.name], b = o.parent && L.boxes[o.parent];
-      if (!a || !b || a.folded) return;
+    const F = erFocus(v, L);
+    const every = F ? [...Object.values(F.base), ...Object.values(F.boxes)] : Object.values(L.boxes);
+    const W = Math.max(...every.map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad;
+    const H = Math.max(...every.map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
+    const regions = L.regions.map((r, i) => `<g class="erreg${i && !ER_VIEW[v].all ? ' near' : ''}${F ? ' erdim' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
+    const relations = (list, boxes, cls) => {
+      const drawn = list.filter((l) => { const a = boxes[l.source], b = boxes[l.target]; return a && b && l.source !== l.target && !(a.folded && b.folded); });
+      const place = pairs(drawn, (l) => [boxes[l.source].folded ? boxes[l.source].folded.label : l.source, boxes[l.target].folded ? boxes[l.target].folded.label : l.target]);
+      return drawn.map((l) => {
+        const a = boxes[l.source], b = boxes[l.target];
+        const [p, q] = erEdge(a.folded ? { ...a.folded } : a, b.folded ? { ...b.folded } : b);
+        const c = bend(p, q, ...place(l));
+        const on = cls === ' top' || (!F && (md.sel === l.source || md.sel === l.target));
+        return `<g class="ered${on ? ' on' : ''}${cls}"><path d="${c.d}" marker-end="url(#${on ? 'erhot' : 'erarrow'})"/>
+          <text x="${c.x + 6}" y="${c.y - 4}">${esc(l.label || l.name)}</text><text class="card" x="${c.x + 6}" y="${c.y + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`;
+      }).join('');
+    };
+    const kinds = (list, boxes, cls) => list.map((o) => {
+      const a = boxes[o.name], b = o.parent && boxes[o.parent];
+      if (!a || !b || a.folded) return '';
       const [p, q] = erEdge(a, b.folded ? b.folded : b);
-      edges.push(`<g class="ered isa"><path d="M${p[0]},${p[1]} L${q[0]},${q[1]}" marker-end="url(#erarrow)"/><text x="${(p[0] + q[0]) / 2 + 6}" y="${(p[1] + q[1]) / 2}">↑ 상위</text></g>`);
-    });
-    const nodes = Object.values(L.boxes).filter((b) => !b.folded).map((b) => {
+      return `<g class="ered isa${cls}"><path d="M${p[0]},${p[1]} L${q[0]},${q[1]}" marker-end="url(#erarrow)"/><text x="${(p[0] + q[0]) / 2 + 6}" y="${(p[1] + q[1]) / 2}">↑ 상위</text></g>`;
+    }).join('');
+    const card = (b, cls, shift) => {
       const o = b.o, on = md.sel === o.name;
       const rows = erRows(o).map((r, i) => `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${esc(r.text.length > 27 ? `${r.text.slice(0, 26)}…` : r.text)}</text>`).join('');
       const tag = o.new ? '새로 추가' : o.pending ? '변경 대기' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
-      return `<g class="ernode${on ? ' on' : ''}${o.new || o.pending ? ' pend' : ''}" data-er="${esc(o.name)}" transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
+      return `<g class="ernode${on ? ' on' : ''}${o.new || o.pending ? ' pend' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
         <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 14 + o.label.length * 13}" y="${b.y + 21}">${esc(o.name)}</text>
         ${tag ? `<text class="tag" x="${b.x + b.w - 10}" y="${b.y + 21}" text-anchor="end">${esc(tag)}</text>` : ''}
         <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}</g>`;
-    }).join('');
+    };
+    let body;
+    if (F) {  // what is not connected stays where it was, faint; what is connected is drawn last, so it lies on top
+      const apart = (l) => !F.ids.has(l.source) && !F.ids.has(l.target);
+      const touches = (l) => l.source === F.sel || l.target === F.sel;
+      const faint = relations(m.links.filter(apart), F.base, ' erdim') + kinds(m.objects.filter((o) => !F.ids.has(o.name) && !F.ids.has(o.parent)), F.base, ' erdim')
+        + Object.values(F.base).filter((b) => !F.ids.has(b.o.name)).map((b) => card(b, ' erdim')).join('');
+      const near = relations(m.links.filter(touches), F.boxes, ' top') + kinds(m.objects.filter((o) => o.name === F.sel || o.parent === F.sel), F.boxes, ' top')
+        + Object.values(F.boxes).map((b) => card(b, '', F.from[b.o.name])).join('')
+        + F.heads.map((x) => `<text class="erside" x="${x.x}" y="${F.y0 - 12}">${esc(x.text)}</text>`).join('');
+      body = `${regions}${faint}${near}`;
+    } else body = `${regions}${relations(m.links, L.boxes, '')}${kinds(m.objects, L.boxes, '')}${Object.values(L.boxes).filter((b) => !b.folded).map((b) => card(b, '')).join('')}`;
     const z = md.zoom || 1;
     return `<svg class="ersvg" width="${Math.round(W * z)}" height="${Math.round(H * z)}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 객체와 관계">
-      <defs><marker id="erarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
-      ${regions}${edges.join('')}${nodes}</svg>`;
+      <defs><marker id="erarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+      <marker id="erhot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+      ${body}</svg>`;
   }
 
   function erCard() {
@@ -1863,8 +1922,8 @@
     box.addEventListener('pointerdown', (ev) => {
       const g = ev.target.closest('[data-er]');
       const L = g && erLayout(v), b = L && L.boxes[g.dataset.er];
-      if (g && b && !b.folded) drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
-      else drag = { pan: true, x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
+      if (g && b && !b.folded && !md.focus) drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
+      else drag = { pan: true, card: g ? g.dataset.er : '', x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
       box.setPointerCapture(ev.pointerId);
     });
     box.addEventListener('pointermove', (ev) => {
@@ -1878,9 +1937,13 @@
       box.innerHTML = erSvg(v);
     });
     const end = () => {
-      if (drag && !drag.moved && !drag.pan) ER_VIEW[v].pick(drag.name);
+      const was = drag;
       drag = null;
       box.classList.remove('panning');
+      if (!was || was.moved) return;
+      if (!was.pan) ER_VIEW[v].pick(was.name);
+      else if (was.card) ER_VIEW[v].pick(was.card);
+      else if (md.focus) ER_VIEW[v].clear();
     };
     box.addEventListener('pointerup', end);
     box.addEventListener('pointercancel', end);
@@ -1894,6 +1957,7 @@
 
   function erZoom(step, floor = 0.4, v = 'model') {  // 0 fits the diagram to the canvas's width
     const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
+    if (step === 0 && md.focus) { ontoPaint(); return; }
     if (step === 0 && box) {
       const svg = box.querySelector('svg'), w = svg ? Number(svg.getAttribute('viewBox').split(' ')[2]) : 0;
       md.zoom = w ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / w)) : 1;
@@ -1909,17 +1973,56 @@
 
   // the whole ontology as the same cards: every module a region, a press opens the object's definition beside it
   function ontoCard() {
-    const ov = S.ov;
-    return `<div class="card"><div class="ch">온톨로지 전체<div class="right"><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-v="onto" data-z="0" title="화면에 맞춤">${Math.round((ov.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="1" aria-label="확대">+</button></span></div></div>
-      <div class="cb ercanvas" id="ontocanvas">${S.mg.st ? erSvg('onto') : '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>'}</div>
-      <div class="cb ernote muted">카드를 누르면 오른쪽에 정의가 나옵니다. 고치려면 [작업 공간에서 열기]를 쓰세요. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+    const ov = S.ov, o = ov.focus && S.mg.st ? mgObj(ov.focus) : null;
+    const zoom = `<span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-v="onto" data-z="0" title="화면에 맞춤">${Math.round((ov.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="1" aria-label="확대">+</button></span>`;
+    const note = o ? '다른 카드를 누르면 그 카드로 옮겨 갑니다. 빈 곳을 누르거나 Esc를 누르면 전체 보기로 돌아갑니다.'
+      : '카드를 누르면 연결된 카드만 한 화면에 모아 보여 주고, 오른쪽에 정의가 나옵니다.';
+    return `<div class="card"><div class="ch">${o ? `${esc(o.label)}${josa(o.label, '과', '와')} 연결된 카드 <span class="chip sm b">${ov.near || 0}</span>` : '온톨로지 전체'}<div class="right">${o ? '<button class="btn sm" data-act="ontoall">전체 보기</button>' : ''}${zoom}</div></div>
+      <div class="cb ercanvas${o ? ' focused' : ''}" id="ontocanvas">${S.mg.st ? erSvg('onto') : '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>'}</div>
+      <div class="cb ernote muted">${note} 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+  }
+
+  function ontoPaint() {  // the card again, the gathered cards fitted to the canvas and in the middle of it
+    const ov = S.ov, card = $('#ontocard'), was = $('#ontocanvas');
+    if (!card || !was) return;
+    const F = ov.focus ? erFocus('onto', erLayout('onto')) : null;
+    if (F) {
+      ov.zoom = Math.min(1, Math.max(0.5, Math.min((was.clientWidth - 32) / F.w, (was.clientHeight - 64) / (F.h + 34))));
+      ov.near = F.ids.size - 1;
+    }
+    card.innerHTML = ontoCard();
+    mountEr('onto');
+    const box = $('#ontocanvas');
+    if (!F || !box) return;
+    box.scrollLeft = Math.max(0, F.cx * ov.zoom - box.clientWidth / 2);
+    box.scrollTop = Math.max(0, F.cy * ov.zoom - box.clientHeight / 2);
+    ov.last = Object.fromEntries(Object.entries(F.boxes).map(([k, b]) => [k, { x: b.x, y: b.y }]));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const moving = [...box.querySelectorAll('[data-dx]')];  // each card travels from where it was, so it can be followed
+    moving.forEach((g) => { g.style.transition = 'none'; g.style.transform = `translate(${g.dataset.dx}px, ${g.dataset.dy}px)`; });
+    box.getBoundingClientRect();
+    requestAnimationFrame(() => moving.forEach((g) => { g.style.transition = 'transform .28s ease'; g.style.transform = ''; }));
   }
 
   function ontoPick(name) {
-    S.ov.sel = name;
-    const box = $('#ontocanvas');
-    if (box) box.innerHTML = erSvg('onto');
+    const ov = S.ov, box = $('#ontocanvas');
+    if (!ov.focus && box) {  // what to come back to, and the spot to gather around
+      const z = ov.zoom || 1;
+      ov.before = { zoom: ov.zoom, left: box.scrollLeft, top: box.scrollTop };
+      ov.anchor = { x: (box.scrollLeft + box.clientWidth / 2) / z, y: (box.scrollTop + box.clientHeight / 2) / z };
+    }
+    ov.sel = name; ov.focus = name;
+    ontoPaint();
     selectObject(name, true);
+  }
+
+  function ontoClear() {
+    const ov = S.ov, b = ov.before || {};
+    if (!ov.focus) return;
+    Object.assign(ov, { focus: '', anchor: null, last: null, zoom: b.zoom });
+    ontoPaint();
+    const box = $('#ontocanvas');
+    if (box) { box.scrollLeft = b.left || 0; box.scrollTop = b.top || 0; }
   }
 
   // what the definition check would refuse in a property, said under its field, with the way to fix it
@@ -5828,6 +5931,7 @@ ${controls}${body}`;
     mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
     erreset: () => { S.md.pos = {}; const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
     erzoom: (t) => erZoom(Number(t.dataset.z), t.dataset.v === 'onto' ? 0.3 : 0.4, t.dataset.v || 'model'),
+    ontoall: () => ontoClear(),
     ontoedit: () => { S.md.sel = S.ov.sel || S.sel; S.mg.form = null; location.hash = '#model'; },
     erfold: () => { S.md.fold = !S.md.fold; render(); },
     mgfix: (t) => { if (S.mg.form) { S.mg.form.v[t.dataset.f] = t.dataset.v; render(); } },
@@ -6806,7 +6910,7 @@ ${controls}${body}`;
     });
     document.addEventListener('keydown', (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ACT.palette(); }
-      if (ev.key === 'Escape') { if (S.rp) ACT.rpclose(); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
+      if (ev.key === 'Escape') { if (S.rp) ACT.rpclose(); else if (S.tab === 'onto' && S.ov.focus) ontoClear(); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
     });
     layer.addEventListener('input', (ev) => {
       if (ev.target.id === 'repolabel') S.pick.label = ev.target.value;
