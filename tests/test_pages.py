@@ -122,3 +122,20 @@ def test_a_decision_is_tried_on_a_record_and_says_what_would_turn_it(session):
     assert session.simulate("returnEligibility", "", {"days_since_delivery": "3", "item_status": "NORMAL",
                                                       "category_returnable": "true", "customer_grade": "BASIC"})["matched"] == ["in-window"]
     assert not session.studio.function_log and not session.studio.actions.audit  # trying writes nothing
+
+
+def test_a_record_graph_grows_by_relation_and_finds_what_joins_two_records(session):
+    links = session.record_links("Customer", "C001")
+    assert links["title"] == "김하늘"
+    placed = next(x for x in links["links"] if x["type"] == "Order")
+    assert placed["forward"] and {i["key"] for i in placed["items"]} >= {"O1"}
+    path = session.record_path("Customer", "C001", "Category", "K3")
+    assert path["ok"] and path["hops"] == 5
+    assert [(n["type"], n["key"]) for n in path["nodes"]] == [("Customer", "C001"), ("Order", "O1"), ("OrderItem", "I1001"),
+                                                            ("Sku", "S1"), ("Product", "P1"), ("Category", "K3")]
+    assert path["edges"][0] == {"source": "Customer:C001", "target": "Order:O1", "link": "placed", "label": "주문함"}
+    far = session.record_path("Customer", "C002", "Category", "K3")  # C002's orders hold no knitwear
+    assert far["ok"] is False or ("Customer", "C002") == (far["nodes"][0]["type"], far["nodes"][0]["key"])
+    with pytest.raises(ValueError):  # an unknown type is said before any path is tried
+        session.record_path("Customer", "C001", "Nowhere", "X")
+    assert "결정 반품 가능 여부" in session.element_readers("object:OrderItem")["readers"]

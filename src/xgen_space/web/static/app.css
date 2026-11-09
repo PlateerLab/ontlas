@@ -687,3 +687,22 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .hint.b { background:var(--blue-soft); border-color:var(--blue-line); color:#15509f; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .hint.b .btn { margin-left:auto; }
 @media (max-width: 1100px) { .cgrid { grid-template-columns:minmax(0, 1fr); } }
+
+/* records as a graph, and one workspace for the definition */
+.gxgrid { grid-template-columns:minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 300px); align-items:start; }
+.gxform { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.gxrow { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.gxrow:last-child { border-bottom:0; }
+.gxrow .muted { font-size:12px; }
+.gxhop { font-size:11.5px; padding:2px 0 2px 14px; }
+.mdgrid { grid-template-columns:minmax(200px, 240px) minmax(0, 1fr) minmax(320px, 400px); align-items:start; }
+.mdtree { max-height:620px; overflow:auto; padding:4px 8px 10px; border-top:1px solid var(--line); }
+.mdgrp { padding:6px 0; }
+.mdgh { display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:#475467; padding:4px 6px; }
+.mdnode { display:flex; align-items:center; gap:6px; width:100%; padding:6px 8px 6px 16px; border:0; border-radius:7px; background:none; font:inherit; font-size:13px; text-align:left; cursor:pointer; color:var(--ink); }
+.mdnode span:first-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mdnode:hover { background:var(--panel); }
+.mdnode.on { background:var(--blue-soft); color:#15509f; font-weight:700; }
+.mdcode { max-height:520px; overflow:auto; font-size:11.5px; line-height:1.55; }
+.mdhi { display:inline-block; width:100%; background:rgba(37, 99, 235, .22); }
+@media (max-width: 1100px) { .gxgrid, .mdgrid { grid-template-columns:minmax(0, 1fr); } }
