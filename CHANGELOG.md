@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
+
+- An object, property or relation carries a status: 초안, 사용 중 or 폐기 예정 (`status` in the definition, `STATUSES`). It is set on
+  the workspace forms, shown on the cards, the tree and the inspector, and a deprecated element that something still reads says so
+  where its uses are listed. A parent is not taken out from under its subtypes: the refusal names them.
+- A file in the catalog is read as a person says it is (`POST catalog/use`: data, definition, document, raw, or back to what
+  its content says); the row says what it became and that it was set, the draft and the search follow, and a replaced file
+  keeps the setting.
+- 할 일 says of an action request how much it changes against its automatic-approval limit (변화율 +30% · 자동 승인 한도 10%
+  초과), and 팀 전체 is the third tab in a team.
+- An answer nothing answers says what the question did name (objects, queries, actions, metrics) and whom to ask: the
+  owner of a metric it named. Related definitions include the decision tables behind the rules found and the metrics
+  named; a metric leads to 규칙 · 지표 and a decision table to its editor. The home's saved list shows metrics with a 지표 chip.
+- A graph perspective is kept by the studio for everyone (`GET graph/views`, `POST graph/view`, `graph/view/forget`), with
+  the types shown, each type's colour and the property that names a type's records (`GET records/labels`); in a team it
+  survives a restart through the journal. The modelling canvas keeps card positions the same way (`POST workspace/layout`,
+  `layout` in `GET manage`), so everyone opening a pipeline sees the same arrangement.
+- A record page shows, when a role is picked, only the actions that role may request.
+- 과거 판정 다시 계산 on 규칙 decides past cases by the tables as the pending edits leave them (`GET agreement?pending=1`), and
+  runs again as a table is edited.
+- In a team, applying a reviewed draft (`draft/apply`, `draft/review/apply`, `draft/map/apply`) needs an approver, since it
+  replaces the shared space; the page says so and keeps the review. `catalog/move` and `catalog/trash` need an editor.
+- The guide (사용 안내) has a section for every screen, including 홈, 할 일, 레코드 탐색, 그래프 탐색, 작업 공간 and 변경 요청, and
+  its first steps are the eight steps a person builds an ontology in. The README's how-to follows the same order and its
+  screenshots are the current screens.
+- Fixed: 객체 제외 on a parent object showed the engine's words; the message is in Korean and names the subtypes.
 
 - An alert leads to its fix. `GET issues` turns a measurement into what can be acted on: the items behind each failure, the module
   or change that brought them, what reads them and the ways to fix each (here, at once, or at the source with the list to hand

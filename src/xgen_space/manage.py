@@ -21,9 +21,9 @@ HIT_POLICIES = ("first", "priority", "collect", "unique")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
-               "cite", "transform", "source_type")
-OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite")
-LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite")
+               "cite", "transform", "source_type", "status")
+OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status")
+LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite", "status")
 PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
 METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
 IDENTITY_FIELDS = ("label", "table", "members", "rules")
@@ -196,7 +196,7 @@ class Workspace:
             for k, v in fields.items():
                 if k == "table":
                     spec["source"] = {"table": v} if v else None
-                elif v in ("", None):
+                elif v in ("", None) or (k == "status" and v == "active"):  # in use is what an element is unless said
                     spec.pop(k, None)
                 else:
                     spec[k] = v
@@ -213,6 +213,9 @@ class Workspace:
 
     def _delete_object(self, a: dict) -> str:
         name = str(a.get("name") or "")
+        children = sorted(t.name for t in self.composed().ontology.objects.values() if t.parent == name)
+        if children:  # the subtypes would be left with no parent: they change first
+            raise EditError(f"object type '{name}' is the parent of {', '.join(children)}")
         if self._owns_object(name):
             del self._section("body", "objects")[name]
             links = self._section("body", "links")
@@ -971,6 +974,8 @@ def _prop_spec(a: dict) -> dict:
     for k in ("label", "description", "column", "unit", "expr", "mask", "cite", "transform", "source_type"):
         if a.get(k):
             spec[k] = a[k]
+    if a.get("status") and a["status"] != "active":
+        spec["status"] = str(a["status"])
     if a.get("columns"):
         spec["columns"] = [str(c) for c in a["columns"]]
     if a.get("values"):

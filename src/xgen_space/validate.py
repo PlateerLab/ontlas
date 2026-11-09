@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from xgen_space.model import CARDINALITIES, RAW_SUFFIX, TEXT_SUFFIX, TYPES, Ontology, valid_name
+from xgen_space.model import CARDINALITIES, RAW_SUFFIX, STATUSES, TEXT_SUFFIX, TYPES, Ontology, valid_name
 
 
 def validate_ontology(o: Ontology) -> list[str]:
@@ -22,6 +22,8 @@ def validate_ontology(o: Ontology) -> list[str]:
             add(f"{t.name}: title '{t.title}' is not a property")
         if t.parent and t.parent not in o.objects:
             add(f"{t.name}: parent '{t.parent}' is unknown")
+        if t.status not in STATUSES:
+            add(f"{t.name}: status '{t.status}' is not one of {STATUSES}")
         for i in t.implements:
             iface = o.interfaces.get(i)
             if iface is None:
@@ -44,6 +46,8 @@ def validate_ontology(o: Ontology) -> list[str]:
                     f"{sorted(set(p.labels) - {str(v) for v in p.values})}")
             if p.mask and p.mask not in MASKS:
                 add(f"{t.name}.{p.name}: mask '{p.mask}' is not one of {MASKS}")
+            if p.status not in STATUSES:
+                add(f"{t.name}.{p.name}: status '{p.status}' is not one of {STATUSES}")
             stored_text = p.name + TEXT_SUFFIX in t.properties or p.name + RAW_SUFFIX in t.properties  # the expression is made
             issues.extend(f"{t.name}.{p.name}: {e}" for e in _transform(t, p))
             if p.format:
@@ -93,6 +97,8 @@ def validate_ontology(o: Ontology) -> list[str]:
     for lk in o.links.values():
         if not valid_name(lk.name):
             add(f"link name '{lk.name}' is not an identifier")
+        if lk.status not in STATUSES:
+            add(f"link {lk.name}: status '{lk.status}' is not one of {STATUSES}")
         if lk.source not in o.objects or lk.target not in o.objects:
             add(f"link {lk.name}: endpoints {lk.source} -> {lk.target} must be object types")
             continue

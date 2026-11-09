@@ -193,9 +193,45 @@ def _sources(found: list[dict], k: int) -> list[dict]:
     return [f for f in kept if f["score"] >= floor][:k]
 
 
-def _definitions(found: list[dict], k: int = 6) -> list[dict]:
-    return [{"id": f["id"], "kind_label": f["kind_label"], "title": f["title"], "element": f["element"]}
-            for f in found if f["kind"] in ("object", "query", "action")][:k]
+def _definitions(found: list[dict], onto=None, text: str = "", k: int = 6) -> list[dict]:
+    """The definitions a question touches: objects, queries and actions it names, the decision tables behind the rules
+    it found, and the metrics it names."""
+    out = [{"id": f["id"], "kind_label": f["kind_label"], "title": f["title"], "element": f["element"]}
+           for f in found if f["kind"] in ("object", "query", "action")]
+    seen = {d["id"] for d in out}
+    for f in found:
+        if f["kind"] != "rule" or onto is None:
+            continue
+        name = f["id"].split(":", 1)[1].rsplit(".", 1)[0]
+        d = onto.decisions.get(name)
+        if d is not None and f"decision:{name}" not in seen:
+            seen.add(f"decision:{name}")
+            out.append({"id": f"decision:{name}", "kind_label": "결정표", "title": d.label or name, "element": f"decision:{name}"})
+    for m in _metrics_named(onto, text):
+        if f"metric:{m.name}" not in seen:
+            seen.add(f"metric:{m.name}")
+            out.append({"id": f"metric:{m.name}", "kind_label": "지표", "title": m.label or m.name, "element": f"metric:{m.name}"})
+    return out[:k]
+
+
+def _metrics_named(onto, text: str) -> list:
+    if onto is None or not text:
+        return []
+    return [m for m in onto.metrics.values() if (m.label and m.label in text) or m.name in text]
+
+
+def _unknown(tools, text: str, found: list[dict]) -> tuple[str, list[dict]]:
+    """Why nothing answers, in terms of what the question did name, and whom to ask for what is missing."""
+    onto = tools.studio.onto
+    named = [f"{f['kind_label']} {f['title']}" for f in found if f["kind"] in ("object", "query", "action")][:3]
+    metrics = _metrics_named(onto, text)
+    named += [f"지표 {m.label or m.name}" for m in metrics]
+    if named:
+        reason = f"질문에서 알아들은 것은 {', '.join(named)}입니다. 이 조합에 답하는 등록 질의, 결정표, 문서가 없습니다."
+    else:
+        reason = "질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다."
+    ask = [{"who": m.owner, "about": f"지표 {m.label or m.name}"} for m in metrics if m.owner]
+    return reason, ask
 
 
 def _query(tools, text: str, found: list[dict]) -> dict | None:
@@ -250,7 +286,7 @@ def answer_question(tools, text: str, *, k: int = 6, pick: dict | None = None, f
     know = tools.knowledge(folder) if folder else tools.knowledge()
     found = know.find(text, max(k * 4, 24))
     out: dict[str, Any] = {"ok": True, "question": text, "route": "documents", "answer": "", "engine": know.retriever.kind,
-                           "sources": _sources(found, k), "definitions": _definitions(found),
+                           "sources": _sources(found, k), "definitions": _definitions(found, tools.studio.onto, text),
                            "relations": know.relations(text, [f["id"] for f in found[:k]])}
     at = None
     if pick:
@@ -288,6 +324,7 @@ def answer_question(tools, text: str, *, k: int = 6, pick: dict | None = None, f
     out["needs_model"] = True
     if top is None:
         out["route"], out["answer"] = "none", "관련 정의와 문서를 찾지 못했습니다."
+        out["reason"], out["ask"] = _unknown(tools, text, found)
     else:
         out["answer"] = top["text"].split("\n")[0][:220]
     return out

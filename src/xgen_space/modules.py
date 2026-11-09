@@ -241,7 +241,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view", "status"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
@@ -321,7 +321,7 @@ def _extend_link(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
     lk = acc["links"].get(name)
     if lk is None:
         raise ModuleError(f"{m.key} extends link '{name}', which no attached module defines")
-    for k in ("on", "via", "label", "description", "cite", "required", "inverse", "cardinality"):
+    for k in ("on", "via", "label", "description", "cite", "required", "inverse", "cardinality", "status"):
         if k in patch:
             lk[k] = copy.deepcopy(patch[k])
     if True in patch:

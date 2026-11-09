@@ -27,6 +27,28 @@ KEY_MENTIONS = 4  # passages that name a record's own key
 TITLE_WORDS = ("name", "title", "label")
 
 
+LIMIT_WORD = {"percent": "변화율", "delta": "변화폭", "max": "값", "min": "값"}
+
+
+def _limit_words(v: dict, x: dict) -> str:
+    """How a request stands against one automatic approval limit, in the one line a list shows: what changed, by how
+    much, against which limit, and whether it went past it."""
+    subject = str(x.get("subject") or "")
+    label = v["labels"].get(subject, subject)
+    value, limit, kind = x.get("value"), x.get("limit"), str(x.get("kind") or "")
+    before, after = v["before"].get(subject), (v["changes"] or {}).get(subject)
+    sign = ""
+    try:
+        if before is not None and after is not None and kind in ("delta", "percent"):
+            sign = "+" if float(after) > float(before) else "-" if float(after) < float(before) else ""
+    except (TypeError, ValueError):
+        sign = ""
+    unit = "%" if kind == "percent" else ""
+    shown = "값 없음" if not isinstance(value, (int, float)) else f"{sign}{value:,.1f}{unit}".replace(".0%", "%").replace(".0", "") if kind == "percent" else f"{sign}{value:,.0f}" if float(value).is_integer() else f"{sign}{value:,.2f}"
+    bound = f"{limit:,.0f}" if isinstance(limit, (int, float)) and float(limit).is_integer() else str(limit)
+    return f"{label} {LIMIT_WORD.get(kind, kind)} {shown} · 자동 승인 한도 {bound}{unit}{'' if x.get('within') else ' 초과'}"
+
+
 def _title(onto, type_name: str) -> str:
     """The property a person reads a record by: the declared title, or else a text property called a name."""
     t = onto.obj(type_name)
@@ -437,7 +459,8 @@ class PagesMixin:
             items.append({"kind": "action", "id": p.id, "title": f"{v['label']} · {v['target_label']} {p.key}",
                           "target": p.target, "key": str(p.key), "by": p.requested_by.id, "by_kind": p.requested_by.kind,
                           "mine": p.requested_by.id == self.who, "change": change, "failed": failed,
-                          "outside": len(outside), "waits": v["waits"]})
+                          "outside": len(outside), "waits": v["waits"],
+                          "delta": " · ".join(_limit_words(v, x) for x in v["limits"])})
         from xgen_space.web.api import GATE_LABEL
         from xgen_space.web.monitor import FINDING
 
@@ -564,6 +587,80 @@ class PagesMixin:
         except ChangeError as e:
             raise ValueError(f"댓글을 남기지 못했습니다. {e}") from None
         return self.change_detail(change_id)
+
+    # ---- what people keep of how they look at things: graph perspectives and where the cards stand ----------------
+
+    def _prefs(self, kind: str, attr: str) -> dict:
+        """Records of one kind from the journal, by name, the last write of each name winning; without a journal,
+        what this session was told."""
+        if getattr(self, attr) is None:
+            out: dict[str, Any] = {}
+            journal = self.studio.changes.journal
+            for r in journal.read() if journal is not None else []:
+                if r.get("kind") == kind and r.get("name"):
+                    if r.get("gone"):
+                        out.pop(r["name"], None)
+                    else:
+                        out[r["name"]] = {k: v for k, v in r.items() if k not in ("kind", "at", "name")}
+            setattr(self, attr, out)
+        return getattr(self, attr)
+
+    def _pref_set(self, kind: str, attr: str, name: str, body: dict | None) -> None:
+        kept = self._prefs(kind, attr)
+        if body is None:
+            kept.pop(name, None)
+        else:
+            kept[name] = body
+        journal = self.studio.changes.journal
+        if journal is not None:
+            journal.write(kind, {"name": name, **({"gone": True} if body is None else body)})
+
+    def graph_views(self) -> dict:
+        """The saved perspectives of the record graph: which types to show, each type's colour and the property that
+        names its records. Shared by everyone on this studio, and kept across a restart when there is a journal."""
+        return plain({"views": self._prefs("view", "_graph_views")})
+
+    def graph_view_save(self, name: str, hide: list, color: dict | None, label: dict | None) -> dict:
+        name = " ".join(str(name or "").split())[:40]
+        if not name:
+            raise ValueError("관점 이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.")
+        o = self.studio.onto
+        hide = [str(t) for t in (hide or []) if str(t) in o.objects]
+        color = {str(t): str(c) for t, c in (color or {}).items() if str(t) in o.objects and re.fullmatch(r"#[0-9a-fA-F]{6}", str(c))}
+        label = {str(t): str(p) for t, p in (label or {}).items() if str(t) in o.objects and str(p) in all_props(o, str(t))}
+        self._pref_set("view", "_graph_views", name, {"hide": hide, "color": color, "label": label, "by": self.who})
+        return self.graph_views()
+
+    def graph_view_forget(self, name: str) -> dict:
+        if str(name) not in self._prefs("view", "_graph_views"):
+            raise LookupError(f"관점 {name}")
+        self._pref_set("view", "_graph_views", str(name), None)
+        return self.graph_views()
+
+    def record_labels(self, type_name: str, keys: list, prop: str) -> dict:
+        """The value of one property for a few records, for a perspective that names records by it."""
+        o = self.studio.onto
+        if type_name not in o.objects or prop not in all_props(o, type_name):
+            raise LookupError(f"{type_name}.{prop}")
+        out = {}
+        for k in [str(x) for x in keys][:60]:
+            row = self.studio.fetch(type_name, k)
+            if row is not None and row.get(prop) not in (None, ""):
+                out[k] = row.get(prop)
+        return plain({"type": type_name, "property": prop, "labels": out})
+
+    def workspace_layout(self, pipeline: str, positions: dict) -> dict:
+        """Where the modelling cards stand, for everyone who opens this pipeline's workspace."""
+        o = self.studio.onto
+        pos = {}
+        for name, p in (positions or {}).items():
+            if str(name) in o.objects and isinstance(p, dict) and isinstance(p.get("x"), (int, float)) and isinstance(p.get("y"), (int, float)):
+                pos[str(name)] = {"x": round(float(p["x"])), "y": round(float(p["y"]))}
+        self._pref_set("layout", "_layouts", str(pipeline or self.pipeline), {"positions": pos, "by": self.who})
+        return {"ok": True, "positions": pos}
+
+    def _layout_of(self) -> dict:
+        return dict((self._prefs("layout", "_layouts").get(self.pipeline) or {}).get("positions") or {})
 
     def _standing_gates(self) -> dict:
         """The pass conditions as the studio meets them before any change, measured once per definition."""
