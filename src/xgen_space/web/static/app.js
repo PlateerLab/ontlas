@@ -64,7 +64,9 @@
   const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
   const TAB_WORD = { mgrules: '규칙', actions: '액션', mgfuncs: '함수', changes: '변경 요청', model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '자산 탐색기', map: '자산 그래프' };
-  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['states', '상태'], ['roles', '권한']]]];
+  // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere (these tables are the workspace's)
+  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['states', '상태'], ['roles', '권한']], [['objects', '객체'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const TABLE_TABS = ['objects', 'props', 'links'];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
   const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
@@ -455,7 +457,7 @@
   const ROLE_WORD = { viewer: '조회', editor: '편집', approver: '승인', admin: '관리' };
 
   try { S.slim = localStorage.getItem('xspace-slim') === '1'; } catch (e) { S.slim = false; }
-  const groupOf = (tab) => NAV_GROUP.find((g) => g[2].includes(tab));
+  const groupOf = (tab) => NAV_GROUP.find((g) => g[2].includes(TABLE_TABS.includes(tab) ? 'model' : tab));
   const BRAND = `<div class="sbrand"><div class="logo">X</div><div class="bname"><b>XGEN Space</b></div></div>`;
 
   function renderTop() {
@@ -502,7 +504,7 @@
       const count = set ? 0 : n[k];
       return `<a class="stab${on ? ' on' : ''}" href="#${(set && S.seen[set[0]]) || k}" data-tabs="${keys.join(' ')}"${on ? ' aria-current="page"' : ''}>${esc(set ? set[0] : tabWord(k))}${count ? `<span class="n">${count}</span>` : ''}</a>`;
     };
-    const seg = here ? `<div class="sseg" role="group" aria-label="${esc(here[0])}">${here[1].map(([k, word]) => `<a class="sitem${S.tab === k ? ' on' : ''}" href="#${k}"${S.tab === k ? ' aria-current="true"' : ''}>${esc(word)}</a>`).join('')}</div>` : '';
+    const seg = here ? `<div class="sseg" role="group" aria-label="${esc(here[0])}">${(here[2] || []).map(([k, word]) => `<a class="sitem" href="#${k}" title="작업 공간의 ${esc(word)} 표로 이동합니다">${esc(word)}<span class="sout" aria-hidden="true">↗</span></a>`).join('')}${here[1].map(([k, word]) => `<a class="sitem${S.tab === k ? ' on' : ''}" href="#${k}"${S.tab === k ? ' aria-current="true"' : ''}>${esc(word)}</a>`).join('')}</div>` : '';
     return `<nav class="stabs" aria-label="${esc(g[1])}">${g[2].map(tab).join('')}${seg}</nav>`;
   }
 
@@ -6234,7 +6236,7 @@ ${controls}${body}`;
   // a link can say what to open on the screen it leads to: #model?el=property:Sku.expires_on&field=column
   function readHash() {
     const [tab, query] = location.hash.slice(1).split('?');
-    if (['objects', 'props', 'links'].includes(tab)) { S.tab = 'model'; S.md.view = 'table'; S.md.table = tab; } else S.tab = tab || 'home';
+    if (TABLE_TABS.includes(tab)) { S.tab = 'model'; S.md.view = 'table'; S.md.table = tab; S.mg.q = ''; S.mg.obj = ''; } else S.tab = tab || 'home';
     S.land = query ? Object.fromEntries(new URLSearchParams(query)) : null;
     S.hit = ''; S.hitDone = '';
     if (!S.land) S.md.hot = null;

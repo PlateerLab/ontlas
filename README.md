@@ -153,7 +153,7 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
 | | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. The same objects, properties and relations as tables, one switch away |
 | | | 온톨로지 | See objects and relations as a graph, and documents as documents, sections and concepts; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | | 정의 관리 | Change states and roles on forms; rules, functions and actions are under 규칙 · 액션, where the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
+| | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables; rules, functions and actions are under 규칙 · 액션, where the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
 | | 라이브러리 · 변경 | 라이브러리 | Apply and remove modules and edit a module's file |
 | | | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
 | 운영 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |

@@ -23,7 +23,7 @@
   remembered. Any one pending edit can be taken back, later edits kept (`manage/revert`), and one taken back made again
   (`manage/redo`). What blocks a change request is said where it is blocked, and pending edits are checked against the source as
   they are made.
-- 객체, 속성 and 관계 tables are a switch on the workspace; 정의 관리 keeps states and roles. Their old addresses open the table view.
+- 객체, 속성 and 관계 tables are a switch on the workspace. 정의 관리 keeps states and roles and leads to each of the three tables; their old addresses open them too.
 - A question brought by a module can take a new expected answer (`update_question`): a module that removes a question and writes it
   itself keeps its own.
 
