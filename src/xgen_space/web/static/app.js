@@ -77,7 +77,7 @@
   const MAP_STORE = new Set(['vector_store', 'graph_store', 'reasoner', 'embedder']);
   const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 객체'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
   const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
-    question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값', function: '함수', metric: '지표', identity: '식별 통합' };
+    question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값', function: '함수', metric: '지표', identity: '식별 통합', conflict: '출처 충돌' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
   // what to do about each kind of finding; the engine's own text stays below it for whoever fixes the source
@@ -440,6 +440,7 @@
   function stale() {
     S.q.res = null; S.d.res = null; S.d.proposal = null; S.d.keys = {}; S.qa = null; S.bind = null; S.obj = null; S.fl = null;
     S.mg.st = null; S.iss.list = null; S.home.box = null;
+    S.home.sug = null; S.q.props = {}; S.md.trial = null;  // read from a definition that is no longer the one shown
   }
 
   // ---- frame ---------------------------------------------------------------------------------------------------
@@ -5094,7 +5095,8 @@ ${controls}${body}`;
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
     add_decision: '결정표 추가', update_parameter: '기준값 변경', add_action: '액션 추가', update_action: '액션 변경', delete_action: '액션 제외',
-    add_role: '역할 추가', update_role: '역할 변경', delete_role: '역할 제외', update_states: '상태 전이 변경' };
+    add_role: '역할 추가', update_role: '역할 변경', delete_role: '역할 제외', update_states: '상태 전이 변경',
+    update_question: '검증 질문 정답 변경', pick_conflict: '출처 선택' };
   const MASK_WORD = { '': '가리지 않음', partial: '일부 가림', full: '전체 가림' };
   const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
   const sqlType = (t) => {
@@ -7211,7 +7213,7 @@ ${controls}${body}`;
     mgopen: () => { S.mg.open = !S.mg.open; render(); },
     mgdiscard: async () => {
       if (!window.confirm('대기 중인 변경을 모두 취소합니다. 표준 모듈과 승인된 변경은 유지됩니다.')) return;
-      try { S.mg.st = await api('manage/discard', {}); S.mg.form = null; S.mg.sel = ''; S.mg.review = null; toast('대기 중인 변경을 취소했습니다.'); } catch (e) { fail(e); }
+      try { S.mg.st = await api('manage/discard', {}); S.mg.form = null; S.mg.sel = ''; S.mg.review = null; S.md.trial = null; toast('대기 중인 변경을 취소했습니다.'); } catch (e) { fail(e); }
       render();
     },
     mgpropose: async () => {

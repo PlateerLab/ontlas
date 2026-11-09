@@ -850,18 +850,19 @@ class Draft:
         def to(n: str) -> str:
             return names.get(n, n)
 
-        def query(q: str) -> str:  # generated queries are named after their objects: listHoewon, daechulPerHoewon
-            for a, b in names.items():
-                q = q.replace(a, b).replace(a[:1].lower() + a[1:], b[:1].lower() + b[1:])
-            return q
-
         objs = [PlannedObject(**{**asdict(o), "name": to(o.name), "properties": o.properties}) for o in self.objects]
         links = [PlannedLink(**{**asdict(lk), "source": to(lk.source), "target": to(lk.target)}) for lk in self.links]
         states = [PlannedStates(**{**asdict(x), "object": to(x.object)}) for x in self.states]
         decisions = {k: {**v, "target": to(v.get("target"))} for k, v in self.decisions.items()}
-        return Draft(self.name, self.label, objs, links, self.tables, self.skipped, self.loaded, self.origin,
-                     self.lang, self.rules, [query(q) for q in self.no_queries], states,
-                     {query(k): v for k, v in self.answers.items()}, decisions, self.terms, self.messages)
+        out = Draft(self.name, self.label, objs, links, self.tables, self.skipped, self.loaded, self.origin,
+                    self.lang, self.rules, [], states, {}, decisions, self.terms, self.messages)
+        # a renamed object renames the queries made from it; both drafts make them in the same order, so the
+        # query in each place is the same query (a name that is already the new one stays as it is)
+        old, new = list(self.queries(dropped=True)), list(out.queries(dropped=True))
+        query = dict(zip(old, new)) if len(old) == len(new) else {}
+        out.no_queries = sorted({query.get(q, q) for q in self.no_queries})
+        out.answers = {query.get(k, k): v for k, v in self.answers.items()}
+        return out
 
     # ---- rules, actions, roles, questions ----
 

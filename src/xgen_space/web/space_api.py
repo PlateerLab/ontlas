@@ -535,13 +535,18 @@ class SpaceMixin:
 
     def conflict_pick(self, cid: str, source: str, reason: str = "") -> dict:
         """A person's pick is a change like any other: it waits in the pending edits and goes through review."""
-        from xgen_space.decide.conflicts import record_pick
+        from xgen_space.manage import EditError
+        from xgen_space.web.api import _edit_text
 
         c = next((x for x in self.studio.onto.source_conflicts() if x.id == cid), None)
         if c is None:
             raise LookupError(f"출처 충돌 {cid}")
-        ws = self._ws()
-        record_pick(ws.module, c, source, by=self.who, reason=str(reason or "")[:200])
+        if source not in {a.source for a in c.answers}:
+            raise ValueError(f"'{source}' is not a source of {c.id}")
+        try:  # an edit, so that taking back an earlier edit does not take the pick with it
+            self._ws().apply("pick_conflict", {"id": cid, "source": source, "by": self.who, "reason": str(reason or "")[:200]})
+        except EditError as e:
+            raise ValueError(_edit_text(str(e))) from None
         return {"ok": True, "pending": True}
 
     def transitions_advance(self) -> dict:

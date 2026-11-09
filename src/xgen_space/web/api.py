@@ -1567,6 +1567,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         for o in d.objects:
             got = english(o.label, words) or english(o.table, words)
             out[o.name] = {"name": got[0], "parts": got[1]} if got else {"name": "", "parts": []}
+        # 주문내역 and 주문상세 both read OrderDetail: a name two objects would share is offered to neither
+        final = [out[o.name]["name"] or o.name for o in d.objects]
+        for o in d.objects:
+            if out[o.name]["name"] and final.count(out[o.name]["name"]) > 1:
+                out[o.name] = {"name": "", "parts": []}
         return out
 
     def draft_table(self, table: str) -> dict:
@@ -1646,8 +1651,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         if not self.pending:
             raise ValueError("생성된 초안이 없어 판정 표를 만들지 못했습니다. 초안을 먼저 생성해 주세요.")
         d0, b, _, _ = self.pending
-        try:
-            d = self._edit(d0, edits)
+        try:  # the page names the target and inputs as the draft found them; new names come last, when it is applied
+            d = self._edit(d0, {k: v for k, v in (edits or {}).items() if k != "names"})
             onto = compose(d.modules(), name=d.name).ontology
             out = induce(b, onto, str(target), [str(x) for x in inputs or []], label=label[:60])
         except (InduceError, ValueError) as e:
@@ -2305,9 +2310,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         return out
 
     def manage_undo(self) -> dict:
+        from xgen_space.manage import UNDO_DEPTH, TooFarBack
+
         ws = self._ws()
-        if ws.undo() is None:
-            raise ValueError("되돌릴 변경이 없습니다.")
+        try:
+            if ws.undo() is None:
+                raise ValueError("되돌릴 변경이 없습니다.")
+        except TooFarBack:
+            raise ValueError(f"최근 {UNDO_DEPTH}개보다 앞선 변경은 하나씩 되돌리지 못합니다. 모두 취소한 뒤 다시 바꿔 주세요.") from None
         return {"ok": True, **self.manage_state()}
 
     def manage_redo(self) -> dict:
@@ -2316,16 +2326,18 @@ class StudioSession(SpaceMixin, PagesMixin):
         try:
             if self._ws().redo() is None:
                 raise ValueError("다시 실행할 변경이 없습니다.")
-        except EditError as e:
+        except (EditError, ModuleError) as e:
             raise ValueError(_edit_text(str(e))) from None
         return {"ok": True, **self.manage_state()}
 
     def manage_revert(self, index: int) -> dict:
         """One pending edit taken back, the ones after it kept."""
-        from xgen_space.manage import EditError
+        from xgen_space.manage import UNDO_DEPTH, EditError, TooFarBack
 
         try:
             self._ws().revert(int(index))
+        except TooFarBack:
+            raise ValueError(f"최근 {UNDO_DEPTH}개보다 앞선 변경은 하나씩 되돌리지 못합니다. 모두 취소한 뒤 다시 바꿔 주세요.") from None
         except EditError as e:
             raise ValueError(f"뒤에 있는 변경({e})이 이 변경에 기대고 있어 되돌리지 못했습니다. 그 변경을 먼저 되돌려 주세요.") from None
         return {"ok": True, **self.manage_state()}

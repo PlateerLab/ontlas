@@ -346,6 +346,7 @@ def trial(studio, modules: list[Module], settings: FlowSettings):
     copy = Studio.from_modules(modules, library=studio.library, now=studio.now, **studio._compose_kw)
     copy.settings = dict(studio.settings)
     copy.entries, copy.actions.caller = studio.entries, studio.actions.caller
+    copy.space = studio.space  # documents do not change with the modules: the copy reads the same ones
     if studio.source:
         copy.backends[studio.source] = studio.backends[studio.source]
         copy.source = studio.source
