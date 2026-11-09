@@ -144,9 +144,9 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 온톨로지 | 도메인 | See objects and relations as a graph, and what is connected to a card gathered around it |
 | | | 문서 | See documents as documents, sections and concepts, and read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | 레코드 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
-| | | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
-| | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
+| | 객체 탐색 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
+| | 그래프 탐색 | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
+| | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back; it and 규칙 · 지표 share one tab, 판정 · 규칙, with a switch |
 | | | 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
 | 구축 | 데이터 가져오기 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, and turn a file's or a folder's embedding on and off |
 | | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
@@ -154,18 +154,22 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
 | | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
 | | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. One switch away, objects, properties and relations stand in three columns: pick an object and the other two follow it, and a row opens for editing where it stands |
-| | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables; rules, functions and actions are under 규칙 · 액션, where the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
-| | 라이브러리 · 변경 | 라이브러리 | Apply and remove modules and edit a module's file |
-| | | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
+| | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables |
+| | 규칙 · 액션 | 규칙 | Head a decision table with its hit policy, change a cell where it stands and move rules by dragging; the form says how the table applies its rules and what the table check finds, and tries the table as edited on a record's or typed values |
+| | | 액션 | Change actions on forms: their inputs, the decision and the state move they need, and whether a person approves them |
+| | | 함수 | Register calculations, decisions and outside models as functions with inputs, outputs, a version and an owner |
+| | 변경 요청 | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
+| | | 라이브러리 | Apply and remove modules and edit a module's file |
 | 운영 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
 | | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| | 데이터 지도 | 탐색기 | Browse everything the space holds as folders, search names, paths, definitions and document text at once, and move, rename and delete files with a trash and a work record |
-| | | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
+| | 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
+| | | DB 대조 | Check the definition against the database |
 | | 저장소 · 연동 | 구성 | See every swappable part as measured on opening |
 | | | 벡터 · 임베딩 | See the embedding model, the vector stores, each document's embedding and whether questions find their documents; see what a change of model embeds again, and change it |
 | | | 외부 연동 | See how MCP, REST and a platform's connection plug the space in |
-| | 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
-| | | DB 대조 | Check the definition against the database |
+| | 데이터 지도 | 자산 탐색기 | Browse everything the space holds as folders, search names, paths, definitions and document text at once, and move, rename and delete files with a trash and a work record |
+| | | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
+| | 사용 안내 | 사용 안내 | Read what each screen is for and how to use it, beside the demo video when one is given |
 
 ## What it looks like
 
@@ -917,7 +921,7 @@ filter or mask it. What the module defines itself is left for a person to fix, s
 is refused. On the page the edits are filed as one change request; a request the trial stops comes back with its
 review (the conditions it failed and what the database check found), and the edits stay to be fixed.
 
-Rules, named values, states, actions and roles go the same way, on forms: 정의 관리 · 규칙 edits a rule's conditions and outcome input by
+Rules, named values, states, actions and roles go the same way, on forms: 규칙 · 액션 › 규칙 edits a rule's conditions and outcome input by
 input, and a rule from a standard is replaced over it (`rules_replace`, `rules_remove`) without touching the standard. Every edit lands in
 the workspace module, is tried on a copy and is approved like any other change. A library keeps its versions: open an earlier one in the
 module editor and file it, and it comes back as a new version. With `--library-write`, what is switched on stays on across a restart; if a

@@ -16,6 +16,7 @@ from xgen_space.model import TYPES, _scope_filter
 from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
+UNDO_DEPTH = 50  # the edits that can each be taken back; each keeps the module as it was before it
 HIT_POLICIES = ("first", "priority", "collect", "unique")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
@@ -32,6 +33,10 @@ FUNCTION_FIELDS = ("label", "description", "runtime", "target", "version", "owne
 
 class EditError(ValueError):
     """The edit cannot be made; the message says why."""
+
+
+class TooFarBack(EditError):
+    """An edit further back than the snapshots kept: it goes with discarding the edits, not one by one."""
 
 
 @dataclass
@@ -54,7 +59,7 @@ class Workspace:
         start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
-        self._before: list[dict] = []  # the module before each edit, to take any one back
+        self._before: list[dict | None] = []  # the module before each edit, to take any one back
         self._undone: list[Edit] = []  # what was taken back and can be made again
         self._base_onto = compose(self.base, **self.kw).ontology
 
@@ -108,6 +113,8 @@ class Workspace:
         edit = Edit(op, target, took, copy.deepcopy(a))
         self.edits.append(edit)
         self._before.append(before)
+        for i in range(len(self._before) - UNDO_DEPTH):  # each snapshot holds every edit before it: keep the last ones
+            self._before[i] = None
         if not again:
             self._undone.clear()
         return edit
@@ -116,6 +123,8 @@ class Workspace:
         """Take back the last edit: the module is as it was before it."""
         if not self.edits:
             return None
+        if self._before[-1] is None:
+            raise TooFarBack(self.edits[-1].target)
         self.module = Module.from_dict(self._before.pop())
         edit = self.edits.pop()
         self._undone.append(edit)
@@ -126,20 +135,26 @@ class Workspace:
         if not self._undone:
             return None
         edit = self._undone.pop()
-        return self.apply(edit.op, edit.args, again=True)
+        try:
+            return self.apply(edit.op, edit.args, again=True)
+        except (EditError, ModuleError):  # it no longer holds: it stays to be made again
+            self._undone.append(edit)
+            raise
 
     def revert(self, index: int) -> Edit:
         """Take back one edit, however far back: the module goes back to before it and the later edits are made again.
         When a later edit leans on it, nothing changes and the message names that edit."""
         if not 0 <= index < len(self.edits):
             raise EditError("edit not found")
+        if self._before[index] is None:
+            raise TooFarBack(self.edits[index].target)
         module, edits, before = self.module, list(self.edits), list(self._before)
         gone, later = edits[index], edits[index + 1:]
         self.module, self.edits, self._before = Module.from_dict(before[index]), edits[:index], before[:index]
         for edit in later:
             try:
                 self.apply(edit.op, edit.args, again=True)
-            except EditError:
+            except (EditError, ModuleError):
                 self.module, self.edits, self._before = module, edits, before
                 raise EditError(edit.target) from None
         self._undone.clear()
@@ -355,10 +370,23 @@ class Workspace:
             if current.decision:
                 mine.update({"decision": current.decision, "key": current.key})
             else:
-                mine.update({"query": current.query, "params": dict(current.params or {})})
+                mine["query"] = current.query
+            if current.params:  # a decision question is decided with its params too (Studio.questions)
+                mine["params"] = dict(current.params)
             own.append(mine)
         mine["expect"] = dict(a.get("expect") or {})
         return f"question:{qid}"
+
+    def _pick_conflict(self, a: dict) -> str:
+        """A person's pick between sources that disagree, kept like any other edit so that it can be taken back."""
+        from xgen_space.decide.conflicts import record_pick
+
+        cid = str(a.get("id") or "")
+        c = next((x for x in self.composed().ontology.source_conflicts() if x.id == cid), None)
+        if c is None:
+            raise EditError(f"conflict '{cid}' is unknown")
+        record_pick(self.module, c, str(a.get("source") or ""), by=str(a.get("by") or ""), reason=str(a.get("reason") or ""))
+        return f"conflict:{cid}"
 
     def _delete_question(self, a: dict) -> str:
         qid = str(a.get("id") or "")

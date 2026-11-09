@@ -89,7 +89,7 @@
   inspector has the form, the object's YAML as the pending edits leave it, which writes back as the same edits
   (`GET element/yaml`, `POST manage/yaml`), what reads it, and comments kept in the journal (`GET element/comments`,
   `POST element/comment`). A property's form says under the field what the definition check would refuse, with the fix
-  as a button. At the foot: the pending edits and what they reach, the last one taken back (`POST manage/undo`), a
+  as a button. In the toolbar: the pending edits and what they reach, the last one taken back (`POST manage/undo`), a
   trial on a copy of the space (`POST manage/trial`) and the change request.
 - 규칙 관리 heads each table with its hit policy (a choice; `update_decision`), its target, its module and the rules
   other modules add; a cell is changed in place; rows move by dragging (`move_rule`). The simulator opens on a record,
@@ -122,13 +122,23 @@
   codes through the library's words), a page at a time. On the graph the start and both ends of a path are found as
   they are typed, Enter takes the best match and draws it, a picked box becomes the path's start, a start the graph does
   not hold yet is drawn first, and a window lists many records by type with paging.
-- 모델링 › 온톨로지 draws the whole ontology as the workspace's cards, every module a region, beside the picked object's
+- 온톨로지 › 도메인 draws the whole ontology as the workspace's cards, every module a region, beside the picked object's
   definition.
-- On 모델링 › 온톨로지 a pressed card gathers what it connects to around it at reading size, in one view: what points at it
+- On 온톨로지 › 도메인 a pressed card gathers what it connects to around it at reading size, in one view: what points at it
   on the left, what it points at on the right, its parent above and its kinds below, on top of the rest of the ontology,
   which stays faint where it was. Another card moves the focus; an empty spot, Esc or 전체 보기 comes back to where the
   person was looking.
 - The README's table of screens follows the new sidebar.
+- Pending edits hold when they are taken back: a later edit that no longer composes leaves them as they were, one that
+  cannot be made again stays to be made, and the last 50 can each be taken back (an older one goes with 모두 취소). A
+  source pick is a pending edit like the others, so taking back an earlier edit keeps it. A question that takes a new
+  expected answer keeps its params.
+- A draft's renamed objects keep their queries' answers and what the review left out, a decision drawn from past
+  outcomes on a draft with English names finds its columns, and an English name two tables would share is suggested
+  to neither.
+- A trial copy reads the same documents, so the document search condition is measured before and after a module is
+  taken off or the edits are tried. 할 일 reads the last measurement instead of taking one, a studio from one ontology
+  file opens 규칙 · 지표 and the simulator again, and a wrong answer is not put down to a missing column its result names.
 
 ## 0.13.0
 

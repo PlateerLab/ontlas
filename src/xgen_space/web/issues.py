@@ -309,7 +309,7 @@ def _accuracy(s, check: dict, gate: dict) -> dict:
     for w in check.get("wrong") or []:
         q = next((x for x in onto.questions if x.id == w["id"]), None)
         items.append({"element": f"question:{w['id']}", "name": w["id"], "label": w.get("text") or w["id"], "row": f"q:{w['id']}", "near": "",
-                      "say": "실행 실패" if w.get("error") else f"기대 {_short(w.get('expected'))}", "evidence": w.get("error") or f"결과 {_short(w.get('got'))}",
+                      "say": "실행 실패" if w.get("error") else f"기대 {_short(w.get('expected'))}", "evidence": w.get("error") or f"결과 {_short(w.get('got'))}", "error": w.get("error") or "",
                       "go": _open_for(q) if q else {"tab": "check", "row": f"q:{w['id']}"}})
     if items:
         fixes.append(_fix("규칙 · 질의 열기", "here", "이 질문이 읽는 규칙이나 질의를 엽니다.", "열기", go=items[0]["go"], steps=_steps(items), recommended=True))
@@ -377,7 +377,7 @@ def _depends(other: dict, queries: set[str], decisions: set[str], questions: set
     if other["kind"] == "query":
         return bool(other["items"]) and all(x["name"] in queries for x in other["items"])
     if other["kind"] in ("check.accuracy", "check.grounded"):
-        return bool(other["items"]) and all(x["name"] in questions or named(x["evidence"]) for x in other["items"])
+        return bool(other["items"]) and all(x["name"] in questions or named(x.get("error")) for x in other["items"])  # an answer is no error
     if other["kind"] == "check.values":
         return named(check.get("value_error"))
     if other["kind"] == "decide":

@@ -463,7 +463,8 @@ class PagesMixin:
             answers = " ↔ ".join(f"{a.source} {', '.join(f'{k} {v}' for k, v in a.says.items())}".strip() for a in c.answers)
             items.append({"kind": "conflict", "id": c.id, "title": c.label or c.id, "decision": c.decision,
                           "detail": answers[:160], "mine": False})
-        bind = (self._standing_measured() or {}).get("bind") or {}
+        # the last measurement anyone took (the board's, or a review's); the list itself never measures
+        bind = (self._measured or (self._standing[2] if self._standing else {})).get("bind") or {}
         warned = [f for f in bind.get("findings") or [] if f.get("severity") in ("warning", "error")]
         if warned:  # what the last check of the source against the definition found, for whoever looks after it
             items.append({"kind": "check", "id": "bind", "title": f"DB 대조 {'오류' if bind.get('errors') else '경고'} {len(warned)}건",
@@ -580,11 +581,6 @@ class PagesMixin:
         self._standing = (sig, got, measured)
         return got
 
-    def _standing_measured(self) -> dict:
-        """What the last standing measurement found, measuring once if nothing has."""
-        self._standing_gates()
-        return self._standing[2] if self._standing else {}
-
     _standing: tuple | None = None
 
     def _element_label(self, el: str, after=None) -> str:
@@ -688,6 +684,8 @@ class PagesMixin:
 
     def _pending_onto(self):
         """The definition as the pending edits leave it, which a table being edited is tried on."""
+        if self.studio.composition is None:  # a studio from one ontology file has no edits waiting
+            return self.studio.onto, False
         ws = self._ws()
         if not ws.dirty:
             return self.studio.onto, False
