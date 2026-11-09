@@ -483,6 +483,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.record_labels(a["type"], str(a.get("keys", "")).split(","), a.get("prop", ""))
                 if route == "graph/views":
                     return s.graph_views()
+                if route == "build/steps":
+                    return s.build_steps()
                 if route == "record/path":
                     return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
                 if route == "element/readers":
