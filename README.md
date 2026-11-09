@@ -142,6 +142,8 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick and edits not filed yet, each saying who asked and what it changes |
 | | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question |
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
+| | 온톨로지 | 도메인 | See objects and relations as a graph, and what is connected to a card gathered around it |
+| | | 문서 | See documents as documents, sections and concepts, and read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
 | | 레코드 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
 | | | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
 | | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
@@ -151,8 +153,7 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 | | | 결과 | See what each file came to, and the one JSON they roll up into |
 | | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
 | | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
-| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. The same objects, properties and relations as tables, one switch away |
-| | | 온톨로지 | See objects and relations as a graph, and documents as documents, sections and concepts; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
+| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them. One switch away, objects, properties and relations stand in three columns: pick an object and the other two follow it, and a row opens for editing where it stands |
 | | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables; rules, functions and actions are under 규칙 · 액션, where the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
 | | 라이브러리 · 변경 | 라이브러리 | Apply and remove modules and edit a module's file |
 | | | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
