@@ -231,6 +231,7 @@ def read_file(data: bytes, source: str, *, max_rows: int = 0, header=None) -> li
 
 # ---- types ---------------------------------------------------------------------------------------------------
 
+_OBJECT_NAME = re.compile(r"[A-Z][A-Za-z0-9]*")
 _INT = re.compile(r"[-+]?(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)")  # no leading zeros: '00123' is a code
 _DEC = re.compile(r"[-+]?(?:\d+|\d{1,3}(?:,\d{3})+)?\.\d+|[-+]?(?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)")
 _DATE = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\.?")
@@ -751,15 +752,17 @@ class Draft:
 
     def revise(self, *, drop: list[str] = (), labels: dict[str, str] | None = None, keys: dict[str, str] | None = None,
                types: dict[str, str] | None = None, values: dict[str, list[str]] | None = None,
-               cardinality: dict[str, str] | None = None, add_links: list[dict] = ()) -> Draft:
+               cardinality: dict[str, str] | None = None, add_links: list[dict] = (),
+               names: dict[str, str] | None = None) -> Draft:
         """A person's edits on top of the draft; the draft itself stays as it was.
 
         drop: object:X, link:y, property:X.p, query:q. labels: object:X, property:X.p, link:y -> label.
         keys: X -> property. types and values: X.p -> type, X.p -> allowed values. cardinality: y -> cardinality.
         add_links: {source, property, target, label?, cardinality?}, joined on the target's key.
+        names: X -> the object's new name, given last, so every other edit still says X.
         """
         labels, keys, types, values = labels or {}, keys or {}, types or {}, values or {}
-        cardinality = cardinality or {}
+        cardinality, rename = cardinality or {}, dict(names or {})
         gone = {e.split(":", 1)[1] for e in drop if e.startswith("object:")}
         cut = {e.split(":", 1)[1] for e in drop if e.startswith("link:")}
         props_gone = {e.split(":", 1)[1] for e in drop if e.startswith("property:")}
@@ -827,9 +830,38 @@ class Draft:
                   and any(p.name == s.property and p.type == "enum" for p in by_name[s.object].properties)]
         decisions = {k: v for k, v in self.decisions.items() if f"decision:{k}" not in drop
                      and v.get("target") in by_name}
+        out = Draft(self.name, self.label, objs, links, self.tables, self.skipped, self.loaded, self.origin,
+                    self.lang, self.rules, no_queries, states, dict(self.answers), decisions, self.terms,
+                    self.messages)
+        return out._renamed(rename) if rename else out
+
+    def _renamed(self, names: dict[str, str]) -> Draft:
+        """The same draft with objects under other names, and every relation, state machine and decision on them."""
+        have = {o.name for o in self.objects}
+        names = {a: b for a, b in names.items() if a in have and b and b != a}
+        for a, b in names.items():
+            if not _OBJECT_NAME.fullmatch(b):
+                raise ValueError(f"{a}: name '{b}' must start with a capital letter and use only letters and digits")
+        after = [names.get(n, n) for n in have]
+        if len(set(after)) != len(after):
+            raise ValueError(f"two objects would be called the same: {sorted(n for n in after if after.count(n) > 1)}")
+        if not names:
+            return self
+        def to(n: str) -> str:
+            return names.get(n, n)
+
+        def query(q: str) -> str:  # generated queries are named after their objects: listHoewon, daechulPerHoewon
+            for a, b in names.items():
+                q = q.replace(a, b).replace(a[:1].lower() + a[1:], b[:1].lower() + b[1:])
+            return q
+
+        objs = [PlannedObject(**{**asdict(o), "name": to(o.name), "properties": o.properties}) for o in self.objects]
+        links = [PlannedLink(**{**asdict(lk), "source": to(lk.source), "target": to(lk.target)}) for lk in self.links]
+        states = [PlannedStates(**{**asdict(x), "object": to(x.object)}) for x in self.states]
+        decisions = {k: {**v, "target": to(v.get("target"))} for k, v in self.decisions.items()}
         return Draft(self.name, self.label, objs, links, self.tables, self.skipped, self.loaded, self.origin,
-                     self.lang, self.rules, no_queries, states, dict(self.answers), decisions, self.terms,
-                     self.messages)
+                     self.lang, self.rules, [query(q) for q in self.no_queries], states,
+                     {query(k): v for k, v in self.answers.items()}, decisions, self.terms, self.messages)
 
     # ---- rules, actions, roles, questions ----
 

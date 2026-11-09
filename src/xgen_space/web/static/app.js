@@ -344,7 +344,8 @@
       lang: 'sparql', text: '', dirty: false, question: '', busy: false },
     d: { name: null, key: null, keys: {}, res: null, proposal: null, params: {}, role: '', audit: [], busy: false },
     qa: null, bind: null, fl: null, files: null, dpos: {}, guide: null,
-    dr: { step: 0, view: 'read', sel: null, busy: false, timer: 0, label: '', dsn: '', rules: null, tables: {}, rev: null, graph: null,
+    dr: { step: 0, view: 'objects', sel: null, busy: false, timer: 0, label: '', dsn: '', rules: null, tables: {}, rev: null, graph: null,
+      choice: {}, names: {}, ok: {}, seen: {}, tbl: {}, pick: '', setup: false, rv: 'bind',
       ed: { drop: {}, labels: {}, keys: {}, types: {}, values: {}, card: {}, add: [] }, add: { source: '', property: '', target: '', label: '' } },
     ed: null, me: null, change: null, changes: null, flset: null, agree: null, ident: null,
     map: { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false, auto: '' },
@@ -2992,16 +2993,11 @@ ${controls}${body}`;
 
   function startDraft() {
     clearInterval(S.dr.timer);
-    Object.assign(S.dr, { step: 0, view: 'read', sel: null, ed: NEW_EDITS(), rev: null, graph: null, add: { source: '', property: '', target: '', label: '' } });
-    S.dpos = {};
-    S.dr.timer = setInterval(() => {
-      const p = S.files && S.files.pending;
-      if (!p) { clearInterval(S.dr.timer); S.dr.timer = 0; return; }
-      S.dr.step = Math.min(S.dr.step + 1, p.steps.length);
-      if (S.dr.step >= p.steps.length) { clearInterval(S.dr.timer); S.dr.timer = 0; }
-      S.dr.view = p.steps[Math.min(S.dr.step, p.steps.length - 1)].id;
-      if (S.tab === 'data') refreshDraft();
-    }, 900);
+    Object.assign(S.dr, { step: 99, view: 'objects', sel: null, ed: NEW_EDITS(), rev: null, graph: null, add: { source: '', property: '', target: '', label: '' },
+      choice: {}, names: {}, ok: {}, seen: {}, tbl: {}, pick: '', setup: false, rv: 'plan', plan: null });
+    S.dpos = {}; S.dr.timer = 0;
+    S.map.auto = ''; S.map.sug = null;
+    if (S.tab === 'data') render();
     requestAnimationFrame(() => { const box = $('#draft'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   }
 
@@ -3009,8 +3005,15 @@ ${controls}${body}`;
 
   function toEdits() {
     const e = S.dr.ed;
+    const p = S.files && S.files.pending, names = {};
+    if (p) {
+      for (const x of p.steps.find((st) => st.id === 'objects').items) {
+        const r = objProposal(p, x);
+        if (r.choice !== 'standard' && r.api && r.api !== r.id) names[r.id] = r.api;
+      }
+    }
     return { drop: Object.keys(e.drop).filter((k) => e.drop[k]), labels: e.labels, keys: e.keys, types: e.types,
-      values: e.values, cardinality: e.card, add_links: e.add };
+      values: e.values, cardinality: e.card, add_links: e.add, names };
   }
 
   let previewTimer = 0;
@@ -3024,10 +3027,8 @@ ${controls}${body}`;
     if (!S.files || !S.files.pending) return;
     try { S.dr.rev = await api('draft/preview', { edits: toEdits() }); } catch (e) { S.dr.rev = { ok: false, issues: [e.message] }; }
     if (S.dr.rev.graph) S.dr.graph = S.dr.rev.graph;
-    const bar = $('#dcheck');
-    if (bar) bar.innerHTML = checkBar();
     const detail = $('#ddetail');
-    if (detail && (S.dr.view === 'yaml' || S.dr.view === 'queries')) detail.innerHTML = stepDetail(S.files.pending, currentStep());
+    if (detail && ['review', 'queries'].includes(reviewStep())) detail.innerHTML = reviewMain(S.files.pending, reviewStep());
     mountDraftGraph();
   }
 
@@ -3075,11 +3076,6 @@ ${controls}${body}`;
     return base + (x.nulls ? ` · 빈 값 ${show(x.nulls)}` : '') + (x.title ? ' · 표시 이름' : '');
   }
 
-  const currentStep = () => {
-    const p = S.files.pending;
-    return S.dr.view === 'yaml' ? { id: 'yaml' } : p.steps.find((x) => x.id === S.dr.view) || p.steps[0];
-  };
-
   function draftContext(p) {
     const nodes = p.graph.nodes;
     const e = S.dr.ed;
@@ -3094,31 +3090,18 @@ ${controls}${body}`;
   const labelInput = (el, value) => `<input type="text" class="inline" data-in="dlab" data-el="${esc(el)}" value="${esc(S.dr.ed.labels[el] ?? value)}">`;
   const options = (items, cur) => items.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('');
 
+  function okCell(x, asks, word) {  // a proposal a person adopts, or one that needed nobody
+    if (S.dr.ed.drop[x.element]) return '<span class="muted">제외</span>';
+    if (!asks || S.dr.ok[x.element]) return '<span class="rvok">채택</span>';
+    return `<button class="btn sm" data-act="dok" data-el="${esc(x.element)}" title="${esc(word)}">확인 · 채택</button>`;
+  }
+
   function stepDetail(p, st) {
     const o = draftContext(p);
     const e = S.dr.ed;
     if (st.id === 'read') {
       return `<table class="tight"><tr><th>파일</th><th>테이블</th><th>행</th><th>컬럼</th><th></th></tr>${st.items.map((x) => `<tr><td>${esc(x.source || '-')}</td><td class="mono">${esc(x.table)}</td><td class="num">${show(x.rows)}</td><td class="num">${x.columns}</td>
         <td class="muted" style="font-size:12px">${x.truncated ? '행 한도까지 읽음 · ' : ''}${x.row_key ? `키 컬럼 없음 · <span class="mono">${esc(x.row_key)}</span> 추가` : ''}</td></tr>`).join('')}</table>`;
-    }
-    if (st.id === 'objects') {
-      const rows = st.items.map((x) => {
-        const id = x.element.split(':')[1];
-        const on = !e.drop[x.element];
-        const sm = standardMatch(x.table);
-        const std = sm ? `<span class="chip sm b" title="${esc(sm.why)}">${esc(sm.label)} · ${esc(sm.object)} ${pct(sm.score)}</span>` : (S.map.sug ? '<span class="muted" style="font-size:12px">일치 없음</span>' : '<span class="muted" style="font-size:12px"><span class="spin"></span></span>');
-        return `<tr class="${on ? '' : 'off'}"><td style="width:28px"><input type="checkbox" data-in="dkeep" data-el="${esc(x.element)}"${on ? ' checked' : ''} aria-label="${esc(x.label)} 포함"></td>
-          <td>${labelInput(x.element, x.label)}<div class="muted mono">${esc(id)}${sm && sm.object !== id ? ` <span class="muted">· 표준 이름 ${esc(sm.object)}</span>` : ''}</div></td>
-          <td class="mono">${esc(x.table)}</td>
-          <td><select class="inline" data-in="dkey" data-obj="${esc(id)}">${options(o.propsOf(id).map((n) => [n, n]), o.keyOf(id))}</select></td>
-          <td>${std}</td>
-          <td class="muted" style="font-size:12px">${e.keys[id] && e.keys[id] !== x.key ? '직접 지정' : why(o, 'object', x)}</td></tr>`;
-      }).join('');
-      const hits = st.items.filter((x) => standardMatch(x.table)).length;
-      const lead = hits ? `<div class="hint b" style="margin-bottom:10px">테이블 ${st.items.length}개 중 ${hits}개가 표준 객체와 일치합니다. 새 객체를 만드는 대신 표준에 연결하면 표준의 객체 이름, 규칙, 질의를 그대로 씁니다. <button class="btn sm primary" data-act="mapgo">표준에 연결 검토</button></div>` : '';
-      const left = (k, text) => { const xs = st.skipped.filter((x) => x.why === k); return xs.length ? `<div class="hint" style="margin-top:10px">${text}: ${xs.map((x) => esc(x.table)).join(', ')}</div>` : ''; };
-      const skipped = left('no_key', '키 컬럼이 없어 제외된 테이블');
-      return `${lead}<table class="tight"><tr><th></th><th>이름</th><th>테이블</th><th>키</th><th>표준과 일치</th><th>근거</th></tr>${rows}</table>${skipped}`;
     }
     if (st.id === 'properties') {
       const items = st.items.filter((x) => !S.dr.sel || x.object === S.dr.sel);
@@ -3134,10 +3117,11 @@ ${controls}${body}`;
           <td class="mono">${esc(o.labelOf(x.object))}.${esc(x.column)}</td>
           <td><select class="inline" data-in="dtype" data-ref="${esc(ref)}">${options(TYPES.map((t) => [t, t]), type)}</select>
             ${type === 'enum' ? `<input type="text" class="inline wide" data-in="dvalues" data-ref="${esc(ref)}" value="${esc(vals)}" placeholder="허용값, 쉼표로 구분">` : ''}</td>
-          <td class="muted" style="font-size:12px">${isKey ? '키' : (e.types[ref] && e.types[ref] !== x.type ? '직접 지정' : why(o, 'property', x))}</td></tr>`;
+          <td class="muted" style="font-size:12px">${isKey ? '키' : (e.types[ref] && e.types[ref] !== x.type ? '직접 지정' : why(o, 'property', x))}</td>
+          <td>${okCell(x, x.type === 'enum' && !isKey, '허용값 추정')}</td></tr>`;
       }).join('');
       const filter = S.dr.sel ? `<div class="hint" style="margin-bottom:8px">${esc(o.labelOf(S.dr.sel))} 속성만 표시합니다. <button class="chip sm" data-act="dsel">전체 보기</button></div>` : '';
-      return `${filter}<table class="tight"><tr><th></th><th>속성</th><th>원천 컬럼</th><th>타입</th><th>근거</th></tr>${rows}</table>`;
+      return `${filter}<table class="tight"><tr><th></th><th>속성</th><th>원천 컬럼</th><th>타입</th><th>근거</th><th>상태</th></tr>${rows}</table>`;
     }
     if (st.id === 'links') {
       const card = (cur, name, fixed) => `<select class="inline" data-in="dcard" data-link="${esc(name)}"${fixed ? ' disabled' : ''}>${options(Object.entries(CARD), cur)}</select>`;
@@ -3146,7 +3130,8 @@ ${controls}${body}`;
         const on = !e.drop[x.element];
         return `<tr class="${on ? '' : 'off'}"><td style="width:28px"><input type="checkbox" data-in="dkeep" data-el="${esc(x.element)}"${on ? ' checked' : ''} aria-label="${esc(x.label)} 포함"></td>
           <td>${labelInput(x.element, x.label)}<div class="muted">${esc(o.labelOf(x.from))} → ${esc(o.labelOf(x.to))} <span class="mono">${esc(name)}</span></div></td>
-          <td>${card(e.card[name] || x.cardinality, name, !!x.via)}</td><td class="muted" style="font-size:12px">${why(o, 'link', x)}</td></tr>`;
+          <td>${card(e.card[name] || x.cardinality, name, !!x.via)}</td><td class="muted" style="font-size:12px">${why(o, 'link', x)}</td>
+          <td>${okCell(x, x.why !== 'foreign_key' && !x.via, '값으로 추론')}</td></tr>`;
       }).join('');
       const added = e.add.map((a, i) => `<tr><td></td><td><b>${esc(a.label || o.labelOf(a.target))}</b><div class="muted">${esc(o.labelOf(a.source))}.${esc(a.property)} → ${esc(o.labelOf(a.target))}</div></td>
         <td>${esc(CARD[a.cardinality] || a.cardinality)}</td><td class="muted" style="font-size:12px">직접 추가 <button class="chip sm" data-act="dadddel" data-i="${i}">삭제</button></td></tr>`).join('');
@@ -3223,70 +3208,222 @@ ${controls}${body}`;
     if (S.tab === 'data') render();
   }
 
-  function mappingCard() {
+  function standardsCard() {  // which standards a draft is compared with, table by table
     const m = S.map;
     if (!m.standards) { mapLoad(); return ''; }
     if (!m.standards.length) return '';
-    const picks = m.standards.map((s) => `<label class="tick"><input type="checkbox" data-in="mpick" data-v="${esc(s.name)}"${m.picked.includes(s.name) ? ' checked' : ''}>${esc(s.label)} <span class="muted" style="font-size:11.5px">${esc(s.kind_label)}</span></label>`).join('');
-    let body = '';
-    const sg = m.sug;
-    if (sg && sg.ok) {
-      const tables = sg.tables.map((x) => x.table);
-      const rows = sg.objects.map((x) => {
-        const table = m.edits.objects[x.object] === undefined ? x.table : m.edits.objects[x.object];
-        const here = sg.tables.find((y) => y.table === table) || { columns: [], names: {} };
-        const colsOf = here.columns;
-        const cols = x.columns.map((c) => {
-          const cur = m.edits.columns[`${x.object}.${c.property}`] === undefined ? c.column : m.edits.columns[`${x.object}.${c.property}`];
-          return `<div class="mrow"><span>${esc(c.label)} <span class="muted mono">${esc(c.property)}</span></span><select class="inline" data-in="mcol" data-ref="${esc(x.object + '.' + c.property)}"><option value="">없음</option>${colsOf.map((n) => `<option value="${esc(n)}"${n === cur ? ' selected' : ''}>${esc(here.names[n] || n)}</option>`).join('')}</select><span class="muted" style="font-size:11.5px">${esc(c.why)}</span></div>`;
-        }).join('');
-        return `<tr class="${table ? '' : 'off'}"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.object)}</div></td>
-          <td><select class="inline" data-in="mobj" data-obj="${esc(x.object)}"><option value="">제외</option>${tables.map((n) => `<option value="${esc(n)}"${n === table ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select><div class="muted" style="font-size:11.5px;margin-top:3px">점수 ${pct(x.score)} · ${esc(x.why)}</div></td>
-          <td>${cols}${x.missing.length ? `<div class="muted" style="font-size:11.5px;margin-top:4px">테이블에 없는 속성(제외): ${esc(x.missing.map((y) => y.label).join(', '))}</div>` : ''}${x.extra.length ? `<div class="muted" style="font-size:11.5px">표준에 없는 컬럼: ${esc(x.extra.join(', '))}</div>` : ''}</td></tr>`;
-      }).join('');
-      const links = Object.entries(sg.links).map(([k, v]) => `<span class="chip sm">${esc(k)} · ${esc(v.why)}</span>`).join('');
-      body = `<table class="tight" style="margin-top:12px"><tr><th>표준 객체</th><th>테이블</th><th>속성 ↔ 컬럼</th></tr>${rows}</table>
-        ${links ? `<div class="sec">관계</div><div class="chips">${links}</div>` : ''}
-        ${sg.unmatched_tables.length ? `<div class="hint" style="margin-top:8px">표준에 대응하지 않은 테이블: ${esc(sg.unmatched_tables.join(', '))}</div>` : ''}
-        ${sg.unbound_objects.length ? `<div class="hint">연결할 테이블이 없는 표준 객체: ${esc(sg.unbound_objects.map((y) => y.label).join(', '))}. 이 객체를 사용하는 질의는 제외됩니다.</div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-act="mapapply"${m.busy ? ' disabled' : ''}>표준에 연결해 적용</button></div>`;
-    } else if (sg && !sg.ok) body = `<div class="banner no" style="margin-top:10px"><div class="why">${esc(sg.error)}</div></div>`;
-    return `<div class="card" id="mapcard"><div class="ch">표준에 연결<div class="right muted" style="font-weight:600;font-size:12px">새 객체 대신 표준 정의에 Binding</div></div><div class="cb">
-      <div class="chips">${picks}</div><button class="btn sm" data-act="mapsuggest" style="margin-top:10px"${m.picked.length && !m.busy ? '' : ' disabled'}>${m.busy ? '<span class="spin"></span>처리 중' : '연결 제안'}</button>
-      <div class="hint" style="margin-top:6px">테이블과 컬럼을 표준 객체와 속성에 이름, 라벨, 타입, 허용값, 키 기준으로 연결합니다. 제안을 확인하고 수정한 뒤 적용하세요.</div>${body}</div></div>`;
+    const picks = m.standards.map((x) => `<label class="tick"><input type="checkbox" data-in="mpick" data-v="${esc(x.name)}"${m.picked.includes(x.name) ? ' checked' : ''}>${esc(x.label)} <span class="muted" style="font-size:11.5px">${esc(x.kind_label)}</span></label>`).join('');
+    return `<div class="card"><div class="ch">비교할 표준</div><div class="cb"><div class="chips">${picks}</div>
+      <div class="hint" style="margin-top:8px">초안의 테이블마다 이 표준의 객체와 이름, 컬럼, 타입, 허용값, 키를 비교합니다. 맞는 테이블은 새 객체 대신 표준 객체에 연결할 수 있습니다.</div></div></div>`;
   }
 
-  function checkBar() {
-    const p = S.files.pending;
-    const r = S.dr.rev;
-    const done = S.dr.step >= p.steps.length;
-    const issues = r && r.issues ? r.issues : [];
-    const c = (r && r.counts) || { objects: p.steps[1].items.length, links: p.steps[3].items.length, properties: p.steps[2].items.length, queries: p.steps[4].items.length };
-    const list = issues.length ? `<div class="banner no" style="margin:0 0 12px"><span class="ic x" style="width:24px;height:24px">!</span><div><div class="big" style="font-size:14px">정의 검사 오류 ${issues.length}건</div><div class="loglist">${issues.slice(0, 8).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div></div>` : '';
-    return `${list}<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <div class="chips" style="flex:1;min-width:240px"><span class="chip">객체 ${c.objects}</span><span class="chip">관계 ${c.links}</span><span class="chip">속성 ${c.properties}</span><span class="chip">질의 ${c.queries}</span>${issues.length ? '' : '<span class="chip ok">✓ 정의 검사 통과</span>'}</div>
-      <span class="muted" style="font-size:12.5px">적용하면 새 파이프라인으로 추가됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.</span>
-      <button class="btn primary" data-act="dapply"${done && c.objects && !issues.length && !S.dr.busy ? '' : ' disabled'}>스페이스에 적용</button></div>`;
+  // ---- the draft as a review: each table a proposal to adopt, bound to a standard or kept as a new object ------------
+
+  const MATCH_SURE = 0.85;  // a standard match this close is adopted unless a person says otherwise
+  const REVIEW = [['read', '파일 · 테이블'], ['objects', '객체 · 키'], ['properties', '속성 · 타입'], ['links', '관계'], ['queries', '질의'], ['rules', '상태 · 규칙'], ['review', '검토 · 적용']];
+  const reviewStep = () => (REVIEW.some((x) => x[0] === S.dr.view) ? S.dr.view : 'objects');
+  const shortModule = (label) => String(label || '').replace(/\s*온톨로지$/, '').replace(/^이커머스\s+/, '');
+
+  function stdNames() {
+    const sg = S.map.sug;
+    return sg && sg.ok ? new Set([...sg.objects.map((o) => o.object), ...sg.unbound_objects.map((o) => o.name)]) : new Set();
+  }
+
+  function objProposal(p, x) {
+    const id = x.element.split(':')[1];
+    const sm = standardMatch(x.table);
+    const choice = S.dr.choice[x.table] || (sm && sm.score >= MATCH_SURE ? 'standard' : (sm ? '' : 'new'));
+    const sug = (p.names || {})[id] || { name: '', parts: [] };
+    const typed = S.dr.names[id];
+    const api = choice !== 'new' && sm ? sm.object : (typed || sug.name || id);
+    const clash = choice === 'new' && stdNames().has(api);
+    const roman = choice === 'new' && !typed && !sug.name;
+    const status = S.dr.ed.drop[x.element] ? 'off' : (!choice || clash || (roman && !S.dr.ok[x.element])) ? 'check' : 'ok';
+    return { id, x, sm, choice, api, sug, typed, clash, roman, status };
+  }
+
+  function stepChecks(p, st) {  // what a person has not settled yet in a step
+    const e = S.dr.ed;
+    if (st.id === 'objects') return st.items.filter((x) => objProposal(p, x).status === 'check').length;
+    if (st.id === 'properties') return st.items.filter((x) => x.type === 'enum' && !x.key && !e.drop[x.element] && !e.drop[`object:${x.object}`] && !S.dr.ok[x.element]).length;
+    if (st.id === 'links') return st.items.filter((x) => x.why !== 'foreign_key' && !x.via && !e.drop[x.element] && !S.dr.ok[x.element]).length;
+    return 0;
+  }
+
+  function stepTotal(st) {
+    const n = st.items.length;
+    return `${n}개`;
+  }
+
+  function reviewSteps(p) {
+    const cur = reviewStep();
+    return `<nav class="rvsteps" aria-label="초안 검토 단계">${REVIEW.map(([id, word], i) => {
+      const st = p.steps.find((s) => s.id === id);
+      const n = st ? stepChecks(p, st) : 0;
+      const done = S.dr.seen[id] && !n && id !== cur;
+      const tail = id === 'review' ? '' : (n ? ` · 확인 ${n}` : (st ? ` · ${stepTotal(st)}` : ''));
+      return `${i ? '<i class="rvline" aria-hidden="true"></i>' : ''}<button class="rvstep${id === cur ? ' on' : ''}${n ? ' warn' : ''}${done ? ' done' : ''}" data-act="dview" data-view="${id}"${id === cur ? ' aria-current="step"' : ''}>${done ? '✓ ' : ''}${word}${tail}</button>`;
+    }).join('')}</nav>`;
+  }
+
+  function objectsReview(p, st) {
+    const o = draftContext(p);
+    const read = p.steps.find((s) => s.id === 'read').items;
+    const rows = st.items.map((x) => objProposal(p, x));
+    const colOf = Object.fromEntries(p.steps.find((s) => s.id === 'properties').items.map((x) => [x.element.slice(9), x.column]));
+    const word = { ok: '<span class="rvok">채택</span>', check: '<span class="rvwarn">확인</span>', off: '<span class="muted">제외</span>' };
+    const tr = rows.map((r) => {
+      const { x, sm, id } = r;
+      const src = read.find((y) => y.table === x.table) || {};
+      const std = sm ? `<span class="chip sm${r.choice === 'standard' ? ' b' : ''}" title="${esc(sm.why)}">${esc(shortModule(sm.module_label) || '표준')} · ${esc(sm.label)} ${Math.round(sm.score * 100)}%</span>${r.choice === 'new' ? '<div class="muted" style="font-size:11px">새 객체로 유지</div>' : ''}`
+        : (S.map.sug ? '<span class="muted" style="font-size:12px">일치 없음</span>' : '<span class="spin"></span>');
+      const name = r.choice !== 'new' && sm ? `<span class="mono">${esc(r.api)}</span>`
+        : `<input type="text" class="inline mono" data-in="dapi" data-obj="${esc(id)}" value="${esc(r.api)}" aria-label="${esc(x.label)} API 이름" style="width:150px">`;
+      const nameWhy = r.choice === 'standard' ? '표준 객체 이름' : !r.choice ? '표준에 연결하면 쓰는 이름' : r.typed ? '직접 입력' : r.sug.name ? r.sug.parts.map(([k, v]) => `${k}=${v}`).join(' + ') : '로마자 표기 · 이름 확인';
+      const keyWhy = x.why === 'primary_key' ? '선언된 기본 키' : x.why === 'unique' ? `고유 ${show(x.rows)}/${show(x.rows)}` : why(o, 'object', x);
+      const pick = `data-act="dpick" data-t="${esc(x.table)}"`;
+      return `<tr class="${r.status === 'off' ? 'off' : ''}${S.dr.pick === x.table ? ' sel' : ''}">
+        <td style="width:28px"><input type="checkbox" data-in="dkeep" data-el="${esc(x.element)}"${r.status === 'off' ? '' : ' checked'} aria-label="${esc(x.label)} 포함"></td>
+        <td ${pick} class="rvpick">${esc(src.source || x.table)}<div class="muted mono">${show(x.rows)}행</div></td>
+        <td>${labelInput(x.element, x.label)}${r.choice === 'standard' && sm && sm.label !== x.label ? `<div class="muted" style="font-size:11.5px">→ <b>${esc(sm.label)}</b></div>` : ''}</td>
+        <td>${name}<div class="muted" style="font-size:11px">${esc(nameWhy)}</div>${r.clash ? '<div class="rvbad">표준 객체 이름과 같습니다</div>' : ''}</td>
+        <td><select class="inline" data-in="dkey" data-obj="${esc(id)}">${options(o.propsOf(id).map((n) => [n, colOf[`${id}.${n}`] || n]), o.keyOf(id))}</select><div class="muted" style="font-size:11px">${S.dr.ed.keys[id] && S.dr.ed.keys[id] !== x.key ? '직접 지정' : esc(keyWhy)}</div></td>
+        <td ${pick} class="rvpick">${std}</td><td ${pick} class="rvpick">${word[r.status]}</td></tr>`;
+    }).join('');
+    const left = st.skipped.filter((x) => x.why === 'no_key');
+    return `<table class="tight rvtable"><tr><th></th><th>원천</th><th>객체 이름</th><th>API 이름</th><th>키</th><th>표준과 일치</th><th>상태</th></tr>${tr}</table>
+      ${left.length ? `<div class="hint" style="margin-top:10px">키 컬럼이 없어 제외된 테이블: ${left.map((x) => esc(x.table)).join(', ')}</div>` : ''}`;
+  }
+
+  async function loadDraftTable(table) {
+    S.dr.tbl[table] = null;
+    try { S.dr.tbl[table] = await api('draft/table', { table }); } catch (e) { S.dr.tbl[table] = { error: e.message }; }
+    if (S.tab === 'data') refreshDraft();
+  }
+
+  function bar(label, v, text) {
+    return `<div class="rvbar"><span>${esc(label)}</span><i><b style="width:${Math.max(2, Math.round(Math.min(1, v) * 100))}%"></b></i><span class="mono">${esc(text)}</span></div>`;
+  }
+
+  function objectSide(p, st) {
+    const rows = st.items.map((x) => objProposal(p, x));
+    const r = rows.find((y) => y.x.table === S.dr.pick) || rows.find((y) => y.status === 'check') || rows[0];
+    if (!r) return '';
+    const t = S.dr.tbl[r.x.table];
+    if (t === undefined) loadDraftTable(r.x.table);
+    const sm = r.sm;
+    const title = r.choice === 'standard' && sm ? `${esc(r.x.table)} → ${esc(sm.label)}(${esc(sm.object)})`
+      : !r.choice && sm ? `${esc(r.x.table)} → ${esc(sm.label)}에 연결할까요?` : `${esc(r.x.table)} → 새 객체 ${esc(r.api)}`;
+    let sample = '<div class="empty" style="padding:10px"><span class="spin"></span>행을 읽는 중입니다.</div>';
+    let facts = '';
+    if (t && t.error) sample = `<div class="hint warn">${esc(t.error)}</div>`;
+    else if (t) {
+      const cols = t.columns.slice(0, 5);
+      sample = t.sample.length ? `<div class="scroll"><table class="tight rvsample"><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${t.sample.map((row) => `<tr>${cols.map((c, i) => `<td>${show(row[i])}</td>`).join('')}</tr>`).join('')}</table></div>` : '<div class="muted">행이 없습니다.</div>';
+      const k = t.key;
+      const keySay = k.why === 'primary_key' ? '선언된 기본 키입니다' : (k.nulls === 0 && k.distinct === t.rows ? `${show(t.rows)}행 모두 값이 있고 서로 다릅니다` : `${show(t.rows)}행 중 서로 다른 값 ${show(k.distinct)}개, 빈 값 ${show(k.nulls)}개`);
+      const chips = [...t.personal.map((c) => `<span class="chip sm warn">${esc(c)} · 가림 권장</span>`),
+        ...t.profile.filter((c) => c.values).map((c) => `<span class="chip sm">${esc(c.name)} · 허용값 ${c.values}개</span>`)];
+      facts = `<div class="rvfacts"><div><b>키 근거</b> · <span class="mono">${esc(k.column)}</span> ${esc(keySay)}</div>`;
+      if (sm) {
+        const n = sm.columns.length, all = n + sm.missing.length;
+        const form = n ? sm.columns.reduce((a, c) => a + c.score, 0) / n : 0;
+        facts += `<div><b>일치 근거</b> · ${esc(sm.why)}</div>${bar('이름 · 용어사전', sm.name_score, sm.name_score.toFixed(2))}${bar('속성 일치', all ? n / all : 0, `${n}/${all}`)}${bar('값 형태', form, form.toFixed(2))}`;
+        if (sm.missing.length) facts += `<div class="muted" style="font-size:12px">테이블에 없는 표준 속성: ${esc(sm.missing.map((y) => y.label).join(', '))}</div>`;
+      } else facts += `<div class="muted">표준 모듈에 맞는 객체가 없어 새 객체로 만듭니다.${r.sug.name ? ` 이름은 ${esc(r.sug.parts.map(([a, b]) => `${a}=${b}`).join(' + '))}로 지었습니다.` : ''}</div>`;
+      if (r.roman) facts += '<div class="hint warn" style="margin:0">이름에 모르는 단어가 있어 로마자로 표기했습니다. API 이름을 고치거나 이대로 채택해 주세요.</div>';
+      facts += chips.length ? `<div class="chips">${chips.join('')}</div>` : '';
+      facts += '</div>';
+    }
+    const t0 = esc(r.x.table);
+    const acts = sm ? `<button class="btn sm${r.choice === 'standard' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="standard">${esc(sm.label)}에 연결</button><button class="btn sm${r.choice === 'new' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="new">새 객체로 유지</button>`
+      : `<button class="btn sm${r.status === 'ok' ? '' : ' primary'}" data-act="dchoose" data-t="${t0}" data-c="new">${r.roman ? '이 이름으로 채택' : '새 객체로 채택'}</button>`;
+    return `<div class="card"><div class="ch">${title}</div><div class="cb">${sample}</div><div class="cb rvline2">${facts}</div><div class="cb rvline2"><div class="chips">${acts}</div></div></div>`;
+  }
+
+  function reviewMain(p, cur) {
+    if (cur === 'objects') return objectsReview(p, p.steps.find((s) => s.id === 'objects'));
+    if (cur === 'review') return reviewPlan(p);
+    return stepDetail(p, p.steps.find((s) => s.id === cur));
+  }
+
+  function reviewChoices(p) {
+    const rows = p.steps.find((x) => x.id === 'objects').items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
+    return Object.fromEntries(rows.map((r) => [r.x.table, r.choice]));
+  }
+
+  async function loadPlan() {
+    const p = S.files.pending, body = { standard: S.map.picked, edits: toEdits(), choices: reviewChoices(p) };
+    const sig = JSON.stringify(body);
+    if (S.dr.plan && S.dr.plan.sig === sig) return;
+    S.dr.plan = { sig, busy: true };
+    let got;
+    try { got = await api('draft/review/preview', body); } catch (e) { got = { ok: false, issues: [e.message] }; }
+    if (S.dr.plan.sig !== sig) return;
+    S.dr.plan = { sig, ...got };
+    if (S.tab === 'data' && reviewStep() === 'review') refreshDraft();
+  }
+
+  // what applying will do, table by table, with the module files it writes and what the definition check says of them
+  function reviewPlan(p) {
+    loadPlan();
+    const plan = S.dr.plan || { busy: true };
+    const rows = p.steps.find((x) => x.id === 'objects').items.map((x) => objProposal(p, x));
+    const read = p.steps.find((x) => x.id === 'read').items;
+    const to = (r) => (r.status === 'off' ? '<span class="muted">제외</span>'
+      : r.choice === 'standard' && r.sm ? `<span class="chip sm b">표준에 연결</span> ${esc(r.sm.label)} <span class="mono muted">${esc(r.sm.object)}</span> <span class="muted">· ${esc(shortModule(r.sm.module_label))}</span>`
+        : !r.choice ? '<span class="rvwarn">정하지 않음</span>' : `<span class="chip sm">새 객체</span> ${esc(S.dr.ed.labels[r.x.element] || r.x.label)} <span class="mono muted">${esc(r.api)}</span>`);
+    const table = `<table class="tight"><tr><th>원천</th><th>적용 결과</th><th>상태</th></tr>${rows.map((r) => `<tr class="${r.status === 'off' ? 'off' : ''}"><td>${esc((read.find((y) => y.table === r.x.table) || {}).source || r.x.table)}</td><td>${to(r)}</td><td>${{ ok: '<span class="rvok">채택</span>', check: '<span class="rvwarn">확인</span>', off: '' }[r.status]}</td></tr>`).join('')}</table>`;
+    const issues = plan.issues || [];
+    const check = plan.busy ? '<span class="chip"><span class="spin"></span>정의 검사 중</span>'
+      : issues.length ? `<div class="banner no" style="margin:0"><span class="ic x" style="width:24px;height:24px">!</span><div><div class="big" style="font-size:14px">정의 검사 오류 ${issues.length}건</div><div class="loglist">${issues.slice(0, 8).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div></div>`
+        : '<span class="chip ok">✓ 정의 검사 통과</span>';
+    const v = S.dr.rv === 'yaml' ? 'yaml' : 'plan';
+    const tabs = [['plan', '적용할 내용'], ['yaml', '정의 파일']].map(([k, w]) => `<button class="${v === k ? 'on' : ''}" data-act="drv" data-k="${k}">${w}</button>`).join('');
+    const mods = plan.modules || [];
+    const files = mods.map((m) => `<div class="sec">${esc(m.label)} <span class="muted mono">${esc(m.name)}</span></div><pre class="code" style="max-height:360px;overflow:auto">${esc(m.yaml)}</pre>`).join('') || '<div class="empty"><span class="spin"></span></div>';
+    return `<div class="chips" style="align-items:center">${check}</div><div class="seg" style="margin:14px 0 10px;width:max-content">${tabs}</div>${v === 'yaml' ? files : table}`;
+  }
+
+  function reviewFoot(p) {
+    const cur = reviewStep(), i = REVIEW.findIndex((s) => s[0] === cur);
+    const next = REVIEW[i + 1];
+    const st = p.steps.find((s) => s.id === cur);
+    const left = st ? stepChecks(p, st) : 0;
+    let say;
+    if (cur === 'objects') {
+      const rows = st.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
+      const ok = rows.filter((r) => r.status === 'ok').length, std = rows.filter((r) => r.choice === 'standard').length;
+      say = `<b>${rows.length}개 중 ${ok}개 채택${rows.length - ok ? ` · ${rows.length - ok}개 확인 필요` : ''}</b><span class="muted">표준에 연결 ${std} · 새 객체 ${rows.length - std}</span>`;
+    } else if (cur === 'review') {
+      const os = p.steps.find((s) => s.id === 'objects');
+      const n = os.items.filter((x) => objProposal(p, x).status === 'check').length;
+      say = n ? `<b class="rvwarn">객체 · 키 단계에 확인할 테이블 ${n}개가 남았습니다</b>` : '<b>모든 제안을 검토했습니다</b><span class="muted">적용하면 새 파이프라인으로 추가됩니다</span>';
+    } else say = left ? `<b>확인 필요 ${left}</b><span class="muted">${esc(STEP[cur][1])}</span>` : `<b>${esc(STEP[cur][0])} · 확인할 제안 없음</b><span class="muted">${esc(STEP[cur][1])}</span>`;
+    const nst = next && p.steps.find((s) => s.id === next[0]);
+    const hint = nst ? `<span class="muted">다음 단계에서 ${esc(REVIEW[i + 1][1])} ${esc(stepTotal(nst))}를 검토합니다</span>` : '';
+    const all = left ? '<button class="btn" data-act="dokall">남은 제안 모두 채택</button>' : '';
+    const go = next ? `<button class="btn primary" data-act="dview" data-view="${next[0]}">다음: ${next[1]}</button>`
+      : `<button class="btn primary" data-act="dapply"${S.dr.busy || !S.dr.plan || S.dr.plan.busy || (S.dr.plan.issues || []).length ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>적용 중' : '스페이스에 적용'}</button>`;
+    return `<div class="rvfoot">${say}${hint}<span style="flex:1"></span>${all}${go}</div>`;
   }
 
   function draftBody() {
     const p = S.files.pending;
-    if (!S.dr.timer && S.dr.step === 0) { S.dr.step = p.steps.length; S.dr.view = p.steps[p.steps.length - 1].id; }  // a draft made before the page was opened again
-    const done = S.dr.step >= p.steps.length;
-    const steps = p.steps.map((st, i) => {
-      const state = i < S.dr.step ? 'done' : (i === S.dr.step ? 'now' : 'wait');
-      return `<button class="dstep ${state}${S.dr.view === st.id ? ' on' : ''}" data-act="dview" data-view="${st.id}"${state === 'wait' ? ' disabled' : ''}>
-        <span class="ic ${state === 'done' ? 'y' : ''}">${state === 'done' ? '✓' : i + 1}</span><span><b>${STEP[st.id][0]}</b><span class="muted">${state === 'wait' ? '' : stepCount(st)}</span></span></button>`;
-    }).join('') + `<button class="dstep ${done ? 'done' : 'wait'}${S.dr.view === 'yaml' ? ' on' : ''}" data-act="dview" data-view="yaml"${done ? '' : ' disabled'}><span class="ic">{ }</span><span><b>정의 파일</b><span class="muted">${done ? `모듈 ${p.modules.length}개` : ''}</span></span></button>`;
-    const cur = currentStep();
-    const curTitle = cur.id === 'yaml' ? ['정의 파일', '정의 모듈, Binding 모듈'] : STEP[cur.id];
-    return `<div class="grid" style="grid-template-columns:240px minmax(0,1fr);align-items:start">
-      <div class="card"><div class="ch">생성 단계</div><div class="cb dsteps">${steps}</div></div>
-      <div class="card"><div class="ch">${esc(p.label)} 초안<div class="right legend"><span><i class="fill"></i>객체</span><span>→ 관계</span></div></div>
-        <div class="cb" style="padding:0;position:relative"><div class="kg" id="dgraph" style="height:420px"></div><div class="kg-tip">${done ? 'Node를 선택하면 속성이 표시됩니다' : esc(STEP[p.steps[Math.min(S.dr.step, p.steps.length - 1)].id][1])}</div></div></div>
-    </div>
-    <div class="card"><div class="ch">${curTitle[0]}<div class="right muted" style="font-weight:600;font-size:12px">${curTitle[1]}</div></div><div class="cb scroll" id="ddetail" style="max-height:520px">${stepDetail(p, cur)}</div></div>
-    <div class="card"><div class="cb" id="dcheck">${checkBar()}</div></div>`;
+    if (S.dr.step < p.steps.length) S.dr.step = p.steps.length;
+    const cur = reviewStep();
+    S.dr.seen[cur] = true;
+    const read = p.steps.find((s) => s.id === 'read').items;
+    const files = new Set(read.map((x) => x.source || x.table)).size;
+    const std = S.map.picked.map((n) => ((S.map.standards || []).find((x) => x.name === n) || { label: n }).label);
+    const meta = `${esc(S.st.repository.label)} · 파일 ${files}개 · ${show(read.reduce((a, x) => a + x.rows, 0))}행${std.length ? ` · ${esc(std.join(', '))}와 비교함` : ''}`;
+    const side = cur === 'objects' ? objectSide(p, p.steps.find((s) => s.id === 'objects'))
+      : `<div class="card"><div class="ch">초안 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span>→ 관계</span></div></div><div class="cb" style="padding:0;position:relative"><div class="kg" id="dgraph" style="height:420px"></div><div class="kg-tip">Node를 선택하면 속성이 표시됩니다</div></div></div>`;
+    return `<div class="rvhead"><div><h2>${esc(p.label)} 초안</h2><div class="sub">${meta}</div></div><button class="btn sm" data-act="dsetup" aria-expanded="${!!S.dr.setup}">${S.dr.setup ? '설정 닫기' : '생성 설정'}</button></div>
+      ${reviewSteps(p)}
+      <div class="grid rvgrid"><div class="card"><div class="ch">${cur === 'objects' ? '원천 테이블 → 객체' : esc(cur === 'review' ? '검토 · 적용' : STEP[cur][0])}<div class="right muted" style="font-weight:600;font-size:12px">${cur === 'objects' ? '행을 고르면 오른쪽에 샘플과 근거가 보입니다' : esc(cur === 'review' ? '적용할 내용, 정의 파일' : STEP[cur][1])}</div></div>
+        <div class="cb scroll" id="ddetail">${reviewMain(p, cur)}</div></div><div class="hcol">${side}</div></div>
+      ${reviewFoot(p)}`;
   }
 
   function rulesCard(f) {
@@ -3330,8 +3467,10 @@ ${controls}${body}`;
       ${list}${defs}${defHint}
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
         <button class="btn primary" data-act="draft"${(f.files.length || f.definitions.some((x) => x.tables.length)) && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
-    const draft = f.pending ? `<div id="draft" style="display:flex;flex-direction:column;gap:16px">${draftBody()}</div>${mappingCard()}` : '';
-    return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);align-items:start">${left}${rulesCard(f)}</div>${draft}`;
+    const setup = `<div class="grid" style="grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);align-items:start">${left}<div class="hcol">${rulesCard(f)}${standardsCard()}</div></div>`;
+    if (!f.pending) return `${head}${setup}`;
+    if (!S.map.standards) mapLoad();
+    return `${head}${S.dr.setup ? setup : ''}<div id="draft" class="rvwrap">${draftBody()}</div>`;
   }
 
   // ---- catalog: repositories of raw files, by folder, each file with what it turned out to be ----------------------
@@ -4812,7 +4951,6 @@ ${controls}${body}`;
       S.chg.det = null; S.home.box = null; render();
     },
     simrun: () => simulateNow(S.sim.key, S.sim.vals),
-    mapgo: () => { const c = $('#mapcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     rec: (t) => openRecord(t.dataset.type, t.dataset.key),
     recact: (t) => { S.rec.act = S.rec.act === t.dataset.name ? '' : t.dataset.name; S.rec.role = ''; S.rec.params = {}; render(); },
     recactx: () => { S.rec.act = ''; render(); },
@@ -5008,28 +5146,6 @@ ${controls}${body}`;
     },
     dinddel: async (t) => {
       try { await api('draft/decision/drop', { name: t.dataset.name }); S.files = await api('files'); S.dr.view = 'rules'; render(); } catch (e) { fail(e); }
-    },
-    mapsuggest: async () => {
-      S.map.busy = true; render();
-      try { S.map.sug = await api('draft/map', { standard: S.map.picked, edits: toEdits() }); S.map.edits = { objects: {}, columns: {} }; } catch (e) { S.map.sug = { ok: false, error: e.message }; }
-      S.map.busy = false; render();
-    },
-    mapapply: async () => {
-      S.map.busy = true; render();
-      const edits = { objects: {}, columns: {} };
-      for (const [k, v] of Object.entries(S.map.edits.objects)) edits.objects[k] = v || null;
-      for (const [k, v] of Object.entries(S.map.edits.columns)) edits.columns[k] = v || null;
-      try {
-        await api('draft/map/apply', { standard: S.map.picked, edits: toEdits(), mapping: edits });
-        Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
-        stale();
-        S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false };
-        S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
-        S.changes = null; S.agree = null; S.flset = null;
-        await load();
-        location.hash = '#flow';
-        toast('업로드한 테이블을 표준 정의에 연결해 적용했습니다.');
-      } catch (e) { S.map.busy = false; render(); fail(e); }
     },
     checks: () => runChecks(),
     bindings: () => runBindings(),
@@ -5231,7 +5347,35 @@ ${controls}${body}`;
     },
     connect: () => filesCall('connect', { dsn: S.dr.dsn, label: S.dr.label, rules: S.dr.rules }, () => { startDraft(); location.hash = '#data'; }),
     gwconnect: () => filesCall('connect/gateway', { ...S.gw, label: S.dr.label, rules: S.dr.rules }, () => { S.gw.token = ''; startDraft(); location.hash = '#data'; }),
-    dview: (t) => { S.dr.view = t.dataset.view; refreshDraft(); },
+    dview: (t) => { S.dr.view = t.dataset.view; refreshDraft(); const box = $('#draft'); if (box) box.scrollIntoView({ block: 'start' }); },
+    dpick: (t) => { S.dr.pick = t.dataset.t; refreshDraft(); },
+    dchoose: (t) => {
+      const p = S.files.pending, x = p.steps.find((st) => st.id === 'objects').items.find((y) => y.table === t.dataset.t);
+      S.dr.choice[t.dataset.t] = t.dataset.c;
+      if (x) S.dr.ok[x.element] = true;
+      edited();
+    },
+    dok: (t) => { S.dr.ok[t.dataset.el] = true; refreshDraft(); },
+    dokall: () => {
+      const p = S.files.pending, cur = reviewStep(), st = p.steps.find((x) => x.id === cur);
+      if (cur === 'objects') {
+        for (const x of st.items) {
+          const r = objProposal(p, x);
+          if (r.status !== 'check') continue;
+          if (!r.choice) S.dr.choice[x.table] = r.sm ? 'standard' : 'new';
+          else if (r.clash && r.sm) S.dr.choice[x.table] = 'standard';
+          S.dr.ok[x.element] = true;
+        }
+        edited();
+        const left = st.items.filter((x) => objProposal(p, x).status === 'check').length;
+        if (left) toast(`이름이 표준 객체와 같은 테이블 ${left}개는 API 이름을 바꾸거나 표준에 연결해 주세요.`, true);
+        return;
+      }
+      for (const x of st.items) S.dr.ok[x.element] = true;
+      refreshDraft();
+    },
+    dsetup: () => { S.dr.setup = !S.dr.setup; render(); },
+    drv: (t) => { S.dr.rv = t.dataset.k; refreshDraft(); },
     dsel: () => { S.dr.sel = null; refreshDraft(); },
     'drules-reset': () => { S.dr.rules = JSON.parse(JSON.stringify(S.files.defaults)); render(); },
     dadd: () => {
@@ -5433,11 +5577,18 @@ ${controls}${body}`;
       mgEdit('delete_question', { id: t.dataset.id }, `검증 질문 ${t.dataset.id}을 제외했습니다.`);
     },
     dapply: async () => {
+      const p = S.files.pending, os = p.steps.find((x) => x.id === 'objects');
+      const rows = os.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
+      const left = rows.filter((r) => r.status === 'check');
+      if (left.length) { S.dr.view = 'objects'; S.dr.pick = left[0].x.table; render(); toast(`확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다. 표준에 연결할지 새 객체로 둘지 정해 주세요.`, true); return; }
+      const choices = Object.fromEntries(rows.map((r) => [r.x.table, r.choice]));
       S.dr.busy = true;
       render();
       try {
-        await api('draft/apply', { edits: toEdits() });
+        await api('draft/review/apply', { standard: S.map.picked, edits: toEdits(), choices });
         Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
+        S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false, auto: '' };
+        S.changes = null; S.agree = null; S.flset = null;
         stale();
         S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
         S.dr.busy = false;
@@ -5482,6 +5633,7 @@ ${controls}${body}`;
     dname: (t) => { S.dr.label = t.value; },
     dsn: (t) => { S.dr.dsn = t.value; },
     dlab: (t) => { S.dr.ed.labels[t.dataset.el] = t.value; if (t.dataset.el.startsWith('object:')) drawGraph(); },
+    dapi: (t) => { S.dr.names[t.dataset.obj] = t.value.trim(); },
     dvalues: (t) => { S.dr.ed.values[t.dataset.ref] = t.value; },
     dalabel: (t) => { S.dr.add.label = t.value; },
     drule: (t) => {
@@ -5602,6 +5754,7 @@ ${controls}${body}`;
     dlab: () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 150); },
     dvalues: () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 150); },
     dkey: (t) => { S.dr.ed.keys[t.dataset.obj] = t.value; edited(); },
+    dapi: () => edited(),
     dtype: (t) => { S.dr.ed.types[t.dataset.ref] = t.value; edited(); },
     dcard: (t) => { S.dr.ed.card[t.dataset.link] = t.value; clearTimeout(previewTimer); previewTimer = setTimeout(preview, 150); },
     dtable: (t) => { S.dr.tables[t.dataset.t] = t.checked; },
@@ -5642,15 +5795,7 @@ ${controls}${body}`;
     },
     dindt: (t) => { S.ind.target = t.value; S.ind.inputs = {}; refreshDraft(); },
     dindin: (t) => { S.ind.inputs[t.dataset.v] = t.checked; refreshDraft(); },
-    mpick: (t) => { S.map.picked = t.checked ? [...new Set([...S.map.picked, t.dataset.v])] : S.map.picked.filter((x) => x !== t.dataset.v); S.map.sug = null; render(); },
-    mobj: async (t) => {
-      S.map.edits.objects[t.dataset.obj] = t.value;
-      if (!t.value) { render(); return; }
-      const tables = Object.fromEntries(Object.entries(S.map.edits.objects).filter(([, v]) => v));
-      try { S.map.sug = await api('draft/map', { standard: S.map.picked, edits: toEdits(), tables }); } catch (e) { fail(e); }
-      render();
-    },
-    mcol: (t) => { S.map.edits.columns[t.dataset.ref] = t.value; },
+    mpick: (t) => { S.map.picked = t.checked ? [...new Set([...S.map.picked, t.dataset.v])] : S.map.picked.filter((x) => x !== t.dataset.v); S.map.sug = null; S.map.auto = ''; render(); },
     csel: (t) => { S.cat.sel[t.dataset.path] = t.checked; render(); },
     call: (t) => {
       const c = S.cat;
