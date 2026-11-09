@@ -56,7 +56,7 @@
   // A group's screens are tabs on its page.
   const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '검색 · 질문', ['search', 'query']], ['use', '객체 탐색', ['records', 'record']],
     ['use', '그래프 탐색', ['graph']], ['use', '판정 · 처리', ['decide', 'rules']], ['build', '데이터 가져오기', ['catalog', 'db', 'convert', 'sources', 'data']],
-    ['build', '모델링', ['model', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'roles']], ['build', '규칙 · 액션', ['mgrules', 'actions', 'mgfuncs']],
+    ['build', '모델링', ['model', 'onto', 'docs', 'states', 'roles']], ['build', '규칙 · 액션', ['mgrules', 'actions', 'mgfuncs']],
     ['build', '변경 요청', ['changes', 'library']],
     ['run', '파이프라인 관제', ['monitor', 'flow']], ['run', '검증', ['check', 'bind']], ['run', '저장소 · 연동', ['adapters', 'vectors', 'connect']],
     ['run', '데이터 지도', ['explorer', 'map']], ['run', '사용 안내', ['guide']]];
@@ -64,7 +64,7 @@
   const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
   const TAB_WORD = { mgrules: '규칙', actions: '액션', mgfuncs: '함수', changes: '변경 요청', model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '자산 탐색기', map: '자산 그래프' };
-  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['states', '상태'], ['roles', '권한']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
   const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
@@ -111,7 +111,7 @@
       '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 연쇄 장애에서 원인 경로를 확인합니다.',
       '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
       '사이드바 아래 [연결]은 저장소, 쿼리 언어, 연동 항목이 지금 응답하는지 30초마다 확인해 표시합니다. 초록은 응답, 빨강은 응답 없음, 회색은 사용하지 않거나 아직 호출하지 않은 항목입니다.',
-      '[장애 테스트]를 선택하면 설정한 장애 시나리오를 적용해 알람과 원인 경로를 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
+      '[장애 테스트]를 선택하면 설정한 장애 시나리오를 적용해 알림과 원인 경로를 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
     ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
       '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
       '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 문서 검색 적중률, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
@@ -144,7 +144,7 @@
       '[JSON 내려받기]로 전체 내용을 저장합니다.']],
     ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 객체를 확인합니다.', [
       '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
-      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 객체 관리에서 객체로 추가합니다.',
+      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 작업 공간에서 객체로 추가합니다.',
       '파일 업로드는 [데이터 카탈로그], DB 연결은 [DB 연결]에서 합니다.']],
     ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 생성하고 스페이스에 적용합니다.', [
       '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
@@ -324,7 +324,7 @@
     ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
     ['정책서, 화면설계서', '라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
-    ['객체, 속성, 관계 수정', '객체 관리, 속성 관리, 관계 관리', '관리 변경 모듈'],
+    ['객체, 속성, 관계 수정', '모델링 작업 공간', '관리 변경 모듈'],
     ['모듈 정의 파일', '라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
   const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
@@ -367,7 +367,10 @@
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
       q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [] },
     ov: { sel: '', pos: {} },
-    md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false },
+    md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false,
+      view: 'diagram', table: 'objects', left: 'objects', leftOff: false, rightOff: false, list: 'props', hot: null, draft: null, only: false, src: {}, data: null, wide: true, posFor: '' },
+    iss: { list: null, busy: false, open: '', preview: null, done: null, running: false, at: '', gates: null },
+    fix: null, land: null, hit: '', hitDone: '',
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
   S.cat = NEW_CAT();
@@ -434,7 +437,7 @@
 
   function stale() {
     S.q.res = null; S.d.res = null; S.d.proposal = null; S.d.keys = {}; S.qa = null; S.bind = null; S.obj = null; S.fl = null;
-    S.mg.st = null;
+    S.mg.st = null; S.iss.list = null; S.home.box = null;
   }
 
   // ---- frame ---------------------------------------------------------------------------------------------------
@@ -547,7 +550,7 @@
       const [, label, keys] = NAV_GROUP[i];
       const on = keys.includes(S.tab);
       if (on) S.seen[i] = S.tab;
-      const waiting = wait && keys.includes('objects');
+      const waiting = wait && keys.includes('model');
       const badge = keys[0] === 'inbox' && waits ? `<span class="nbadge">${waits}</span>`
         : keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
       return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
@@ -566,7 +569,7 @@
       const on = $('#side .nav.on');
       if (on) on.scrollIntoView({ block: 'nearest' });
     }
-    $('#app').classList.toggle('slim', S.slim);
+    $('#app').classList.toggle('slim', S.tab === 'model' ? S.md.wide : S.slim);  // the workspace takes the room for its canvas
   }
 
   function render() {
@@ -574,9 +577,10 @@
     renderTop();
     renderSide();
     const views = { graph: viewGraph, model: viewModel, changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
-      sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
+      sources: viewSources, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
     const main = $('#main');
-    main.innerHTML = subTabs() + (views[S.tab] || viewHome)();
+    main.classList.toggle('wsmode', S.tab === 'model');
+    main.innerHTML = (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
     paintLayer();
     after();
   }
@@ -586,7 +590,9 @@
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
     if (S.tab === 'graph' && $('#gxcanvas')) { mountGx(); gxPaint(); }
-    if (S.tab === 'model') mountEr();
+    if (S.tab === 'model' && S.md.view === 'diagram') mountEr();
+    if (S.tab === 'model') hotField();
+    if (S.tab === 'model' && S.mg.st && !S.mg.st.error && !S.iss.list && !S.iss.busy) loadIssues().then(() => { if (S.tab === 'model') render(); });
     if (S.tab === 'record' && !S.rec.res && !S.rec.busy && !S.rec.err) loadRecord();
     if (S.tab === 'guide') mountGuide();
     if (S.tab === 'docs') mountDocs();
@@ -641,6 +647,8 @@
     if (S.tab === 'check' && !S.qa) runChecks();
     if ((MG_TABS.includes(S.tab) || S.tab === 'check') && !S.mg.st && !S.mg.busy) loadManage();
     if (S.tab === 'bind' && !S.bind) runBindings();
+    landNow();
+    showHit();
   }
 
   // ---- the pages for people who use the ontology: a home, what waits on them, records one by one -------------------
@@ -699,15 +707,15 @@
       buttons = `<button class="btn sm" data-act="ibchange" data-id="${esc(x.id)}">검토</button>`;
     } else if (x.kind === 'check') {
       meta = x.detail;
-      buttons = '<a class="btn sm" href="#bind">보기</a>';
+      buttons = '<button class="btn sm" data-act="issopen" data-key="bind">조치 보기</button>';
     } else if (x.kind === 'conflict') {
       meta = `${x.detail} · 고를 때까지 기존 규칙으로 판정합니다`;
-      buttons = '<a class="btn sm" href="#rules">고르기</a>';
+      buttons = `<button class="btn sm" data-act="issopen" data-key="conflict:${esc(x.id)}">고르기</button>`;
     } else {
       meta = `${x.detail} · 변경 요청을 만들어야 반영됩니다`;
-      buttons = '<a class="btn sm" href="#objects">변경 요청 만들기</a>';
+      buttons = '<a class="btn sm" href="#model?left=changes">변경 목록 열기</a>';
     }
-    return `<div class="ibrow"><span class="chip sm ${cls}">${esc(word)}</span><div class="ibmain"><b>${esc(x.title)}</b><div class="muted">${esc(meta)}</div></div><div class="ibact">${buttons}</div></div>`;
+    return `<div class="ibrow" data-row="${esc(x.kind)}:${esc(x.id)}"><span class="chip sm ${cls}">${esc(word)}</span><div class="ibmain"><b>${esc(x.title)}</b><div class="muted">${esc(meta)}</div></div><div class="ibact">${buttons}</div></div>`;
   }
 
   function inboxCard(limit) {
@@ -733,7 +741,7 @@
     const stat = (v, w) => `<div class="stat"><b>${v}</b><span>${w}</span></div>`;
     return `<div class="card"><div class="ch"><i class="dot ${f.passed ? 'ok' : 'bad'}"></i>운영 상태 ${f.passed ? '정상' : '확인 필요'}<div class="right"><a class="btn sm ghost" href="#monitor">파이프라인 관제</a></div></div>
       <div class="cb"><div class="hstats">${stat(`${passed} / ${gates.length}`, '통과 조건')}${stat(conf.queries ? `${conf.agree} / ${conf.queries}` : '-', '저장소 간 결과 일치')}${stat(agree.rate === undefined || agree.rate === null ? '-' : pct(agree.rate), '과거 판정 일치율')}${stat(step('check').accuracy === undefined || step('check').accuracy === null ? '-' : pct(step('check').accuracy), '검증 질문 정답률')}</div>
-      ${gates.filter((g) => !g.passed).map((g) => `<div class="hint warn" style="margin-top:8px">${esc(g.label)} · 기준 ${esc(g.limit)} · 측정 ${g.value === null ? '-' : esc(Math.round(g.value * 1000) / 1000)}</div>`).join('')}</div></div>`;
+      ${gates.filter((g) => !g.passed).map((g) => `<button class="hint warn ihint" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(g.label)} · 기준 ${esc(g.limit)} · 측정 ${g.value === null ? '-' : esc(Math.round(g.value * 1000) / 1000)}<span>조치 보기</span></button>`).join('')}</div></div>`;
   }
 
   function recentCard() {
@@ -764,7 +772,7 @@
     const link = (href, title, sub) => `<a class="hrow" href="${href}"><b>${esc(title)}</b><span class="muted">${esc(sub)}</span></a>`;
     return `<div class="card"><div class="ch">구축</div><div class="cb" style="padding:6px 8px">
       ${link('#catalog', '데이터 가져오기', `레포지토리 파일 ${count(S.st.data.files)}개`)}${link('#data', '초안 생성', '파일과 DB에서 온톨로지 초안')}
-      ${link('#objects', '정의 관리', ws ? ws.title : '객체 · 속성 · 관계 · 규칙 · 액션 · 권한')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
+      ${link('#model', '작업 공간', ws ? ws.title : '객체 · 속성 · 관계')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
   }
 
   function viewHome() {
@@ -1024,7 +1032,7 @@
 
   function feedbackCard(r, d) {
     if (!d) return '';
-    const body = r.fb === 'saved' ? `<div class="hint ok">검증 질문을 정의 관리의 대기 중인 변경에 추가했습니다. 변경 요청으로 반영하면 규칙이 바뀔 때마다 이 질문으로 다시 확인합니다. <a href="#check">검증 질문 보기</a></div>`
+    const body = r.fb === 'saved' ? `<div class="hint ok">검증 질문을 작업 공간의 대기 중인 변경에 추가했습니다. 변경 요청으로 반영하면 규칙이 바뀔 때마다 이 질문으로 다시 확인합니다. <a href="#check">검증 질문 보기</a></div>`
       : `<div class="fbrow"><button class="btn sm${r.fb === 'good' ? ' on' : ''}" data-act="srgood" aria-pressed="${r.fb === 'good'}">맞아요</button><button class="btn sm${r.fb === 'bad' ? ' on' : ''}" data-act="srbad" aria-pressed="${r.fb === 'bad'}">틀려요</button></div>
       ${r.fb === 'good' ? `<button class="btn sm primary" data-act="srsave" style="margin-top:10px">검증 질문으로 저장 · 정답 ${esc(d.verdict)}</button>` : ''}
       ${r.fb === 'bad' ? `<div class="hint warn" style="margin-top:10px">판정에 쓴 값과 규칙을 확인해 주세요. [조건 바꿔 보기]에서 어떤 값일 때 답이 바뀌는지 볼 수 있습니다. <a href="#mgrules">규칙 관리</a></div>` : ''}
@@ -1094,7 +1102,7 @@
     const head = pageHead('변경 요청', '모듈의 새 버전을 사본에서 시험한 결과와 바뀐 항목을 하나씩 검토하고 승인합니다');
     const all = S.changes && S.changes.changes;
     if (!all) return head + '<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>';
-    if (!all.length) return head + '<div class="card"><div class="cb"><div class="empty">변경 요청이 없습니다. 정의 관리나 라이브러리에서 바꾼 내용을 변경 요청으로 만들면 여기서 검토합니다.</div></div></div>';
+    if (!all.length) return head + '<div class="card"><div class="cb"><div class="empty">변경 요청이 없습니다. 작업 공간이나 라이브러리에서 바꾼 내용을 변경 요청으로 만들면 여기서 검토합니다.</div></div></div>';
     const c = S.chg;
     const list = [...all.filter((x) => x.status === 'pending'), ...all.filter((x) => x.status !== 'pending')];
     if (!c.sel || !list.some((x) => x.id === c.sel)) { c.sel = list[0].id; c.det = null; c.item = ''; }
@@ -1630,16 +1638,26 @@
   function modelTree() {
     const m = S.mg.st, md = S.md;
     const q = md.q.trim().toLowerCase();
+    const has = (s) => String(s || '').toLowerCase().includes(q);
+    if (q) {
+      const obj = m.objects.filter((o) => has(o.name) || has(o.label) || has(o.table));
+      const props = m.properties.filter((p) => !p.inherited && (has(p.name) || has(p.label) || has(p.column))).slice(0, 30);
+      const links = m.links.filter((l) => has(l.name) || has(l.label)).slice(0, 20);
+      const cols = m.sources.source.tables.flatMap((t) => t.columns.filter((c) => has(c.name)).map((c) => ({ t, c }))).slice(0, 30);
+      const group = (word, rows) => (rows.length ? `<div class="mdgrp"><div class="mdgh">${word}<span class="muted">${rows.length}</span></div>${rows.join('')}</div>` : '');
+      return group('객체', obj.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span><span class="muted mono">${esc(o.table || '')}</span></button>`))
+        + group('속성', props.map((p) => `<button class="mdnode" data-act="mdprop" data-name="${esc(`${p.object}.${p.name}`)}"><span>${esc(mgLabel(p.object))} · ${esc(p.label || p.name)}</span></button>`))
+        + group('관계', links.map((l) => `<button class="mdnode" data-act="mdlink" data-name="${esc(l.name)}"><span>${esc(l.label || l.name)}</span><span class="muted">${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</span></button>`))
+        + group('원천 컬럼', cols.map((x) => `<button class="mdnode" data-act="mdcol" data-col="${esc(`${x.t.table}|${x.c.name}|${x.c.type}`)}"><span class="mono">${esc(x.t.table)}.${esc(x.c.name)}</span></button>`))
+        || '<div class="empty">찾은 항목이 없습니다.</div>';
+    }
     const groups = {};
-    m.objects.forEach((o) => {
-      if (q && !`${o.name} ${o.label} ${o.table}`.toLowerCase().includes(q)) return;
-      const k = o.module_label || o.module || '정의';
-      (groups[k] = groups[k] || []).push(o);
-    });
-    const marks = (o) => [o.new ? ['warn', '새로 추가'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
+    m.objects.forEach((o) => { const k = o.module_label || o.module || '정의'; (groups[k] = groups[k] || []).push(o); });
+    const by = modelProblems().by;
+    const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
       o.series ? ['', '시계열'] : null, (o.extended_by || []).length ? ['', `+ ${shortMod(o.extended_by[0])}`] : null, (m.comments || {})[`object:${o.name}`] ? ['', `댓글 ${m.comments[`object:${o.name}`]}`] : null]
       .filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
-    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">찾은 객체가 없습니다.</div>';
+    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">객체가 없습니다.</div>';
   }
 
   function modelUses(o) {
@@ -1647,33 +1665,55 @@
     if (!u || u.id !== `object:${o.name}`) {
       if (S.md.usesFor === o.name) return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
       S.md.usesFor = o.name;
-      api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail).finally(() => { S.md.usesFor = ''; });
+      api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; paintSide(); }).catch(fail).finally(() => { S.md.usesFor = ''; });
       return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
     }
     return u.list.length ? `<div class="chips">${u.list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div><div class="hint" style="margin-top:10px">이 객체를 바꾸면 위 요소가 함께 영향을 받습니다. 지우면 정의 관리가 함께 제외되는 항목을 알려 줍니다.</div>` : '<div class="empty">이 객체를 읽는 질의, 결정, 액션이 없습니다.</div>';
   }
 
   function modelSide() {
-    const m = S.mg.st, md = S.md, o = mgObj(md.sel);
-    if (!o) return '<div class="card"><div class="cb"><div class="empty">트리나 그래프에서 객체를 고르세요.</div></div></div>';
+    const m = S.mg.st, md = S.md, o = mgObj(md.sel), f = S.mg.form;
+    const creating = f && f.mode === 'new' && ['object', 'prop', 'link'].includes(f.kind);
+    if (creating) {
+      const word = { object: '새 객체', prop: '새 속성', link: '새 관계' }[f.kind];
+      return `<div class="ihead"><div class="icrumb">${o ? `<button class="ilinkb" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button> › ` : ''}<b>${word}</b></div></div><div class="ibody">${f.kind === 'prop' ? propForm() : f.kind === 'link' ? linkForm() : objectForm()}</div>`;
+    }
+    if (!o) return '<div class="empty" style="padding:24px 12px">트리나 그래프에서 객체를 고르세요.</div>';
     const uses = md.uses && md.uses.id === `object:${o.name}` ? md.uses.list.length : null;
     if (uses === null && md.tab !== 'uses') modelUses(o);  // whether anything reads it is said on every tab
     const notes = (m.comments || {})[`object:${o.name}`] || 0;
-    const tabs = [['form', '폼', ''], ['yaml', 'YAML', ''], ['uses', '사용처', uses || ''], ['notes', '댓글', notes || '']]
+    const tabs = [['form', '폼', ''], ['data', '데이터', ''], ['uses', '사용처', uses || ''], ['yaml', 'YAML', ''], ['notes', '댓글', notes || '']]
       .map(([k, w, n]) => `<button class="${md.tab === k ? 'on' : ''}" data-act="mdtab" data-k="${k}">${w}${n ? ` <span class="muted">${n}</span>` : ''}</button>`).join('');
-    let body = '';
-    if (md.tab === 'yaml') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelYaml(o)}</div></div>`;
-    else if (md.tab === 'uses') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelUses(o)}</div></div>`;
-    else if (md.tab === 'notes') body = `<div class="card"><div class="cb">${objectStatus(o)}${modelComments(o)}</div></div>`;
-    else {
-      const props = mgProps(o.name).map((p) => `<tr class="${S.mg.sel === `${o.name}.${p.name}` ? 'sel' : ''}" data-act="mdprop" data-name="${esc(`${o.name}.${p.name}`)}" style="cursor:pointer"><td>${esc(p.label || p.name)}<div class="muted mono">${esc(p.name)}</div></td><td><span class="chip sm${p.expr ? ' b' : ''}">${p.expr ? '계산' : esc(p.type)}</span></td><td class="mono muted" style="font-size:11.5px">${esc(p.column || '')}</td></tr>`).join('');
-      const links = m.links.filter((l) => l.source === o.name || l.target === o.name).map((l) => `<tr class="${S.mg.sel === l.name ? 'sel' : ''}" data-act="mdlink" data-name="${esc(l.name)}" style="cursor:pointer"><td>${esc(l.label || l.name)}<div class="muted mono">${esc(l.name)}</div></td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="mono">${esc(CARD[l.cardinality] || l.cardinality)}</td></tr>`).join('');
-      const f = S.mg.form;
-      const form = f && f.kind === 'prop' ? propForm() : f && f.kind === 'link' ? linkForm() : objectForm();
-      body = `${f && f.kind === 'object' && f.mode === 'edit' ? `<div class="mdstatwrap">${objectStatus(o)}</div>` : ''}${form}<div class="card"><div class="ch">속성 ${mgProps(o.name).length}</div><div class="cb scroll" style="padding:0;max-height:260px"><table class="tight">${props}</table></div></div>
-        <div class="card"><div class="ch">관계</div><div class="cb scroll" style="padding:0">${links ? `<table class="tight">${links}</table>` : '<div class="empty" style="padding:12px">관계가 없습니다.</div>'}</div></div>`;
+    const inner = f && f.kind === 'prop' ? (m.properties.find((p) => p.object === f.v.object && p.name === f.v.name) || {}) : f && f.kind === 'link' ? (m.links.find((l) => l.name === f.v.name) || {}) : null;
+    const crumb = `<div class="icrumb">${inner ? `<button class="ilinkb" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button> › <b>${esc(inner.label || inner.name || '')}</b> <span class="muted mono">${esc(inner.name || '')}</span>` : `<b>${esc(o.label)}</b> <span class="muted mono">${esc(o.name)}</span>`}</div>`;
+    let body;
+    if (md.tab === 'yaml') body = modelYaml(o);
+    else if (md.tab === 'uses') body = modelUses(o);
+    else if (md.tab === 'notes') body = modelComments(o);
+    else if (md.tab === 'data') body = modelData(o);
+    else body = `${md.hot && md.hot.note ? `<div class="ierr">${esc(md.hot.note)}</div>` : ''}${f && f.kind === 'prop' ? propForm() : f && f.kind === 'link' ? linkForm() : objectForm()}`;
+    const by = modelProblems().elements;
+    const props = mgProps(o.name).map((p) => { const id = `${o.name}.${p.name}`; return `<button class="ilist-i${S.mg.sel === id ? ' on' : ''}" data-act="mdprop" data-name="${esc(id)}"><span>${esc(p.label || p.name)}</span>${by.has(`property:${id}`) ? '<span class="chip sm bad">문제</span>' : p.new ? '<span class="chip sm ok">새</span>' : p.pending ? '<span class="chip sm warn">변경</span>' : `<span class="muted mono">${esc(p.expr ? '계산' : p.name)}</span>`}</button>`; }).join('');
+    const links = m.links.filter((l) => l.source === o.name || l.target === o.name).map((l) => `<button class="ilist-i${S.mg.sel === l.name ? ' on' : ''}" data-act="mdlink" data-name="${esc(l.name)}"><span>${esc(l.label || l.name)}</span>${l.new ? '<span class="chip sm ok">새</span>' : l.pending ? '<span class="chip sm warn">변경</span>' : `<span class="muted">${esc(mgLabel(l.source === o.name ? l.target : l.source))} ${esc(CARD[l.cardinality] || '')}</span>`}</button>`).join('');
+    const count = m.links.filter((l) => l.source === o.name || l.target === o.name).length;
+    const list = `<div class="ilist"><div class="ilist-h"><div class="seg" style="margin:0"><button class="${md.list === 'props' ? 'on' : ''}" data-act="mdlist" data-k="props">속성 ${mgProps(o.name).length}</button><button class="${md.list === 'links' ? 'on' : ''}" data-act="mdlist" data-k="links">관계 ${count}</button></div><button class="btn sm" data-act="${md.list === 'props' ? 'mdaddprop' : 'mdlinknew'}">+ 추가</button></div><div class="ilist-b">${(md.list === 'props' ? props : links) || '<div class="empty" style="padding:10px">항목이 없습니다.</div>'}</div></div>`;
+    return `<div class="ihead">${crumb}${f && f.kind === 'object' ? objectStatus(o) : ''}<div class="seg" style="margin:0">${tabs}</div></div><div class="ibody">${body}</div>${list}`;
+  }
+
+  function modelData(o) {
+    const d = S.md.data;
+    if (!d || d.id !== o.name) {
+      S.md.data = { id: o.name, busy: true };
+      api(`object/profile?name=${encodeURIComponent(o.name)}`).then((x) => { S.md.data = { id: o.name, res: x }; }).catch((e) => { S.md.data = { id: o.name, res: { ok: false, error: e.message } }; })
+        .finally(() => { paintSide(); });
+      return '<div class="empty"><span class="spin"></span>데이터를 읽는 중입니다.</div>';
     }
-    return `<div class="seg" style="margin:0 0 12px">${tabs}</div>${body}`;
+    if (d.busy) return '<div class="empty"><span class="spin"></span>데이터를 읽는 중입니다.</div>';
+    const r = d.res;
+    if (!r.ok) return `<div class="hint warn">${esc(r.error)}</div>`;
+    return `<div class="muted" style="font-size:12px;margin-bottom:6px"><span class="mono">${esc(r.table)}</span> · ${show(r.total)}행</div>
+      <div class="cb scroll" style="padding:0;border:1px solid var(--line);border-radius:8px"><table class="tight"><tr><th>속성</th><th>빈 값</th><th>고유값</th></tr>${r.stats.map((x) => `<tr><td>${esc(x.label)}<div class="muted mono">${esc(x.column)}</div></td><td class="num">${x.empty ? `<span class="chip sm warn">${Math.round(x.empty * 100)}%</span>` : '0%'}</td><td class="num">${show(x.distinct)}</td></tr>`).join('')}</table></div>
+      <div class="label" style="margin:12px 0 4px">샘플 ${r.rows.length}행</div><div class="cb scroll" style="padding:0;border:1px solid var(--line);border-radius:8px;overflow-x:auto"><table class="tight"><tr>${r.columns.map((c) => `<th class="mono">${esc(c)}</th>`).join('')}</tr>${r.rows.map((x) => `<tr>${x.map((v) => `<td>${show(v)}</td>`).join('')}</tr>`).join('')}</table></div>`;
   }
 
   // ---- the schema as an entity diagram: each object with its key, its main and computed properties, each relation
@@ -1687,11 +1727,13 @@
     const props = mgProps(o.name);
     const key = props.find((p) => p.key);
     const rest = props.filter((p) => !p.key && !p.inherited);
-    const pick = [...rest.filter((p) => p.expr), ...rest.filter((p) => p.module && p.module !== o.module), ...rest.filter((p) => p.mask), ...rest]
-      .filter((p, i, a) => a.indexOf(p) === i).slice(0, 3);
+    const broken = modelProblems().elements;
+    const isBad = (p) => broken.has(`property:${o.name}.${p.name}`);
+    const pick = [...rest.filter(isBad), ...rest.filter((p) => p.expr), ...rest.filter((p) => p.module && p.module !== o.module), ...rest.filter((p) => p.mask), ...rest]
+      .filter((p, i, a) => a.indexOf(p) === i).slice(0, Math.max(3, rest.filter(isBad).length));
     const rows = [];
     if (key) rows.push({ kind: 'key', text: `🔑 ${key.name}` });
-    pick.forEach((p) => rows.push(p.expr ? { kind: 'expr', text: `${p.name} = ${p.expr}` }
+    pick.forEach((p) => rows.push(isBad(p) ? { kind: 'bad', text: `${p.name} !` } : p.expr ? { kind: 'expr', text: `${p.name} = ${p.expr}` }
       : p.module && p.module !== o.module ? { kind: 'ext', text: `${p.name} · ${shortMod(p.module_label || p.module)}` }
         : { kind: p.mask ? 'mask' : '', text: `${p.name}${p.mask ? ' · 가림' : ''}` }));
     const more = rest.length - pick.length;
@@ -1700,8 +1742,8 @@
   }
 
   const ER_VIEW = {
-    model: { state: () => S.md, box: 'ercanvas', card: 'ercard', pick: (n) => modelPick(n), html: () => erCard() },
-    onto: { state: () => S.ov, box: 'ontocanvas', card: 'ontocard', pick: (n) => ontoPick(n), html: () => ontoCard(), all: true, clear: () => ontoClear() },
+    model: { state: () => S.md, box: 'ercanvas', card: 'ercard', pick: (n) => modelPick(n), html: () => erCard(), clear: () => focusOff('model') },
+    onto: { state: () => S.ov, box: 'ontocanvas', card: 'ontocard', pick: (n) => { focusOn('onto', n); selectObject(n, true); }, html: () => ontoCard(), all: true, clear: () => focusOff('onto') },
   };
 
   function erLayout(v = 'model') {
@@ -1856,6 +1898,9 @@
     if (!L) return '<div class="empty">트리에서 객체를 고르세요.</div>';
     const m = S.mg.st, md = ER_VIEW[v].state();
     const F = erFocus(v, L);
+    const live = v === 'model';
+    const prob = live ? modelProblems().by : {};
+    const quiet = (name) => live && md.only && !(prob[name] || []).length;
     const every = F ? [...Object.values(F.base), ...Object.values(F.boxes)] : Object.values(L.boxes);
     const W = Math.max(...every.map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad;
     const H = Math.max(...every.map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
@@ -1868,7 +1913,8 @@
         const [p, q] = erEdge(a.folded ? { ...a.folded } : a, b.folded ? { ...b.folded } : b);
         const c = bend(p, q, ...place(l));
         const on = cls === ' top' || (!F && (md.sel === l.source || md.sel === l.target));
-        return `<g class="ered${on ? ' on' : ''}${cls}"><path d="${c.d}" marker-end="url(#${on ? 'erhot' : 'erarrow'})"/>
+        const state = !live ? '' : `${l.new ? ' fresh' : l.pending ? ' pend' : ''}${S.mg.sel === l.name ? ' picked' : ''}${quiet(l.source) && quiet(l.target) ? ' erdim' : ''}`;
+        return `<g class="ered${on ? ' on' : ''}${cls}${state}"${live ? ` data-link="${esc(l.name)}"` : ''}>${live ? `<path class="erhit" d="${c.d}"/>` : ''}<path d="${c.d}" marker-end="url(#${on ? 'erhot' : 'erarrow'})"/>
           <text x="${c.x + 6}" y="${c.y - 4}">${esc(l.label || l.name)}</text><text class="card" x="${c.x + 6}" y="${c.y + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`;
       }).join('');
     };
@@ -1881,11 +1927,13 @@
     const card = (b, cls, shift) => {
       const o = b.o, on = md.sel === o.name;
       const rows = erRows(o).map((r, i) => `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${esc(r.text.length > 27 ? `${r.text.slice(0, 26)}…` : r.text)}</text>`).join('');
-      const tag = o.new ? '새로 추가' : o.pending ? '변경 대기' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
-      return `<g class="ernode${on ? ' on' : ''}${o.new || o.pending ? ' pend' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
+      const bad = (prob[o.name] || []).length;
+      const tag = bad ? `문제 ${bad}` : o.new ? '새 객체' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
+      const plus = live && !F ? `<g class="erplus" data-from="${esc(o.name)}"><circle cx="${b.x + b.w}" cy="${b.y + b.h / 2}" r="9"/><text x="${b.x + b.w}" y="${b.y + b.h / 2 + 4}" text-anchor="middle">+</text></g>` : '';
+      return `<g class="ernode${on ? ' on' : ''}${o.new ? ' fresh' : o.pending ? ' pend' : ''}${bad ? ' problem' : ''}${quiet(o.name) ? ' erdim' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
         <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 14 + o.label.length * 13}" y="${b.y + 21}">${esc(o.name)}</text>
         ${tag ? `<text class="tag" x="${b.x + b.w - 10}" y="${b.y + 21}" text-anchor="end">${esc(tag)}</text>` : ''}
-        <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}</g>`;
+        <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}${plus}</g>`;
     };
     let body;
     if (F) {  // what is not connected stays where it was, faint; what is connected is drawn last, so it lies on top
@@ -1906,12 +1954,13 @@
   }
 
   function erCard() {
-    const md = S.md, o = mgObj(md.sel);
-    const ver = o ? (S.st.layers || []).flatMap((l) => l.modules).find((x) => x.label === (o.module_label || o.module)) : null;
-    return `<div class="card"><div class="ch">${esc(o ? (o.module_label || o.module) : '스키마')}${ver ? ` <span class="muted mono" style="font-weight:600">${esc(ver.version)}</span>` : ''}
-      <div class="right"><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-z="0" title="화면에 맞춤">${Math.round((md.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-z="1" aria-label="확대">+</button></span></div></div>
-      <div class="cb ertools"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button><button class="btn sm" data-act="erfold" aria-pressed="${!!md.fold}">${md.fold ? '모듈 펼치기' : '모듈 접기'}</button></div>
-      <div class="cb ercanvas" id="ercanvas">${erSvg()}</div><div class="cb ernote muted">카드를 끌어 옮기고, 빈 곳을 끌거나 스크롤해 둘러봅니다. Ctrl + 휠로 확대합니다. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+    const md = S.md, fold = md.fold;
+    return `<div class="wstools"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button>
+      <button class="btn sm" data-act="erfold" aria-pressed="${!!fold}">${fold ? '모듈 펼치기' : '모듈 접기'}</button>
+      <button class="btn sm${md.focus ? ' primary' : ''}" data-act="mdfocus" aria-pressed="${!!md.focus}">연결만 보기</button><button class="btn sm${md.only ? ' primary' : ''}" data-act="mdonly" aria-pressed="${!!md.only}">문제만 보기</button>
+      <span class="grow"></span><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-z="0" title="화면에 맞춤">${Math.round((md.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-z="1" aria-label="확대">+</button></span></div>
+      <div class="ercanvas${md.focus ? ' focused' : ''}" id="ercanvas">${erSvg()}</div>
+      <div class="ernote muted">카드를 끌어 옮기고, 카드 테두리의 + 를 끌어 다른 카드에 놓으면 관계를 만듭니다. 관계선을 누르면 오른쪽에서 열립니다.</div>`;
   }
 
   function mountEr(v = 'model') {
@@ -1919,30 +1968,71 @@
     if (!box || box.dataset.on) return;
     box.dataset.on = '1';
     let drag = null;
+    const at = (ev) => { const r = box.getBoundingClientRect(), z = md.zoom || 1; return [(ev.clientX - r.left + box.scrollLeft) / z, (ev.clientY - r.top + box.scrollTop) / z]; };
+    const under = (ev) => { const t = document.elementFromPoint(ev.clientX, ev.clientY); return t && t.closest('[data-er]'); };
     box.addEventListener('pointerdown', (ev) => {
+      const plus = ev.target.closest('[data-from]');
+      if (plus) {  // from the + on a card's edge to another card makes a relation
+        drag = { from: plus.dataset.from, x0: ev.clientX, y0: ev.clientY, moved: false };
+        box.setPointerCapture(ev.pointerId);
+        return;
+      }
       const g = ev.target.closest('[data-er]');
+      const edge = !g && ev.target.closest('[data-link]');
       const L = g && erLayout(v), b = L && L.boxes[g.dataset.er];
       if (g && b && !b.folded && !md.focus) drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
-      else drag = { pan: true, card: g ? g.dataset.er : '', x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
+      else drag = { pan: true, card: g ? g.dataset.er : '', edge: edge ? edge.dataset.link : '', x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
       box.setPointerCapture(ev.pointerId);
     });
+    if (v === 'model') {
+      box.addEventListener('dragover', (ev) => { if ([...ev.dataTransfer.types].includes('text/x-column')) ev.preventDefault(); });
+      box.addEventListener('drop', (ev) => {
+        const c = ev.dataTransfer.getData('text/x-column');
+        if (!c) return;
+        ev.preventDefault();
+        const [table, column, type] = c.split('|'), g = ev.target.closest('[data-er]'), o = g && mgObj(g.dataset.er);
+        if (!o) { toast('컬럼은 객체 카드 위에 놓아 주세요.', true); return; }
+        if (o.table !== table) { toast(`이 컬럼은 ${table} 테이블에 있습니다. ${table}을 읽는 객체 카드에 놓아 주세요.`, true); return; }
+        columnToProp(table, column, type, o.name);
+      });
+    }
     box.addEventListener('pointermove', (ev) => {
       if (!drag) return;
       const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
       if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       drag.moved = true;
+      if (drag.from) {
+        const L = erLayout(v), b = L.boxes[drag.from], [x, y] = at(ev), svg = box.querySelector('svg');
+        let line = svg.querySelector('#erdrag');
+        if (!line) { line = document.createElementNS('http://www.w3.org/2000/svg', 'line'); line.id = 'erdrag'; svg.appendChild(line); }
+        line.setAttribute('x1', b.x + b.w); line.setAttribute('y1', b.y + b.h / 2); line.setAttribute('x2', x); line.setAttribute('y2', y);
+        box.querySelectorAll('.droptarget').forEach((n) => n.classList.remove('droptarget'));
+        const g = under(ev);
+        if (g && g.dataset.er !== drag.from) g.classList.add('droptarget');
+        return;
+      }
       if (drag.pan) { box.scrollLeft = drag.sl - dx; box.scrollTop = drag.st - dy; box.classList.add('panning'); return; }
       const z = md.zoom || 1;
       md.pos[drag.name] = { x: Math.max(4, drag.bx + dx / z), y: Math.max(30, drag.by + dy / z) };
       box.innerHTML = erSvg(v);
     });
-    const end = () => {
+    const end = (ev) => {
       const was = drag;
       drag = null;
       box.classList.remove('panning');
+      if (was && was.from) {
+        const line = box.querySelector('#erdrag');
+        if (line) line.remove();
+        box.querySelectorAll('.droptarget').forEach((n) => n.classList.remove('droptarget'));
+        const g = was.moved && under(ev);
+        if (g && g.dataset.er !== was.from) linkDraft(was.from, g.dataset.er, ev);
+        return;
+      }
+      if (was && was.moved && was.name) erPosSave();
       if (!was || was.moved) return;
       if (!was.pan) ER_VIEW[v].pick(was.name);
       else if (was.card) ER_VIEW[v].pick(was.card);
+      else if (was.edge) modelLink(was.edge);
       else if (md.focus) ER_VIEW[v].clear();
     };
     box.addEventListener('pointerup', end);
@@ -1957,7 +2047,7 @@
 
   function erZoom(step, floor = 0.4, v = 'model') {  // 0 fits the diagram to the canvas's width
     const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
-    if (step === 0 && md.focus) { ontoPaint(); return; }
+    if (step === 0 && md.focus) { focusPaint(v); return; }
     if (step === 0 && box) {
       const svg = box.querySelector('svg'), w = svg ? Number(svg.getAttribute('viewBox').split(' ')[2]) : 0;
       md.zoom = w ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / w)) : 1;
@@ -1982,17 +2072,17 @@
       <div class="cb ernote muted">${note} 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
   }
 
-  function ontoPaint() {  // the card again, the gathered cards fitted to the canvas and in the middle of it
-    const ov = S.ov, card = $('#ontocard'), was = $('#ontocanvas');
+  function focusPaint(v) {  // the card again, the gathered cards fitted to the canvas and in the middle of it
+    const ov = ER_VIEW[v].state(), card = $(`#${ER_VIEW[v].card}`), was = $(`#${ER_VIEW[v].box}`);
     if (!card || !was) return;
-    const F = ov.focus ? erFocus('onto', erLayout('onto')) : null;
+    const F = ov.focus ? erFocus(v, erLayout(v)) : null;
     if (F) {
       ov.zoom = Math.min(1, Math.max(0.5, Math.min((was.clientWidth - 32) / F.w, (was.clientHeight - 64) / (F.h + 34))));
       ov.near = F.ids.size - 1;
     }
-    card.innerHTML = ontoCard();
-    mountEr('onto');
-    const box = $('#ontocanvas');
+    card.innerHTML = ER_VIEW[v].html();
+    mountEr(v);
+    const box = $(`#${ER_VIEW[v].box}`);
     if (!F || !box) return;
     box.scrollLeft = Math.max(0, F.cx * ov.zoom - box.clientWidth / 2);
     box.scrollTop = Math.max(0, F.cy * ov.zoom - box.clientHeight / 2);
@@ -2004,24 +2094,23 @@
     requestAnimationFrame(() => moving.forEach((g) => { g.style.transition = 'transform .28s ease'; g.style.transform = ''; }));
   }
 
-  function ontoPick(name) {
-    const ov = S.ov, box = $('#ontocanvas');
+  function focusOn(v, name) {
+    const ov = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
     if (!ov.focus && box) {  // what to come back to, and the spot to gather around
       const z = ov.zoom || 1;
       ov.before = { zoom: ov.zoom, left: box.scrollLeft, top: box.scrollTop };
       ov.anchor = { x: (box.scrollLeft + box.clientWidth / 2) / z, y: (box.scrollTop + box.clientHeight / 2) / z };
     }
     ov.sel = name; ov.focus = name;
-    ontoPaint();
-    selectObject(name, true);
+    focusPaint(v);
   }
 
-  function ontoClear() {
-    const ov = S.ov, b = ov.before || {};
+  function focusOff(v) {
+    const ov = ER_VIEW[v].state(), b = ov.before || {};
     if (!ov.focus) return;
     Object.assign(ov, { focus: '', anchor: null, last: null, zoom: b.zoom });
-    ontoPaint();
-    const box = $('#ontocanvas');
+    focusPaint(v);
+    const box = $(`#${ER_VIEW[v].box}`);
     if (box) { box.scrollLeft = b.left || 0; box.scrollTop = b.top || 0; }
   }
 
@@ -2051,7 +2140,7 @@
       if (!S.md.yamlBusy) {
         S.md.yamlBusy = true;
         api(`element/yaml?id=${encodeURIComponent(id)}`).then((x) => { S.md.yaml = { id, text: x.yaml, was: x.yaml }; }).catch((e) => { S.md.yaml = { id, error: e.message }; })
-          .finally(() => { S.md.yamlBusy = false; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); });
+          .finally(() => { S.md.yamlBusy = false; paintSide(); });
       }
       return '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>';
     }
@@ -2066,7 +2155,7 @@
   function modelComments(o) {
     const id = `object:${o.name}`, c = S.md.notes;
     if (!c || c.id !== id) {
-      api(`element/comments?id=${encodeURIComponent(id)}`).then((x) => { S.md.notes = { id, list: x.comments }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail);
+      api(`element/comments?id=${encodeURIComponent(id)}`).then((x) => { S.md.notes = { id, list: x.comments }; paintSide(); }).catch(fail);
       return '<div class="empty"><span class="spin"></span></div>';
     }
     const list = c.list.map((x) => `<div class="cmt"><span class="av">${esc(String(x.by || '?').slice(0, 1))}</span><div><div class="muted" style="font-size:12px"><b style="color:var(--ink)">${esc(x.by)}</b> · ${esc(String(x.at || '').replace('T', ' '))}</div><div style="font-size:13px;margin-top:2px">${esc(x.text)}</div></div></div>`).join('');
@@ -2076,47 +2165,243 @@
   }
 
   // the edits waiting, what they reach, and the way to try them, take the last one back or file them
-  function modelFoot() {
-    const w = S.mg.st.workspace;
-    if (!w.dirty) return '';
-    const d = w.diff, imp = w.impact || {};
-    const says = w.edits.slice(-3).map((e) => `${OP_WORD[e.op] || e.op} ${elementText(e.target)}`).join(' · ');
-    const reach = [['queries', '질의'], ['decisions', '판정'], ['questions', '검증 질문'], ['actions', '액션']].map(([k, l]) => `${l} ${imp[k] || 0}`).join(' · ');
-    const t = S.md.trial;
-    const trial = t ? (t.busy ? '<span class="chip"><span class="spin"></span>사본에서 시험 중</span>'
-      : t.error ? `<span class="chip bad">${esc(t.error)}</span>` : `<button class="chip ${t.passed ? 'ok' : 'bad'}" data-act="mdtrialopen">${t.passed ? '✓ 사본 시험 통과' : '사본 시험 실패'} ${t.gates.filter((g) => g.passed).length}/${t.gates.length}</button>`) : '';
-    return `<div class="rvfoot mdfoot"><span class="chip warn">변경 ${w.edits.length || d.added.length + d.changed.length + d.removed.length}건</span><span style="font-size:12.5px">${esc(says)}</span>
-      <span class="muted">영향: ${esc(reach)}</span>${trial}<span style="flex:1"></span>
-      <button class="btn sm" data-act="mdundo"${w.edits.length ? '' : ' disabled'}>되돌리기</button><button class="btn sm" data-act="mdtrial"${t && t.busy ? ' disabled' : ''}>사본에서 시험</button>
-      <button class="btn sm primary" data-act="mgpropose"${S.mg.busy || w.issues.length ? ' disabled' : ''}>변경 요청 만들기</button></div>${S.md.trialOpen && t && t.gates ? trialPanel(t) : ''}`;
+  function wsChanges() {
+    const m = S.mg.st, w = m.workspace, md = S.md, t = md.trial;
+    if (!w.dirty) return '<div class="empty" style="padding:18px 12px">바뀐 내용이 없습니다. 객체나 속성을 고치면 여기에 쌓입니다.</div>';
+    const row = (e, i) => `<div class="wsrow"><div><b>${esc(OP_WORD[e.op] || e.op)}</b> <span class="mono muted">${esc(elementText(e.target))}</span>${e.took_out.length ? `<div class="muted" style="font-size:11.5px">함께 제외 ${e.took_out.length}개</div>` : ''}</div><button class="btn sm" data-act="mdrevert" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>되돌리기</button></div>`;
+    const list = w.edits.length ? w.edits.map(row).join('') : [...w.diff.added.map((x) => ['추가', x]), ...w.diff.changed.map((x) => ['변경', x]), ...w.diff.removed.map((x) => ['제외', x])].map(([a, x]) => `<div class="wsrow"><div><b>${a}</b> <span class="mono muted">${esc(elementText(x))}</span></div></div>`).join('');
+    const checked = !w.issues.length;
+    const tried = t && t.gates ? (t.passed ? 'ok' : 'bad') : '';
+    const steps = `<div class="wssteps"><span class="chip sm ${checked ? 'ok' : 'bad'}">1 검사 ${checked ? '통과' : `오류 ${w.issues.length}`}</span>›<span class="chip sm ${tried}">2 사본 시험${t && t.gates ? ` ${t.gates.filter((g) => g.passed).length}/${t.gates.length}` : ''}</span>›<span class="chip sm">3 변경 요청</span></div>`;
+    const blocks = w.issues.length ? `<div class="banner no" style="padding:10px 12px"><div class="why" style="font-size:12.5px"><b>변경 요청을 만들 수 없습니다.</b> 아래 정의 검사 오류를 먼저 고쳐 주세요.<div class="loglist" style="margin-top:6px">${w.issues.slice(0, 6).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div></div>` : '';
+    const reach = [['queries', '질의'], ['decisions', '판정'], ['questions', '검증 질문'], ['actions', '액션']].map(([k, l]) => `${l} ${(w.impact || {})[k] || 0}`).join(' · ');
+    return `<div class="wslist">${list}</div>${steps}${blocks}<div class="muted" style="font-size:12px">영향: ${esc(reach)}</div>
+      ${t && t.error ? `<div class="hint warn">${esc(t.error)}</div>` : ''}${t && t.gates ? trialPanel(t) : ''}
+      <div class="wsbtns"><button class="btn sm" data-act="mdtrial"${t && t.busy ? ' disabled' : ''}>${t && t.busy ? '<span class="spin"></span>시험 중' : '사본에서 시험'}</button><button class="btn sm primary" data-act="mgpropose"${S.mg.busy || w.issues.length ? ' disabled' : ''}>변경 요청 만들기</button><span class="grow"></span><button class="btn sm ghost danger" data-act="mgdiscard">모두 취소</button></div>
+      <details class="wsyaml"><summary>정의 파일 보기 · ${esc(w.label)}</summary><pre class="code">${esc(w.yaml)}</pre></details>`;
   }
 
+  // what is wrong with the definition, element by element: the last measurement, less what the pending edits already mend
+  let probMemo = null;
+  function modelProblems() {
+    const m = S.mg.st;
+    if (!m || m.error) return { list: [], by: {}, elements: new Set() };
+    if (probMemo && probMemo.st === m && probMemo.issues === S.iss.list) return probMemo;
+    const w = m.workspace;
+    const still = new Set((w.findings || []).map((f) => f.element));
+    const objectOf = (el) => { const [k, ...r] = el.split(':'), n = r.join(':'); return k === 'property' ? n.split('.')[0] : k === 'object' ? n : ((m.links.find((l) => l.name === n) || {}).source || ''); };
+    const list = [];
+    issueAll().forEach((x) => x.items.forEach((it, i) => {
+      if (!/^(object|property|link):/.test(it.element)) return;
+      const mended = w.dirty && ['컬럼 없음', '테이블 없음'].includes(it.say) && !still.has(it.element);
+      if (!list.some((y) => y.element === it.element)) list.push({ element: it.element, label: it.label, say: it.say, issue: x.id, i, mended, object: objectOf(it.element) });
+    }));
+    (w.findings || []).forEach((f) => {  // what the pending edits themselves would break
+      if (!list.some((y) => y.element === f.element)) list.push({ element: f.element, label: elementText(f.element), say: FINDING[f.kind] || f.kind, issue: '', i: -1, mended: false, object: objectOf(f.element) });
+    });
+    const by = {};
+    list.filter((x) => !x.mended).forEach((x) => { (by[x.object] = by[x.object] || []).push(x); });
+    probMemo = { st: m, issues: S.iss.list, list, by, elements: new Set(list.filter((x) => !x.mended).map((x) => x.element)) };
+    return probMemo;
+  }
+
+  function wsProblems() {
+    const m = S.mg.st, P = modelProblems();
+    const objects = [...new Set(P.list.map((x) => x.object))];
+    const fixRow = (x) => `<div class="wsrow"><span>${esc(x.label.split(' · ').pop())} · ${esc(x.say)}</span>${x.mended ? '<span class="chip sm ok">변경으로 해결</span>' : x.issue ? `<button class="btn sm" data-act="mdprob" data-id="${esc(x.issue)}" data-i="${x.i}">고치기</button>` : `<a class="btn sm" href="${elementTo(x.element)}">열기</a>`}</div>`;
+    const broken = objects.map((o) => `<div class="mdgh">${esc(mgLabel(o))}</div>${P.list.filter((x) => x.object === o).map(fixRow).join('')}`).join('');
+    const look = [...m.unlinked.map((n) => [n, '관계 없음']), ...m.unread.filter((n) => !m.unlinked.includes(n)).map((n) => [n, '사용처 없음'])];
+    const check = look.length ? `<div class="mdgh" style="margin-top:8px">확인해 볼 것</div>${look.map(([n, w]) => `<button class="wsrow wsbtnrow" data-act="mdpick" data-name="${esc(n)}"><span>${esc(mgLabel(n))} · ${w}</span></button>`).join('')}` : '';
+    const defs = m.workspace.issues.length ? `<div class="mdgh" style="color:#a3261e">정의 검사 오류</div>${m.workspace.issues.slice(0, 6).map((x) => `<div class="wsrow mono" style="font-size:11.5px">${esc(x)}</div>`).join('')}` : '';
+    return defs + broken + check || '<div class="empty" style="padding:18px 12px">최근 측정에서 정의 문제를 찾지 못했습니다.</div>';
+  }
+
+  function wsSource() {
+    const m = S.mg.st, md = S.md, s = m.sources.source;
+    if (!s.name) return '<div class="hint" style="margin:8px">원천 DB가 연결되지 않았습니다. 데이터 가져오기에서 연결해 주세요.</div>';
+    const used = (t, c) => t.objects.flatMap((o) => mgProps(o)).find((p) => (p.column || '').toLowerCase() === c.toLowerCase() || (p.columns || []).includes(c));
+    const row = (t) => {
+      const open = md.src[t.table], free = t.columns.filter((c) => !used(t, c.name)).length;
+      const cols = open ? t.columns.map((c) => { const u = used(t, c.name); return `<button class="srcc" draggable="true" data-act="mdcol" data-col="${esc(`${t.table}|${c.name}|${c.type}`)}" title="카드에 끌어 놓거나 눌러서 속성으로 추가합니다"><span class="mono">${esc(c.name)}</span><span class="muted">${esc(c.type)}</span>${u ? `<span class="chip sm">${esc(u.label || u.name)}</span>` : '<span class="chip sm warn">미사용</span>'}</button>`; }).join('') : '';
+      return `<div class="srct"><button class="srch" data-act="mdsrc" data-t="${esc(t.table)}" aria-expanded="${!!open}"><span class="srca">${open ? '▾' : '▸'}</span><b class="mono">${esc(t.table)}</b><span class="grow"></span>${t.objects.length ? `<span class="muted">${esc(t.objects.map(mgLabel).join(', '))}</span>` : t.links.length ? '<span class="muted">연결 테이블</span>' : '<span class="chip sm warn">미사용</span>'}${free && t.objects.length ? `<span class="chip sm warn">${free}</span>` : ''}</button>${open ? `<div class="srcb">${cols}${t.objects.length ? '' : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}" style="margin:6px">객체로 추가</button>`}</div>` : ''}</div>`;
+    };
+    return s.tables.slice().sort((a, b) => (b.objects.length ? 1 : 0) - (a.objects.length ? 1 : 0) || a.table.localeCompare(b.table)).map(row).join('');
+  }
+
+  function wsLeft() {
+    const md = S.md, m = S.mg.st, w = m.workspace, P = modelProblems();
+    const n = P.list.filter((x) => !x.mended).length, c = w.edits.length || (w.dirty ? w.diff.added.length + w.diff.changed.length + w.diff.removed.length : 0);
+    const tabs = [['objects', '객체', 0], ['source', '원천', 0], ['issues', '문제', n], ['changes', '변경', c]].map(([k, l, x]) => `<button class="${md.left === k ? 'on' : ''}" data-act="mdleft" data-k="${k}">${l}${x ? ` <span class="wsn${k === 'issues' ? ' bad' : ''}">${x}</span>` : ''}</button>`).join('');
+    const body = md.left === 'source' ? wsSource() : md.left === 'issues' ? wsProblems() : md.left === 'changes' ? wsChanges()
+      : `<div style="padding:8px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 속성 · 관계 · 컬럼 검색" aria-label="검색"></div><div class="mdtree" id="mdtree">${modelTree()}</div>`;
+    return `<div class="wstabs">${tabs}</div><div class="wsleftb">${body}</div>`;
+  }
+
+  function wsBar() {
+    const w = S.mg.st.workspace, md = S.md, t = md.trial;
+    const n = w.edits.length || (w.dirty ? w.diff.added.length + w.diff.changed.length + w.diff.removed.length : 0);
+    const imp = Object.entries({ queries: '질의', decisions: '판정', questions: '검증 질문', actions: '액션' }).filter(([k]) => (w.impact || {})[k]).map(([k, l]) => `${l} ${w.impact[k]}`).join(' · ');
+    const state = w.dirty ? `<button class="chip sm warn" data-act="mdleft" data-k="changes">변경 ${n}건</button><span class="muted wsmeta">${esc(w.label)}에 기록${imp ? ` · 영향: ${esc(imp)}` : ''}</span>` : '<span class="muted wsmeta">바뀐 내용 없음</span>';
+    const tried = t && t.gates ? `<button class="chip sm ${t.passed ? 'ok' : 'bad'}" data-act="mdleft" data-k="changes">${t.passed ? '✓ 사본 시험 통과' : '사본 시험 실패'} ${t.gates.filter((g) => g.passed).length}/${t.gates.length}</button>` : '';
+    const blocked = w.issues.length ? `<button class="chip sm bad" data-act="mdleft" data-k="changes">검사 오류 ${w.issues.length}건</button>` : '';
+    const seg = `<div class="seg wsseg"><button class="${md.view === 'diagram' ? 'on' : ''}" data-act="mdview" data-k="diagram">다이어그램</button><button class="${md.view === 'table' ? 'on' : ''}" data-act="mdview" data-k="table">표</button></div>`;
+    return `<div class="wsbar">${subTabs()}${seg}<span class="grow"></span>${state}${tried}${blocked}
+      <button class="btn sm" data-act="mdundo"${w.edits.length ? '' : ' disabled'}>되돌리기</button><button class="btn sm" data-act="mdredo"${w.redo ? '' : ' disabled'}>다시 실행</button><button class="btn sm" data-act="mdtrial"${!w.dirty || (t && t.busy) ? ' disabled' : ''}>${t && t.busy ? '<span class="spin"></span>시험 중' : '사본에서 시험'}</button><button class="btn sm primary" data-act="mgpropose"${!w.dirty || S.mg.busy || w.issues.length ? ' disabled' : ''}${w.issues.length ? ' title="정의 검사 오류를 먼저 고쳐 주세요"' : ''}>변경 요청 만들기</button>
+      <button class="iconbtn" data-act="mdpanel" data-k="leftOff" aria-label="왼쪽 패널 ${md.leftOff ? '펼치기' : '접기'}" title="왼쪽 패널 ${md.leftOff ? '펼치기' : '접기'}">◧</button><button class="iconbtn" data-act="mdpanel" data-k="rightOff" aria-label="오른쪽 패널 ${md.rightOff ? '펼치기' : '접기'}" title="오른쪽 패널 ${md.rightOff ? '펼치기' : '접기'}">◨</button></div>`;
+  }
+
+  function modelTable() {
+    const m = S.mg.st, md = S.md, k = md.table;
+    const q = S.mg.q.trim().toLowerCase();
+    const has = (s) => !q || s.toLowerCase().includes(q);
+    const inObj = (n) => !S.mg.obj || n === S.mg.obj;
+    const seg = `<div class="seg wsseg">${[['objects', '객체', m.objects.length], ['props', '속성', m.properties.length], ['links', '관계', m.links.length]].map(([x, l, n]) => `<button class="${k === x ? 'on' : ''}" data-act="mdtable" data-k="${x}">${l} ${n}</button>`).join('')}</div>`;
+    const objSel = k === 'objects' ? '' : `<select data-in="mgpobj" style="width:170px"><option value="">전체 객체</option>${m.objects.map((o) => opt(o.name, o.label, S.mg.obj)).join('')}</select>`;
+    const adds = { objects: '<button class="btn sm primary" data-act="mdobjnew">새 객체</button>', props: '<button class="btn sm primary" data-act="mdaddprop">새 속성</button>', links: '<button class="btn sm primary" data-act="mdlinknew">새 관계</button>' }[k];
+    const tools = `<div class="wstools">${seg}${objSel}<input type="text" data-in="mgq" value="${esc(S.mg.q)}" placeholder="검색" aria-label="표 검색" style="width:180px"><span class="grow"></span>${adds}</div>`;
+    let table, extra = '';
+    if (k === 'objects') {
+      const rows = m.objects.filter((o) => has(`${o.name} ${o.label} ${o.table}`)).map((o) => `<tr class="${md.sel === o.name ? 'sel' : ''}" data-act="mdpick" data-name="${esc(o.name)}" style="cursor:pointer"><td><b>${esc(o.label)}</b><div class="muted mono">${esc(o.name)}</div></td>
+        <td>${o.concept ? '<span class="chip sm">개념 · 테이블 없음</span>' : `<span class="mono">${esc(o.table)}</span>`}</td><td class="mono" style="font-size:11.5px">${esc(o.key)}</td><td>${o.parent ? esc(mgLabel(o.parent)) : '<span class="muted">-</span>'}</td>
+        <td class="num">${o.properties}</td><td class="num">${o.links || (o.concept ? '0' : '<span class="chip sm bad">0</span>')}</td><td class="num">${o.concept ? '<span class="muted">-</span>' : show(o.rows)}</td><td><div class="chips">${ownerChip(o)}${stateChips(o)}</div></td></tr>`).join('');
+      table = `<table class="tight"><tr><th>객체</th><th>원천 테이블</th><th>키</th><th>상위</th><th>속성</th><th>관계</th><th>행</th><th>정의</th></tr>${rows}</table>`;
+      extra = `<div class="wsextra">${identityCard()}${identityForm()}</div>`;
+    } else if (k === 'props') {
+      const all = m.properties.filter((p) => inObj(p.object) && has(`${p.name} ${p.label} ${p.column} ${p.object}`)), shown = all.slice(0, 400);
+      const rows = shown.map((p) => { const id = `${p.object}.${p.name}`; return `<tr class="${S.mg.sel === id ? 'sel' : ''}" data-act="mdprop" data-name="${esc(id)}" style="cursor:pointer">${S.mg.obj ? '' : `<td>${esc(mgLabel(p.object))}</td>`}<td><b>${esc(p.label || p.name)}</b> ${p.key ? '<span class="chip sm b">키</span>' : ''}${p.inherited ? `<span class="chip sm">상속 · ${esc(mgLabel(p.inherited))}</span>` : ''}<div class="muted mono">${esc(p.name)}</div></td>
+        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px" title="${esc(valueText(p, ', '))}">허용값 ${p.values.length}개${Object.keys(p.labels || {}).length ? ' · 코드명 등록' : ''}</div>` : ''}</td><td class="mono" style="font-size:11.5px">${p.expr ? '<span class="chip sm">계산 속성</span>' : esc(p.column)}</td>
+        <td><div class="chips">${p.required ? '<span class="chip sm">필수</span>' : ''}${p.mask ? `<span class="chip sm warn">${MASK_WORD[p.mask]}</span>` : ''}</div></td><td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`; }).join('');
+      table = `${all.length > shown.length ? `<div class="muted" style="font-size:12px;padding:6px 10px">앞 ${shown.length}개 표시 · 객체나 검색어로 좁히세요</div>` : ''}<table class="tight"><tr>${S.mg.obj ? '' : '<th>객체</th>'}<th>속성</th><th>자료형</th><th>원천 컬럼</th><th>제약</th><th>정의</th></tr>${rows}</table>`;
+    } else {
+      const how = (l) => (l.on ? `<span class="mono">${esc(l.source)}.${esc(l.on[0])} = ${esc(l.target)}.${esc(l.on[1])}</span>` : (l.via ? `<span class="mono">${esc(l.via.table)}</span> <span class="muted">(${esc(l.via.source)} · ${esc(l.via.target)})</span>` : '<span class="chip sm">개념 관계</span>'));
+      const rows = m.links.filter((l) => (inObj(l.source) || inObj(l.target)) && has(`${l.name} ${l.label} ${l.source} ${l.target} ${mgLabel(l.source)} ${mgLabel(l.target)}`)).map((l) => `<tr class="${S.mg.sel === l.name ? 'sel' : ''}" data-act="mdlink" data-name="${esc(l.name)}" style="cursor:pointer"><td><b>${esc(l.label || l.name)}</b><div class="muted mono">${esc(l.name)}${l.inverse ? ` · 역 ${esc(l.inverse)}` : ''}</div></td>
+        <td>${esc(mgLabel(l.source))} <span class="muted">→</span> ${esc(mgLabel(l.target))}</td><td><span class="chip sm">${CARD[l.cardinality] || esc(l.cardinality)}</span></td><td style="font-size:11.5px">${how(l)}</td><td><div class="chips">${l.required ? '<span class="chip sm">필수</span>' : ''}${ownerChip(l)}${stateChips(l)}</div></td></tr>`).join('');
+      table = `<table class="tight"><tr><th>관계</th><th>출발 → 도착</th><th>Cardinality</th><th>연결 기준</th><th>정의</th></tr>${rows}</table>`;
+      const sug = fkSuggestions();
+      extra = sug.length ? `<div class="wsextra"><div class="card"><div class="ch">참조 컬럼으로 찾은 관계 <span class="chip sm">${sug.length}</span></div><div class="cb scroll" style="padding:0;max-height:240px"><table class="tight"><tr><th>출발 → 도착</th><th>연결 기준</th><th>이름</th><th></th></tr>${sug.map((x, i) => `<tr><td>${esc(mgLabel(x.source))} → ${esc(mgLabel(x.target))}</td><td class="mono" style="font-size:11.5px">${esc(x.column)}</td><td class="mono">${esc(x.name)}</td><td><button class="btn sm" data-act="mgsug" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>관계 추가</button></td></tr>`).join('')}</table></div></div></div>` : '';
+    }
+    return `${tools}<div class="wstable">${table}${extra}</div>`;
+  }
+
+  const wsMain = () => (S.md.view === 'table' ? modelTable() : `<div id="ercard">${erCard()}</div><div id="erpop">${draftBox()}</div>`);
+
+  function erPosKey() { return `xspace-er-pos:${S.st.pipeline || ''}`; }
+  function erPosLoad() {
+    const md = S.md, key = erPosKey();
+    if (md.posFor === key) return;
+    md.posFor = key;
+    try { md.pos = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { md.pos = {}; }
+  }
+  function erPosSave() { try { localStorage.setItem(erPosKey(), JSON.stringify(S.md.pos)); } catch (e) { /* kept for this visit */ } }
+
+  async function linkDraft(source, target, ev) {
+    const wrap = $('#wscenter').getBoundingClientRect();
+    S.md.draft = { source, target, busy: true, x: ev.clientX - wrap.left, y: ev.clientY - wrap.top };
+    paintDraft();
+    try {
+      const r = await api(`manage/link/suggest?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`);
+      const o = r.options[0];
+      Object.assign(S.md.draft, { busy: false, res: r, name: r.name, label: r.label, sp: o ? o.sp : '', tp: o ? o.tp : '', cardinality: o ? o.cardinality : 'many_to_one' });
+    } catch (e) { S.md.draft = null; fail(e); }
+    paintDraft();
+  }
+
+  function draftBox() {
+    const d = S.md.draft;
+    if (!d) return '';
+    const left = Math.max(8, Math.min(d.x, ($('#wscenter') || { clientWidth: 900 }).clientWidth - 340)), top = Math.max(50, Math.min(d.y, ($('#wscenter') || { clientHeight: 600 }).clientHeight - 300));
+    const pos = `style="left:${left}px;top:${top}px"`;
+    const head = `<div class="erpoph"><b>${esc(mgLabel(d.source))} → ${esc(mgLabel(d.target))}</b><button class="iconbtn" data-act="draftclose" aria-label="닫기">×</button></div>`;
+    if (d.busy) return `<div class="erpopb" ${pos}>${head}<div class="empty" style="padding:12px"><span class="spin"></span>연결 기준을 찾는 중입니다.</div></div>`;
+    const r = d.res, cur = r.options.find((o) => o.sp === d.sp && o.tp === d.tp);
+    const sel = (f, list) => `<select data-in="mddraft" data-f="${f}"><option value="">선택</option>${list.map((p) => opt(p.name, `${p.label} (${p.name})`, d[f])).join('')}</select>`;
+    const meets = cur && cur.ratio !== null ? `${Math.round(cur.ratio * 100)}% 연결됩니다 (${show(cur.matched)} / ${show(cur.total)}행)` : d.sp && d.tp ? '실제 행 연결 비율은 추가 후 DB 대조에서 확인합니다' : '';
+    return `<div class="erpopb" ${pos}>${head}
+      ${r.options.length ? `<div class="field"><label>연결 기준 · 같은 이름에서 제안</label><select data-in="mddraftopt">${r.options.map((o, i) => `<option value="${i}"${o === cur ? ' selected' : ''}>${esc(o.sp)} = ${esc(o.tp)}${o.ratio === null ? '' : ` · ${Math.round(o.ratio * 100)}%`}</option>`).join('')}<option value="-1"${cur ? '' : ' selected'}>직접 고르기</option></select></div>` : '<div class="muted" style="font-size:12px;margin-bottom:8px">같은 이름의 컬럼을 찾지 못했습니다. 연결할 속성을 골라 주세요.</div>'}
+      ${cur ? '' : `<div class="rgrid two"><div class="field"><label>출발 속성</label>${sel('sp', r.props.source)}</div><div class="field"><label>도착 속성</label>${sel('tp', r.props.target)}</div></div>`}
+      <div class="rgrid two"><div class="field"><label>Cardinality</label><select data-in="mddraft" data-f="cardinality">${Object.entries(CARD).map(([k, x]) => opt(k, x, d.cardinality)).join('')}</select></div><div class="field"><label>영문 이름</label><input type="text" data-in="mddraft" data-f="name" value="${esc(d.name)}"></div></div>
+      <div class="field"><label>라벨</label><input type="text" data-in="mddraft" data-f="label" value="${esc(d.label)}"></div>
+      <div class="erpopf"><span class="muted" id="erpopm">${esc(meets)}</span><span class="grow"></span><button class="btn sm primary" data-act="draftadd"${S.mg.busy ? ' disabled' : ''}>추가</button></div></div>`;
+  }
+
+  function paintDraft() { const b = $('#erpop'); if (b) b.innerHTML = draftBox(); }
+
+  function columnToProp(table, column, type, objName) {
+    const t = mgTable(table), md = S.md, obj = objName || t.objects[0];
+    md.hot = null;
+    if (!obj) {
+      S.mg.sel = '';
+      S.mg.form = { kind: 'object', mode: 'new', v: { table, name: typeName(table), label: '', key: t.key[0] || (t.columns[0] || {}).name || '', parent: '', description: '', cols: true } };
+      render();
+      return;
+    }
+    const p = mgProps(obj).find((x) => (x.column || '').toLowerCase() === column.toLowerCase());
+    Object.assign(md, { sel: obj, tab: 'form', rightOff: false });
+    if (p) mgOpen('prop', `${obj}.${p.name}`, true);
+    else {
+      S.mg.sel = '';
+      S.mg.form = { kind: 'prop', mode: 'new', v: { object: obj, name: propName(column), label: '', description: '', type: sqlType(type), column, values: '', unit: '', required: false, mask: '', expr: '' } };
+    }
+    render();
+    erReveal(obj);
+  }
+
+  function hotField() {
+    const h = S.md.hot;
+    if (!h || !h.field) return;
+    const el = document.querySelector(`#mdside [data-f="${h.field}"]`);
+    if (!el) return;
+    const box = el.closest('.field, .tick');
+    if (box) box.classList.add('fieldhot');
+    if (h.fresh) { h.fresh = false; el.scrollIntoView({ block: 'center' }); }
+    if (document.activeElement === document.body) el.focus({ preventScroll: true });
+  }
+
+  function paintSide() { const b = $('#mdside'); if (b) { b.innerHTML = modelSide(); hotField(); } }
+
   function trialPanel(t) {
-    return `<div style="margin-top:10px">${changeGates(t)}</div>`;
+    const before = (g) => (t.before || {})[`${g.stage}.${g.condition}`];
+    return `<div class="wstrial"><div class="mdgh" style="padding:0 0 3px">사본에서 시험한 결과</div>${t.issues && t.issues.length ? `<div class="hint warn">${esc(t.issues.join(' · '))}</div>` : ''}${t.gates.map((g) => `<div class="wstrialr"><span>${esc(g.label)}</span><span class="muted">${before(g) === undefined || before(g) === null ? '-' : gateValue(g, before(g))} → ${g.value === null ? '-' : gateValue(g, g.value)}</span><span class="ic ${g.passed ? 'y' : 'x'}" style="width:16px;height:16px;font-size:10px">${g.passed ? '✓' : '!'}</span></div>`).join('')}</div>`;
   }
 
   function viewModel() {
-    const title = '모델링 작업 공간', sub = '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다. 고친 내용은 변경 요청으로 반영됩니다';
-    const wait = mgWait(title, sub);
+    const wait = mgWait('모델링 작업 공간', '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다');
     if (wait) return wait;
-    const md = S.md;
+    erPosLoad();
+    const md = S.md, f = S.mg.form;
+    if (f && f.mode === 'edit') {  // a form opened from a list or a link belongs to its object
+      const owner = f.kind === 'object' ? f.v.name : f.kind === 'prop' ? f.v.object : f.kind === 'link' ? f.v.source : '';
+      if (owner && mgObj(owner) && owner !== md.sel && !(f.kind === 'link' && f.v.target === md.sel)) md.sel = owner;
+    }
     if (!md.sel || !mgObj(md.sel)) md.sel = (S.st.decisions[0] && mgObj(S.st.decisions[0].target) ? S.st.decisions[0].target : (S.mg.st.objects[0] || {}).name) || '';
     if (md.sel && !S.mg.form) mgOpen('object', md.sel, true);
-    const head = mgHead(title, sub, '<a class="btn sm" href="#objects">표로 보기</a><button class="btn sm primary" data-act="mgobjnew">새 객체</button>');
-    return `${head}<div class="grid mdgrid"><div class="card"><div class="cb" style="padding:10px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 테이블 검색" aria-label="객체 검색"></div><div class="cb mdtree" id="mdtree">${modelTree()}</div></div>
-      <div id="ercard">${erCard()}</div><div id="mdside">${modelSide()}</div></div>${modelFoot()}`;
+    return `<div class="ws">${wsBar()}<div class="wsbody${md.leftOff ? ' noleft' : ''}${md.rightOff ? ' noright' : ''}"><div class="wsleft" id="wsleft">${wsLeft()}</div><div class="wscenter" id="wscenter">${wsMain()}</div><div class="insp" id="mdside">${modelSide()}</div></div></div>`;
   }
 
   function modelPick(name) {
     const md = S.md;
-    md.sel = name; md.tab = md.tab || 'form';
+    md.sel = name; md.tab = md.tab || 'form'; md.hot = null;
     S.mg.keep = true;
     mgOpen('object', name, true);
     S.gsel = name;
-    const tree = $('#mdtree'), side = $('#mdside'), card = $('#ercard');
-    if (tree) tree.innerHTML = modelTree();
-    if (side) side.innerHTML = modelSide();
-    if (card) { card.innerHTML = erCard(); mountEr(); erReveal(name); }
+    if (md.focus) focusOn('model', name);
+    wsRefresh(name);
+  }
+
+  function modelLink(name) {
+    S.md.hot = null; S.md.tab = 'form'; S.md.list = 'links';
+    mgOpen('link', name, true);
+    wsRefresh();
+  }
+
+  function wsRefresh(reveal) {  // what shows the selection, without losing the canvas's place
+    const left = $('#wsleft'), side = $('#mdside'), md = S.md;
+    if (left) left.innerHTML = wsLeft();
+    if (side) paintSide();
+    if (md.view === 'table') { const c = $('#wscenter'); if (c) c.innerHTML = wsMain(); return; }
+    const box = $('#ercanvas');
+    if (box && !md.focus) box.innerHTML = erSvg();
+    if (reveal && !md.focus) erReveal(reveal);
   }
 
   function erReveal(name) {  // the picked card comes into view, wherever the diagram was scrolled to
@@ -3118,7 +3403,7 @@
       return `<tr><td><b>${esc(list[0].label || d)}</b><div class="muted mono">${esc(d)}</div></td>${KINDS.map((k) => cell(list, k)).join('')}<td style="text-align:right"><button class="btn sm" data-act="ruopen" data-d="${esc(d)}" aria-expanded="${open}">${open ? '접기' : '보기'}</button></td></tr>${detail}`;
     };
     const findings = tables.length ? `<table class="tight"><tr><th>결정표</th>${KINDS.map((k) => `<th>${esc(WORD[k])}</th>`).join('')}<th></th></tr>${tables.map(table).join('')}</table>` : empty('점검 결과 이상이 없습니다.');
-    const conflict = (c) => `<div class="hit"><div class="hit-top"><b>${esc(c.label || c.id)}</b><span class="chip sm ${c.status === 'open' ? 'warn' : 'ok'}">${c.status === 'open' ? '미결정' : `${esc(c.picked)} 선택`}</span></div>
+    const conflict = (c) => `<div class="hit" data-row="conflict:${esc(c.id)}"><div class="hit-top"><b>${esc(c.label || c.id)}</b><span class="chip sm ${c.status === 'open' ? 'warn' : 'ok'}">${c.status === 'open' ? '미결정' : `${esc(c.picked)} 선택`}</span></div>
       <table class="tight"><tr><th>출처</th><th>값</th><th></th></tr>${c.answers.map((x) => `<tr><td>${esc(x.source)}</td><td>${esc(x.says && typeof x.says === 'object' ? Object.values(x.says).map(show).join(', ') : show(x.says))}</td><td>${c.status === 'open' ? `<button class="btn sm" data-act="rpick" data-id="${esc(c.id)}" data-source="${esc(x.source)}">이 출처 선택</button>` : ''}</td></tr>`).join('')}</table></div>`;
     const conflicts = r.conflicts.length ? r.conflicts.map(conflict).join('') : empty('출처 충돌이 없습니다.');
     const due = r.due.length ? `<table class="tight"><tr><th>객체</th><th>대상</th><th>전이</th></tr>${r.due.map((d) => `<tr><td>${esc(d.type)}</td><td class="mono">${esc(d.key)}</td><td>${esc(d.source)} → ${esc(d.target)}</td></tr>`).join('')}</table><button class="btn sm" data-act="radvance" style="margin-top:8px">기한 지난 전이 처리</button>` : empty('기한이 지난 전이가 없습니다.');
@@ -3219,7 +3504,7 @@
       const sel = st.queries.find((x) => x.name === q.name);
       const params = sel ? Object.entries(sel.params).map(([k, t]) => `<div class="field"><label>${esc(k)} · ${esc(t)}</label><input type="text" data-in="param" data-k="${esc(k)}" value="${esc(plainText(q.params[k]))}"></div>`).join('') : '';
       const asked = sel ? st.questions.filter((x) => x.query === sel.name) : [];
-      left = `<div class="qlist">${st.queries.map((x) => `<button class="qitem${x.name === q.name ? ' on' : ''}" data-act="pick" data-q="${esc(x.name)}"><b>${esc(x.label)}</b><span>${esc(x.name)}</span></button>`).join('')}</div>
+      left = `<div class="qlist">${st.queries.map((x) => `<button class="qitem${x.name === q.name ? ' on' : ''}" data-act="pick" data-q="${esc(x.name)}" data-row="query:${esc(x.name)}"><b>${esc(x.label)}</b><span>${esc(x.name)}</span></button>`).join('')}</div>
         ${params}${asked.length ? `<div class="hint" style="margin-bottom:12px">검증 질문 · ${asked.map((x) => esc(x.text)).join('<br>')}</div>` : ''}`;
     } else if (q.mode === 'build') {
       left = qbForm();
@@ -3520,6 +3805,7 @@ ${controls}${body}`;
       if (yes && S.ed && S.ed.name === r.change.module) await openModule(r.change.module).catch(() => {});
       S.change = r.change;
       await load();
+      if (S.fix && yes) await fixRecheck(false);
       toast(yes ? `${r.change.module_label} ${r.change.version} 변경을 승인하고 적용했습니다.` : '변경을 반려했습니다.');
     } catch (e) { render(); fail(e); }
   }
@@ -3568,17 +3854,17 @@ ${controls}${body}`;
       <div class="stat"><b>${r.results.length ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
       ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>Backend 결과 일치 질의</span></div>` : ''}</div>
       <div class="hint" style="margin:-4px 0 12px">정답률은 정답이 정해진 질문에 같은 답을 낸 비율이고, 근거 제시율은 답에 적용 규칙 또는 질의, 출처, 모듈 버전이 모두 있는 비율입니다. 기준보다 낮으면 오답 원인에서 질문을 확인하고, 정의를 고치거나 의도한 변경이면 정답을 갱신합니다.</div>`;
-    const rows = r.results.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td style="font-size:12px">${showObj(x.expected)}</td>
+    const rows = r.results.map((x) => `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td style="font-size:12px">${showObj(x.expected)}</td>
       <td style="font-size:12px">${x.error ? `<span class="muted">${esc(x.error)}</span>` : (typeof x.got === 'number' ? `${show(x.got)}행` : showObj(x.got))}</td>
-      <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span></td></tr>`).join('');
-    const conf = c && c.queries ? c.queries.map((x) => `<tr><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.name)}</div></td>
+      <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span>${x.passed && x.grounded ? '' : `<div class="iacts"><button class="btn sm" data-act="chkopen" data-id="${esc(x.id)}">열기</button>${x.passed || x.error ? '' : `<button class="btn sm" data-act="chkexpect" data-id="${esc(x.id)}">정답 갱신</button>`}</div>`}</td></tr>`).join('');
+    const conf = c && c.queries ? c.queries.map((x) => `<tr data-row="conf:${esc(x.name)}"><td><b>${esc(x.label)}</b><div class="muted mono">${esc(x.name)}</div></td>
       <td style="font-size:12px">${Object.entries(x.rows).map(([b, n]) => `${esc(b)} ${n === null ? '오류' : n + '행'}`).join(' · ')}</td>
-      <td><span class="ic ${x.agree ? 'y' : 'x'}">${x.agree ? '✓' : '!'}</span></td></tr>`).join('') : '';
+      <td><span class="ic ${x.agree ? 'y' : 'x'}">${x.agree ? '✓' : '!'}</span>${x.agree ? '' : `<div class="iacts"><a class="btn sm" href="#query?query=${encodeURIComponent(x.name)}">질의 열기</a></div>`}</td></tr>`).join('') : '';
     const causes = {};
     const put = (k, id) => { (causes[k] = causes[k] || []).push(id); };
     r.results.filter((x) => !x.passed).forEach((x) => put(x.error ? '실행 오류' : (typeof x.got === 'number' ? '질의 결과 불일치' : '판정 결과 불일치'), x.id));
     r.results.filter((x) => x.passed && !x.grounded).forEach((x) => (x.gaps || []).forEach((g) => put(`근거 부족 · ${g}`, x.id)));
-    const wrong = Object.keys(causes).length ? `<div class="card"><div class="ch">오답 원인 <span class="chip sm warn">${Object.keys(causes).length}종</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>원인</th><th>질문 수</th><th>질문</th></tr>${Object.entries(causes).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${v.length}</td><td class="mono" style="font-size:12px">${esc(v.slice(0, 12).join(', '))}</td></tr>`).join('')}</table></div></div>` : '';
+    const wrong = Object.keys(causes).length ? `<div class="card"><div class="ch">오답 원인 <span class="chip sm warn">${Object.keys(causes).length}종</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>원인</th><th>질문 수</th><th>질문</th></tr>${Object.entries(causes).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${v.length}</td><td class="mono" style="font-size:12px">${v.slice(0, 12).map((id) => `<button class="ilinkb" data-act="chkrow" data-row="q:${esc(id)}">${esc(id)}</button>`).join(' ')}</td></tr>`).join('')}</table></div></div>` : '';
     return `${head}${stats}${wrong}
 <div class="grid" style="grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);align-items:start">
   <div class="card"><div class="ch">검증 질문</div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>번호</th><th>질문</th><th>정답</th><th>결과</th><th>근거</th><th></th></tr>${rows}</table>` : '<div class="empty" style="padding:14px">등록된 검증 질문이 없습니다.</div>'}</div></div>
@@ -3590,9 +3876,9 @@ ${controls}${body}`;
     const v = S.val;
     if (!v || v.busy) return '';
     if (!v.configured) return '<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도</div><div class="cb"><div class="hint">거래 시스템의 값과 대조할 항목이 없습니다. 흐름 설정의 거래 값 대조에서 지정합니다.</div></div></div>';
-    if (!v.ok) return `<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도</div><div class="cb"><div class="hint">${esc(v.error)}</div></div></div>`;
+    if (!v.ok) return `<div class="card" style="margin-top:16px" data-row="values"><div class="ch">거래 값 정확도</div><div class="cb"><div class="hint">${esc(v.error)}</div></div></div>`;
     const rows = v.items.map((x) => `<tr><td><b>${esc(x.label)}</b></td><td>${x.cases}건</td><td>${x.errors ? `<span class="chip sm warn">오류 ${x.errors}건</span>` : '<span class="chip sm ok">일치</span>'}</td><td style="font-size:12px">${x.mismatches.slice(0, 5).map((m) => `<span class="mono">${esc(m.key)}</span> 온톨로지 ${show(m.answer)} · 거래 시스템 ${show(m.truth)}`).join('<br>')}</td></tr>`).join('');
-    return `<div class="card" style="margin-top:16px"><div class="ch">거래 값 정확도<div class="right"><span class="chip ${v.errors ? 'warn' : 'ok'}">오류 ${v.errors}건 / ${v.cases}건</span></div></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>항목</th><th>대조</th><th>결과</th><th>다른 건</th></tr>${rows}</table></div></div>`;
+    return `<div class="card" style="margin-top:16px" data-row="values"><div class="ch">거래 값 정확도<div class="right"><span class="chip ${v.errors ? 'warn' : 'ok'}">오류 ${v.errors}건 / ${v.cases}건</span></div></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>항목</th><th>대조</th><th>결과</th><th>다른 건</th></tr>${rows}</table></div></div>`;
   }
 
   // ---- bindings ------------------------------------------------------------------------------------------------
@@ -3616,9 +3902,9 @@ ${controls}${body}`;
       <div class="hint" style="margin:-4px 0 12px">테이블과 컬럼은 정의가 참조하는 원천의 수이고, 데이터 점검은 키 중복, 필수 값, 허용값, 끊긴 관계를 원천 행에서 확인한 수입니다. 문제가 있으면 항목별 조치를 따릅니다.</div>`;
     const banner = r.ok && !r.findings.length ? '<div class="banner ok"><span class="ic y" style="width:26px;height:26px">✓</span><div><div class="big" style="font-size:16px">정의와 원천 DB가 일치합니다</div></div></div>'
       : `<div class="banner ${r.ok ? 'ok' : 'no'}"><span class="ic ${r.ok ? 'y' : 'x'}" style="width:26px;height:26px">${r.ok ? '✓' : '!'}</span><div><div class="big" style="font-size:16px">${r.ok ? '확인이 필요한 항목이 있습니다' : '정의와 원천 DB가 일치하지 않습니다'}</div></div></div>`;
-    const rows = r.findings.map((f) => `<tr><td><span class="chip ${f.severity === 'error' ? 'bad' : 'warn'}">${f.severity === 'error' ? '오류' : '주의'}</span></td>
-      <td>${esc(FINDING[f.kind] || f.kind)}</td><td>${element(f.element)}</td><td>${findingText(f)}</td></tr>`).join('');
-    return `${head}${stats}${banner}${r.findings.length ? `<div class="card"><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>심각도</th><th>종류</th><th>항목</th><th>조치</th></tr>${rows}</table></div></div>` : ''}`;
+    const rows = r.findings.map((f) => `<tr data-row="bind:${esc(f.element)}"><td><span class="chip ${f.severity === 'error' ? 'bad' : 'warn'}">${f.severity === 'error' ? '오류' : '주의'}</span></td>
+      <td>${esc(FINDING[f.kind] || f.kind)}</td><td>${elementLink(f.element)}</td><td>${findingText(f)}</td><td><button class="btn sm" data-act="issel" data-el="${esc(f.element)}">고치기</button></td></tr>`).join('');
+    return `${head}${stats}${banner}${r.findings.length ? `<div class="card"><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>심각도</th><th>종류</th><th>항목</th><th>조치</th><th></th></tr>${rows}</table></div></div>` : ''}`;
   }
 
   // ---- guide: the demo video beside the manual, each pointing at the other -------------------------------------
@@ -3727,7 +4013,8 @@ ${controls}${body}`;
     if (gates.length) ok = gates.every((g) => g.passed);
     let chip = ok === null ? '<span class="chip">미등록</span>' : (ok ? '<span class="chip ok">✓</span>' : '<span class="chip warn">확인 필요</span>');
     if (step.on === false) chip = '<span class="chip">꺼짐</span>';
-    const gateChips = gates.length ? `<div class="chips" style="margin-top:6px">${gates.map((g) => `<span class="chip sm ${g.passed ? 'ok' : 'bad'}">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''}</span>`).join('')}</div>` : '';
+    const gateChips = gates.length ? `<div class="chips" style="margin-top:6px">${gates.map((g) => (g.passed ? `<span class="chip sm ok">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''}</span>`
+      : `<button class="chip sm bad" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''} · 조치 보기</button>`)).join('')}</div>` : '';
     const sync = id === 'project' && step.backends.length ? `<button class="btn sm ghost" data-act="sync">원천 다시 읽기</button>` : '';
     return `<div class="card fstep${step.on === false ? ' off' : ''}"><div class="cb">
       <div class="fhead"><span class="fno">${i + 1}</span><b>${title}</b><span style="flex:1"></span>${chip}</div>
@@ -3796,7 +4083,7 @@ ${controls}${body}`;
         ${sel(i, 'by', [...f.decisions.map((d) => [`decision:${d.name}`, `결정 · ${d.label || d.name}`]), ...(f.functions || []).map((x) => [`function:${x.name}`, `함수 · ${x.label || x.name}`])], a.decision ? `decision:${a.decision}` : (a.function ? `function:${a.function}` : ''))}${sel(i, 'output', outs.map((o) => [o, o]), a.output)}
         <button class="iconbtn" data-act="fvaldel" data-i="${i}" aria-label="행 삭제">×</button></div>`;
     };
-    return `<div class="sec">거래 값 대조</div><div class="mgrows">${list.map(row).join('')}<button class="btn sm" data-act="fvaladd">항목 추가</button></div>
+    return `<div class="sec" data-row="values">거래 값 대조</div><div class="mgrows">${list.map(row).join('')}<button class="btn sm" data-act="fvaladd">항목 추가</button></div>
       <div class="hint" style="margin-top:6px">질의는 한 건이 한 행이고, 대상 번호 컬럼과 거래 시스템이 기록한 값 컬럼을 지정합니다. 온톨로지가 낸 값과 건별로 비교합니다.</div>`;
   }
 
@@ -4471,7 +4758,7 @@ ${controls}${body}`;
       const emb = x.files ? `<input type="checkbox" data-in="cemb" data-path="${esc(x.path)}"${x.embedded === x.files ? ' checked' : ''} aria-label="${esc(x.name)} 임베딩">${x.embedded && x.embedded < x.files ? `<span class="muted"> ${x.embedded}/${x.files}</span>` : ''}` : '<span class="muted">-</span>';
       return `<tr class="crow"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td><span class="chip sm folder">폴더</span></td><td class="muted">-</td><td>${x.files ? fileSize(x.bytes) : '<span class="muted">-</span>'}</td><td class="muted">-</td><td class="muted">${count(x.files)}개 파일</td><td class="muted">-</td><td>${inc}</td><td>${emb}</td><td>${more}</td></tr>`;
     }
-    return `<tr class="crow${x.included && !x.error ? '' : ' out'}"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td>${kindChip(x)}</td><td class="mono muted">${esc(x.ext || '-')}</td><td>${fileSize(x.bytes)}</td><td>${amount(x)}</td><td class="muted">${esc(dayOf(x.uploaded))}</td><td class="route">${esc(routeOf(x))}</td>
+    return `<tr class="crow${x.included && !x.error ? '' : ' out'}" data-row="file:${esc(x.path)}"><td>${pick}</td><td class="muted">${i + 1}</td><td>${name}</td><td>${kindChip(x)}</td><td class="mono muted">${esc(x.ext || '-')}</td><td>${fileSize(x.bytes)}</td><td>${amount(x)}</td><td class="muted">${esc(dayOf(x.uploaded))}</td><td class="route">${esc(routeOf(x))}</td>
       <td>${x.error || (x.facts || {}).kind === 'raw' ? '<span class="muted">-</span>' : `<input type="checkbox" data-in="cinc" data-path="${esc(x.path)}"${x.included ? ' checked' : ''} aria-label="${esc(x.name)} 초안 포함">`}</td><td>${embedCell(x)}</td><td>${more}</td></tr>`;
   }
 
@@ -4557,6 +4844,7 @@ ${controls}${body}`;
     if (c.file) html += fileDrawer(c);
     if (S.pal) html += paletteBox();
     if (S.rp) html += pickerBox();
+    html += issuePanel();
     const keep = layer.querySelector('#palq') || layer.querySelector('#rpq');
     const at = keep ? keep.selectionStart : null;
     const typing = document.activeElement && document.activeElement.id === 'repolabel';
@@ -4637,22 +4925,20 @@ ${controls}${body}`;
   }
 
   function monitorBrief(m) {
-    const cards = [...m.floors].reverse().map((f) => `<a class="mfloor st-${f.status}" href="#${f.tab}"><div class="mfh"><b>${esc(f.no)} ${esc(f.label)}</b><span>${ST_WORD[f.status]}</span></div>
-      <div class="mfn"><b>${f.alerts}</b> 알람</div><div class="mfk">${f.tags.slice(0, 3).map((t) => `<span>${esc(t.label)} <b>${esc(t.value)}</b></span>`).join('')}</div></a>`).join('');
-    const chain = m.chain ? `<div class="mchain"><div class="mchainh"><span class="chip sm bad">${m.chain.floors > 1 ? '연쇄 장애' : '장애'}</span><b>${m.chain.steps.map((x) => esc(x.label)).join(' ← ')}</b></div>
-      <ol>${m.chain.steps.map((x) => `<li><a href="#${esc(x.tab)}">${esc(x.label)}</a>${x.detail ? `<span class="muted">${esc(x.detail)}</span>` : ''}</li>`).join('')}</ol></div>`
-      : '<div class="mclear"><span class="ic y" style="width:22px;height:22px">✓</span>모든 통과 조건을 충족했습니다.</div>';
-    const alerts = m.alerts.length ? m.alerts.map((a) => `<a class="malert" href="#${esc(a.tab)}"><i style="background:${a.level === 'bad' ? '#e5484d' : '#e2a03f'}"></i><b>${esc(a.title)}</b><span class="muted">${esc(a.detail)}</span></a>`).join('') : '<div class="muted" style="font-size:12.5px">활성 알람이 없습니다.</div>';
+    const cards = [...m.floors].reverse().map((f) => `<a class="mfloor st-${f.status}" href="#${f.tab}"${f.alerts ? ` data-act="issfloor" data-floor="${f.id}"` : ''}><div class="mfh"><b>${esc(f.no)} ${esc(f.label)}</b><span>${ST_WORD[f.status]}</span></div>
+      <div class="mfn"><b>${f.alerts}</b> 알림</div><div class="mfk">${f.tags.slice(0, 3).map((t) => `<span>${esc(t.label)} <b>${esc(t.value)}</b></span>`).join('')}</div></a>`).join('');
+    const clear = m.alerts.some((a) => a.level === 'bad') ? '' : '<div class="mclear"><span class="ic y" style="width:22px;height:22px">✓</span>모든 통과 조건을 충족했습니다.</div>';
     const events = m.events.length ? m.events.map((e) => `<div class="mevent"><span class="mono muted">${esc(hms(e.at))}</span><span>${esc(e.text)}</span></div>`).join('') : '<div class="muted" style="font-size:12.5px">최근 활동이 없습니다.</div>';
+    const causes = m.issues.filter((x) => x.members.length).length;
     return `<div class="card mbrief"><h2>단계별 현황</h2>
-      <div class="mfloors">${cards}</div>${chain}
-      <div class="mcols"><div><div class="sec">활성 알람</div>${alerts}</div><div><div class="sec">최근 활동</div><div class="mevents">${events}</div></div></div></div>`;
+      <div class="mfloors">${cards}</div>${clear}
+      <div class="mcols"><div><div class="sec">활성 알림 ${m.alerts.length}${causes ? ` · 원인 ${causes}` : ''}</div>${issueList(m.issues)}</div><div><div class="sec">최근 활동</div><div class="mevents">${events}</div></div></div></div>`;
   }
 
   function monitorStrip(m) {
     const rtt = S.mon.rtt;
     return `<span class="mdot st-${m.status}"></span><span>파이프라인 상태 <b>${ST_WORD[m.status]}</b></span>
-      <span>활성 알람 <b>${m.alerts.length}</b></span><span>통과 조건 <b>${m.gates.met} / ${m.gates.all}</b></span>
+      <span>활성 알림 <b>${m.alerts.length}</b></span><span>통과 조건 <b>${m.gates.met} / ${m.gates.all}</b></span>
       <span>최근 점검 <b>${esc(hms(m.measured_at))}</b> <span class="muted">${count(m.took)}ms</span></span><span>접속자 <b>${count(m.visitors)}</b></span>
       <span class="mgrow"></span><span>응답 시간 <b>${rtt.length ? `${rtt[rtt.length - 1]}ms` : '-'}</b></span>${spark(rtt)}`;
   }
@@ -4786,9 +5072,12 @@ ${controls}${body}`;
     try {
       const r = await api('manage/edit', { op, args });
       S.mg.st = r;
+      const was = S.tab === 'model' && S.mg.form && S.mg.form.mode === 'edit' && S.mg.sel ? [S.mg.form.kind, S.mg.sel] : null;
       S.mg.form = null;
-      S.md.yaml = null; S.md.trial = null;
+      if (was && (was[0] === 'object' ? mgObj(was[1]) : was[0] === 'prop' ? r.properties.some((x) => `${x.object}.${x.name}` === was[1]) : was[0] === 'link' ? r.links.some((x) => x.name === was[1]) : false)) mgOpen(was[0], was[1], true);  // the workspace stays on what was just saved
+      S.md.yaml = null; S.md.trial = null; S.md.data = null; S.md.hot = null;
       S.mg.review = null;
+      if (S.fix && S.fix.phase === 'work') S.fix.phase = 'edited';
       const out = r.edit.took_out.length;
       toast(`${done} ${out ? `함께 제외된 항목 ${out}개는 대기 중인 변경에서 확인하세요.` : '변경 요청 후 승인되면 모든 화면에 반영됩니다.'}`);
     } catch (e) { fail(e); }
@@ -4869,35 +5158,7 @@ ${controls}${body}`;
 
   // ---- objects
 
-  function rowsCard() {
-    const r = S.mg.rows;
-    if (!r) return '';
-    if (r.busy) return '<div class="card" style="margin-top:16px"><div class="cb"><span class="spin"></span>데이터를 읽는 중입니다.</div></div>';
-    if (!r.ok) return `<div class="card" style="margin-top:16px"><div class="cb"><div class="hint warn">${esc(r.error)}</div></div></div>`;
-    return `<div class="card" style="margin-top:16px"><div class="ch">${esc(r.label)} 데이터 <span class="chip sm">상위 ${r.rows.length}건</span><div class="right"><button class="btn sm ghost" data-act="mgrowsclose">닫기</button></div></div>
-      <div class="cb scroll" style="padding:0;max-height:420px"><table class="tight"><tr>${r.columns.map((c) => `<th>${esc(r.labels[c] || c)}</th>`).join('')}</tr>${r.rows.map((x) => `<tr>${x.map((v) => `<td>${show(v)}</td>`).join('')}</tr>`).join('')}</table></div></div>`;
-  }
 
-  function viewObjects() {
-    const title = '객체 관리', sub = '객체의 원천 테이블, 키, 상위 객체를 관리합니다';
-    const wait = mgWait(title, sub);
-    if (wait) return wait;
-    const m = S.mg.st;
-    const q = S.mg.q.trim().toLowerCase();
-    const list = m.objects.filter((o) => !q || `${o.name} ${o.label} ${o.table}`.toLowerCase().includes(q));
-    const rows = list.map((o) => `<tr class="${S.mg.sel === o.name ? 'sel' : ''}" data-act="mgobj" data-name="${esc(o.name)}" style="cursor:pointer">
-      <td><b>${esc(o.label)}</b><div class="muted mono">${esc(o.name)}</div></td>
-      <td>${o.concept ? '<span class="chip sm">개념 · 테이블 없음</span>' : `<span class="mono">${esc(o.table)}</span>`}</td>
-      <td class="mono" style="font-size:11.5px">${esc(o.key)}</td><td>${o.parent ? esc(mgLabel(o.parent)) : '<span class="muted">-</span>'}</td>
-      <td class="num">${o.properties}</td><td class="num">${o.links || (o.concept ? '0' : '<span class="chip sm bad">0</span>')}</td><td class="num">${o.concept ? '<span class="muted">-</span>' : show(o.rows)}</td>
-      <td><div class="chips">${ownerChip(o)}${stateChips(o)}</div></td></tr>`).join('');
-    const unlinked = m.unlinked.length ? `<div class="hint">관계가 없는 객체: ${m.unlinked.map((n) => `<b>${esc(mgLabel(n))}</b>`).join(', ')}. 다른 객체로 이어지는 질의를 만들 수 없습니다. [관계 관리]에서 관계를 추가하세요.</div>` : '';
-    const head = mgHead(title, sub, `<input type="text" data-in="mgq" value="${esc(S.mg.q)}" placeholder="객체 · 테이블 검색" style="width:200px"><button class="btn sm primary" data-act="mgobjnew">새 객체</button>`);
-    return `${head}${pendingBar()}${unlinked}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start">
-      <div class="card"><div class="ch">객체 <span class="chip sm">${list.length}</span></div><div class="cb scroll" style="padding:0;max-height:640px">
-        <table class="tight"><tr><th>객체</th><th>원천 테이블</th><th>키</th><th>상위</th><th>속성</th><th>관계</th><th>행</th><th>정의</th></tr>${rows}</table></div></div>
-      ${objectForm()}</div>${rowsCard()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start;margin-top:16px">${identityCard()}${identityForm()}</div>`;
-  }
 
   function identityCard() {
     const m = S.mg.st;
@@ -4955,37 +5216,12 @@ ${controls}${body}`;
       ${field('상위 객체', parents)}
       ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button>
-        <a class="btn" href="#props" data-act="mgpropsof" data-name="${esc(o.name)}">속성 보기</a><a class="btn" href="#links" data-act="mglinksof" data-name="${esc(o.name)}">관계 보기</a>${o.table ? `<button class="btn" data-act="mgrows" data-name="${esc(o.name)}">데이터 보기</button>` : ''}
+
         <div class="grow" style="flex:1"></div><button class="btn danger" data-act="mgdel"${S.mg.busy ? ' disabled' : ''}>객체 제외</button></div></div></div>`;
   }
 
   // ---- properties
 
-  function viewProps() {
-    const title = '속성 관리', sub = '객체별 속성의 자료형, 원천 컬럼, 허용값, 필수, 가림을 관리합니다';
-    const wait = mgWait(title, sub);
-    if (wait) return wait;
-    const m = S.mg.st;
-    const q = S.mg.q.trim().toLowerCase();
-    const all = m.properties.filter((p) => (!S.mg.obj || p.object === S.mg.obj) && (!q || `${p.name} ${p.label} ${p.column} ${p.object}`.toLowerCase().includes(q)));
-    const shown = all.slice(0, 400);
-    const rows = shown.map((p) => {
-      const id = `${p.object}.${p.name}`;
-      return `<tr class="${S.mg.sel === id ? 'sel' : ''}" data-act="mgprop" data-id="${esc(id)}" style="cursor:pointer">
-        ${S.mg.obj ? '' : `<td>${esc(mgLabel(p.object))}</td>`}
-        <td><b>${esc(p.label || p.name)}</b> ${p.key ? '<span class="chip sm b">키</span>' : ''}${p.inherited ? `<span class="chip sm">상속 · ${esc(mgLabel(p.inherited))}</span>` : ''}<div class="muted mono">${esc(p.name)}</div></td>
-        <td>${esc(TYPE_WORD[p.type] || p.type)}${p.values.length ? `<div class="muted" style="font-size:11.5px" title="${esc(valueText(p, ', '))}">허용값 ${p.values.length}개${Object.keys(p.labels || {}).length ? ' · 코드명 등록' : ''}</div>` : ''}</td>
-        <td class="mono" style="font-size:11.5px">${p.expr ? '<span class="chip sm">계산 속성</span>' : esc(p.column)}</td>
-        <td><div class="chips">${p.required ? '<span class="chip sm">필수</span>' : ''}${p.mask ? `<span class="chip sm warn">${MASK_WORD[p.mask]}</span>` : ''}</div></td>
-        <td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`;
-    }).join('');
-    const objSel = `<select data-in="mgpobj" style="width:180px"><option value="">전체 객체</option>${m.objects.map((o) => opt(o.name, o.label, S.mg.obj)).join('')}</select>`;
-    const head = mgHead(title, sub, `${objSel}<input type="text" data-in="mgq" value="${esc(S.mg.q)}" placeholder="속성 · 컬럼 검색" style="width:180px"><button class="btn sm primary" data-act="mgpropnew">새 속성</button>`);
-    return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start">
-      <div class="card"><div class="ch">속성 <span class="chip sm">${all.length}</span>${all.length > shown.length ? `<span class="muted" style="font-weight:600;font-size:12px">앞 ${shown.length}개 표시 · 객체나 검색어로 좁히세요</span>` : ''}</div>
-        <div class="cb scroll" style="padding:0;max-height:640px"><table class="tight"><tr>${S.mg.obj ? '' : '<th>객체</th>'}<th>속성</th><th>자료형</th><th>원천 컬럼</th><th>제약</th><th>정의</th></tr>${rows}</table></div></div>
-      ${propForm()}</div>`;
-  }
 
   function columnsOf(obj) {
     const o = mgObj(obj);
@@ -5003,12 +5239,15 @@ ${controls}${body}`;
     const typeOk = !p || p.new || own(p);
     const iss = propIssues(v, f.mode);
     const types = `<select data-in="mgf" data-f="type" data-re="1"${typeOk ? '' : ' disabled'}>${TYPES.map((t) => opt(t, `${TYPE_WORD[t]} (${t})`, v.type)).join('')}</select>`;
-    const cols = columnsOf(v.object);
     const used = new Set(mgProps(v.object).map((x) => (x.column || '').toLowerCase()));
-    const colSel = cols.length ? `<select data-in="mgf" data-f="column" data-re="1"><option value="">${f.mode === 'new' ? '선택' : '이름과 같은 컬럼'}</option>${cols.map((c) => opt(c.name, `${c.name} · ${c.type}${used.has(c.name.toLowerCase()) && c.name !== v.column ? ' · 사용 중' : ''}`, v.column)).join('')}</select>`
+    const near = (S.md.hot && S.md.hot.near || '').toLowerCase();
+    const rank = (c) => (c.name.toLowerCase() === near ? 0 : used.has(c.name.toLowerCase()) ? 2 : 1);  // what could fit first
+    const cols = [...columnsOf(v.object)].sort((a, b) => rank(a) - rank(b));
+    const blank = S.md.hot && S.md.hot.field === 'column' ? '컬럼을 고르세요' : f.mode === 'new' ? '선택' : '이름과 같은 컬럼';
+    const colSel = cols.length ? `<select data-in="mgf" data-f="column" data-re="1"><option value="">${blank}</option>${cols.map((c) => opt(c.name, `${c.name} · ${c.type}${used.has(c.name.toLowerCase()) && c.name !== v.column ? ' · 사용 중' : ''}`, v.column)).join('')}</select>`
       : `<input type="text" data-in="mgf" data-f="column" value="${esc(v.column)}" placeholder="원천 컬럼 이름">`;
     const common = `${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}">`)}
-      ${field('자료형', types, typeOk ? '' : '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}${fieldErr(iss.type)}
+      ${field(typeOk ? '자료형' : `자료형 · ${esc(p.module_label || '표준 모듈')}에서 정함`, types, typeOk ? '' : '이 모듈에서 정한 자료형은 여기서 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가하세요.')}${fieldErr(iss.type)}
       ${v.expr ? field('계산식', `<input type="text" data-in="mgf" data-f="expr" value="${esc(v.expr)}" class="mono">`)
         : (p && p.columns.length ? field('원천 컬럼', `<input type="text" value="${esc(p.columns.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field('원천 컬럼', colSel))}
       ${v.expr || (p && p.columns.length) ? '' : `<div class="rgrid two">${field('변환식', `<input type="text" data-in="mgf" data-f="transform" value="${esc(v.transform || '')}" class="mono" placeholder="예: value / 100">`, '원천 값을 value로 참조합니다. 비워 두면 그대로 읽습니다.')}
@@ -5060,32 +5299,6 @@ ${controls}${body}`;
     return out;
   }
 
-  function viewLinks() {
-    const title = '관계 관리', sub = '객체 사이의 관계와 연결 기준 컬럼, Cardinality를 관리합니다';
-    const wait = mgWait(title, sub);
-    if (wait) return wait;
-    const m = S.mg.st;
-    const q = S.mg.q.trim().toLowerCase();
-    const list = m.links.filter((l) => (!S.mg.obj || l.source === S.mg.obj || l.target === S.mg.obj)
-      && (!q || `${l.name} ${l.label} ${l.source} ${l.target} ${mgLabel(l.source)} ${mgLabel(l.target)}`.toLowerCase().includes(q)));
-    const how = (l) => (l.on ? `<span class="mono">${esc(l.source)}.${esc(l.on[0])} = ${esc(l.target)}.${esc(l.on[1])}</span>`
-      : (l.via ? `<span class="mono">${esc(l.via.table)}</span> <span class="muted">(${esc(l.via.source)} · ${esc(l.via.target)})</span>` : '<span class="chip sm">개념 관계</span>'));
-    const rows = list.map((l) => `<tr class="${S.mg.sel === l.name ? 'sel' : ''}" data-act="mglink" data-name="${esc(l.name)}" style="cursor:pointer">
-      <td><b>${esc(l.label || l.name)}</b><div class="muted mono">${esc(l.name)}${l.inverse ? ` · 역 ${esc(l.inverse)}` : ''}</div></td>
-      <td>${esc(mgLabel(l.source))} <span class="muted">→</span> ${esc(mgLabel(l.target))}</td><td><span class="chip sm">${CARD[l.cardinality] || esc(l.cardinality)}</span></td>
-      <td style="font-size:11.5px">${how(l)}</td><td><div class="chips">${l.required ? '<span class="chip sm">필수</span>' : ''}${ownerChip(l)}${stateChips(l)}</div></td></tr>`).join('');
-    const sug = fkSuggestions();
-    const sugCard = sug.length ? `<div class="card"><div class="ch">참조 컬럼으로 찾은 관계 <span class="chip sm">${sug.length}</span><div class="right muted" style="font-weight:600;font-size:12px">원천 테이블의 외래 키 기준</div></div><div class="cb scroll" style="padding:0;max-height:240px">
-      <table class="tight"><tr><th>출발 → 도착</th><th>연결 기준</th><th>이름</th><th></th></tr>${sug.map((x, i) => `<tr><td>${esc(mgLabel(x.source))} → ${esc(mgLabel(x.target))}</td>
-        <td class="mono" style="font-size:11.5px">${esc(x.column)}</td><td class="mono">${esc(x.name)}</td><td><button class="btn sm" data-act="mgsug" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>관계 추가</button></td></tr>`).join('')}</table></div></div>` : '';
-    const unlinked = m.unlinked.length ? `<div class="hint">관계가 없는 객체: ${m.unlinked.map((n) => `<b>${esc(mgLabel(n))}</b>`).join(', ')}. 다른 객체로 이어지는 질의를 만들 수 없습니다.</div>` : '';
-    const objSel = `<select data-in="mgpobj" style="width:180px"><option value="">전체 객체</option>${m.objects.map((o) => opt(o.name, o.label, S.mg.obj)).join('')}</select>`;
-    const head = mgHead(title, sub, `${objSel}<input type="text" data-in="mgq" value="${esc(S.mg.q)}" placeholder="관계 검색" style="width:160px"><button class="btn sm primary" data-act="mglinknew">새 관계</button>`);
-    return `${head}${pendingBar()}${unlinked}${sugCard}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start">
-      <div class="card"><div class="ch">관계 <span class="chip sm">${list.length}</span><div class="right muted" style="font-weight:600;font-size:12px">그래프는 [온톨로지]에서 확인</div></div><div class="cb scroll" style="padding:0;max-height:640px">
-        <table class="tight"><tr><th>관계</th><th>출발 → 도착</th><th>Cardinality</th><th>연결 기준</th><th>정의</th></tr>${rows}</table></div></div>
-      ${linkForm()}</div>`;
-  }
 
   function linkForm() {
     const f = S.mg.form && S.mg.form.kind === 'link' ? S.mg.form : null;
@@ -5875,6 +6088,240 @@ ${controls}${body}`;
     if (!quiet) render();
   }
 
+  // ---- what is wrong, and the way to each fix -------------------------------------------------------------------
+
+  const WHERE_WORD = { here: ['b', '여기서 고침'], now: ['ok', '바로 적용'], source: ['warn', '원천에서 고침'] };
+  const FLOOR_WORD = { source: '원천', convert: '변환', ontology: '구축', store: '저장소', use: '활용', verify: '검증' };
+  const DIRECT_WORD = { workspace: '변경 열기', change: '검토 열기', action: '처리 열기' };
+  const BACK_WORD = { monitor: '관제로 돌아가기', inbox: '할 일로 돌아가기', home: '홈으로 돌아가기', flow: '흐름으로 돌아가기', check: '검증으로 돌아가기', bind: 'DB 대조로 돌아가기' };
+  const gateKey = (g) => (g.stage === 'bind' ? 'bind' : `gate:${g.stage}.${g.condition}`);
+  const issueAll = () => (S.iss.list || []).flatMap((x) => [x, ...x.members]);
+  const issueOf = (id) => issueAll().find((x) => x.id === id);
+  const issuesLeft = () => issueAll().filter((x) => !x.direct && x.kind !== 'conflict').length;
+  const rootOf = (x) => (S.iss.list || []).find((r) => r.members.some((y) => y.id === x.id)) || x;
+  const elementTo = (id) => `#model?el=${encodeURIComponent(id)}`;
+  const elementLink = (id) => (/^(object|property|link):/.test(id) ? `<a class="chip sm" href="${elementTo(id)}">${esc(ELEMENT[id.split(':')[0]])} <span class="mono">${esc(id.split(':').slice(1).join(':'))}</span></a>` : element(id));
+
+  function loadIssues() {  // one fetch at a time: whoever asks while it runs waits for the same answer
+    const I = S.iss;
+    if (I.busy) return I.busy;
+    I.busy = api('issues').then((r) => { Object.assign(I, { list: r.issues, at: r.measured_at, gates: r.gates }); }).catch((e) => { I.list = I.list || []; fail(e); }).finally(() => { I.busy = null; });
+    return I.busy;
+  }
+
+  function issueList(list) {
+    if (!list.length) return '<div class="muted" style="font-size:12.5px">활성 알림이 없습니다.</div>';
+    const row = (x) => {
+      const on = S.iss.open === x.id || x.members.some((y) => y.id === S.iss.open);
+      if (x.direct) return `<div class="iagroup"><div class="iahead"><i class="dot ${x.level}"></i><b>${esc(x.title)}</b><span class="muted">${esc(x.detail)}</span><span class="grow"></span><button class="btn sm" data-act="issopen" data-id="${esc(x.id)}">${DIRECT_WORD[x.kind] || '열기'}</button></div></div>`;
+      const sub = (y, title) => `<button class="iasub" data-act="issopen" data-id="${esc(y.id)}"><span>${esc(title)}</span><span class="muted">${esc(FLOOR_WORD[y.floor])} · ${esc(y.detail)}</span></button>`;
+      if (!x.members.length) return `<div class="iagroup${on ? ' on' : ''}"><button class="iahead" data-act="issopen" data-id="${esc(x.id)}"><i class="dot ${x.level}"></i><b>${esc(x.title)}</b><span class="muted">${esc(x.detail)}</span></button></div>`;
+      return `<div class="iagroup${on ? ' on' : ''}"><button class="iahead" data-act="issopen" data-id="${esc(x.id)}"><i class="dot ${x.level}"></i><b>${esc(x.title)}</b><span class="grow"></span><span class="chip sm">알림 ${x.members.length + 1}</span></button>
+        ${sub(x, x.bind_title || x.title)}${x.members.map((y) => sub(y, y.title)).join('')}</div>`;
+    };
+    return `<div class="ialist">${list.map(row).join('')}</div>`;
+  }
+
+  async function issueOpen(id, key) {
+    await loadIssues();
+    const list = S.iss.list || [];
+    const x = id ? issueOf(id) : list.find((y) => y.keys.includes(key)) || issueAll().find((y) => y.keys.includes(key));
+    if (!x) { toast('이 문제는 이미 해결됐습니다. 최근 측정에서 찾지 못했습니다.'); return; }
+    if (x.direct) { follow(x.direct); return; }
+    Object.assign(S.iss, { open: x.id, preview: null, done: null });
+    paintLayer();
+    const box = $('#mbrief');
+    if (box && S.mon.st) box.innerHTML = monitorBrief(S.mon.st);
+  }
+
+  function sceneIssue(a) {  // a badge or number on the picture: where something is wrong it opens that, otherwise its screen
+    const m = S.mon.st;
+    if (!m) return false;
+    const floor = a.dataset.badge || String(a.dataset.key || '').split('.')[0];
+    const f = m.floors.find((x) => x.id === floor);
+    const tag = f && a.dataset.key ? f.tags.find((t) => t.key === a.dataset.key) : null;
+    if (!f || !f.alerts || (tag && tag.status === 'ok')) return false;
+    ACT.issfloor({ dataset: { floor } });
+    return true;
+  }
+
+  function issuePanel() {
+    const I = S.iss;
+    if (I.done) {
+      const d = I.done;
+      return `<aside class="drawer ipanel" role="dialog" aria-label="해결됨"><div class="dhead"><b>조치 결과</b><button class="iconbtn" data-act="issclose" aria-label="닫기">${ui('close')}</button></div>
+        <div class="dbody"><div class="banner ok"><span class="ic y" style="width:26px;height:26px">✓</span><div><div class="big" style="font-size:16px">해결됐습니다</div><div class="muted" style="font-size:12.5px">다시 측정 ${esc(hms(d.at))} · 통과 조건 ${d.gates ? `${d.gates.met} / ${d.gates.all}` : '-'} · 남은 문제 ${d.left}건</div></div></div>
+        <div class="muted" style="font-size:13px;margin-top:12px">${esc(d.title)}</div></div></aside>`;
+    }
+    const x = I.open && issueOf(I.open);
+    if (!x) return '';
+    const root = rootOf(x);
+    const section = (word, body) => `<div class="isec"><div class="ish">${word}</div>${body}</div>`;
+    const items = x.items.map((it, i) => `<button class="iitem" data-act="issitem" data-i="${i}"><span class="iilabel">${esc(it.label)}${it.name && it.name !== it.label ? ` <span class="mono muted">${esc(it.name)}</span>` : ''}</span><span class="muted">${esc(it.say)}</span>${it.evidence ? `<span class="iiproof muted">${esc(it.evidence)}</span>` : ''}</button>`).join('');
+    const more = x.total > x.items.length ? `<div class="muted" style="font-size:12px">외 ${x.total - x.items.length}건</div>` : '';
+    const cause = x.cause ? section('왜 생겼나', `<div class="itext">${esc(x.cause.text)}</div>${root !== x ? `<button class="ilinkb" data-act="issopen" data-id="${esc(root.id)}">원인 전체 보기</button>` : ''}`) : '';
+    const effects = x.effects.length ? section('어디에 영향을 주나', x.effects.map((e) => `<div class="ikv"><span>${esc(e.label)}</span><span class="muted">${esc(e.say)}</span></div>`).join('')) : '';
+    const members = x.members.length ? section('같은 원인으로 생긴 알림', [`<button class="iitem" data-act="issopen" data-id="${esc(x.id)}"><span class="iilabel">${esc(x.bind_title)}</span><span class="muted">${esc(x.detail)}</span></button>`, ...x.members.map((y) => `<button class="iitem" data-act="issopen" data-id="${esc(y.id)}"><span class="iilabel">${esc(y.title)}</span><span class="muted">${esc(y.detail)}</span></button>`)].slice(1).join('')) : '';
+    const fix = (f, i) => {
+      const [c, w] = WHERE_WORD[f.where];
+      const p = I.preview && I.preview.i === i ? I.preview : null;
+      const body = !p ? '' : p.busy ? '<div class="ipreview"><span class="spin"></span>사본에서 시험하는 중입니다.</div>'
+        : p.error ? `<div class="ipreview"><div class="hint warn">${esc(p.error)}</div></div>` : `<div class="ipreview">
+          <div class="ikv"><span>빠지는 항목</span><span class="muted">${esc((p.res.removed || []).join(', ') || '없음')}</span></div>
+          <div class="ikv"><span>해제 후 통과 조건</span><span><b>${p.res.gates ? `${p.res.gates.met} / ${p.res.gates.all}` : '-'}</b></span></div>
+          ${p.res.impact.broken.length ? `<div class="hint warn">${esc(p.res.impact.broken.join(', '))}</div>` : ''}
+          <div class="iacts"><button class="btn sm primary" data-act="issrun" data-i="${i}"${I.running || !p.res.impact.ok ? ' disabled' : ''}>${I.running ? '<span class="spin"></span>처리 중' : '해제'}</button><button class="btn sm ghost" data-act="isscancel">취소</button></div></div>`;
+      return `<div class="ifix${f.recommended ? ' rec' : ''}"><div class="ifh"><b>${esc(f.label)}</b><span class="chip sm ${c}">${w}</span>${f.recommended ? '<span class="chip sm b">추천</span>' : ''}<span class="grow"></span>
+        ${p ? '' : `<button class="btn sm${f.recommended ? ' primary' : ''}" data-act="issfix" data-i="${i}"${I.running ? ' disabled' : ''}>${esc(f.cta)}</button>`}</div><div class="ifs">${esc(f.say)}</div>${body}</div>`;
+    };
+    const since = x.since ? `${hms(x.since)}부터 · ` : '';
+    return `<aside class="drawer ipanel" role="dialog" aria-label="${esc(x.title)}"><div class="dhead"><span class="chip sm ${x.level}">${x.level === 'bad' ? '장애' : '주의'}</span><span class="muted" style="font-size:12.5px">${esc(since)}${esc(x.floors.map((f) => FLOOR_WORD[f]).join(', '))}</span><span class="grow"></span><button class="btn sm ghost" data-act="issclose">닫기</button></div>
+      <div class="dbody"><h3 class="ititle">${esc(x.title)}</h3>
+      ${items ? section('어디가 문제인가', `${items}${more}${x.note ? `<div class="muted" style="font-size:12px">${esc(x.note)}</div>` : ''}`) : (x.note ? section('어디가 문제인가', `<div class="itext">${esc(x.note)}</div>`) : '')}
+      ${cause}${effects}${members}
+      ${section('어떻게 고치나', x.fixes.map(fix).join('') || '<div class="muted" style="font-size:12.5px">제안할 조치가 없습니다.</div>')}
+      <div class="muted ifoot">고치면 다시 측정해 이 알림을 닫습니다.</div></div></aside>`;
+  }
+
+  function goHash(go, issue) {
+    const { tab, ...rest } = go;
+    const q = new URLSearchParams();
+    Object.entries(rest).forEach(([k, v]) => q.set(k, typeof v === 'string' ? v : JSON.stringify(v)));
+    if (issue) q.set('issue', issue);
+    const s = q.toString();
+    return `#${tab}${s ? `?${s}` : ''}`;
+  }
+
+  function follow(go, issue) {
+    const h = goHash(go, issue);
+    if (location.hash === h) { readHash(); render(); $('#main').scrollTop = 0; } else location.hash = h;
+  }
+
+  function startFix(x, steps, i, label) {
+    S.fix = { id: x.id, title: x.bind_title || x.title, level: x.level, label, steps, i, back: S.fix ? S.fix.back : S.tab, phase: 'work', at: '', gates: null, left: 0 };
+    S.iss.open = '';
+    paintLayer();
+    follow(steps[i].go, x.id);
+  }
+
+  async function fixRecheck(waiting) {  // a change has gone in, or is waiting for someone: whether the problem is still there
+    const f = S.fix;
+    if (!f) return;
+    if (waiting) { f.phase = 'waiting'; render(); return; }
+    await loadIssues();
+    Object.assign(f, { phase: issueOf(f.id) ? 'left' : 'done', at: S.iss.at, gates: S.iss.gates, left: issuesLeft() });
+    render();
+  }
+
+  function fixBar() {
+    const f = S.fix;
+    if (!f) return '';
+    const n = f.steps.length, back = `<button class="btn sm ghost" data-act="fixback">${BACK_WORD[f.back] || '돌아가기'}</button>`;
+    const panel = '<button class="btn sm" data-act="fixpanel">조치 패널</button>';
+    const next = n > 1 && f.i < n - 1 ? '<button class="btn sm" data-act="fixnext">다음 문제</button>' : '';
+    if (f.phase === 'done') return `<div class="fixbar done"><i class="dot ok"></i><b>해결됐습니다</b><span class="muted">다시 측정 ${esc(hms(f.at))} · 통과 조건 ${f.gates ? `${f.gates.met} / ${f.gates.all}` : '-'} · 남은 문제 ${f.left}건</span><span class="grow"></span>${back}</div>`;
+    if (f.phase === 'left') return `<div class="fixbar"><i class="dot bad"></i><b>아직 남아 있습니다</b><span class="muted">다시 측정 ${esc(hms(f.at))} · ${esc(f.title)}</span><span class="grow"></span>${panel}${back}</div>`;
+    if (f.phase === 'waiting') return `<div class="fixbar edit"><i class="dot warn"></i><b>승인을 기다립니다</b><span class="muted">승인되면 반영되고 다시 측정합니다</span><span class="grow"></span><a class="btn sm" href="#changes">변경 요청 보기</a>${back}</div>`;
+    const where = `<span class="muted">${n > 1 ? `${f.i + 1} / ${n} · ` : ''}${esc(f.steps[f.i].label)}</span>`;
+    if (f.phase === 'edited') {
+      const t = S.md.trial, done = t && t.gates;
+      const say = done ? (t.passed ? `사본 시험 통과 ${t.gates.filter((g) => g.passed).length} / ${t.gates.length} · 변경 요청을 만들면 반영되고 다시 측정합니다` : '사본 시험에서 통과하지 못한 조건이 있습니다. 왼쪽 변경 목록에서 확인해 주세요') : '사본에서 시험한 뒤 변경 요청을 만들면 반영되고 다시 측정합니다';
+      return `<div class="fixbar edit"><i class="dot warn"></i><b>수정했습니다</b><span class="muted">${say}</span>${where}<span class="grow"></span>${next}${back}</div>`;
+    }
+    return `<div class="fixbar"><i class="dot ${f.level}"></i><b>${esc(f.title)} 고치는 중</b>${where}<span class="grow"></span>${next}${panel}${back}</div>`;
+  }
+
+  // a link can say what to open on the screen it leads to: #model?el=property:Sku.expires_on&field=column
+  function readHash() {
+    const [tab, query] = location.hash.slice(1).split('?');
+    if (['objects', 'props', 'links'].includes(tab)) { S.tab = 'model'; S.md.view = 'table'; S.md.table = tab; } else S.tab = tab || 'home';
+    S.land = query ? Object.fromEntries(new URLSearchParams(query)) : null;
+    S.hit = ''; S.hitDone = '';
+    if (!S.land) S.md.hot = null;
+  }
+
+  const LAND = {
+    model: (l) => {
+      if (!S.mg.st) return false;
+      const m = S.mg.st, md = S.md;
+      S.land = null;
+      if (l.left) Object.assign(md, { left: l.left, leftOff: false });
+      if (l.el) {
+        const [kind, ...rest] = l.el.split(':'), name = rest.join(':');
+        const exists = kind === 'property' ? m.properties.some((x) => `${x.object}.${x.name}` === name) : kind === 'object' ? !!mgObj(name) : kind === 'link' ? m.links.some((x) => x.name === name) : false;
+        if (!exists) { toast('이 항목은 정의에서 찾지 못했습니다. 이미 고쳐졌을 수 있습니다.'); render(); return true; }
+        Object.assign(md, { view: 'diagram', tab: 'form', rightOff: false, focus: '' });
+        if (kind === 'property') { md.sel = name.split('.')[0]; mgOpen('prop', name, true); }
+        if (kind === 'object') { md.sel = name; mgOpen('object', name, true); }
+        if (kind === 'link') { md.sel = m.links.find((x) => x.name === name).source; mgOpen('link', name, true); }
+        const item = issueAll().flatMap((x) => x.items).find((x) => x.element === l.el);
+        md.hot = l.field || (item && item.message) ? { field: l.field || '', note: (item && item.message) || '', fresh: true, near: l.prefill || '' } : null;
+        const v = S.mg.form && S.mg.form.v;
+        if (v && l.prefill !== undefined) {
+          const cols = kind === 'property' ? columnsOf(md.sel) : [];
+          const named = l.field === 'column' && cols.find((c) => c.name.toLowerCase() === l.prefill.toLowerCase());
+          v[l.field] = l.prefill === 'false' ? false : (named ? named.name : l.prefill);
+        }
+        if (v && l.append) v.values = [v.values, ...JSON.parse(l.append)].filter(Boolean).join(', ');
+      }
+      render();
+      if (l.el) erReveal(md.sel);
+      return true;
+    },
+    bind: (l) => { if (!S.bind || S.bind.busy) return false; S.hit = l.row || ''; return true; },
+    check: (l) => { if (!S.qa || S.qa.busy) return false; S.hit = l.row || ''; return true; },
+    flow: (l) => { if (!S.flset || S.flset.busy) return false; S.hit = l.row || ''; return true; },
+    rules: (l) => { if (!S.ru) return false; S.hit = l.row || ''; return true; },
+    inbox: (l) => { if (!S.home.box) return false; S.hit = l.row || ''; return true; },
+    query: (l) => {
+      if (!l.query) return true;
+      S.land = null;
+      S.q.mode = 'list'; S.hit = `query:${l.query}`;
+      pickQuery(l.query);
+      return true;
+    },
+    mgrules: (l) => {
+      if (!S.mg.st) return false;
+      S.land = null;
+      if (l.decision) S.mg.dec = l.decision;
+      if (l.key) { S.sim.dec = l.decision; S.sim.key = l.key; S.sim.vals = {}; simulateNow(l.key, {}); } else render();
+      return true;
+    },
+    changes: (l) => { if (l.change) { S.land = null; S.chg.sel = l.change; S.chg.det = null; S.chg.item = ''; render(); } return true; },
+    catalog: (l) => {
+      if (!l.file) return true;
+      S.land = null;
+      const folder = l.file.includes('/') ? l.file.slice(0, l.file.lastIndexOf('/')) : '';
+      Object.assign(S.cat, { folder });
+      S.hit = `file:${l.file}`;
+      loadCatalog();
+      ACT.cview({ dataset: { path: l.file } });
+      return true;
+    },
+  };
+
+  function landNow() {
+    const l = S.land;
+    if (!l) return;
+    const go = LAND[S.tab];
+    if (go && go(l) === false) return;  // what it points at is still loading; the next render comes back here
+    if (S.land === l) S.land = null;
+    if (l.issue && !S.fix) {  // a reloaded or shared link: the bar comes back with the problem it was about
+      loadIssues().then(() => {
+        const x = issueOf(l.issue), f = x && x.fixes.find((y) => y.go);
+        if (x && f) { S.fix = { id: x.id, title: x.bind_title || x.title, level: x.level, label: f.label, steps: f.steps.length ? f.steps : [{ label: x.title, go: f.go }], i: 0, back: 'monitor', phase: 'work' }; render(); }
+      });
+    }
+  }
+
+  function showHit() {
+    if (!S.hit) return;
+    const el = document.querySelector(`[data-row="${CSS.escape(S.hit)}"]`);
+    if (!el) return;
+    el.classList.add('hitrow');
+    if (S.hitDone !== S.hit) { S.hitDone = S.hit; el.scrollIntoView({ block: 'center' }); }
+  }
+
   // ---- events --------------------------------------------------------------------------------------------------
 
   // what every screen holds of the pipeline on screen, for when another one takes its place
@@ -5926,12 +6373,84 @@ ${controls}${body}`;
     gxsel: (t) => gxPick(t.dataset.id),
     gxroot: (t) => { const n = S.gx.nodes[t.dataset.id]; if (n) gxStart(n.type, n.key); },
     recgraph: () => { const r = S.rec; S.gx.seed = { type: r.type, key: r.key }; location.hash = '#graph'; gxStart(r.type, r.key); },
+    issopen: (t) => issueOpen(t.dataset.id, t.dataset.key),
+    issclose: () => { Object.assign(S.iss, { open: '', preview: null, done: null }); paintLayer(); const box = $('#mbrief'); if (box && S.mon.st) box.innerHTML = monitorBrief(S.mon.st); },
+    isscancel: () => { S.iss.preview = null; paintLayer(); },
+    issfloor: async (t) => {
+      await loadIssues();
+      const x = issueAll().find((y) => y.alert && y.floor === t.dataset.floor);
+      if (x) issueOpen(x.id);
+    },
+    issel: async (t) => {
+      await loadIssues();
+      const x = issueAll().find((y) => y.items.some((i) => i.element === t.dataset.el));
+      if (x) issueOpen(x.id); else toast('이 문제는 이미 해결됐습니다.');
+    },
+    issitem: (t) => {
+      const x = issueOf(S.iss.open), i = Number(t.dataset.i), it = x.items[i];
+      startFix(x, x.items.map((y) => ({ label: y.label, go: y.go })), i, it.label);
+    },
+    issfix: async (t) => {
+      const I = S.iss, i = Number(t.dataset.i), x = issueOf(I.open), f = x.fixes[i];
+      if (f.copy) {
+        try { await navigator.clipboard.writeText(f.copy); toast('내용을 복사했습니다. 담당자에게 전달해 주세요.'); } catch (_) { window.prompt('아래 내용을 복사해 주세요.', f.copy); }
+        return;
+      }
+      if (f.preview) {
+        I.preview = { i, busy: true };
+        paintLayer();
+        try { I.preview = { i, res: await api(`issue/preview?module=${encodeURIComponent(f.preview)}`) }; } catch (e) { I.preview = { i, error: e.message }; }
+        paintLayer();
+        return;
+      }
+      if (f.run) { ACT.issrun(t); return; }
+      startFix(x, f.steps.length ? f.steps : [{ label: x.title, go: f.go }], 0, f.label);
+    },
+    issrun: async (t) => {
+      const I = S.iss, x = issueOf(I.open), f = x.fixes[Number(t.dataset.i)];
+      I.running = true;
+      paintLayer();
+      try {
+        const r = await api(f.run.route, f.run.body);
+        if (r.ok === false) throw new Error(r.error || '조치를 실행하지 못했습니다.');
+        if (r.pending) {  // it waits in the pending edits, like any other change
+          Object.assign(I, { running: false, open: '', preview: null });
+          S.mg.st = null;
+          toast('대기 중인 변경에 기록했습니다. 작업 공간에서 변경 요청을 만들어 주세요.');
+          follow({ tab: 'model', left: 'changes' });
+          return;
+        }
+        stale();
+        S.mg.form = null; S.changes = null; S.home.box = null; S.agree = null; S.cat.st = null;
+        S.st = await api('state');
+        await loadIssues();
+        const still = issueOf(x.id);
+        S.mon.st = S.tab === 'monitor' ? await api('monitor') : S.mon.st;
+        Object.assign(I, { running: false, preview: null, open: still ? x.id : '', done: still ? null : { title: x.title, at: I.at, gates: I.gates, left: issuesLeft() } });
+        if (still) toast('조치했지만 문제가 남아 있습니다. 측정 결과를 다시 확인해 주세요.', true);
+        render();
+      } catch (e) { I.running = false; paintLayer(); fail(e); }
+    },
+    fixnext: () => { const f = S.fix; f.i += 1; f.phase = 'work'; follow(f.steps[f.i].go, f.id); },
+    fixpanel: () => issueOpen(S.fix.id),
+    fixback: () => { const to = S.fix.back; S.fix = null; S.md.hot = null; if (S.tab === to) render(); else location.hash = `#${to}`; },
+    chkrow: (t) => { S.hit = t.dataset.row; S.hitDone = ''; render(); },
+    chkopen: (t) => {
+      const q = S.st.questions.find((x) => x.id === t.dataset.id);
+      if (q) follow(q.decision ? { tab: 'mgrules', decision: q.decision } : { tab: 'query', query: q.query });
+    },
+    chkexpect: async (t) => {
+      const r = S.qa.results.find((x) => x.id === t.dataset.id);
+      const expect = typeof r.got === 'number' ? { rows: r.got } : Object.fromEntries(Object.keys(r.expected || {}).map((k) => [k, (r.got || {})[k]]));
+      if (!window.confirm(`${r.id}의 정답을 현재 결과로 바꿉니다. 의도한 변경일 때만 사용해 주세요. 변경 요청을 거쳐 반영됩니다.`)) return;
+      try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast('정답 변경을 대기 중인 변경에 기록했습니다. 작업 공간에서 변경 요청을 만들어 주세요.'); render(); } catch (e) { fail(e); }
+    },
     mdpick: (t) => modelPick(t.dataset.name),
     mdobjnew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.mg.form = { kind: 'object', mode: 'new', v: { table: '', name: '', label: '', key: '', parent: '', description: '', cols: true } }; render(); },
     mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
-    erreset: () => { S.md.pos = {}; const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
+    erreset: () => { S.md.pos = {}; erPosSave(); const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
     erzoom: (t) => erZoom(Number(t.dataset.z), t.dataset.v === 'onto' ? 0.3 : 0.4, t.dataset.v || 'model'),
-    ontoall: () => ontoClear(),
+    ontoall: () => focusOff('onto'),
     ontoedit: () => { S.md.sel = S.ov.sel || S.sel; S.mg.form = null; location.hash = '#model'; },
     erfold: () => { S.md.fold = !S.md.fold; render(); },
     mgfix: (t) => { if (S.mg.form) { S.mg.form.v[t.dataset.f] = t.dataset.v; render(); } },
@@ -5961,13 +6480,44 @@ ${controls}${body}`;
     },
     mdtrial: async () => {
       S.md.trial = { busy: true }; render();
+      S.md.left = 'changes';
       try { S.md.trial = await api('manage/trial', {}); S.md.trialOpen = true; } catch (e) { S.md.trial = { error: e.message }; }
       render();
     },
-    mdtrialopen: () => { S.md.trialOpen = !S.md.trialOpen; render(); },
-    mdprop: (t) => { mgOpen('prop', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
-    mdlink: (t) => { mgOpen('link', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
-    mdtab: (t) => { S.md.tab = t.dataset.k; const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
+
+    mdprop: (t) => { S.md.hot = null; S.md.tab = 'form'; S.md.list = 'props'; S.md.sel = t.dataset.name.split('.')[0]; mgOpen('prop', t.dataset.name, true); wsRefresh(); },
+    mdleft: (t) => { Object.assign(S.md, { left: t.dataset.k, leftOff: false }); render(); },
+    mdview: (t) => { S.md.view = t.dataset.k; S.md.focus = ''; render(); },
+    mdtable: (t) => { S.md.table = t.dataset.k; S.mg.q = ''; const c = $('#wscenter'); if (c) c.innerHTML = wsMain(); },
+    mdlist: (t) => { S.md.list = t.dataset.k; paintSide(); },
+    mdpanel: (t) => { S.md[t.dataset.k] = !S.md[t.dataset.k]; render(); },
+    mdaddprop: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; S.md.hot = null; ACT.mgpropnew(); },
+    mdfocus: () => { if (S.md.focus) focusOff('model'); else if (S.md.sel) focusOn('model', S.md.sel); },
+    mdonly: () => { if (!S.md.only && !Object.keys(modelProblems().by).length) { toast('표시할 문제가 없습니다.'); return; } S.md.only = !S.md.only; const c = $('#ercard'); if (c) { c.innerHTML = erCard(); mountEr(); } },
+    mdsrc: (t) => { S.md.src[t.dataset.t] = !S.md.src[t.dataset.t]; const b = $('#wsleft'); if (b) b.innerHTML = wsLeft(); },
+    mdcol: (t) => { const [table, column, type] = t.dataset.col.split('|'); columnToProp(table, column, type); },
+    mdprob: (t) => {
+      const x = issueOf(t.dataset.id);
+      if (x) startFix(x, x.items.map((y) => ({ label: y.label, go: y.go })), Number(t.dataset.i), x.title);
+    },
+    mdrevert: async (t) => {
+      S.mg.busy = true; render();
+      try { S.mg.st = await api('manage/revert', { index: Number(t.dataset.i) }); S.mg.form = null; S.md.yaml = null; S.md.trial = null; toast('이 변경을 되돌렸습니다. 뒤의 변경은 그대로입니다.'); } catch (e) { fail(e); }
+      S.mg.busy = false; render();
+    },
+    mdredo: async () => {
+      try { S.mg.st = await api('manage/redo', {}); S.mg.form = null; S.md.yaml = null; S.md.trial = null; toast('되돌린 변경을 다시 적용했습니다.'); render(); } catch (e) { fail(e); }
+    },
+    draftclose: () => { S.md.draft = null; paintDraft(); },
+    draftadd: () => {
+      const d = S.md.draft;
+      if (!IDENT.test(d.name || '')) { toast('이름은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있습니다.', true); return; }
+      if (!d.sp || !d.tp) { toast('연결할 속성을 모두 골라 주세요.', true); return; }
+      S.md.draft = null;
+      mgEdit('add_link', { name: d.name, label: d.label, source: d.source, target: d.target, on: [d.sp, d.tp], cardinality: d.cardinality }, `관계 ${d.label || d.name}을 추가했습니다.`);
+    },
+    mdlink: (t) => modelLink(t.dataset.name),
+    mdtab: (t) => { S.md.tab = t.dataset.k; paintSide(); },
     mdedit: async (t) => { location.hash = '#library'; await openModule(t.dataset.module).catch(fail); },
     ibchange: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },
     chgsel: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; S.chg.text = ''; render(); },
@@ -6028,7 +6578,7 @@ ${controls}${body}`;
       try { S.met[t.dataset.name] = await api('metric?name=' + encodeURIComponent(t.dataset.name)); render(); } catch (e) { fail(e); }
     },
     rpick: async (t) => {
-      try { await api('conflict/pick', { id: t.dataset.id, source: t.dataset.source }); S.ru = null; toast('선택을 대기 중인 변경에 추가했습니다. 객체 관리에서 변경 요청으로 반영합니다.'); render(); } catch (e) { fail(e); }
+      try { await api('conflict/pick', { id: t.dataset.id, source: t.dataset.source }); S.ru = null; toast('선택을 대기 중인 변경에 추가했습니다. 작업 공간에서 변경 요청으로 반영합니다.'); render(); } catch (e) { fail(e); }
     },
     radvance: async () => {
       try { const r = await api('transitions/advance', {}); S.ru = null; toast(`기한이 지난 전이 ${r.moved}건을 처리했습니다.`); render(); } catch (e) { fail(e); }
@@ -6232,6 +6782,7 @@ ${controls}${body}`;
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
     ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
     slim: () => {
+      if (S.tab === 'model') { S.md.wide = !S.md.wide; renderSide(); return; }
       S.slim = !S.slim;
       try { localStorage.setItem('xspace-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
       renderSide();
@@ -6523,13 +7074,6 @@ ${controls}${body}`;
     mgclose: () => { S.mg.form = null; S.mg.sel = ''; render(); },
     fvaladd: () => { const s = S.flset.settings; (s.values = s.values || []).push({ name: '', label: '', query: '', key: '', truth: '', answer: {} }); render(); },
     fvaldel: (t) => { S.flset.settings.values.splice(Number(t.dataset.i), 1); render(); },
-    mgrows: async (t) => {
-      S.mg.rows = { busy: true };
-      render();
-      try { S.mg.rows = await api('object/rows?name=' + encodeURIComponent(t.dataset.name)); } catch (e) { S.mg.rows = { ok: false, error: e.message }; }
-      render();
-    },
-    mgrowsclose: () => { S.mg.rows = null; render(); },
     mgrowadd: (t) => { S.mg.form.v[t.dataset.list].push({ ...NEW_ROW[t.dataset.list] }); render(); },
     mgrowdel: (t) => { S.mg.form.v[t.dataset.list].splice(Number(t.dataset.i), 1); render(); },
     mgrulenew: () => {
@@ -6569,7 +7113,7 @@ ${controls}${body}`;
       const x = tb ? mgTable(tb) : null;
       S.mg.sel = '';
       S.mg.form = { kind: 'object', mode: 'new', v: { table: tb, name: tb ? typeName(tb) : '', label: '', key: x ? (x.key[0] || (x.columns[0] || {}).name || '') : '', parent: '', description: '', cols: true } };
-      if (S.tab !== 'objects') { S.mg.keep = true; location.hash = '#objects'; } else render();
+      if (S.tab !== 'model') { S.mg.keep = true; location.hash = '#model'; } else render();
     },
     mgpropnew: () => {
       const m = S.mg.st;
@@ -6583,8 +7127,8 @@ ${controls}${body}`;
       S.mg.form = { kind: 'link', mode: 'new', v: { name: '', label: '', source: S.mg.obj || '', target: '', sp: '', tp: '', cardinality: 'many_to_one', inverse: '', required: false } };
       render();
     },
-    mgpropsof: (t) => { S.mg.obj = t.dataset.name; S.mg.q = ''; S.mg.form = null; S.mg.sel = ''; location.hash = '#props'; },
-    mglinksof: (t) => { S.mg.obj = t.dataset.name; S.mg.q = ''; S.mg.form = null; S.mg.sel = ''; location.hash = '#links'; },
+
+
     mgcancel: () => { S.mg.form = null; S.mg.sel = ''; render(); },
     mgsave: () => mgSave(),
     mgdel: () => mgDelete(),
@@ -6611,10 +7155,11 @@ ${controls}${body}`;
         }
         S.mg.review = null;
         stale();
-        S.mg.st = r; S.mg.form = null; S.mg.sel = ''; S.mg.open = false;
+        S.mg.st = r; S.mg.form = null; S.mg.sel = ''; S.mg.open = false; S.md.trial = null;
         S.changes = null; S.change = r.change; S.agree = null; S.flset = null; S.pos = {};
         S.mg.busy = false;
         await load();
+        if (S.fix) await fixRecheck(r.pending);
         toast(r.pending ? '변경을 요청했습니다. 승인자가 승인하면 반영됩니다. [온톨로지 라이브러리]의 변경 요청에서 확인하세요.'
           : `변경을 승인하고 적용했습니다. '${r.change.module_label}' ${r.change.version} 기준으로 모든 화면이 바뀝니다.${r.warning ? ' ' + r.warning : ''}`);
       } catch (e) { S.mg.busy = false; render(); fail(e); }
@@ -6796,6 +7341,12 @@ ${controls}${body}`;
       if (!t.checked && at >= 0) list.splice(at, 1);
       if (t.dataset.v === '*') render();
     },
+    mddraftopt: (t) => {
+      const d = S.md.draft, i = Number(t.value), o = d.res.options[i];
+      Object.assign(d, o ? { sp: o.sp, tp: o.tp, cardinality: o.cardinality } : { sp: '', tp: '' });
+      paintDraft();
+    },
+    mddraft: (t) => { const d = S.md.draft; d[t.dataset.f] = t.value; if (['sp', 'tp'].includes(t.dataset.f)) paintDraft(); },
     mgf: (t) => {
       const f = S.mg.form;
       if (!f) return;
@@ -6904,13 +7455,15 @@ ${controls}${body}`;
     const layer = $('#layer');
     const OPENS = ['repopick', 'palette', 'cmenu'];  // these decide for themselves whether a float stays
     document.addEventListener('click', (ev) => {
+      const scene = ev.target.closest('#mscene a.badge, #mscene a.tag');
+      if (scene && sceneIssue(scene)) { ev.preventDefault(); return; }
       const t = ev.target.closest('[data-act]');
       if (!ev.target.closest('#layer') && !(t && OPENS.includes(t.dataset.act))) closeFloats();
       if (t && ACT[t.dataset.act]) { ev.preventDefault(); ACT[t.dataset.act](t, ev); }
     });
     document.addEventListener('keydown', (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ACT.palette(); }
-      if (ev.key === 'Escape') { if (S.rp) ACT.rpclose(); else if (S.tab === 'onto' && S.ov.focus) ontoClear(); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
+      if (ev.key === 'Escape') { if (S.iss.open || S.iss.done) ACT.issclose(); else if (S.md.draft) ACT.draftclose(); else if (S.rp) ACT.rpclose(); else if (S.tab === 'onto' && S.ov.focus) focusOff('onto'); else if (S.tab === 'model' && S.md.focus) focusOff('model'); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
     });
     layer.addEventListener('input', (ev) => {
       if (ev.target.id === 'repolabel') S.pick.label = ev.target.value;
@@ -6931,6 +7484,10 @@ ${controls}${body}`;
     });
     $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
+    main.addEventListener('dragstart', (ev) => {
+      const c = ev.target.closest && ev.target.closest('[data-col]');
+      if (c) { ev.dataTransfer.setData('text/x-column', c.dataset.col); ev.dataTransfer.effectAllowed = 'copy'; }
+    });
     main.addEventListener('change', (ev) => { const t = ev.target; if (t.dataset && CHANGE[t.dataset.in]) CHANGE[t.dataset.in](t); });
     main.addEventListener('keydown', (ev) => {
       if (ev.target.dataset && ev.target.dataset.in === 'exq' && ev.key === 'Enter') { ev.preventDefault(); ACT.exsearch(); }
@@ -6981,7 +7538,8 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && ev.target.id === 'chgtext') { const b = $('[data-act=chgcomment]'); if (b) ACT.chgcomment(b); }
     });
     window.addEventListener('hashchange', () => {
-      S.tab = location.hash.slice(1) || 'home';
+      readHash();
+      $('#main').scrollTop = 0;
       S.cat.file = null; S.pa = null;
       if (S.mg.keep) S.mg.keep = false;
       else if (S.mg.form && S.mg.form.kind !== 'question') { S.mg.form = null; S.mg.sel = ''; }
@@ -6989,7 +7547,8 @@ ${controls}${body}`;
     });
   }
 
-  S.tab = (location.hash.slice(1) && NAV.some(([k]) => k === location.hash.slice(1))) ? location.hash.slice(1) : 'home';
+  readHash();
+  if (!NAV.some(([k]) => k === S.tab)) S.tab = 'home';
   setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
   setInterval(() => { if (S.st && document.visibilityState === 'visible') loadLinks(); }, LINKS_EVERY);
   wire();

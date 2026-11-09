@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- An alert leads to its fix. `GET issues` turns a measurement into what can be acted on: the items behind each failure, the module
+  or change that brought them, what reads them and the ways to fix each (here, at once, or at the source with the list to hand
+  over). Failures that read a broken column are gathered under it; a failure nothing ties to it stands alone. Which fix is put
+  first follows from rules (a close column name to bind to, a module just attached), and without grounds none is. The board's
+  alerts, its picture and floors, the home, 할 일, 흐름, DB 대조 and 검증 all open the same panel. A database check finding now
+  carries the table, columns and rows it is about (`Finding.data`), and a measurement the queries that disagree and the
+  questions a document search missed.
+- A link can name what to open on the screen it leads to (`#model?el=property:Sku.expires_on&field=column`), and a screen opens at
+  the top instead of where the last one was scrolled to. While a problem is being fixed a bar says which one, what is next and
+  where to go back; when the change goes in the board measures again and says whether it is gone. `GET issue/preview` tries taking
+  a module off on a copy first. When each issue opened and closed is written to the journal.
+- 모델링 작업 공간 is rebuilt around the canvas: the sidebar folds, the panels on either side fold, and the bar along the bottom is gone
+  to a toolbar. On the left, objects (found by object, property, relation or column), the source's tables and columns, what is
+  wrong and what is pending. On the right, an object and then what is in it, with its properties and relations always in reach,
+  each field that cannot be changed saying which module set it, and a data tab with rows and how full each column is
+  (`GET object/profile`). On the canvas a relation is drawn from the + on a card to another card, with the join worked out from
+  names and how many rows would meet (`GET manage/link/suggest`), a relation line opens when pressed, a column dropped on a card
+  becomes a property, cards say what is new, changed or wrong, 연결만 보기 and 문제만 보기 narrow it, and where cards were moved is
+  remembered. Any one pending edit can be taken back, later edits kept (`manage/revert`), and one taken back made again
+  (`manage/redo`). What blocks a change request is said where it is blocked, and pending edits are checked against the source as
+  they are made.
+- 객체, 속성 and 관계 tables are a switch on the workspace; 정의 관리 keeps states and roles. Their old addresses open the table view.
+- A question brought by a module can take a new expected answer (`update_question`): a module that removes a question and writes it
+  itself keeps its own.
+
 - The page starts from what a person comes to do. The sidebar is three sections, 업무 (home, 할 일, search and questions,
   records, decisions), 구축 (bringing data in, modelling, the library and its changes) and 운영 (the pipeline board, the data
   map, stores and links, checks, the guide), and the first screen is a home instead of the pipeline board.

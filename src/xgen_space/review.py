@@ -252,13 +252,17 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
     space = studio.space
     if settings.on("index") and space is not None and space.documents():
         rep = space.check()
-        out["index"] = {"found": rep["found"], "questions": rep["questions"], "share": rep["share"]} if rep else {}
+        out["index"] = {"found": rep["found"], "questions": rep["questions"], "share": rep["share"],
+                        "missed": [{"text": r["text"], "document": r["document"]} for r in rep["results"] if not r["rank"]]} if rep else {}
     if settings.on("query") and studio.onto.queries and len(studio.backends) > 1:
         try:
             c = studio.conformance()
             s = c.summary()
             out["query"] = {"agree": s["agree"], "queries": s["queries"], "disagree": s["disagree"],
-                            "share": s["agree"] / s["queries"] if s["queries"] else None}
+                            "share": s["agree"] / s["queries"] if s["queries"] else None,
+                            "reports": [{"name": q.name, "outcomes": {b: {"rows": None if o.rows is None else len(o.rows), "error": o.error}
+                                                                      for b, o in q.outcomes.items()}}
+                                        for q in c.queries if not q.agree]}
         except Exception as e:  # a query a backend refuses is a failed condition, not a crash of the review
             out["query"] = {"error": f"{type(e).__name__}: {e}", "share": 0.0}
     if settings.on("check") and studio.onto.questions:

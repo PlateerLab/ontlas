@@ -1,7 +1,7 @@
 """Check the definition against the actual database: tables, columns, types, keys, enum values, orphan links."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from xgen_space.check import columns_of
 from xgen_space.compile.sql import qi
@@ -24,6 +24,7 @@ class Finding:
     kind: str
     element: str
     detail: str
+    data: dict = field(default_factory=dict)  # the table, columns and rows it is about, for whoever goes on to fix it
 
 
 @dataclass
@@ -65,7 +66,7 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
             out.append(Finding("warning", "table", f"object:{o.name}", f"identity not resolved yet: '{o.table}' is written then"))
             continue
         if have is None:
-            out.append(Finding("error", "table", f"object:{o.name}", f"table '{o.table}' does not exist"))
+            out.append(Finding("error", "table", f"object:{o.name}", f"table '{o.table}' does not exist", {"table": o.table}))
             continue
         for p in sorted(set(o.properties) | {o.key}):
             prop = o.properties.get(p)
@@ -76,22 +77,24 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
                 checked["columns"] += 1
                 if col.lower() not in have:
                     out.append(Finding("error", "column", f"property:{o.name}.{p}",
-                                       f"column '{o.table}.{col}' does not exist"))
+                                       f"column '{o.table}.{col}' does not exist", {"table": o.table, "column": col}))
                 elif prop is not None and len(parts) == 1 and not _fits(prop.type, have[col.lower()]):
                     out.append(Finding("warning", "type", f"property:{o.name}.{p}",
-                                       f"{prop.type} is read from {o.table}.{col} declared {have[col.lower()] or '?'}"))
+                                       f"{prop.type} is read from {o.table}.{col} declared {have[col.lower()] or '?'}",
+                                       {"table": o.table, "column": col, "type": prop.type, "sql_type": have[col.lower()] or ""}))
     for lk in onto.links.values():
         if lk.via and lk.via.table in absent:
             continue
         if lk.via:
             have = table(lk.via.table)
             if have is None:
-                out.append(Finding("error", "table", f"link:{lk.name}", f"link table '{lk.via.table}' does not exist"))
+                out.append(Finding("error", "table", f"link:{lk.name}", f"link table '{lk.via.table}' does not exist", {"table": lk.via.table}))
                 continue
             for c in (lk.via.source_column, lk.via.target_column):
                 checked["columns"] += 1
                 if c.lower() not in have:
-                    out.append(Finding("error", "column", f"link:{lk.name}", f"column '{lk.via.table}.{c}' does not exist"))
+                    out.append(Finding("error", "column", f"link:{lk.name}", f"column '{lk.via.table}.{c}' does not exist",
+                                       {"table": lk.via.table, "column": c}))
     if data and not any(f.severity == "error" for f in out):
         out += _data_checks(onto, backend, limit, checked, absent)
     return BindingReport(out, checked)
@@ -110,7 +113,8 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int], a
         checked["data_checks"] += 1
         if dup:
             shown = [KEY_SEP.join(str(v) for v in r[:-1]) for r in dup]
-            out.append(Finding("error", "key", f"object:{o.name}", f"key {o.key} repeats: {shown}"))
+            out.append(Finding("error", "key", f"object:{o.name}", f"key {o.key} repeats: {shown}",
+                               {"table": o.table, "columns": list(o.key_prop.cols), "keys": shown}))
         for p in o.properties.values():
             if p.expr:
                 continue
@@ -120,14 +124,18 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int], a
                 n = backend.fetch(f"SELECT COUNT(*) FROM {t} WHERE {empty}")[0][0]
                 checked["data_checks"] += 1
                 if n:
-                    out.append(Finding("error", "required", f"property:{o.name}.{p.name}", f"{n} rows have no value"))
+                    rows = backend.fetch(f"SELECT {top}{key} FROM {t} WHERE {empty}{first}")
+                    out.append(Finding("error", "required", f"property:{o.name}.{p.name}", f"{n} rows have no value",
+                                       {"table": o.table, "columns": list(p.cols), "count": n,
+                                        "keys": [KEY_SEP.join(str(v) for v in r) for r in rows]}))
             if p.type == "enum" and p.values:
-                seen = [r[0] for r in backend.fetch(f"SELECT DISTINCT {c} FROM {t} WHERE {c} IS NOT NULL")]
+                seen = {str(r[0]): r[1] for r in backend.fetch(f"SELECT {c}, COUNT(*) FROM {t} WHERE {c} IS NOT NULL GROUP BY {c}")}
                 checked["data_checks"] += 1
-                extra = sorted(str(v) for v in seen if str(v) not in p.values)
+                extra = sorted(v for v in seen if v not in p.values)
                 if extra:
                     out.append(Finding("warning", "enum", f"property:{o.name}.{p.name}",
-                                       f"values not in the definition: {extra[:limit]}"))
+                                       f"values not in the definition: {extra[:limit]}",
+                                       {"table": o.table, "column": p.cols[0], "extra": extra[:20], "counts": {v: seen[v] for v in extra[:20]}}))
     for lk in onto.links.values():
         src, dst = onto.objects[lk.source], onto.objects[lk.target]
         if not (lk.on and src.table and dst.table):
@@ -140,6 +148,12 @@ def _data_checks(onto: Ontology, backend, limit: int, checked: dict[str, int], a
                           f"WHERE s.{qi(sp[0])} IS NOT NULL AND d.{qi(tp[0])} IS NULL")[0][0]
         checked["data_checks"] += 1
         if n:
+            dialect = backend.capabilities.dialect
+            top = f"TOP {limit} " if dialect == "tsql" else ""
+            first = {"oracle": f" FETCH FIRST {limit} ROWS ONLY", "tsql": ""}.get(dialect, f" LIMIT {limit}")
+            rows = backend.fetch(f"SELECT {top}s.{qi(sp[0])} FROM {qi(src.table)} s LEFT JOIN {qi(dst.table)} d ON {join} "
+                                 f"WHERE s.{qi(sp[0])} IS NOT NULL AND d.{qi(tp[0])} IS NULL{first}")
             out.append(Finding("warning", "orphan", f"link:{lk.name}",
-                               f"{n} {src.name} rows point at a {dst.name} that does not exist"))
+                               f"{n} {src.name} rows point at a {dst.name} that does not exist",
+                               {"table": src.table, "column": sp[0], "count": n, "target": dst.table, "values": [str(r[0]) for r in rows]}))
     return out

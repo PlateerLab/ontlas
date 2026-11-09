@@ -435,6 +435,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.function_log()
                 if route == "values":
                     return s.value_state()
+                if route == "issues":
+                    return s.issues()
+                if route == "issue/preview":
+                    return s.module_preview(a["module"])
+                if route == "manage/link/suggest":
+                    return s.link_suggest(a["source"], a["target"])
+                if route == "object/profile":
+                    return s.object_profile(a["name"])
                 if route == "files":
                     return s.files_state()
                 if route == "catalog":
@@ -675,6 +683,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_discard()
             if route == "manage/undo":
                 return s.manage_undo()
+            if route == "manage/redo":
+                return s.manage_redo()
+            if route == "manage/revert":
+                return s.manage_revert(int(a.get("index", -1)))
             if route == "manage/trial":
                 return s.manage_trial()
             if route == "manage/yaml":

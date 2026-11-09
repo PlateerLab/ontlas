@@ -93,12 +93,12 @@ def _alerts(steps: dict, files: dict, counts: dict, findings: list[dict], *, cha
     if counts["unread"]:
         name = next(p for p, f in files.items() if f.get("error")).rsplit("/", 1)[-1]
         out.append({"floor": "convert", "level": "warn", "title": f"읽기 실패 파일 {counts['unread']}개",
-                    "detail": name, "tab": "catalog"})
+                    "detail": name, "tab": "catalog", "key": "files"})
     if findings:
         first = findings[0]
         where = str(first.get("element", "")).split(":", 1)[-1]
         out.append({"floor": "ontology", "level": "bad", "title": f"DB 대조 오류 {len(findings)}건",
-                    "detail": f"{where} · {FINDING.get(first.get('kind'), first.get('kind'))}", "tab": "bind"})
+                    "detail": f"{where} · {FINDING.get(first.get('kind'), first.get('kind'))}", "tab": "bind", "key": "bind"})
     for s in steps.values():
         if s.get("on") is False:
             continue
@@ -106,16 +106,16 @@ def _alerts(steps: dict, files: dict, counts: dict, findings: list[dict], *, cha
             if not g["passed"] and s["id"] != "bind":
                 out.append({"floor": STAGES[s["id"]][0], "level": "bad", "title": f"{g['label']} 미충족",
                             "detail": f"기준 {_gate_value(g, g['limit'])} · 현재 {_gate_value(g, g['value'])}",
-                            "tab": STAGES[s["id"]][2]})
+                            "tab": STAGES[s["id"]][2], "key": f"gate:{s['id']}.{g['condition']}"})
     if dirty:
         out.append({"floor": "ontology", "level": "warn", "title": "대기 중인 관리 변경", "detail": "변경 요청이 필요합니다",
-                    "tab": "objects"})
+                    "tab": "model", "key": "dirty"})
     if changes:
         out.append({"floor": "ontology", "level": "warn", "title": f"승인 대기 변경 {changes}건", "detail": "온톨로지 라이브러리",
-                    "tab": "library"})
+                    "tab": "changes", "key": "changes"})
     if actions:
         out.append({"floor": "use", "level": "warn", "title": f"승인 대기 처리 {actions}건", "detail": "판정 · 처리",
-                    "tab": "decide"})
+                    "tab": "inbox", "key": "actions"})
     return out
 
 
