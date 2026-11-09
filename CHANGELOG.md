@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- An alert leads to its fix. `GET issues` turns a measurement into what can be acted on: the items behind each failure, the module
+  or change that brought them, what reads them and the ways to fix each (here, at once, or at the source with the list to hand
+  over). Failures that read a broken column are gathered under it; a failure nothing ties to it stands alone. Which fix is put
+  first follows from rules (a close column name to bind to, a module just attached), and without grounds none is. The board's
+  alerts, its picture and floors, the home, 할 일, 흐름, DB 대조 and 검증 all open the same panel. A database check finding now
+  carries the table, columns and rows it is about (`Finding.data`), and a measurement the queries that disagree and the
+  questions a document search missed.
+- A link can name what to open on the screen it leads to (`#model?el=property:Sku.expires_on&field=column`), and a screen opens at
+  the top instead of where the last one was scrolled to. While a problem is being fixed a bar says which one, what is next and
+  where to go back; when the change goes in the board measures again and says whether it is gone. `GET issue/preview` tries taking
+  a module off on a copy first. When each issue opened and closed is written to the journal.
+- 모델링 작업 공간 is rebuilt around the canvas: the sidebar folds, the panels on either side fold, and the bar along the bottom is gone
+  to a toolbar. On the left, objects (found by object, property, relation or column), the source's tables and columns, what is
+  wrong and what is pending. On the right, an object and then what is in it, with its properties and relations always in reach,
+  each field that cannot be changed saying which module set it, and a data tab with rows and how full each column is
+  (`GET object/profile`). On the canvas a relation is drawn from the + on a card to another card, with the join worked out from
+  names and how many rows would meet (`GET manage/link/suggest`), a relation line opens when pressed, a column dropped on a card
+  becomes a property, cards say what is new, changed or wrong, 연결만 보기 and 문제만 보기 narrow it, and where cards were moved is
+  remembered. Any one pending edit can be taken back, later edits kept (`manage/revert`), and one taken back made again
+  (`manage/redo`). What blocks a change request is said where it is blocked, and pending edits are checked against the source as
+  they are made.
+- 객체, 속성 and 관계 are a view of the workspace, three columns side by side: pick an object and the other two follow it, and a row
+  opens for editing where it stands. 정의 관리 keeps states and roles and leads to that view; the tables' old addresses open it too.
+- 온톨로지 is its own place in the sidebar, under 업무: it is read there and changed under 모델링, which holds 작업 공간 and 정의 관리.
+- A question brought by a module can take a new expected answer (`update_question`): a module that removes a question and writes it
+  itself keeps its own.
+
 - The page starts from what a person comes to do. The sidebar is three sections, 업무 (home, 할 일, search and questions,
   records, decisions), 구축 (bringing data in, modelling, the library and its changes) and 운영 (the pipeline board, the data
   map, stores and links, checks, the guide), and the first screen is a home instead of the pipeline board.
@@ -49,6 +76,58 @@
 - 모델링 · 작업 공간: the modules and their objects as a tree, the schema graph, and the picked object's form, its lines in
   its module file, and what reads it (`GET element/readers`), side by side. Edits go to the pending changes as on the
   definition screens.
+- 초안 생성 is a review of proposals: a stepper that counts what each step still asks a person to settle, each source
+  table with the standard object it matches and how well, an English API name from the library's words and the
+  glossaries (`주문상태이력` is `OrderStatusHistory`; a name is romanized only when a part of it is no known word), and
+  beside the picked table its rows, why its key is a key, the match evidence and the columns to hide
+  (`POST draft/table`). Each table is bound to the standard or kept as a new object; the rest are adopted from the
+  bar at the foot. The last step shows what applying writes (`POST draft/review/preview`), and applying binds the
+  chosen tables to the standard and keeps the others as new objects beside it, joined to the standard's objects where
+  the draft found the tables joined (`POST draft/review/apply`). A draft takes object names as an edit (`names`).
+- 모델링 · 작업 공간 draws the picked object's module as an entity diagram (keys, computed properties, what other modules
+  add, relation names and cardinality, the modules it reaches in their own folding region; cards move by dragging). The
+  inspector has the form, the object's YAML as the pending edits leave it, which writes back as the same edits
+  (`GET element/yaml`, `POST manage/yaml`), what reads it, and comments kept in the journal (`GET element/comments`,
+  `POST element/comment`). A property's form says under the field what the definition check would refuse, with the fix
+  as a button. At the foot: the pending edits and what they reach, the last one taken back (`POST manage/undo`), a
+  trial on a copy of the space (`POST manage/trial`) and the change request.
+- 규칙 관리 heads each table with its hit policy (a choice; `update_decision`), its target, its module and the rules
+  other modules add; a cell is changed in place; rows move by dragging (`move_rule`). The simulator opens on a record,
+  and it, the boundary cases, the validation questions and the table check run on the table as edited.
+- 변경 요청 says who reviews and that the author cannot approve, marks each element not yet looked at, lists what the
+  change reaches, compares an element field by field or as the module file before and after, and answers a broken
+  validation question with a proposal to its author.
+- 홈 says when the space was last checked, keeps recent questions, shows which pass conditions a change makes worse and a
+  source check that warns as a task, offers records before any was opened, and orders the sidebar for the role.
+- 레코드 is read by what it belongs with when it has no name, lists those records a level deeper, has tabs, works out
+  read-only functions on opening without logging them, and has the source's own dates in its history.
+- 그래프 탐색 starts from a record found by key or name (`GET records/find`), keeps names on nodes and relations, folds a
+  relation with many records into one node, saves the shown types as a perspective, lists the steps and copies a link.
+- 질의 shows the results first with the code folded below, builds a query without code (an object, a relation, the values,
+  conditions) and keeps it as a registered query (`add_query`), and says there is nothing to compare with one store.
+- 데이터 카탈로그 says what the files just brought in turned out to be and leads to the next step; the data map's explorer
+  is the 자산 탐색기 and an object there leads to its records.
+- An edit with an unknown property type or a hit policy the rules cannot take is refused; a rule-level issue no longer
+  reads as a decision called "x rule y" when a module is settled.
+- The sidebar follows the proposal: 업무 has 객체 탐색 and 그래프 탐색 apart; 구축 has 규칙 · 액션 and 변경 요청 (with the
+  number waiting), the library its second tab. A library module shows its change under review and opens in the
+  modelling workspace; decided changes are its history.
+- 그래프 탐색 draws records as boxes by type with each relation's name, in layers or rings, with the found path in
+  orange; relations of the picked record are ticked open and closed; the canvas pans, zooms and fits.
+- The modelling diagram follows a pick in the tree, scrolls, pans by dragging the empty canvas, zooms (Ctrl + wheel)
+  and fits the width on opening; the modules it reaches stand beside it.
+- 초안 생성 opens at its first step, the files and the settings, in the same stepper as the review.
+- A record is found as a person would say it (`GET records/find`): a key or part of one in any case, a name, or a
+  definition, that is a type's name with words its values hold ("VIP 고객", "취소된 주문": Korean words reach English
+  codes through the library's words), a page at a time. On the graph the start and both ends of a path are found as
+  they are typed, Enter takes the best match and draws it, a picked box becomes the path's start, a start the graph does
+  not hold yet is drawn first, and a window lists many records by type with paging.
+- 모델링 › 온톨로지 draws the whole ontology as the workspace's cards, every module a region, beside the picked object's
+  definition.
+- On 모델링 › 온톨로지 a pressed card gathers what it connects to around it at reading size, in one view: what points at it
+  on the left, what it points at on the right, its parent above and its kinds below, on top of the rest of the ontology,
+  which stays faint where it was. Another card moves the focus; an empty spot, Esc or 전체 보기 comes back to where the
+  person was looking.
 - The README's table of screens follows the new sidebar.
 
 ## 0.13.0

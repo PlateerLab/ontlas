@@ -12,10 +12,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from xgen_space.model import _scope_filter
+from xgen_space.model import TYPES, _scope_filter
 from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
+HIT_POLICIES = ("first", "priority", "collect", "unique")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
@@ -38,6 +39,7 @@ class Edit:
     op: str
     target: str
     took_out: list[str] = field(default_factory=list)
+    args: dict[str, Any] = field(default_factory=dict)  # what it was asked with, to make it again
 
 
 class Workspace:
@@ -52,6 +54,8 @@ class Workspace:
         start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
+        self._before: list[dict] = []  # the module before each edit, to take any one back
+        self._undone: list[Edit] = []  # what was taken back and can be made again
         self._base_onto = compose(self.base, **self.kw).ontology
 
     # ---- reading ------------------------------------------------------------------------------------------------
@@ -81,7 +85,7 @@ class Workspace:
 
     # ---- edits --------------------------------------------------------------------------------------------------
 
-    def apply(self, op: str, a: dict[str, Any]) -> Edit:
+    def apply(self, op: str, a: dict[str, Any], *, again: bool = False) -> Edit:
         fn = getattr(self, f"_{op}", None)
         if fn is None or op.startswith("_"):
             raise EditError(f"unknown edit '{op}'")
@@ -101,9 +105,45 @@ class Workspace:
         except (ModuleError, KeyError, TypeError, ValueError) as e:  # the edit does not hold: nothing changes
             self.module = Module.from_dict(before)
             raise EditError(str(e)) from None
-        edit = Edit(op, target, took)
+        edit = Edit(op, target, took, copy.deepcopy(a))
         self.edits.append(edit)
+        self._before.append(before)
+        if not again:
+            self._undone.clear()
         return edit
+
+    def undo(self) -> Edit | None:
+        """Take back the last edit: the module is as it was before it."""
+        if not self.edits:
+            return None
+        self.module = Module.from_dict(self._before.pop())
+        edit = self.edits.pop()
+        self._undone.append(edit)
+        return edit
+
+    def redo(self) -> Edit | None:
+        """Make the edit last taken back again."""
+        if not self._undone:
+            return None
+        edit = self._undone.pop()
+        return self.apply(edit.op, edit.args, again=True)
+
+    def revert(self, index: int) -> Edit:
+        """Take back one edit, however far back: the module goes back to before it and the later edits are made again.
+        When a later edit leans on it, nothing changes and the message names that edit."""
+        if not 0 <= index < len(self.edits):
+            raise EditError("edit not found")
+        module, edits, before = self.module, list(self.edits), list(self._before)
+        gone, later = edits[index], edits[index + 1:]
+        self.module, self.edits, self._before = Module.from_dict(before[index]), edits[:index], before[:index]
+        for edit in later:
+            try:
+                self.apply(edit.op, edit.args, again=True)
+            except EditError:
+                self.module, self.edits, self._before = module, edits, before
+                raise EditError(edit.target) from None
+        self._undone.clear()
+        return gone
 
     def _section(self, part: str, section: str) -> dict:
         holder = self.module.body if part == "body" else self.module.extend
@@ -183,6 +223,7 @@ class Workspace:
             raise EditError(f"property name '{name}' must be letters, digits and _ starting with a letter")
         if name in _all_props(onto, obj):
             raise EditError(f"{obj} already has '{name}'")
+        _known_type(a)
         spec = _prop_spec(a)
         if self._owns_object(obj):
             self._section("body", "objects")[obj].setdefault("properties", {})[name] = spec
@@ -196,6 +237,7 @@ class Workspace:
         if obj not in onto.objects or name not in _all_props(onto, obj):
             raise EditError(f"{obj}.{name} is unknown")
         fields = {k: a[k] for k in PROP_FIELDS if k in a}
+        _known_type(fields)
         if self._added_prop(obj, name):
             holder = (self._section("body", "objects")[obj] if self._owns_object(obj)
                       else self._section("extend", "objects")[obj])
@@ -298,6 +340,26 @@ class Workspace:
         self.module.body.setdefault("questions", []).append(q)
         return f"question:{qid}"
 
+    def _update_question(self, a: dict) -> str:
+        """Another expected answer for a question: what the module brought is taken out and written here anew."""
+        qid = str(a.get("id") or "")
+        current = next((q for q in self.composed().ontology.questions if q.id == qid), None)
+        if current is None:
+            raise EditError(f"question '{qid}' is unknown")
+        own = self.module.body.setdefault("questions", [])
+        mine = next((q for q in own if q.get("id") == qid), None)
+        if mine is None:
+            if qid not in self._removed("questions"):
+                self._removed("questions").append(qid)
+            mine = {"id": qid, "text": current.text}
+            if current.decision:
+                mine.update({"decision": current.decision, "key": current.key})
+            else:
+                mine.update({"query": current.query, "params": dict(current.params or {})})
+            own.append(mine)
+        mine["expect"] = dict(a.get("expect") or {})
+        return f"question:{qid}"
+
     def _delete_question(self, a: dict) -> str:
         qid = str(a.get("id") or "")
         own = self.module.body.get("questions") or []
@@ -381,6 +443,62 @@ class Workspace:
                     return f"rule:{name}.{spec['id']}"
         patch.setdefault("rules_replace", {})[spec["id"]] = spec
         return f"rule:{name}.{spec['id']}"
+
+    def _add_query(self, a: dict) -> str:
+        """A query people run by its name, put together on the page."""
+        from xgen_space.ir import IRError, Query
+
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"query name '{name}' must be letters, digits and _ starting with a letter")
+        if name in self.composed().ontology.queries:
+            raise EditError(f"query '{name}' already exists")
+        q = a.get("query")
+        try:
+            Query.from_dict(q)
+        except (IRError, TypeError, ValueError) as e:
+            raise EditError(f"query {name}: {e}") from None
+        self._section("body", "queries")[name] = {"label": str(a.get("label") or name), "query": q}
+        return f"query:{name}"
+
+    def _update_decision(self, a: dict) -> str:
+        """A table's label, its clause, or how it picks among the rules that hold."""
+        name = str(a.get("decision") or a.get("name") or "")
+        t = self._table(name)
+        fields = {k: a[k] for k in ("label", "cite", "hit_policy") if k in a}
+        if fields.get("hit_policy") and fields["hit_policy"] not in HIT_POLICIES:
+            raise EditError(f"hit policy '{fields['hit_policy']}' is not one of {', '.join(HIT_POLICIES)}")
+        bare = [r.id for r in t.rules if r.priority is None]
+        if fields.get("hit_policy") == "priority" and bare:
+            raise EditError(f"hit policy priority needs a priority on every rule; {', '.join(bare)} have none")
+        holder = (self._section("body", "decisions")[name] if self._owns("decisions", name)
+                  else self._section("extend", "decisions").setdefault(name, {}))
+        holder.update(fields)
+        return f"decision:{name}"
+
+    def _move_rule(self, a: dict) -> str:
+        """A rule to another place in its table. Where the table is another module's, this module writes the whole
+        order: it takes the table's rules out and puts them back first, in the new order."""
+        name, rid = str(a.get("decision") or ""), str(a.get("id") or "")
+        t = self._table(name)
+        ids = [r.id for r in t.rules]
+        if rid not in ids:
+            raise EditError(f"rule '{rid}' is unknown in {name}")
+        order = [i for i in ids if i != rid]
+        order.insert(max(0, min(int(a.get("to", 0)), len(order))), rid)
+        if order == ids:
+            return f"rule:{name}.{rid}"
+        specs = {r["id"]: r for r in self.composed().ontology.to_dict()["decisions"][name].get("rules") or []}
+        if self._owns("decisions", name):
+            self._section("body", "decisions")[name]["rules"] = [specs[i] for i in order]
+            return f"rule:{name}.{rid}"
+        patch = self._section("extend", "decisions").setdefault(name, {})
+        mine = {r.get("id") for k in ("rules_prepend", "rules_append") for r in patch.get(k) or []}
+        patch["rules_remove"] = sorted(set(patch.get("rules_remove") or []) | {i for i in ids if i not in mine})
+        patch.pop("rules_append", None)
+        patch.pop("rules_replace", None)
+        patch["rules_prepend"] = [specs[i] for i in order]
+        return f"rule:{name}.{rid}"
 
     def _delete_rule(self, a: dict) -> str:
         name, rid = str(a.get("decision") or ""), str(a.get("id") or "")
@@ -813,6 +931,11 @@ def _removals(d: dict) -> set[str]:
         else:
             out |= {f"{kinds.get(s, s)}:{k}" for k in items or []}
     return out
+
+
+def _known_type(a: dict) -> None:
+    if a.get("type") and a["type"] not in TYPES:
+        raise EditError(f"type '{a['type']}' is not one of {', '.join(TYPES)}")
 
 
 def _prop_spec(a: dict) -> dict:

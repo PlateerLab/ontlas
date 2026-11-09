@@ -31,7 +31,10 @@ NEEDS = {
     "draft/map/apply": "editor", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
+    "draft/table": "editor", "draft/review/apply": "editor", "draft/review/preview": "editor",
+    "manage/undo": "editor", "manage/trial": "editor", "manage/yaml": "editor", "element/comment": "editor",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
+    "manage/redo": "editor", "manage/revert": "editor",
     "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
 }

@@ -96,6 +96,8 @@ def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_n
     assert "액션 반품 신청" in rule["readers"]  # what the rule reaches
     assert d["before"]["decide.min_agreement"] >= next(g["value"] for g in d["gates"] if g["stage"] == "decide")
     assert not d["can_decide"] and d["can_mark"]  # its author cannot approve it
+    assert d["module_label"] == "관리 변경" and "검증 질문 A1" in d["affected"] and not d["self_approve"]
+    assert any(t == "+" and "<= 21" in line for t, line in d["yaml"])  # the module file, line by line
     d = session.change_mark(cid, rule["element"], "fix")
     d = session.change_comment(cid, rule["element"], "개정 문서를 올려 주세요")
     assert d["marks"] == {rule["element"]: "fix"} and d["items"][0]["comments"][0]["text"] == "개정 문서를 올려 주세요"
@@ -108,6 +110,17 @@ def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_n
     assert session.decide_change(cid, False)["ok"]
     with pytest.raises(ValueError):
         session.change_mark(cid, rule["element"], "ok")  # decided: no more marks
+
+
+def test_a_record_is_read_by_what_it_belongs_with_and_its_values_are_worked_out_on_opening(session):
+    r = session.record_page("OrderItem", "I1001")
+    ctx = {c["type"]: c for c in r["context"]}
+    assert ctx["Order"]["key"] == "O1" and ctx["Order"]["next"][0]["key"] == "C001"  # the order, then its customer
+    assert r["title"] is None and r["named_by"]["type"] == "Product"  # read by what it is, not by whose it is
+    if r["computed"]:
+        assert all("outputs" in c or "error" in c for c in r["computed"])
+    assert not session.studio.function_log  # worked out, not run
+    assert any(h["kind"] == "source" and h["event"] == "배송 완료" for h in r["history"])
 
 
 def test_a_decision_is_tried_on_a_record_and_says_what_would_turn_it(session):
@@ -139,3 +152,32 @@ def test_a_record_graph_grows_by_relation_and_finds_what_joins_two_records(sessi
     with pytest.raises(ValueError):  # an unknown type is said before any path is tried
         session.record_path("Customer", "C001", "Nowhere", "X")
     assert "결정 반품 가능 여부" in session.element_readers("object:OrderItem")["readers"]
+
+
+def test_a_record_is_found_by_its_key_or_its_name_whatever_its_type(session):
+    first = session.record_find("C001")["items"][0]
+    assert (first["type"], first["key"], first["title"]) == ("Customer", "C001", "김하늘")
+    assert session.record_find("c001")["items"][0]["key"] == "C001"  # however it is typed
+    found = session.record_find("니트")["items"]
+    assert {(x["type"], x["key"]) for x in found} >= {("Category", "K3"), ("Product", "P1")}
+    assert {x["key"] for x in session.record_find("I100")["items"]} >= {"I1001", "I1002"}  # part of a key
+    assert session.record_find("  ")["items"] == []
+
+
+def test_a_record_is_found_by_a_definition(session):
+    vip = session.record_find("VIP 고객")
+    assert vip["type"] == "Customer" and vip["items"] and all(x["sub"].startswith("VIP") for x in vip["items"])
+    every = session.record_find("고객")
+    assert every["type"] == "Customer" and every["total"] > vip["total"]
+    gone = session.record_find("취소된 주문")  # a Korean word for an English code: 취소 is CANCELLED
+    assert gone["type"] == "Order" and gone["items"] and all("CANCELLED" in x["sub"] for x in gone["items"])
+    page = session.record_find("", 2, "OrderItem", 2)
+    assert len(page["items"]) == 2 and page["more"] and page["total"] > 4
+
+
+def test_a_relation_read_from_either_end_is_the_same_relation(session):
+    order = session.record_links("Order", "O2")["links"]
+    item = session.record_links("OrderItem", "I1005")["links"]
+    down = next(x for x in order if x["type"] == "OrderItem" and x["forward"])
+    up = next(x for x in item if x["type"] == "Order" and not x["forward"])
+    assert down["base"] == up["base"] and down["base_label"] == up["base_label"]  # one edge on the graph, not two

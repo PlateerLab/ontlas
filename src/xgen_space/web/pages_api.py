@@ -40,6 +40,24 @@ def _title(onto, type_name: str) -> str:
     return ""
 
 
+ENDINGS = ("에서", "으로", "된", "한", "인", "의", "을", "를", "은", "는", "이", "가", "로")  # what a Korean word carries on
+
+
+def _forms(word: str) -> list[str]:
+    """The ways a word may stand in a value: as typed, in capitals and small letters, and without a Korean ending."""
+    out = [word, word.upper(), word.lower()]
+    for e in ENDINGS:
+        if len(word) > len(e) + 1 and word.endswith(e):
+            out.append(word[:-len(e)])
+            break
+    return list(dict.fromkeys(out))
+
+
+def find_prop_of(onto, type_name: str, code: str) -> str:
+    """The property of a type whose allowed values carry `code`."""
+    return next((p for p in all_props(onto, type_name) if code in (find_prop(onto, type_name, p).labels or {})), "")
+
+
 def _lineage(onto, name: str) -> list[str]:
     out, t = [], name
     while t and t in onto.objects and t not in out:
@@ -73,8 +91,17 @@ class PagesMixin:
                           "module_label": self._label(owner) if owner else ""})
         tp = _title(o, type_name)
         title = row.get(tp) if tp and tp != t.key else None
+        context = self._to_one(type_name, key, depth=2)
+        flat = [x for c in context for x in (c, *c["next"])]
+        # a thing is read by the name of what it is (the product), not of the person it belongs to: a type that hides
+        # some of its values is about a person
+        person = {x["type"] for x in flat if any(find_prop(o, x["type"], p).mask for p in all_props(o, x["type"]))}
+        named = None if title is not None else next((x for x in flat if x["title"] and x["type"] not in person),
+                                                    next((x for x in flat if x["title"]), None))
         return plain({
             "type": type_name, "label": t.label or type_name, "key": key, "title": title, "table": t.table,
+            "context": context, "named_by": named,
+            "computed": self._computed(o, type_name, key),
             "description": t.description, "props": props, "state": self._record_state(t, row),
             "links": self._record_links(type_name, key), "decisions": self._record_decisions(type_name, key),
             "functions": [{"name": f.name, "label": f.label or f.name, "outputs": list(f.outputs), "status": f.status,
@@ -86,6 +113,68 @@ class PagesMixin:
             "key_documents": self._key_mentions(key),
             "history": self._record_history(type_name, key),
         })
+
+    def _to_one(self, type_name: str, key: str, depth: int = 1, seen: frozenset = frozenset()) -> list[dict]:
+        """The records this one refers to, one each (an order item's order and its SKU), and theirs in turn up to
+        `depth`: what a person reads a record by when it has no name of its own."""
+        o, st = self.studio.onto, self.studio
+        mine = set(_lineage(o, type_name))
+        out = []
+        for lk in o.links.values():
+            # one record on the other side: a relation to one, or a relation from one read backwards
+            ahead = lk.source in mine and lk.cardinality in ("many_to_one", "one_to_one")
+            back = lk.target in mine and lk.cardinality in ("one_to_many", "one_to_one") and not ahead
+            other = lk.target if ahead else lk.source
+            if not (ahead or back) or other in seen or other in mine:
+                continue
+            ot = o.obj(other)
+            edge = Edge("x", lk.name, "y") if ahead else Edge("y", lk.name, "x")
+            q = Query(nodes={"x": type_name, "y": other}, edges=[edge],
+                      where=Cmp(Ref("x", o.obj(type_name).key), "eq", key), columns=[Column(Ref("y", ot.key), "k")], limit=2)
+            try:
+                rows = st.run(q).rows
+            except Exception:  # a relation the source cannot answer is left out of the summary
+                continue
+            if len(rows) != 1:
+                continue
+            k = str(rows[0][0])
+            row = st.fetch(other, k) or {}
+            tp = _title(o, other)
+            item = {"type": other, "type_label": ot.label or other, "key": k, "via": (lk.label or lk.name) if ahead else (ot.label or other),
+                    "title": row.get(tp) if tp and tp != ot.key else None, "sub": self._summary(other, row), "next": []}
+            if depth > 1:
+                item["next"] = self._to_one(other, k, depth - 1, seen | mine)
+            out.append(item)
+        return out
+
+    def _summary(self, type_name: str, row: dict) -> str:
+        """Two values a person tells a record by, besides its key and name: a state, a date, a grade."""
+        o = self.studio.onto
+        t = o.obj(type_name)
+        tp = _title(o, type_name)
+        picks = []
+        for p in all_props(o, type_name):
+            prop = find_prop(o, type_name, p)
+            v = row.get(p)
+            if p in (t.key, tp) or v in (None, "") or prop.expr or prop.mask or p.endswith("_id") or prop.type == "boolean":
+                continue
+            rank = 0 if prop.type == "enum" or (t.states and p == t.states.property) else 1 if prop.type in ("date", "datetime") else 2
+            picks.append((rank, str(v)[:16].replace("T", " ") if prop.type in ("date", "datetime") else str(v)))
+        return " · ".join(v for _, v in sorted(picks, key=lambda x: x[0])[:2])
+
+    def _computed(self, o, type_name: str, key: str) -> list[dict]:
+        """What the record's functions give, worked out on opening when they only read: a formula, a table or a query.
+        The runs are not kept in the function log."""
+        out = []
+        for f in o.functions.values():
+            if f.target not in _lineage(o, type_name) or f.status != "active" or f.runtime not in ("expr", "decision", "query"):
+                continue
+            try:
+                got = self.studio.function(f.name, key, {}, by=self.who, log=False)
+                out.append({"name": f.name, "label": f.label or f.name, "outputs": got["outputs"]})
+            except Exception as e:  # one that needs a value from a person waits for the person
+                out.append({"name": f.name, "label": f.label or f.name, "error": str(e)})
+        return out
 
     def _record_state(self, t, row: dict) -> dict | None:
         sm = t.states
@@ -125,11 +214,12 @@ class PagesMixin:
                 try:
                     rows = self.studio.run(q).rows
                 except Exception as e:  # a relation the source cannot answer says why instead of hiding the page
-                    out.append({"link": lk.name, "label": lk.label or lk.name, "forward": forward, "type": other,
+                    out.append({"link": lk.name, "base": lk.name, "base_label": lk.label or lk.name, "label": lk.label or lk.name, "forward": forward, "type": other,
                                 "type_label": ot.label or other, "count": 0, "more": False, "items": [], "error": str(e)})
                     continue
                 name = lk.name if forward else (lk.inverse or lk.name)
-                out.append({"link": name, "label": (lk.label or lk.name) if forward else (ot.label or other),
+                out.append({"link": name, "base": lk.name, "base_label": lk.label or lk.name,  # one relation read either way
+                            "label": (lk.label or lk.name) if forward else (ot.label or other),
                             "forward": forward, "type": other, "type_label": ot.label or other,
                             "cardinality": lk.cardinality, "count": min(len(rows), LINK_COUNT), "more": len(rows) > LINK_COUNT,
                             "items": [{"key": str(r[0]), "title": r[1] if len(r) > 1 else None} for r in rows[:rows_max]]})
@@ -193,7 +283,16 @@ class PagesMixin:
                    if p.status == "pending" and p.target in mine and str(p.key) == key]
         done = [{k: a[k] for k in ("at", "event", "actor", "kind", "proposal", "action")}
                 for a in self.audit() if a["target"] in mine and str(a["key"]) == key]
-        return waiting + done[:20]
+        o = self.studio.onto
+        row = self.studio.fetch(type_name, key) or {}
+        source = []  # the moments the source itself keeps on the record: ordered at, delivered at
+        for p in all_props(o, type_name):
+            prop = find_prop(o, type_name, p)
+            if prop.type in ("date", "datetime") and row.get(p) and not prop.expr:
+                word = re.sub(r"\s*(일시|일자|시각|날짜|일)$", "", prop.label or p) or (prop.label or p)
+                source.append({"at": str(row[p]), "event": word, "actor": "원천 DB", "kind": "source", "proposal": "",
+                               "action": ""})
+        return waiting + sorted(done[:20] + source, key=lambda x: str(x["at"]), reverse=True)
 
     # ---- lists of records -------------------------------------------------------------------------------------------
 
@@ -221,6 +320,105 @@ class PagesMixin:
                       "labels": labels, "total": total[0][0] if total else len(rows), "q": q,
                       "rows": [{"key": str(r[0]), "fields": dict(zip(show[1:], r[1:]))} for r in rows]})
 
+    def record_find(self, q: str, limit: int = 10, type_name: str = "", offset: int = 0) -> dict:
+        """Records found by what a person would say of them: a key or part of one, a name, or a definition, that is a
+        type's name with words its values hold ("VIP 고객" is a customer whose grade is VIP, "고객" every customer).
+        `type_name` keeps to one type; `offset` pages through many."""
+        st, o = self.studio, self.studio.onto
+        q = " ".join(str(q or "").split())[:80]
+        limit, offset = max(1, min(int(limit or 10), LIST_ROWS)), max(0, int(offset or 0))
+        words = q.split()
+        kinds = [type_name] if type_name in o.objects else [n for n, t in o.objects.items() if t.table]
+        said = self._type_words(q) if not type_name else None
+        if said:  # the definition names the type: the rest of the words are what its values hold
+            kinds, words = [said[0]], [w for w in words if w not in said[1]]
+        if not words and not said and not type_name:
+            return {"q": q, "type": "", "items": [], "total": 0, "more": False}
+        out, total = [], 0
+        for name in kinds:
+            t = o.objects[name]
+            if not t.table:
+                continue
+            tp = _title(o, name)
+            text = [p for p in all_props(o, name) if find_prop(o, name, p).type in ("string", "enum") and not find_prop(o, name, p).expr
+                    and not find_prop(o, name, p).mask]
+            conds = []
+            i = 0
+            while i < len(words):
+                w = words[i]
+                pair = self._coded(name, text, _forms(w)[-1] + _forms(words[i + 1])[-1]) if i + 1 < len(words) else []
+                if pair:  # two words that say one value together: 배송 완료 is DELIVERED
+                    conds.append(Or(pair) if len(pair) > 1 else pair[0])
+                    i += 2
+                    continue
+                forms = _forms(w)
+                either = [Contains(Ref("x", p), f) for p in text for f in forms] + self._coded(name, text, forms[-1])
+                if t.key not in text:
+                    either += [Cmp(Ref("x", t.key), "eq", f) for f in forms]
+                conds.append(Or(either) if len(either) > 1 else either[0])
+                i += 1
+            where = (And(conds) if len(conds) > 1 else conds[0]) if conds else None
+            cols = [Column(Ref("x", t.key), "k")] + ([Column(Ref("x", tp), "t")] if tp and tp != t.key else [])
+            try:
+                rows = st.run(Query(nodes={"x": name}, where=where, columns=cols, order=[Order("k")],
+                                    limit=offset + limit + 1 if len(kinds) == 1 else 4)).rows
+                if len(kinds) == 1:
+                    n = st.run(Query(nodes={"x": name}, where=where, columns=[Column(Agg("count", node="x"), "n")])).rows
+                    total = int(n[0][0]) if n else len(rows)
+                    rows = rows[offset:offset + limit + 1]
+            except Exception:  # a type the source cannot search is passed over
+                continue
+            out += [{"type": name, "type_label": t.label or name, "key": str(r[0]), "title": r[1] if len(r) > 1 else None}
+                    for r in rows]
+            if len(kinds) > 1 and len(out) > limit * 3:
+                break
+        exact = [x for x in out if x["key"].lower() == q.lower()]
+        items = exact + [x for x in out if x not in exact]
+        for x in items[:limit]:  # what tells a record without a name apart: its state, a date, a grade
+            x["sub"] = self._summary(x["type"], st.fetch(x["type"], x["key"]) or {})
+        one = len(kinds) == 1
+        return plain({"q": q, "type": kinds[0] if one else "", "type_label": (o.objects[kinds[0]].label or kinds[0]) if one else "",
+                      "items": items[:limit], "total": total if one else len(items), "more": len(items) > limit,
+                      "offset": offset})
+
+    def _coded(self, type_name: str, props: list[str], word: str) -> list:
+        """Conditions for the coded values a Korean word stands for: by the names the codes carry, or by the English
+        word it is (취소 is Cancellation, so CANCELLED)."""
+        from xgen_space.naming import stem, vocabulary
+
+        o = self.studio.onto
+        if getattr(self, "_vocab", None) is None or self._vocab[0] is not o:
+            self._vocab = (o, vocabulary([o], getattr(self, "_terms", lambda: [])() or []))
+        en = self._vocab[1].get(word)
+        out = []
+        for p in props:
+            d = find_prop(o, type_name, p)
+            named = [c for c, label in (d.labels or {}).items() if word in str(label)]
+            by_word = [str(v) for v in d.values or [] if en and len(stem(en)) >= 4 and stem(en) in str(v).upper()]
+            out += [Cmp(Ref("x", p), "eq", c) for c in dict.fromkeys(named + by_word)]
+        return out
+
+    _vocab = None
+
+    def _type_words(self, q: str) -> tuple[str, list[str]] | None:
+        """The type a definition names, and the words that named it: the longest label, name or glossary word in it."""
+        o = self.studio.onto
+        words = q.split()
+        names: list[tuple[str, str]] = []
+        for n, t in o.objects.items():
+            if t.table:
+                names += [(n, x) for x in {t.label or "", n} if x]
+        for term in getattr(self, "_terms", lambda: [])() or []:
+            hit = next((n for n, x in names if x == term.get("term")), None)
+            if hit:
+                names += [(hit, str(s)) for s in term.get("synonyms") or [] if s]
+        best = None
+        for n, x in names:
+            used = [w for w in words if w.lower() == x.lower() or (len(x) > 1 and w.startswith(x) and len(w) - len(x) <= 2)]
+            if used and (best is None or len(x) > len(best[2])):
+                best = (n, used, x)
+        return (best[0], best[1]) if best else None
+
     # ---- what waits on a person ------------------------------------------------------------------------------------
 
     def inbox(self) -> dict:
@@ -240,21 +438,37 @@ class PagesMixin:
                           "target": p.target, "key": str(p.key), "by": p.requested_by.id, "by_kind": p.requested_by.kind,
                           "mine": p.requested_by.id == self.who, "change": change, "failed": failed,
                           "outside": len(outside), "waits": v["waits"]})
+        from xgen_space.web.api import GATE_LABEL
+        from xgen_space.web.monitor import FINDING
+
+        standing = self._standing_gates() if any(c.status == "pending" for c in st.changes.requests.values()) else {}
         for c in st.changes.requests.values():
             if c.status != "pending":
                 continue
             rv = c.review or {}
             gates = rv.get("gates") or []
-            items.append({"kind": "change", "id": c.id, "title": f"{self._label(c.module)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
+            worse = []
+            for g in gates:  # what the change would make worse, the way the review says it
+                was, now = standing.get(f"{g['stage']}.{g['condition']}"), g.get("value")
+                if was is not None and now is not None and (now > was if g["condition"].startswith("max_") else now < was):
+                    worse.append({"label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]), "was": was, "now": now,
+                                  "rate": not g["condition"].startswith("max_")})
+            items.append({"kind": "change", "id": c.id, "title": f"{self._change_label(c)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
                           "module": c.module, "by": c.requested_by, "mine": c.requested_by == self.who, "at": c.at,
                           "passed": rv.get("passed"), "gates": [sum(bool(g.get("passed")) for g in gates), len(gates)],
-                          "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}})
+                          "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}, "worse": worse})
         for c in st.onto.source_conflicts():
             if not c.open:
                 continue
             answers = " ↔ ".join(f"{a.source} {', '.join(f'{k} {v}' for k, v in a.says.items())}".strip() for a in c.answers)
             items.append({"kind": "conflict", "id": c.id, "title": c.label or c.id, "decision": c.decision,
                           "detail": answers[:160], "mine": False})
+        bind = (self._standing_measured() or {}).get("bind") or {}
+        warned = [f for f in bind.get("findings") or [] if f.get("severity") in ("warning", "error")]
+        if warned:  # what the last check of the source against the definition found, for whoever looks after it
+            items.append({"kind": "check", "id": "bind", "title": f"DB 대조 {'오류' if bind.get('errors') else '경고'} {len(warned)}건",
+                          "detail": " · ".join(f"{str(f.get('element', '')).split(':', 1)[-1]} {FINDING.get(f.get('kind'), f.get('kind'))}" for f in warned[:3])[:160],
+                          "mine": False})
         ws = self.workspace
         if ws is not None and ws.dirty:
             items.append({"kind": "workspace", "id": "workspace", "title": f"정의 관리 변경 {len(ws.edits)}건",
@@ -302,11 +516,35 @@ class PagesMixin:
                               "comments": [c for c in cr.comments if c["element"] == el]})
         order = ["object", "property", "link", "decision", "rule", "action", "function", "role", "query", "identity", "question"]
         items.sort(key=lambda x: (order.index(x["kind"]) if x["kind"] in order else len(order), x["element"]))
+        affected = list(dict.fromkeys(r for x in items for r in x["readers"]))
         out.update({"items": items, "comments": [c for c in cr.comments if not c["element"]], "marks": dict(cr.marks),
+                    "affected": affected, "who": self.who, "self_approve": st.changes.self_approve,
+                    "yaml": self._change_yaml(cr), "question_notes": [c for c in cr.comments if c["element"].startswith("question:")],
                     "before": self._standing_gates() if cr.status == "pending" else {},
                     "can_decide": cr.status == "pending" and (st.changes.self_approve or cr.requested_by != self.who),
                     "can_mark": cr.status == "pending"})
         return plain(out)
+
+    def _change_yaml(self, cr) -> list[list[str]]:
+        """The module file before and after the change, line by line: [' ', line], ['-', line] or ['+', line]."""
+        import difflib
+
+        import yaml
+
+        lib = self.studio.changes.store or self.studio.library
+        before = ""
+        if lib is not None and cr.module in lib.names():
+            try:
+                versions = [v for v in lib.versions(cr.module) if v != cr.version]
+                if versions:
+                    before = yaml.safe_dump(lib.get(cr.module, versions[-1]).to_dict(), allow_unicode=True, sort_keys=False)
+            except Exception:  # a version that no longer reads is compared as nothing
+                before = ""
+        out = []
+        for line in difflib.ndiff(before.splitlines(), (cr.text or "").splitlines()):
+            if line[:1] in (" ", "-", "+"):
+                out.append([line[:1], line[2:]])
+        return out
 
     def change_mark(self, change_id: str, element: str, verdict: str) -> dict:
         from xgen_space.review import ChangeError
@@ -335,11 +573,17 @@ class PagesMixin:
         if self._standing is not None and self._standing[0] == sig:
             return self._standing[1]
         try:
-            got = {f"{g.stage}.{g.condition}": g.value for g in gates(measure(st, st.flow), st.flow)}
+            measured = measure(st, st.flow)
+            got = {f"{g.stage}.{g.condition}": g.value for g in gates(measured, st.flow)}
         except Exception:  # the studio as it stands cannot be measured: the review shows the change's numbers alone
-            got = {}
-        self._standing = (sig, got)
+            measured, got = {}, {}
+        self._standing = (sig, got, measured)
         return got
+
+    def _standing_measured(self) -> dict:
+        """What the last standing measurement found, measuring once if nothing has."""
+        self._standing_gates()
+        return self._standing[2] if self._standing else {}
 
     _standing: tuple | None = None
 
@@ -442,14 +686,28 @@ class PagesMixin:
 
     # ---- a decision table tried before it is filed ------------------------------------------------------------------
 
+    def _pending_onto(self):
+        """The definition as the pending edits leave it, which a table being edited is tried on."""
+        ws = self._ws()
+        if not ws.dirty:
+            return self.studio.onto, False
+        try:
+            return ws.composed().ontology, True
+        except Exception:  # edits that no longer compose are tried as the studio stands
+            return self.studio.onto, False
+
     def simulate(self, name: str, key: str = "", inputs: dict | None = None) -> dict:
         """Decide once on given values (a record's, with any of them changed), then say which single change of one input
-        would give another answer, and what the table answers at each threshold its rules name."""
+        would give another answer, and what the table answers at each threshold its rules name. The table is the one
+        being edited: the pending edits are in it before they are filed. The validation questions on the table are
+        answered by it too."""
+        from xgen_space.decide.table import DecisionError, evaluate_table
         from xgen_space.decide.words import input_label, verdict
         from xgen_space.values import coerce
 
         st = self.studio
-        table = st.onto.decisions[name]
+        onto, pending = self._pending_onto()
+        table = onto.decisions[name]
         base: dict[str, Any] = {}
         if key:
             base = dict(st.decide(name, key).inputs)
@@ -459,23 +717,38 @@ class PagesMixin:
         values = {i: base.get(i) for i in table.inputs}
 
         def run(vals: dict) -> dict:
-            res = st.decide(name, inputs=vals)
-            word, good = verdict(table, res.outputs)
-            return {"outputs": res.outputs, "matched": list(res.matched), "verdict": word, "yes": good}
+            try:
+                outs, matched, _ = evaluate_table(table, vals)
+            except DecisionError as e:
+                return {"outputs": {}, "matched": [], "verdict": "판정 불가", "yes": False, "error": str(e)}
+            word, good = verdict(table, outs)
+            return {"outputs": outs, "matched": list(matched), "verdict": word, "yes": good}
+
+        questions = []
+        for q in onto.questions:
+            if q.decision != name:
+                continue
+            try:
+                got = run(dict(st.decide(name, q.key, q.params).inputs))["outputs"]
+            except Exception as e:  # a question on a record the source no longer has
+                questions.append({"id": q.id, "text": q.text, "key": q.key, "passed": False, "error": str(e)})
+                continue
+            passed = isinstance(got, dict) and all(got.get(k) == v for k, v in q.expect.items())
+            questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "got": got, "passed": passed})
 
         now = run(values)
         tries = self._candidates(table, values)
         other, edges = [], []
         for i, vals in tries:
             got = run({**values, i: vals})
-            row = {"input": i, "label": input_label(st.onto, table, i), "value": vals, **got}
+            row = {"input": i, "label": input_label(onto, table, i), "value": vals, **got}
             edges.append(row)
             if got["verdict"] != now["verdict"] and not any(x["input"] == i for x in other):
                 other.append(row)
         return plain({"name": name, "label": table.label or name, "key": key, "hit_policy": table.hit_policy,
-                      "inputs": [{"name": i, "label": input_label(st.onto, table, i), "type": table.inputs[i].type,
+                      "inputs": [{"name": i, "label": input_label(onto, table, i), "type": table.inputs[i].type,
                                   "value": values[i]} for i in table.inputs],
-                      **now, "other": other, "edges": edges[:24]})
+                      **now, "other": other, "edges": edges[:24], "questions": questions, "pending": pending})
 
     @staticmethod
     def _candidates(table, values: dict) -> list[tuple[str, Any]]:
