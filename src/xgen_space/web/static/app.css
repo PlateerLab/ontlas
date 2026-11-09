@@ -1034,9 +1034,32 @@ button.ihint span { font-weight:700; white-space:nowrap; }
 .wscenter .ercanvas { flex:1; min-height:0; overflow:auto; background:#fbfcfe; cursor:grab; touch-action:none; overscroll-behavior:contain; }
 .wscenter .ercanvas.panning { cursor:grabbing; user-select:none; }
 .wscenter .ernote { flex:none; padding:5px 10px; background:#fff; }
-.wstable { flex:1; min-height:0; overflow:auto; background:#fff; }
-.wstable table { width:100%; }
-.wsextra { padding:14px; display:grid; gap:12px; }
+.ws > .wscenter { flex:1; background:#fff; }
+.wscols { flex:1; min-height:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.wscol { display:flex; flex-direction:column; min-height:0; min-width:0; border-right:1px solid var(--line); }
+.wscol:last-child { border-right:0; }
+.wscolh { display:flex; align-items:center; gap:6px; padding:9px 12px 4px; font-size:13.5px; flex:none; }
+.wscol.arrive .wscolh, .wscol.arrive .wscolq { animation:wsarrive 1.4s ease; }
+@keyframes wsarrive { from { background:var(--blue-soft); } to { background:transparent; } }
+.wscolq { padding:4px 12px 8px; border-bottom:1px solid var(--line); flex:none; }
+.wscolb { flex:1; min-height:0; overflow:auto; padding:2px 6px 14px; }
+.wscolb .mdgh { padding:8px 8px 3px; }
+.wsi { display:flex; align-items:center; gap:6px; border-radius:7px; padding-right:6px; }
+.wsi:hover { background:var(--panel); }
+.wsi.on { background:var(--blue-soft); box-shadow:inset 3px 0 0 var(--blue); }
+.wsib { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; border:0; background:none; padding:6px 8px 6px 10px; font:inherit; font-size:13px; text-align:left; color:var(--ink); cursor:pointer; }
+.wsit { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.wsit .mono { font-size:11.5px; }
+.wsis { font-size:11.5px; color:var(--muted); overflow-wrap:anywhere; }
+.wsform { padding:10px 12px 12px; margin:3px 0 7px; border:1px solid var(--blue-line); border-radius:8px; background:#fff; }
+.wsform .card { border:0; box-shadow:none; margin:0; background:none; }
+.wsform .card > .ch { display:none; }
+.wsform.new .card > .ch { display:flex; padding:0 0 8px; border:0; font-size:13px; background:none; }
+.wsform .card > .cb { padding:0; }
+.wsonly { display:none; }
+.wsform .wsonly { display:inline-flex; }
+.wscolx { padding:12px 2px 0; display:grid; gap:10px; }
+.wscolx .card { box-shadow:none; }
 .ernode.fresh rect { stroke:#22a06b; stroke-width:1.6; stroke-dasharray:5 3; }
 .ernode.fresh .tag { fill:#137a44; }
 .ernode.problem rect { stroke:#d93025; }
@@ -1088,6 +1111,9 @@ button.ihint span { font-weight:700; white-space:nowrap; }
   .wsbody.noleft .wsleft, .wsbody.noright .insp { display:none; }
   .wsleftb { max-height:50vh; }
   .ilist { max-height:none; }
+  .wscols { display:block; }
+  .wscolb { overflow:visible; }
+  .wscol { border-right:0; border-bottom:1px solid var(--line); }
 }
-@media (prefers-reduced-motion: reduce) { .erplus { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .erplus { transition:none; } .wscol.arrive .wscolh, .wscol.arrive .wscolq { animation:none; } }
 .ibody .scroll td, .ibody .scroll th { white-space:nowrap; }

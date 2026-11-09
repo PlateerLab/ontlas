@@ -23,7 +23,9 @@
   remembered. Any one pending edit can be taken back, later edits kept (`manage/revert`), and one taken back made again
   (`manage/redo`). What blocks a change request is said where it is blocked, and pending edits are checked against the source as
   they are made.
-- 객체, 속성 and 관계 tables are a switch on the workspace. 정의 관리 keeps states and roles and leads to each of the three tables; their old addresses open them too.
+- 객체, 속성 and 관계 are a view of the workspace, three columns side by side: pick an object and the other two follow it, and a row
+  opens for editing where it stands. 정의 관리 keeps states and roles and leads to that view; the tables' old addresses open it too.
+- 온톨로지 is its own place in the sidebar, under 업무: it is read there and changed under 모델링, which holds 작업 공간 and 정의 관리.
 - A question brought by a module can take a new expected answer (`update_question`): a module that removes a question and writes it
   itself keeps its own.
 
