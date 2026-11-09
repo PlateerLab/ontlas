@@ -467,6 +467,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.record_list(a["type"], a.get("q", ""), int(a.get("limit", 50)))
                 if route == "inbox":
                     return s.inbox()
+                if route == "change":
+                    return s.change_detail(a["id"])
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
@@ -643,6 +645,13 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_discard()
             if route == "manage/propose":
                 return s.manage_propose()
+            if route == "change/mark":
+                return s.change_mark(str(a.get("id", "")), str(a.get("element", "")), str(a.get("mark", "")))
+            if route == "change/comment":
+                return s.change_comment(str(a.get("id", "")), str(a.get("element", "")), str(a.get("text", "")))
+            if route == "decide/simulate":
+                return s.simulate(str(a.get("name", "")), str(a.get("key", "") or ""),
+                                  a.get("inputs") if isinstance(a.get("inputs"), dict) else {})
             if route == "change/decide":
                 return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")))
             if route == "flow/save":

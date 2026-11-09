@@ -410,6 +410,8 @@ class ChangeRequest:
     attach: bool = False
     decided_by: str = ""
     reason: str = ""
+    marks: dict[str, str] = field(default_factory=dict)  # element -> ok | fix: a reviewer's word on each changed element
+    comments: list[dict[str, Any]] = field(default_factory=list)  # {at, by, element, text}, kept with the change
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -478,6 +480,9 @@ class ChangeService:
             raise ChangeError(f"change {cr.id} is {cr.status}")
         if by == cr.requested_by and not self.self_approve:
             raise PermissionError("a change is approved by someone other than the person who proposed it")
+        sent_back = sorted(e for e, v in cr.marks.items() if v == "fix")
+        if sent_back:
+            raise ChangeError(f"change {cr.id} has elements sent back for a fix: {sent_back}")
         module = self._module(cr)
         cr.review = review(self.studio, module, attach=cr.attach)  # the studio may have moved since the proposal
         if not cr.review["passed"]:
@@ -498,6 +503,32 @@ class ChangeService:
             raise ChangeError(f"change {cr.id} is {cr.status}")
         cr.status, cr.decided_by, cr.reason = "rejected", by, reason
         self._log(by, "rejected", cr, reason=reason)
+        return cr
+
+    def mark(self, change_id: str, element: str, verdict: str, *, by: str) -> ChangeRequest:
+        """A reviewer's word on one changed element: `ok`, `fix` (it goes back to its author), or "" to take it back."""
+        cr = self._get(change_id)
+        if cr.status != "pending":
+            raise ChangeError(f"change {cr.id} is {cr.status}")
+        if verdict not in ("ok", "fix", ""):
+            raise ChangeError(f"a mark is ok, fix or empty, not '{verdict}'")
+        if element not in {e for part in (cr.review.get("diff") or {}).values() for e in part}:
+            raise ChangeError(f"change {cr.id} does not change '{element}'")
+        if verdict:
+            cr.marks[element] = verdict
+        else:
+            cr.marks.pop(element, None)
+        self._log(by, "marked", cr, element=element, mark=verdict)
+        return cr
+
+    def comment(self, change_id: str, element: str, text: str, *, by: str) -> ChangeRequest:
+        """A note on one changed element, or on the whole change when `element` is empty, kept after it is decided."""
+        cr = self._get(change_id)
+        text = " ".join(str(text or "").split())[:1000]
+        if not text:
+            raise ChangeError("a comment needs some text")
+        cr.comments.append({"at": self._now(), "by": by, "element": element, "text": text})
+        self._log(by, "commented", cr, element=element)
         return cr
 
     def _get(self, change_id: str) -> ChangeRequest:

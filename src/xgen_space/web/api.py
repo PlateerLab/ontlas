@@ -1808,6 +1808,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         from xgen_space.review import ChangeError
 
         ch = self.studio.changes
+        held = ch.requests.get(change_id)
+        sent_back = [self._element_label(e) for e, v in (held.marks if held else {}).items() if v == "fix"]
+        if approve and sent_back:
+            return {"ok": False, "error": f"수정을 요청한 항목({', '.join(sent_back)})이 있어 승인하지 못했습니다. "
+                                          "작성자가 고친 뒤 다시 검토해 주세요.", "change": self._change(held)}
         try:
             cr = ch.approve(change_id, by=self.who) if approve else                 ch.reject(change_id, by=self.who, reason=reason or "검토 후 반려")
         except PermissionError:

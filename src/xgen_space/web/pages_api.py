@@ -1,11 +1,14 @@
-"""What the page asks for the people who use an ontology rather than build it: a home with what waits on them, one
-record with everything around it, and lists of records to open one from.
+"""What the page asks for around a person's work rather than the definition itself: a home with what waits on them,
+one record with everything around it and lists of records to open one from, a change request element by element with
+the reviewer's word on each, and a decision table tried on values before it is filed.
 
 Kept apart from api.py, which answers the screens that build the definition. A session gets these by inheritance, and
 everything here reads `self.studio` through the same helpers the other screens use.
 """
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
 from xgen_space.check import all_props, column_of, find_prop
@@ -258,3 +261,244 @@ class PagesMixin:
         counts = {"assigned": len(items) if alone else sum(not x["mine"] for x in items), "mine": sum(x["mine"] for x in items),
                   "all": len(items)}
         return plain({"items": items, "counts": counts, "who": self.who, "alone": alone})
+
+    # ---- a change request, element by element -------------------------------------------------------------------------
+
+    def change_detail(self, change_id: str) -> dict:
+        """One change request with each element it adds, changes or removes, field by field, what reads that element now,
+        the reviewer's word and the comments on it, and the pass conditions as the studio meets them now and after."""
+        from xgen_space.modules import compose
+        from xgen_space.review import _elements
+
+        st = self.studio
+        cr = st.changes._get(change_id)
+        out = self._change(cr)
+        diff = (cr.review or {}).get("diff") or {}
+        before: dict[str, str] = {}
+        after: dict[str, str] = {}
+        after_onto = None
+        if cr.status == "pending" and st.composition is not None:
+            module = st.changes._module(cr)
+            current = list(st.composition.modules)
+            mods = ([module if m.name == module.name else m for m in current] if any(m.name == module.name for m in current)
+                    else current + [module] if cr.attach else None)
+            if mods is not None:
+                try:
+                    after_onto = compose(mods, **st._compose_kw).ontology
+                    before, after = _elements(st.onto), _elements(after_onto)
+                except Exception:  # what does not compose is in the review's issues already
+                    before, after = {}, {}
+        items = []
+        for change in ("changed", "added", "removed"):
+            for el in diff.get(change) or []:
+                a = json.loads(before[el]) if el in before else None
+                b = json.loads(after[el]) if el in after else None
+                items.append({"element": el, "kind": el.split(":", 1)[0], "name": el.split(":", 1)[1], "change": change,
+                              "label": self._element_label(el, after_onto), "fields": self._field_diff(el, a, b, after_onto),
+                              "readers": self._readers(el), "mark": cr.marks.get(el, ""),
+                              "comments": [c for c in cr.comments if c["element"] == el]})
+        order = ["object", "property", "link", "decision", "rule", "action", "function", "role", "query", "identity", "question"]
+        items.sort(key=lambda x: (order.index(x["kind"]) if x["kind"] in order else len(order), x["element"]))
+        out.update({"items": items, "comments": [c for c in cr.comments if not c["element"]], "marks": dict(cr.marks),
+                    "before": self._standing_gates() if cr.status == "pending" else {},
+                    "can_decide": cr.status == "pending" and (st.changes.self_approve or cr.requested_by != self.who),
+                    "can_mark": cr.status == "pending"})
+        return plain(out)
+
+    def change_mark(self, change_id: str, element: str, verdict: str) -> dict:
+        from xgen_space.review import ChangeError
+
+        try:
+            self.studio.changes.mark(change_id, element, verdict, by=self.who)
+        except ChangeError as e:
+            raise ValueError(f"표시하지 못했습니다. {e}") from None
+        return self.change_detail(change_id)
+
+    def change_comment(self, change_id: str, element: str, text: str) -> dict:
+        from xgen_space.review import ChangeError
+
+        try:
+            self.studio.changes.comment(change_id, element, text, by=self.who)
+        except ChangeError as e:
+            raise ValueError(f"댓글을 남기지 못했습니다. {e}") from None
+        return self.change_detail(change_id)
+
+    def _standing_gates(self) -> dict:
+        """The pass conditions as the studio meets them before any change, measured once per definition."""
+        from xgen_space.review import gates, measure
+
+        st = self.studio
+        sig = (id(st.onto), len(st.actions.audit))
+        if self._standing is not None and self._standing[0] == sig:
+            return self._standing[1]
+        try:
+            got = {f"{g.stage}.{g.condition}": g.value for g in gates(measure(st, st.flow), st.flow)}
+        except Exception:  # the studio as it stands cannot be measured: the review shows the change's numbers alone
+            got = {}
+        self._standing = (sig, got)
+        return got
+
+    _standing: tuple | None = None
+
+    def _element_label(self, el: str, after=None) -> str:
+        kind, name = el.split(":", 1)
+        for o in (self.studio.onto, after):
+            if o is None:
+                continue
+            if kind == "object" and name in o.objects:
+                return o.objects[name].label or name
+            if kind == "property" and "." in name:
+                t, p = name.split(".", 1)
+                if t in o.objects and p in o.objects[t].properties:
+                    return f"{o.objects[t].label or t} · {o.objects[t].properties[p].label or p}"
+            if kind in ("rule", "decision") and name.split(".")[0] in o.decisions:
+                d = o.decisions[name.split(".")[0]]
+                return f"{d.label or d.name} · {name.split('.', 1)[1]}" if kind == "rule" else (d.label or d.name)
+            section = {"link": o.links, "action": o.actions, "query": o.queries, "function": o.functions, "role": o.roles}.get(kind)
+            if section is not None and name in section:
+                return getattr(section[name], "label", "") or name
+            if kind == "question":
+                q = next((q for q in o.questions if q.id == name), None)
+                if q is not None:
+                    return q.text or name
+        return name
+
+    FIELD_WORDS = {"label": "라벨", "type": "타입", "column": "컬럼", "values": "허용값", "required": "필수", "mask": "가림",
+                   "expr": "계산식", "unit": "단위", "description": "설명", "table": "테이블", "key": "키", "parent": "상위 객체",
+                   "source": "출발 객체", "target": "도착 객체", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
+                   "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
+                   "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이"}
+
+    def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
+        """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""
+        from xgen_space.decide.words import input_label
+
+        def flat(d: Any, pre: str = "") -> dict[str, Any]:
+            out: dict[str, Any] = {}
+            for k, v in (d or {}).items():
+                if isinstance(v, dict) and v and pre.count(".") < 1:
+                    out.update(flat(v, f"{pre}{k}."))
+                else:
+                    out[f"{pre}{k}"] = v
+            return out
+
+        fa, fb = flat(a), flat(b)
+        kind, name = el.split(":", 1)
+        table = None
+        if kind == "rule":
+            for o in (self.studio.onto, after):
+                if o is not None and name.split(".")[0] in o.decisions:
+                    table, onto = o.decisions[name.split(".")[0]], o
+                    break
+
+        def word(f: str) -> str:
+            head, _, rest = f.partition(".")
+            if table is not None and head == "when" and rest in table.inputs:
+                return f"조건 · {input_label(onto, table, rest)}"
+            if head == "then" and rest:
+                return f"결과 · {'사유' if rest == 'reason' else rest}"
+            if f in self.FIELD_WORDS or not rest:
+                return self.FIELD_WORDS.get(f, f)
+            return f"{self.FIELD_WORDS.get(head, head)} · {'사유' if rest == 'reason' else rest}"
+
+        keys = sorted(set(fa) | set(fb), key=lambda k: (not k.startswith("when."), not k.startswith("then."), k))
+        return [{"field": k, "label": word(k), "before": fa.get(k), "after": fb.get(k)}
+                for k in keys if fa.get(k) != fb.get(k) and k not in ("id",)][:16]
+
+    def _readers(self, el: str) -> list[str]:
+        """What in the definition reads an element now, so a reviewer sees what a change to it reaches."""
+        o = self.studio.onto
+        kind, name = el.split(":", 1)
+        out: list[str] = []
+        said = lambda q: json.dumps(q, ensure_ascii=False)  # noqa: E731
+        if kind in ("rule", "decision"):
+            d = name.split(".")[0]
+            out += [f"검증 질문 {q.id}" for q in o.questions if q.decision == d]
+            out += [f"액션 {a.label or a.name}" for a in o.actions.values() if any(c.decision == d for c in a.criteria)]
+            out += [f"함수 {f.label or f.name}" for f in o.functions.values() if f.decision == d]
+            out += [f"역할 {r.label or r.name}" for r in o.roles.values() if d in r.run]
+        elif kind == "property" and "." in name:
+            t, p = name.split(".", 1)
+            out += [f"결정 {x.label or x.name}" for x in o.decisions.values()
+                    if any(p in (i.source.get("property"), i.source.get("days_since")) for i in x.inputs.values())]
+            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f".{p}" in said(q.query)]
+            out += [f"계산 속성 {ot.label or tn} · {prop.label or pn}" for tn, ot in o.objects.items()
+                    for pn, prop in ot.properties.items() if prop.expr and re.search(rf"\b{re.escape(p)}\b", prop.expr)]
+        elif kind == "object":
+            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
+            out += [f"결정 {x.label or x.name}" for x in o.decisions.values() if x.target == name]
+            out += [f"액션 {a.label or a.name}" for a in o.actions.values() if a.target == name]
+        elif kind == "link":
+            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
+            out += [f"결정 {x.label or x.name}" for x in o.decisions.values()
+                    if any(name in (i.source.get("path") or []) for i in x.inputs.values())]
+        elif kind == "query":
+            out += [f"검증 질문 {q.id}" for q in o.questions if q.query == name]
+            out += [f"역할 {r.label or r.name}" for r in o.roles.values() if name in r.run]
+        return list(dict.fromkeys(out))[:12]
+
+    # ---- a decision table tried before it is filed ------------------------------------------------------------------
+
+    def simulate(self, name: str, key: str = "", inputs: dict | None = None) -> dict:
+        """Decide once on given values (a record's, with any of them changed), then say which single change of one input
+        would give another answer, and what the table answers at each threshold its rules name."""
+        from xgen_space.decide.words import input_label, verdict
+        from xgen_space.values import coerce
+
+        st = self.studio
+        table = st.onto.decisions[name]
+        base: dict[str, Any] = {}
+        if key:
+            base = dict(st.decide(name, key).inputs)
+        for k, v in (inputs or {}).items():
+            if k in table.inputs:
+                base[k] = None if v in ("", None) else coerce(v, table.inputs[k].type)
+        values = {i: base.get(i) for i in table.inputs}
+
+        def run(vals: dict) -> dict:
+            res = st.decide(name, inputs=vals)
+            word, good = verdict(table, res.outputs)
+            return {"outputs": res.outputs, "matched": list(res.matched), "verdict": word, "yes": good}
+
+        now = run(values)
+        tries = self._candidates(table, values)
+        other, edges = [], []
+        for i, vals in tries:
+            got = run({**values, i: vals})
+            row = {"input": i, "label": input_label(st.onto, table, i), "value": vals, **got}
+            edges.append(row)
+            if got["verdict"] != now["verdict"] and not any(x["input"] == i for x in other):
+                other.append(row)
+        return plain({"name": name, "label": table.label or name, "key": key, "hit_policy": table.hit_policy,
+                      "inputs": [{"name": i, "label": input_label(st.onto, table, i), "type": table.inputs[i].type,
+                                  "value": values[i]} for i in table.inputs],
+                      **now, "other": other, "edges": edges[:24]})
+
+    @staticmethod
+    def _candidates(table, values: dict) -> list[tuple[str, Any]]:
+        """Values worth trying for each input: either side of every number a rule compares it with, and every value a rule
+        names for it, nearest to the value it has first."""
+        out: list[tuple[str, Any]] = []
+        named = table.named
+        for i, spec in table.inputs.items():
+            cells = [str(r.when.get(i, "")) for r in table.rules if r.when.get(i) not in (None, "-")]
+            if spec.type in ("integer", "decimal"):
+                nums: set[float] = set()
+                for c in cells:
+                    nums |= {float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", c)}
+                    nums |= {float(named[n]) for n in re.findall(r"@(\w+)", c) if isinstance(named.get(n), (int, float))}
+                step = 1 if spec.type == "integer" else 0.01
+                seen: set[float] = set()
+                for n in sorted(nums):
+                    for v in (n - step, n, n + step):
+                        if v not in seen:
+                            seen.add(v)
+                cur = values.get(i)
+                ordered = sorted(seen, key=lambda v: abs(v - cur) if isinstance(cur, (int, float)) else v)
+                out += [(i, int(v) if spec.type == "integer" else round(v, 4)) for v in ordered[:6]]
+            elif spec.type == "boolean":
+                out += [(i, v) for v in (True, False) if v != values.get(i)]
+            else:
+                words = {w for c in cells for w in re.findall(r'"([^"]*)"', c)}
+                out += [(i, w) for w in sorted(words) if w != values.get(i)][:4]
+        return out

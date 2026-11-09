@@ -31,7 +31,7 @@ NEEDS = {
     "draft/map/apply": "editor", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/read": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
-    "change/decide": "approver", "approve": "approver", "rollback": "approver",
+    "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
 }
 

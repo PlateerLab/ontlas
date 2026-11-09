@@ -19,6 +19,19 @@
   from (a decision table or a registered query with no model, a model's wording, or nothing found). A decision's answer opens
   its record, and one judged right is kept as a validation question among the pending edits. A question nothing answers is
   answered that it is not known.
+- 변경 요청 (`GET change`, `POST change/mark`, `POST change/comment`): a change request element by element. Each element it
+  adds, changes or removes shows field by field what it is now and what it becomes (a rule's condition by its input's name),
+  and what in the definition reads it now. The pass conditions show the number the studio meets now beside the number on the
+  trial copy, with the validation questions that fail there. A reviewer approves each element or sends it back for a fix, and
+  comments stay on the element after the change is decided. A change with an element sent back is not approved. Marks and
+  comments go into the journal with the rest of the request. 할 일 opens a change on this screen.
+- 규칙 관리 says how a table applies its rules, what the table check finds (overlaps, rules that never apply, inputs no rule
+  answers), and tries the table while it is edited (`POST decide/simulate`): a record's values or typed ones, the rule that
+  answers, which single change of one input would give another answer, and what the table answers either side of every
+  number its rules compare. Past decisions decided again and the validation questions on the table sit beside it. Trying
+  writes nothing.
+- 초안 생성 scores the draft's tables against every domain standard on its own and shows the match beside each object
+  (`결제 · Payment 94%`), with the way to bind the tables to the standard instead of naming new objects.
 
 ## 0.12.0
 
