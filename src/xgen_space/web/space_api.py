@@ -119,6 +119,7 @@ class SpaceMixin:
         for s in out["sources"]:
             s["concepts"] = [c["label"] for c in sp.concepts_in(s["text"], onto, terms) if c.get("element")][:6]
         out["can_model"] = self.llm is not None
+        out["now"] = self.studio.now().isoformat(timespec="minutes")  # what "4 days since delivery" is counted to
         return plain(out)
 
     def space_ask_more(self, text: str, role: str = "", principal: dict | None = None) -> dict:
