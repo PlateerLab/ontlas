@@ -96,6 +96,9 @@ IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "qu
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
+    (r"^hit policy priority needs a priority on every rule; (.+) have none$", r"우선순위 방식은 규칙마다 우선순위가 있어야 합니다. \1에 우선순위를 먼저 정해 주세요."),
+    (r"^hit policy '(.+)' is not one of .*$", r"적용 방식 '\1'은 쓸 수 없습니다."),
+    (r"^type '(.+)' is not one of .*$", r"자료형 '\1'은 쓸 수 없습니다. 문자열, 정수, 소수, 참 · 거짓, 날짜, 일시, 허용값 중에서 골라 주세요."),
     (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^rule '(.+)' is unknown in (\S+)$", r"규칙 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
@@ -2112,6 +2115,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                    "objects": bound.get(t, []), "links": via.get(t, [])} for t, cols, pk, fks in catalog]
         import yaml
 
+        from xgen_space.answer import rule_owner
         from xgen_space.decide.words import cell_parts, cell_words, input_label, labels_of, reads, unit_of
 
         decisions = []
@@ -2123,7 +2127,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "name": t.name, "label": t.label or t.name, "target": t.target, "target_label": t.target and mine_label(o, t.target),
                 "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
                 "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
-                "rules": [{"id": r.id, "cite": r.cite, "then": r.then,
+                "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "module": rule_owner(comp, t.name, r.id),
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
                            "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
                           for r in t.rules]})

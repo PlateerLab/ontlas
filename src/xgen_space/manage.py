@@ -16,6 +16,7 @@ from xgen_space.model import TYPES, _scope_filter
 from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
+HIT_POLICIES = ("first", "priority", "collect", "unique")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
@@ -392,6 +393,45 @@ class Workspace:
                     return f"rule:{name}.{spec['id']}"
         patch.setdefault("rules_replace", {})[spec["id"]] = spec
         return f"rule:{name}.{spec['id']}"
+
+    def _update_decision(self, a: dict) -> str:
+        """A table's label, its clause, or how it picks among the rules that hold."""
+        name = str(a.get("decision") or a.get("name") or "")
+        t = self._table(name)
+        fields = {k: a[k] for k in ("label", "cite", "hit_policy") if k in a}
+        if fields.get("hit_policy") and fields["hit_policy"] not in HIT_POLICIES:
+            raise EditError(f"hit policy '{fields['hit_policy']}' is not one of {', '.join(HIT_POLICIES)}")
+        bare = [r.id for r in t.rules if r.priority is None]
+        if fields.get("hit_policy") == "priority" and bare:
+            raise EditError(f"hit policy priority needs a priority on every rule; {', '.join(bare)} have none")
+        holder = (self._section("body", "decisions")[name] if self._owns("decisions", name)
+                  else self._section("extend", "decisions").setdefault(name, {}))
+        holder.update(fields)
+        return f"decision:{name}"
+
+    def _move_rule(self, a: dict) -> str:
+        """A rule to another place in its table. Where the table is another module's, this module writes the whole
+        order: it takes the table's rules out and puts them back first, in the new order."""
+        name, rid = str(a.get("decision") or ""), str(a.get("id") or "")
+        t = self._table(name)
+        ids = [r.id for r in t.rules]
+        if rid not in ids:
+            raise EditError(f"rule '{rid}' is unknown in {name}")
+        order = [i for i in ids if i != rid]
+        order.insert(max(0, min(int(a.get("to", 0)), len(order))), rid)
+        if order == ids:
+            return f"rule:{name}.{rid}"
+        specs = {r["id"]: r for r in self.composed().ontology.to_dict()["decisions"][name].get("rules") or []}
+        if self._owns("decisions", name):
+            self._section("body", "decisions")[name]["rules"] = [specs[i] for i in order]
+            return f"rule:{name}.{rid}"
+        patch = self._section("extend", "decisions").setdefault(name, {})
+        mine = {r.get("id") for k in ("rules_prepend", "rules_append") for r in patch.get(k) or []}
+        patch["rules_remove"] = sorted(set(patch.get("rules_remove") or []) | {i for i in ids if i not in mine})
+        patch.pop("rules_append", None)
+        patch.pop("rules_replace", None)
+        patch["rules_prepend"] = [specs[i] for i in order]
+        return f"rule:{name}.{rid}"
 
     def _delete_rule(self, a: dict) -> str:
         name, rid = str(a.get("decision") or ""), str(a.get("id") or "")

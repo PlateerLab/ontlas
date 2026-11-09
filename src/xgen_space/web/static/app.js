@@ -1074,12 +1074,16 @@
     if (s.dec !== d.name) { Object.assign(s, { dec: d.name, res: null, key: '', vals: {}, err: '' }); }
     const keys = (S.d.keys[d.target] || []).slice(0, 300);
     if (d.target && !S.d.keys[d.target]) keysFor(d.target).then(() => { if (S.tab === 'mgrules') render(); });
+    if (d.target && !s.key && keys.length && !s.busy && !s.res && !s.auto) { s.auto = true; s.key = keys[0].key; simulateNow(s.key, {}); }
     const pick = d.target ? `<select data-in="simkey" aria-label="레코드" style="width:auto;min-width:150px"><option value="">레코드 고르기</option>${keys.map((k) => `<option value="${esc(k.key)}"${k.key === s.key ? ' selected' : ''}>${esc(k.key)}</option>`).join('')}</select>` : '';
     const r = s.res;
+    const spec = Object.fromEntries(d.inputs.map((i) => [i.name, i]));
     const inputs = (r ? r.inputs : d.inputs.map((i) => ({ name: i.name, label: i.label, type: i.type, value: null }))).map((i) => {
       const v = s.vals[i.name] ?? (i.value === null || i.value === undefined ? '' : String(i.value));
+      const known = (spec[i.name] || {}).values || [];
       const field = i.type === 'boolean' ? `<select data-in="simval" data-k="${esc(i.name)}"><option value="">값 없음</option>${[['true', '예'], ['false', '아니요']].map(([k, l]) => `<option value="${k}"${v === k ? ' selected' : ''}>${l}</option>`).join('')}</select>`
-        : `<input type="text" data-in="simval" data-k="${esc(i.name)}" value="${esc(v)}" placeholder="값 없음">`;
+        : known.length ? `<select data-in="simval" data-k="${esc(i.name)}"><option value="">값 없음</option>${known.map((x) => `<option value="${esc(x)}"${v === String(x) ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`
+          : `<input type="${['integer', 'decimal'].includes(i.type) ? 'number' : 'text'}" data-in="simval" data-k="${esc(i.name)}" value="${esc(v)}" placeholder="값 없음">`;
       return `<div class="simrow"><span>${esc(i.label)}</span>${field}</div>`;
     }).join('');
     let out = '';
@@ -1088,28 +1092,9 @@
       out = `<div class="simres"><span class="chip ${r.yes ? 'ok' : 'warn'}">${esc(r.verdict)}</span><span class="muted">규칙 ${esc(r.matched.join(', ') || '없음')}</span></div>
         ${r.other.length ? `<div class="label" style="margin-top:10px">다른 결과가 나오려면</div>${r.other.map((o) => `<div class="muted" style="font-size:12.5px">${esc(o.label)}이(가) <b>${typeof o.value === 'boolean' ? yesNo(o.value) : esc(String(o.value))}</b>이면 → ${esc(o.verdict)} (${esc(o.matched.join(', ') || '적중 없음')})</div>`).join('')}` : '<div class="muted" style="font-size:12.5px;margin-top:8px">입력 하나만 바꿔서는 결과가 바뀌지 않습니다.</div>'}`;
     }
-    return `<div class="card"><div class="ch">시뮬레이션<div class="right">${pick}</div></div><div class="cb">
-      <div class="hint" style="margin-bottom:10px">값을 바꿔 결정표가 어떻게 답하는지 봅니다. 저장하거나 요청하지 않습니다.</div>${inputs}
+    return `<div class="card"><div class="ch">시뮬레이션${s.key ? `<span class="muted" style="font-weight:600;font-size:12px">레코드 ${esc(s.key)} 불러옴</span>` : ''}<div class="right">${pick}</div></div><div class="cb">
+      <div class="hint" style="margin-bottom:10px">값을 바꿔 결정표가 어떻게 답하는지 봅니다. ${r && r.pending ? '대기 중인 변경을 반영한 결정표로 판정합니다. ' : ''}저장하거나 요청하지 않습니다.</div>${inputs}
       <button class="btn sm primary" data-act="simrun" style="margin-top:8px"${s.busy ? ' disabled' : ''}>${s.busy ? '<span class="spin"></span>판정 중' : '이 값으로 판정'}</button>${out ? `<div style="margin-top:12px">${out}</div>` : ''}</div></div>`;
-  }
-
-  function testCard(d) {
-    const r = S.sim.res;
-    const edges = r ? r.edges.map((e) => `<tr><td>${esc(e.label)}</td><td class="mono">${typeof e.value === 'boolean' ? yesNo(e.value) : esc(String(e.value))}</td><td><span class="chip sm ${e.yes ? 'ok' : 'warn'}">${esc(e.verdict)}</span></td><td class="mono muted">${esc(e.matched.join(', '))}</td></tr>`).join('') : '';
-    const a = S.agree && S.agree.ok && S.agree.decision === d.name ? S.agree : null;
-    const qs = S.st.questions.filter((q) => q.decision === d.name);
-    return `<div class="card"><div class="ch">테스트</div><div class="cb">
-      <div class="hrow static"><b>과거 판정 다시 계산</b><span class="muted" style="margin-left:auto">${a ? `${a.cases}건 중 ${a.agree}건 일치` : '이 결정표의 과거 사례 기준이 없습니다'}</span>${a ? `<span class="chip sm ${a.rate === 1 ? 'ok' : 'warn'}">${pct(a.rate)}</span>` : ''}</div>
-      <div class="hrow static"><b>검증 질문</b><span class="muted" style="margin-left:auto">이 결정표를 쓰는 질문 ${qs.length}개</span><a class="btn sm ghost" href="#check">실행</a></div>
-      <div class="label" style="margin-top:10px">경계값에서 판정</div>${edges ? `<table class="tight" style="font-size:12.5px"><tr><th>입력</th><th>값</th><th>결과</th><th>규칙</th></tr>${edges}</table>` : '<div class="muted" style="font-size:12.5px">시뮬레이션을 실행하면 규칙이 비교하는 값의 앞뒤에서 판정한 결과를 보여 줍니다.</div>'}</div></div>`;
-  }
-
-  function findingsBar(d) {
-    const fs = ((S.ru || {}).findings || []).filter((f) => f.decision === d.name && f.severity === 'warning');
-    if (!S.ru) return '';
-    const n = (k) => fs.filter((f) => f.kind === k).length;
-    return `<div class="fbar${fs.length ? ' warn' : ''}"><b>검사</b><span>겹침 ${n('overlap')}</span><span>도달 불가 ${n('unreachable')}</span><span>빈 구간 ${n('gap')}</span>
-      <span class="muted">${fs.length ? esc(fs[0].detail) : '겹치거나 닿지 않는 규칙, 어느 규칙도 답하지 않는 입력이 없습니다.'}</span></div>`;
   }
 
   // ---- a draft against the standards: which tables a standard already names -----------------------------------------
@@ -4630,6 +4615,119 @@ ${controls}${body}`;
       ${mgField('규칙에 맞지 않는 경우 사유', mgInput('otherwise', v.otherwise))}${mgButtons(f, '')}</div></div>`;
   }
 
+  // ---- a decision table edited and tried at once: how it applies its rules, cells said and changed in place, rows
+  //      moved by dragging, what overlaps, a simulator on a real record, and the tests run on the table as edited --
+
+  const POLICY_WORD = { first: '위에서 첫 규칙', priority: '우선순위가 높은 규칙', collect: '맞는 규칙 모두', unique: '하나만 맞아야 함' };
+  const modWord = (name) => (name === S.mg.st.workspace.module ? S.mg.st.workspace.label : modLabel(name));
+
+  function cellSay(c) {  // a finding's cell in a person's words: "<= 7" is 7 이하
+    const s = String(c).trim();
+    const m = s.match(/^(<=|>=|<|>|!=|=)\s*(.+)$/);
+    const v = (x) => ({ true: '예', false: '아니요', null: '값 없음' }[x] || x.replace(/^"|"$/g, ''));
+    if (m) return `${v(m[2])} ${{ '<=': '이하', '>=': '이상', '<': '미만', '>': '초과', '!=': '아님', '=': '' }[m[1]]}`.trim();
+    // numbers and ranges that run on into each other read as one range: 0 | 1..6 | 7 is 0~7
+    const parts = s.replace(/^\[|\]$/g, '').split('|').map((x) => x.trim());
+    const spans = parts.map((x) => { const q = x.match(/^(-?\d+(?:\.\d+)?)(?:\.\.(-?\d+(?:\.\d+)?))?$/); return q ? [Number(q[1]), Number(q[2] ?? q[1])] : null; });
+    if (spans.every(Boolean)) {
+      const merged = [];
+      spans.sort((a, b) => a[0] - b[0]).forEach(([lo, hi]) => { const last = merged[merged.length - 1]; if (last && lo <= last[1] + 1) last[1] = Math.max(last[1], hi); else merged.push([lo, hi]); });
+      return merged.map(([lo, hi]) => (lo === hi ? String(lo) : `${lo}~${hi}`)).join(' 또는 ');
+    }
+    return parts.map((x) => v(x)).join(' 또는 ');
+  }
+
+  function overlapSay(d, f) {
+    const where = Object.entries(f.where || {}).map(([k, c]) => `${(d.inputs.find((i) => i.name === k) || { label: k }).label} ${cellSay(c)}`).join(' · ');
+    const [a, b] = f.rules;
+    const how = f.severity === 'warning' ? '두 규칙의 답이 달라 어느 쪽을 쓸지 정해야 합니다.'
+      : d.hit_policy === 'first' ? `위에서 첫 규칙이므로 ${a}이(가) 적용됩니다.` : '우선순위가 높은 규칙이 적용됩니다.';
+    return `${a}와 ${b}가 '${where}'에서 겹칩니다. ${how}`;
+  }
+
+  function findingsBar(d) {
+    if (!S.ru) return '';
+    const fs = (S.ru.findings || []).filter((f) => f.decision === d.name);
+    const n = (k) => fs.filter((f) => f.kind === k).length;
+    const warn = fs.filter((f) => f.severity === 'warning');
+    const sel = fs.find((f) => f.kind === 'overlap' && f.rules.includes(S.mg.sel));
+    const shown = warn[0] || sel;
+    const say = shown ? (shown.kind === 'overlap' || shown.kind === 'tie' ? overlapSay(d, shown) : shown.detail)
+      : n('overlap') ? `겹치는 곳 ${n('overlap')}군데는 ${POLICY_WORD[d.hit_policy]} 방식으로 정해집니다. 규칙을 고르면 그 규칙과 겹치는 규칙을 표시합니다.` : '겹치거나 닿지 않는 규칙, 어느 규칙도 답하지 않는 입력이 없습니다.';
+    return `<div class="fbar${warn.length ? ' warn' : ''}"><b>검사</b><span>겹침 ${n('overlap') + n('tie')}${warn.length ? ` (확인 ${warn.length})` : ''}</span><span>도달 불가 ${n('unreachable')}</span><span>빈 구간 ${n('gap')}</span>
+      <span class="muted">${esc(say)}</span></div>`;
+  }
+
+  function rulesHead(d) {
+    const extra = d.rules.filter((r) => r.module && r.module !== d.module);
+    const by = {};
+    extra.forEach((r) => { by[r.module] = (by[r.module] || 0) + 1; });
+    const policy = `<label class="chip n chipsel" title="규칙을 적용하는 방식">적용 방식 · <select data-in="mgpolicy" aria-label="적용 방식">${Object.entries(POLICY_WORD).map(([k, w]) => opt(k, w, d.hit_policy)).join('')}</select></label>`;
+    return `<div class="rhead2"><div><div class="rtitle2"><h2>${esc(d.label)}</h2><span class="mono muted">${esc(d.name)}</span></div>
+      <div class="chips" style="margin-top:7px">${policy}${d.target ? `<span class="chip">대상 · ${esc(d.target_label || d.target)}</span>` : ''}<span class="chip b">${esc(shortMod(modWord(d.module)))}</span>
+        ${Object.entries(by).map(([mname, k]) => `<span class="chip warn">+ ${esc(shortMod(modWord(mname)))} 규칙 ${k}</span>`).join('')}${stateChips(d)}</div></div>
+      <div class="right"><a class="btn sm" href="/api/export/jdm?decision=${encodeURIComponent(d.name)}" download>ZEN 내보내기</a><button class="btn sm" data-act="mgrulenew">규칙 추가</button><button class="btn sm primary" data-act="mgpropose"${S.mg.st.workspace.dirty && !S.mg.busy ? '' : ' disabled'}>변경 요청</button></div></div>`;
+  }
+
+  function ruleCell(d, r, i) {
+    const c = S.mg.cell;
+    if (c && c.rule === r.id && c.input === i.name) {
+      const part = c.part;
+      const ops = part.op === 'raw' ? ['raw'] : opsOf(i.type);
+      const val = ['any', 'null', 'notnull'].includes(part.op) ? '' : (i.type === 'boolean' ? `<select data-in="cellv">${[['true', '예'], ['false', '아니요']].map(([k, l]) => opt(k, l, part.value)).join('')}</select>`
+        : i.values.length && ['eq', 'ne'].includes(part.op) ? `<select data-in="cellv">${i.values.map((x) => opt(x, i.labels[x] || x, part.value)).join('')}</select>`
+          : `<input type="text" data-in="cellv" value="${esc(part.value)}" style="width:70px">`);
+      return `<td class="cellon"><div class="celled"><select data-in="cellop">${ops.map((o) => opt(o, CELL_OPS[o], part.op)).join('')}</select>${val}
+        <button class="iconbtn" data-act="cellsave" aria-label="저장">✓</button><button class="iconbtn" data-act="cellx" aria-label="취소">×</button></div></td>`;
+    }
+    return `<td class="celltd" data-act="celledit" data-rule="${esc(r.id)}" data-k="${esc(i.name)}" title="눌러서 고치기">${esc(r.said[i.name])}</td>`;
+  }
+
+  function rulesEdited() {  // a table edited: tried and checked again as it now stands
+    S.ru = null;
+    if (S.sim.key) simulateNow(S.sim.key, S.sim.vals);
+    api('rules').then((x) => { S.ru = x; if (S.tab === 'mgrules') render(); }).catch(fail);
+  }
+
+  async function moveRule(id, to) {
+    const d = S.mg.st.decisions.find((x) => x.name === S.mg.dec);
+    if (!d || d.rules.findIndex((r) => r.id === id) === to) return;
+    S.mg.sel = id;
+    await mgEdit('move_rule', { decision: d.name, id, to }, `규칙 ${id}의 순서를 바꿨습니다.`);
+    rulesEdited();
+  }
+
+  function rulesTable(d) {
+    const hitNow = S.sim.res && S.sim.dec === d.name ? S.sim.res.matched : [];
+    const fs = ((S.ru || {}).findings || []).filter((f) => f.decision === d.name);
+    const warn = new Set(fs.filter((f) => f.severity === 'warning').flatMap((f) => f.rules));
+    const near = new Set(fs.filter((f) => f.kind === 'overlap' && f.rules.includes(S.mg.sel)).flatMap((f) => f.rules).filter((x) => x !== S.mg.sel));
+    const rows = d.rules.map((r) => `<tr class="${S.mg.sel === r.id ? 'sel' : ''}${hitNow.includes(r.id) ? ' hitrow' : ''}${warn.has(r.id) || near.has(r.id) ? ' warnrow' : ''}" draggable="true" data-drag-rule="${esc(r.id)}">
+      <td class="draghandle" aria-hidden="true">⋮⋮</td>
+      <td class="mono" style="white-space:nowrap;cursor:pointer" data-act="mgrule" data-name="${esc(r.id)}"><b>${esc(r.id)}</b>${hitNow.includes(r.id) ? ' <span class="chip sm ok">적중</span>' : ''}${near.has(r.id) ? ' <span class="chip sm warn">겹침</span>' : ''}
+        ${r.cite ? `<div><span class="chip sm${r.module && r.module !== d.module ? ' warn' : ''}" style="margin-top:3px">${esc(r.cite)}</span></div>` : ''}</td>
+      ${d.inputs.map((i) => ruleCell(d, r, i)).join('')}${d.outputs.map((o, k) => `<td style="min-width:${o.name === 'reason' ? 150 : 70}px${k === 0 ? ';border-left:2px solid var(--line)' : ''}">${yesNo(r.then[o.name])}</td>`).join('')}</tr>`).join('');
+    const reads = S.mg.st.parameters.filter((p) => (p.readers || []).some((x) => x.startsWith(`${d.label} ·`)));
+    const params = reads.length ? `<div class="cb rparams"><span class="label">기준값</span>${reads.map((p) => `<button class="chip" data-act="mgparam" data-name="${esc(p.name)}">@${esc(p.name)} <b>${show(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</b></button>`).join('')}<span class="muted">기준값을 바꾸면 이 값을 쓰는 규칙과 사유 문장이 함께 바뀝니다</span></div>` : '';
+    return `<div class="card"><div class="cb scroll" style="padding:0"><table class="tight rtable" style="font-size:12.5px"><tr><th></th><th>규칙</th>${d.inputs.map((i) => `<th>${esc(i.label)}</th>`).join('')}${d.outputs.map((o, k) => `<th${k === 0 ? ' style="border-left:2px solid var(--line)"' : ''}>→ ${esc(outWord(d, o.name))}</th>`).join('')}</tr>${rows}
+      <tr><td colspan="${2 + d.inputs.length + d.outputs.length}" class="muted" style="padding:10px;font-size:12px"><button class="btn sm" data-act="mgrulenew">+ 규칙 추가</button> 행을 끌어 순서를 바꿉니다 · 칸을 눌러 '14일 이하'처럼 사람 말로 고칩니다 · 고친 내용은 오른쪽 시뮬레이션과 테스트에 바로 반영됩니다</td></tr></table></div>${params}</div>`;
+  }
+
+  function testCard(d) {
+    const r = S.sim.res && S.sim.dec === d.name ? S.sim.res : null;
+    const a = S.agree && S.agree.ok && S.agree.decision === d.name ? S.agree : null;
+    const qs = r ? r.questions : null;
+    const okq = qs ? qs.filter((q) => q.passed).length : 0;
+    const flips = r ? r.edges.filter((e) => e.verdict !== r.verdict).length : 0;
+    const edges = r && S.sim.edges ? `<table class="tight" style="font-size:12.5px;margin-top:6px"><tr><th>입력</th><th>값</th><th>결과</th><th>규칙</th></tr>${r.edges.map((e) => `<tr><td>${esc(e.label)}</td><td class="mono">${typeof e.value === 'boolean' ? yesNo(e.value) : esc(String(e.value))}</td><td><span class="chip sm ${e.yes ? 'ok' : 'warn'}">${esc(e.verdict)}</span></td><td class="mono muted">${esc(e.matched.join(', '))}</td></tr>`).join('')}</table>` : '';
+    const failing = qs ? qs.filter((q) => !q.passed).map((q) => `<div class="hint warn" style="margin:6px 0 0"><b>${esc(q.id)}</b> ${esc(q.text)} · 기대 ${esc(JSON.stringify(q.expect || {}))} → 결과 ${esc(q.error || JSON.stringify(q.got || {}))}</div>`).join('') : '';
+    return `<div class="card"><div class="ch">테스트${r && r.pending ? '<span class="chip sm warn">대기 중인 변경 반영</span>' : ''}</div><div class="cb">
+      <div class="hrow static"><div><b>과거 판정 다시 계산</b><div class="muted" style="font-size:12px">${a ? `${a.cases}건 중 ${a.agree}건 일치` : '이 결정표의 과거 사례 기준이 없습니다'}</div></div>${a ? `<span class="chip sm ${a.rate === 1 ? 'ok' : 'warn'}" style="margin-left:auto">${pct(a.rate)}</span>` : ''}</div>
+      <div class="hrow static"><div><b>경계값 자동 생성</b><div class="muted" style="font-size:12px">${r ? `규칙이 비교하는 값의 앞뒤 ${r.edges.length}건 · 결과가 바뀌는 값 ${flips}건` : '레코드를 불러오면 만듭니다'}</div></div>${r ? `<button class="btn sm ghost" data-act="simedges" style="margin-left:auto">${S.sim.edges ? '접기' : '보기'}</button>` : ''}</div>${edges}
+      <div class="hrow static"><div><b>검증 질문</b><div class="muted" style="font-size:12px">${qs ? `이 결정표를 쓰는 질문 ${qs.length}개` : '레코드를 불러오면 실행합니다'}</div></div>${qs ? `<span class="chip sm ${okq === qs.length ? 'ok' : 'bad'}" style="margin-left:auto">${okq} / ${qs.length}</span>` : ''}</div>${failing}
+    </div></div>`;
+  }
+
   function viewMgRules() {
     const title = '규칙 관리', sub = '결정표의 규칙과 규칙이 참조하는 기준값을 관리합니다';
     const wait = mgWait(title, sub);
@@ -4638,17 +4736,11 @@ ${controls}${body}`;
     if (!S.mg.dec || !m.decisions.some((d) => d.name === S.mg.dec)) S.mg.dec = (m.decisions[0] || {}).name || '';
     const d = m.decisions.find((x) => x.name === S.mg.dec);
     const pick = `<select data-in="mgdec" style="width:220px">${m.decisions.map((x) => opt(x.name, x.label, S.mg.dec)).join('')}</select>`;
-    const head = mgHead(title, sub, `${pick}<button class="btn sm" data-act="mgparamnew">기준값 추가</button><button class="btn sm" data-act="mgdecnew">새 결정표</button>${d ? '<button class="btn sm primary" data-act="mgrulenew">규칙 추가</button>' : ''}`);
+    const head = mgHead(title, sub, `${pick}<button class="btn sm" data-act="mgparamnew">기준값 추가</button><button class="btn sm" data-act="mgdecnew">새 결정표</button>`);
     const params = m.parameters.length ? `<div class="card" data-mgparams="1"><div class="ch">기준값 <span class="chip sm">${m.parameters.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>정의</th></tr>${m.parameters.map((p) => `<tr class="${S.mg.sel === `param:${p.name}` ? 'sel' : ''}" data-act="mgparam" data-name="${esc(p.name)}" style="cursor:pointer"><td><b>${esc(p.label)}</b><div class="muted mono">@${esc(p.name)}</div></td><td>${show(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`).join('')}</table></div></div>` : '';
     if (!d) return `${head}${pendingBar()}${params}${metricCard()}${paramForm()}${metricForm()}${decisionForm() || mgEmpty('결정표', '결정표가 없습니다. [새 결정표]로 만듭니다.')}`;
-    const hitNow = S.sim.res && S.sim.dec === d.name ? S.sim.res.matched : [];
-    const overlap = new Set(((S.ru || {}).findings || []).filter((f) => f.decision === d.name && f.severity === 'warning').flatMap((f) => f.rules));
-    const rows = d.rules.map((r) => `<tr class="${S.mg.sel === r.id ? 'sel' : ''}${hitNow.includes(r.id) ? ' hitrow' : ''}${overlap.has(r.id) ? ' warnrow' : ''}" data-act="mgrule" data-name="${esc(r.id)}" style="cursor:pointer"><td class="mono" style="white-space:nowrap">${esc(r.id)}${hitNow.includes(r.id) ? ' <span class="chip sm ok">시뮬레이션 적중</span>' : ''}${r.cite ? `<div class="muted cite-note">${esc(r.cite)}</div>` : ''}</td>
-      ${d.inputs.map((i) => `<td style="white-space:nowrap">${esc(r.said[i.name])}</td>`).join('')}${d.outputs.map((o) => `<td style="min-width:110px">${yesNo(r.then[o.name])}</td>`).join('')}</tr>`).join('');
-    const table = `<div class="card"><div class="ch">${esc(d.label)} <span class="chip sm">규칙 ${d.rules.length}</span>${ownerChip(d)}${stateChips(d)}<div class="right"><span class="chip sm n" title="규칙을 적용하는 방식">${esc(HIT_WORD[d.hit_policy] || HIT_WORD.first)}</span></div></div>
-      <div class="cb scroll" style="padding:0"><table class="tight" style="font-size:12.5px"><tr><th>규칙</th>${d.inputs.map((i) => `<th>${esc(i.label)}</th>`).join('')}${d.outputs.map((o) => `<th>${esc(outWord(d, o.name))}</th>`).join('')}</tr>${rows}</table></div></div>`;
-    return `${head}${pendingBar()}${findingsBar(d)}<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(340px,1fr);align-items:start"><div style="display:flex;flex-direction:column;gap:16px;min-width:0">${table}${testCard(d)}${params}${metricCard()}</div>
-      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">${decisionForm()}${paramForm()}${metricForm()}${S.mg.form && ['param', 'metric', 'decision'].includes(S.mg.form.kind) ? '' : ruleForm(d)}${simCard(d)}</div></div>`;
+    return `${head}${pendingBar()}${rulesHead(d)}${findingsBar(d)}<div class="grid" style="grid-template-columns:minmax(0,1.65fr) minmax(330px,1fr);align-items:start;margin-top:12px"><div class="hcol">${rulesTable(d)}${params}${metricCard()}</div>
+      <div class="hcol">${decisionForm()}${paramForm()}${metricForm()}${S.mg.form && ['param', 'metric', 'decision'].includes(S.mg.form.kind) ? '' : (S.mg.form && S.mg.form.kind === 'rule' ? ruleForm(d) : '')}${simCard(d)}${testCard(d)}</div></div>`;
   }
 
   const RUNTIME = [['expr', '계산식'], ['decision', '결정표'], ['query', '등록 질의'], ['python', 'Python'], ['http', '외부 호출']];
@@ -5715,6 +5807,20 @@ ${controls}${body}`;
     mgtable: (t) => { S.mg.table = t.dataset.t; render(); },
     mgobj: (t) => mgOpen('object', t.dataset.name),
     mgrule: (t) => mgOpenMore('rule', t.dataset.name),
+    celledit: (t) => {
+      const d = S.mg.st.decisions.find((x) => x.name === S.mg.dec), r = d && d.rules.find((x) => x.id === t.dataset.rule);
+      if (!r) return;
+      S.mg.cell = { rule: r.id, input: t.dataset.k, part: { ...(r.when[t.dataset.k] || { op: 'any', value: '' }) } };
+      render();
+    },
+    cellx: () => { S.mg.cell = null; render(); },
+    cellsave: () => {
+      const c = S.mg.cell, d = S.mg.st.decisions.find((x) => x.name === S.mg.dec), r = d && d.rules.find((x) => x.id === c.rule);
+      if (!r) return;
+      S.mg.cell = null; S.mg.sel = r.id;
+      mgEdit('update_rule', { decision: d.name, id: r.id, when: { ...r.when, [c.input]: c.part }, then: r.then, cite: r.cite || '' }, `규칙 ${r.id}의 조건을 바꿨습니다.`).then(rulesEdited);
+    },
+    simedges: () => { S.sim.edges = !S.sim.edges; render(); },
     mgparam: (t) => mgOpenMore('param', t.dataset.name),
     mgstate: (t) => mgOpenMore('states', t.dataset.name),
     mgaction: (t) => mgOpenMore('action', t.dataset.name),
@@ -5879,6 +5985,7 @@ ${controls}${body}`;
     gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
     srfolder: (t) => { S.sr.folder = t.value; },
+    cellv: (t) => { if (S.mg.cell) S.mg.cell.part.value = t.value; },
     mdyaml: (t) => { if (S.md.yaml) S.md.yaml.text = t.value; const b = $('[data-act=mdyamlsave]'); if (b) b.disabled = S.md.yaml.text === S.md.yaml.was; },
     mdnote: (t) => { S.md.note = t.value; },
     srfkey: (t) => { S.sr.fix.key = t.value; },
@@ -5960,7 +6067,9 @@ ${controls}${body}`;
     pdoc: (t) => loadDocument(t.value, ''),
     psec: (t) => loadDocument(S.pol.doc, t.value),
     mgpobj: (t) => { S.mg.obj = t.value; S.mg.form = null; S.mg.sel = ''; render(); },
-    mgdec: (t) => { S.mg.dec = t.value; S.mg.form = null; S.mg.sel = ''; render(); },
+    mgdec: (t) => { S.mg.dec = t.value; S.mg.form = null; S.mg.sel = ''; S.mg.cell = null; render(); },
+    mgpolicy: (t) => mgEdit('update_decision', { decision: S.mg.dec, hit_policy: t.value }, `적용 방식을 '${POLICY_WORD[t.value]}'(으)로 바꿨습니다.`).then(rulesEdited),
+    cellop: (t) => { S.mg.cell.part.op = t.value; render(); },
     mgwhen: (t) => {
       const w = S.mg.form.v.when, k = t.dataset.k;
       w[k] = { ...(w[k] || { op: 'any', value: '' }), [t.dataset.p]: t.value };
@@ -6136,6 +6245,21 @@ ${controls}${body}`;
     main.addEventListener('change', (ev) => {
       if (ev.target.id === 'fileinput') uploadAll([...ev.target.files].map((f) => [f, f.name]));
       if (ev.target.id === 'dirinput') uploadAll([...ev.target.files].map((f) => [f, f.webkitRelativePath || f.name]));
+    });
+    main.addEventListener('dragstart', (ev) => { const r = ev.target.closest && ev.target.closest('[data-drag-rule]'); if (r) { S.mg.drag = r.dataset.dragRule; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', S.mg.drag); r.classList.add('dragging'); } });
+    main.addEventListener('dragend', () => { S.mg.drag = ''; document.querySelectorAll('.dragging, .dropat').forEach((x) => x.classList.remove('dragging', 'dropat')); });
+    main.addEventListener('dragover', (ev) => {
+      const r = S.mg.drag && ev.target.closest('[data-drag-rule]');
+      if (r) { ev.preventDefault(); document.querySelectorAll('.dropat').forEach((x) => x.classList.remove('dropat')); r.classList.add('dropat'); }
+    });
+    main.addEventListener('drop', (ev) => {
+      const r = S.mg.drag && ev.target.closest('[data-drag-rule]');
+      if (!r) return;
+      ev.preventDefault();
+      const all = [...r.parentElement.querySelectorAll('[data-drag-rule]')].map((x) => x.dataset.dragRule);
+      const from = all.indexOf(S.mg.drag), at = all.indexOf(r.dataset.dragRule);
+      moveRule(S.mg.drag, at);  // the rule takes the place of the row it is dropped on
+      if (from < 0) S.mg.drag = '';
     });
     main.addEventListener('dragover', (ev) => { const z = ev.target.closest('[data-drop]'); if (z) { ev.preventDefault(); z.classList.add('over'); } });
     main.addEventListener('dragleave', (ev) => { const z = ev.target.closest('[data-drop]'); if (z) z.classList.remove('over'); });
