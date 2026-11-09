@@ -4,6 +4,9 @@
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
     inbox: '<path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2.5h4l1-2.5h5"/>',
     records: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    graph: '<circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="6" r="2.3"/><circle cx="12" cy="18" r="2.3"/><path d="M8.2 7.6l7.5-1.2M7.3 9l3.6 7M16.8 8.1l-3.6 7.9"/>',
+    mgrules: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9 9.5v10"/>',
+    changes: '<circle cx="6.5" cy="6" r="2.2"/><circle cx="6.5" cy="18" r="2.2"/><circle cx="17.5" cy="18" r="2.2"/><path d="M6.5 8.2v7.6M17.5 15.8V10a3 3 0 00-3-3H10"/><path d="M12 5l-2 2 2 2"/>',
     model: '<rect x="3" y="4" width="6" height="16" rx="1.5"/><circle cx="14" cy="8" r="2.2"/><circle cx="19" cy="16" r="2.2"/><path d="M15.6 9.7l2.2 4.4"/>',
     explorer: '<path d="M3 6.5a1.5 1.5 0 011.5-1.5H9l2 2h8.5A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z"/><path d="M7 11h6M7 14.5h9"/>',
     map: '<path d="M9 4L3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/>',
@@ -51,16 +54,17 @@
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: what a person comes to do (use), then what builds the definition (build), then what keeps it running (run).
   // A group's screens are tabs on its page.
-  const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '검색 · 질문', ['search', 'query']], ['use', '레코드', ['records', 'record', 'graph']],
-    ['use', '판정 · 처리', ['decide', 'rules']], ['build', '데이터 가져오기', ['catalog', 'db', 'convert', 'sources', 'data']],
-    ['build', '모델링', ['model', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles']], ['build', '라이브러리 · 변경', ['library', 'changes']],
-    ['run', '파이프라인 관제', ['monitor', 'flow']], ['run', '데이터 지도', ['explorer', 'map']], ['run', '저장소 · 연동', ['adapters', 'vectors', 'connect']],
-    ['run', '검증', ['check', 'bind']], ['run', '사용 안내', ['guide']]];
+  const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '검색 · 질문', ['search', 'query']], ['use', '객체 탐색', ['records', 'record']],
+    ['use', '그래프 탐색', ['graph']], ['use', '판정 · 처리', ['decide', 'rules']], ['build', '데이터 가져오기', ['catalog', 'db', 'convert', 'sources', 'data']],
+    ['build', '모델링', ['model', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'roles']], ['build', '규칙 · 액션', ['mgrules', 'actions', 'mgfuncs']],
+    ['build', '변경 요청', ['changes', 'library']],
+    ['run', '파이프라인 관제', ['monitor', 'flow']], ['run', '검증', ['check', 'bind']], ['run', '저장소 · 연동', ['adapters', 'vectors', 'connect']],
+    ['run', '데이터 지도', ['explorer', 'map']], ['run', '사용 안내', ['guide']]];
   const SECTION = [['use', '업무'], ['build', '구축'], ['run', '운영']];
   const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '자산 탐색기', map: '자산 그래프' };
-  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const TAB_WORD = { mgrules: '규칙', actions: '액션', mgfuncs: '함수', changes: '변경 요청', model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '자산 탐색기', map: '자산 그래프' };
+  const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
   const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
@@ -361,7 +365,7 @@
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
-      q: '', toq: '', found: null, hide: [], view: '', log: [], info: {} },
+      q: '', toq: '', found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [] },
     md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
@@ -543,14 +547,15 @@
       const on = keys.includes(S.tab);
       if (on) S.seen[i] = S.tab;
       const waiting = wait && keys.includes('objects');
-      const badge = keys[0] === 'inbox' && waits ? `<span class="nbadge">${waits}</span>` : '';
+      const badge = keys[0] === 'inbox' && waits ? `<span class="nbadge">${waits}</span>`
+        : keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
       return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
     };
     const section = ([id, word]) => `<div class="nsec"><div class="nhead">${word}</div>${NAV_GROUP.map((g, i) => (g[0] === id ? place(i) : '')).join('')}</div>`;
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    const first = { ops: ['use', 'run', 'build'], domain: ['use', 'build', 'run'], model: ['build', 'use', 'run'] }[S.home.role] || ['use', 'build', 'run'];
+    const first = { ops: ['use', 'build', 'run'], domain: ['use', 'build', 'run'], model: ['build', 'use', 'run'] }[S.home.role] || ['use', 'build', 'run'];
     const sections = [...SECTION].sort((a, b) => first.indexOf(a[0]) - first.indexOf(b[0]));
     $('#side').innerHTML = `${BRAND}<div class="snav">${sections.map(section).join('')}</div>${sideLinks()}
       <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
@@ -579,8 +584,7 @@
     if ((S.tab === 'home' || S.tab === 'inbox') && !S.home.box && !S.home.busy) loadInbox();
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
-    if (S.tab === 'graph' && $('#gxgraph')) mountGraph($('#gxgraph'), gxData(), { key: 'records', pos: S.gx.pos, sel: () => S.gx.sel, pick: (id) => gxPick(id), clear: () => {}, labels: true,
-      shown: (kind, x) => kind !== 'node' || !S.gx.hide.includes(x.module) });
+    if (S.tab === 'graph' && $('#gxcanvas')) { mountGx(); gxPaint(); }
     if (S.tab === 'model') mountEr();
     if (S.tab === 'record' && !S.rec.res && !S.rec.busy && !S.rec.err) loadRecord();
     if (S.tab === 'guide') mountGuide();
@@ -1183,15 +1187,8 @@
     return id;
   }
 
-  function gxEdge(source, target, link, label) {
-    if (!S.gx.edges.some((e) => e.source === source && e.target === target && e.link === link)) S.gx.edges.push({ source, target, link, label });
-  }
-
-  function gxData() {
-    const nodes = Object.entries(S.gx.nodes).map(([id, n]) => ({ id, module: n.type, label: `${n.label} ${n.key}${n.title ? ` · ${n.title}` : ''}` }));
-    const types = [...new Set(nodes.map((n) => n.module))];
-    return { nodes, edges: S.gx.edges.map((e) => ({ source: e.source, target: e.target, label: e.label })),
-      clusters: types.map((t) => ({ id: t, label: t === 'bundle' ? '묶음' : (S.st.graph.nodes.find((x) => x.id === t) || {}).label || t })) };
+  function gxEdge(source, target, link, label, group) {
+    if (!S.gx.edges.some((e) => e.source === source && e.target === target && e.link === link)) S.gx.edges.push({ source, target, link, label, group: group || '' });
   }
 
   // where a graph starts or ends: a record found by its key or its name, of any type
@@ -1232,6 +1229,151 @@
       .finally(() => { const side = $('#gxside'); if (side && S.gx.sel === id) side.innerHTML = gxSide(); });
   }
 
+  // ---- the record graph drawn as boxes: each record by its type, key and name; each relation by its name; a found path
+  //      in orange. Laid out in layers by distance from where it started, or in rings around it ----------------------
+
+  const GX = { h: 30, padX: 12, gapX: 64, gapY: 18, ring: 170, pad: 24 };
+  const GX_COLOR = [['#1a73e8', '#eaf2fe'], ['#12805c', '#e7f6ef'], ['#c2410c', '#fff1e6'], ['#7c3aed', '#f3edff'], ['#0e7490', '#e6f6f9'],
+    ['#b42318', '#fdecea'], ['#a16207', '#fdf6dc'], ['#475467', '#f2f4f7']];
+  const textW = (t) => [...String(t)].reduce((a, c) => a + (c.charCodeAt(0) > 0x1100 ? 12.4 : 7), 0);
+
+  function gxColor(type) {
+    if (type === 'bundle') return ['#667085', '#ffffff'];
+    const i = S.st.graph.nodes.findIndex((n) => n.id === type);
+    return GX_COLOR[(i < 0 ? 0 : i) % GX_COLOR.length];
+  }
+
+  const gxWord = (n) => (n.type === 'bundle' ? `${n.label} ${n.key} · 펼치기` : `${n.label} ${n.key}${n.title ? ` ${String(n.title).length > 9 ? `${String(n.title).slice(0, 8)}…` : n.title}` : ''}`);
+
+  function gxLayout() {
+    const g = S.gx;
+    const ids = Object.keys(g.nodes).filter((id) => !g.hide.includes(g.nodes[id].type));
+    const seed = gxId(g.seed.type, g.seed.key);
+    const near = {};
+    g.edges.forEach((e) => { (near[e.source] = near[e.source] || []).push(e.target); (near[e.target] = near[e.target] || []).push(e.source); });
+    const dist = { [seed]: 0 }, queue = [seed];
+    while (queue.length) { const x = queue.shift(); (near[x] || []).forEach((y) => { if (dist[y] === undefined) { dist[y] = dist[x] + 1; queue.push(y); } }); }
+    const far = Math.max(0, ...Object.values(dist));
+    const levels = [];
+    ids.forEach((id) => { const d = dist[id] ?? far + 1; (levels[d] = levels[d] || []).push(id); });
+    // within a level, a record sits near the records it hangs off
+    const at = {};
+    levels.forEach((lv, d) => {
+      if (!lv) return;
+      if (d) lv.sort((a, b) => Math.min(...(near[a] || []).map((x) => at[x] ?? 99)) - Math.min(...(near[b] || []).map((x) => at[x] ?? 99)));
+      lv.forEach((id, i) => { at[id] = i; });
+    });
+    const boxes = {};
+    const size = (id) => ({ w: Math.max(70, textW(gxWord(g.nodes[id])) + GX.padX * 2), h: GX.h });
+    if (g.layout === 'radial') {
+      levels.forEach((lv, d) => {
+        if (!lv) return;
+        lv.forEach((id, i) => {
+          const a = (i / lv.length) * Math.PI * 2 - Math.PI / 2 + d * 0.35, r = d * GX.ring;
+          const sz = size(id);
+          boxes[id] = { ...sz, x: r * Math.cos(a) - sz.w / 2, y: r * Math.sin(a) - sz.h / 2 };
+        });
+      });
+    } else {  // layers top to bottom, each centred under the widest
+      const rowW = (lv) => lv.reduce((a, id) => a + size(id).w, 0) + (lv.length - 1) * 24;
+      const wide = Math.max(...levels.map((lv) => (lv ? rowW(lv) : 0)));
+      let y = 0;
+      levels.forEach((lv) => {
+        if (!lv) return;
+        let x = (wide - rowW(lv)) / 2;
+        lv.forEach((id) => { const sz = size(id); boxes[id] = { ...sz, x, y }; x += sz.w + 24; });
+        y += GX.h + GX.gapX;
+      });
+    }
+    Object.entries(g.pos).forEach(([id, p]) => { if (boxes[id]) Object.assign(boxes[id], p); });
+    const xs = Object.values(boxes);
+    const minX = Math.min(0, ...xs.map((b) => b.x)) - GX.pad, minY = Math.min(0, ...xs.map((b) => b.y)) - GX.pad - 10;
+    xs.forEach((b) => { b.x -= minX; b.y -= minY; });
+    return { boxes, minX, minY, W: Math.max(...xs.map((b) => b.x + b.w), 300) + GX.pad, H: Math.max(...xs.map((b) => b.y + b.h), 200) + GX.pad };
+  }
+
+  function gxSvg() {
+    const g = S.gx;
+    if (!Object.keys(g.nodes).length) return '';
+    const L = gxLayout(), z = g.zoom || 1;
+    const way = new Set((g.routeEdges || []).map((e) => `${e.source}|${e.target}`));
+    const onWay = new Set((g.route || []).map((x) => x.id));
+    const edges = g.edges.map((e) => {
+      const a = L.boxes[e.source], b = L.boxes[e.target];
+      if (!a || !b) return '';
+      const [p, q] = erEdge(a, b);
+      const hot = way.has(`${e.source}|${e.target}`) || way.has(`${e.target}|${e.source}`);
+      const on = g.sel === e.source || g.sel === e.target;
+      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#${hot ? 'gxhot' : 'gxarrow'})"/><text x="${mx}" y="${my - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
+    }).join('');
+    const nodes = Object.entries(L.boxes).map(([id, b]) => {
+      const n = g.nodes[id], [ink, fill] = gxColor(n.type);
+      const cls = `${id === g.sel ? ' on' : ''}${onWay.has(id) ? ' way' : ''}${n.type === 'bundle' ? ' bundle' : ''}${id === gxId(g.seed.type, g.seed.key) ? ' seed' : ''}`;
+      return `<g class="gxn${cls}" data-gx="${esc(id)}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.h / 2}" style="fill:${fill};stroke:${ink}"/>
+        <text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 4.5}" text-anchor="middle" style="fill:${ink}">${esc(gxWord(n))}</text></g>`;
+    }).join('');
+    return `<svg class="gxsvg" width="${Math.round(L.W * z)}" height="${Math.round(L.H * z)}" viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="레코드 그래프">
+      <defs><marker id="gxarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#98a2b3"/></marker>
+      <marker id="gxhot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#e8590c"/></marker></defs>${edges}${nodes}</svg>`;
+  }
+
+  function mountGx() {
+    const box = $('#gxcanvas');
+    if (!box || box.dataset.on) return;
+    box.dataset.on = '1';
+    let drag = null;
+    box.addEventListener('pointerdown', (ev) => {
+      const n = ev.target.closest('[data-gx]');
+      const L = n && gxLayout(), b = L && L.boxes[n.dataset.gx];
+      drag = b ? { id: n.dataset.gx, x0: ev.clientX, y0: ev.clientY, bx: b.x + L.minX, by: b.y + L.minY, moved: false }
+        : { pan: true, x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
+      box.setPointerCapture(ev.pointerId);
+    });
+    box.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      drag.moved = true;
+      if (drag.pan) { box.scrollLeft = drag.sl - dx; box.scrollTop = drag.st - dy; box.classList.add('panning'); return; }
+      const z = S.gx.zoom || 1;
+      S.gx.pos[drag.id] = { x: drag.bx + dx / z, y: drag.by + dy / z };
+      box.innerHTML = gxSvg();
+    });
+    const end = () => { if (drag && !drag.moved && !drag.pan) gxPick(drag.id); drag = null; box.classList.remove('panning'); };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+    box.addEventListener('wheel', (ev) => { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); gxZoom(ev.deltaY < 0 ? 1 : -1); }, { passive: false });
+  }
+
+  function gxZoom(step) {
+    const g = S.gx, box = $('#gxcanvas');
+    g.zoomed = step !== 0;
+    if (step === 0 && box) { g.zoom = 1; gxFit(); }
+    else g.zoom = Math.min(1.8, Math.max(0.35, Math.round(((g.zoom || 1) + step * 0.1) * 10) / 10));
+    gxRedraw();
+  }
+
+  function gxFit() {
+    const g = S.gx, box = $('#gxcanvas');
+    if (g.zoomed || !box || !Object.keys(g.nodes).length) return;
+    const L = gxLayout();
+    g.zoom = Math.min(1, Math.max(0.35, Math.min((box.clientWidth - 8) / L.W, (box.clientHeight - 8) / L.H)));
+  }
+
+  function gxRedraw() {
+    if ($('#gxcanvas')) gxPaint(); else render();
+  }
+
+  function gxPaint() {  // the canvas and its zoom figure, where the person left them
+    const box = $('#gxcanvas');
+    if (!box) return;
+    gxFit();
+    box.innerHTML = gxSvg();
+    const z = $('[data-act=gxzoom][data-z="0"]');
+    if (z) z.textContent = `${Math.round((S.gx.zoom || 1) * 100)}%`;
+  }
+
   async function gxLinks(id) {
     const n = S.gx.nodes[id];
     if (!n || S.gx.links[id]) return;
@@ -1243,7 +1385,7 @@
   }
 
   async function gxStart(type, key) {
-    Object.assign(S.gx, { nodes: {}, edges: [], links: {}, sel: '', route: [], err: '' });
+    Object.assign(S.gx, { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', open: [], pos: {} });
     const id = gxAdd({ type, key, label: (S.st.graph.nodes.find((x) => x.id === type) || {}).label || type });
     S.gx.seed = { type, key: String(key) };
     S.gx.sel = id;
@@ -1257,22 +1399,37 @@
 
   const BUNDLE = 6;  // more records than this on one relation are folded into one node until it is opened
 
+  const gxGroup = (id, link, forward) => `${id}|${link}|${forward ? 1 : 0}`;
+
+  function gxShrink(id, link, forward) {
+    const g = S.gx, key = gxGroup(id, link, forward);
+    g.open = g.open.filter((x) => x !== key);
+    g.edges = g.edges.filter((e) => e.group !== key);
+    const held = new Set([gxId(g.seed.type, g.seed.key), g.sel, ...(g.route || []).map((x) => x.id)]);
+    g.edges.forEach((e) => { held.add(e.source); held.add(e.target); });
+    Object.keys(g.nodes).forEach((n) => { if (!held.has(n)) delete g.nodes[n]; });
+    g.log.push({ id, word: `${link} 접음` });
+    render();
+  }
+
   function gxGrow(id, link, forward, open) {
     const r = S.gx.links[id];
     if (!r) return;
     const groups = r.links.filter((l) => (link === undefined || (l.link === link && l.forward === forward)) && l.count);
     for (const l of groups) {
+      const key = gxGroup(id, l.link, l.forward);
+      if (!S.gx.open.includes(key)) S.gx.open.push(key);
       const bid = `bundle:${id}:${l.link}:${l.forward ? 1 : 0}`;
       if (l.count > BUNDLE && !open) {
         S.gx.nodes[bid] = { type: 'bundle', key: `${l.count}${l.more ? '+' : ''}`, label: `${l.type_label}`, title: '펼치기', of: { id, link: l.link, forward: l.forward } };
-        if (l.forward) gxEdge(id, bid, l.link, l.label); else gxEdge(bid, id, l.link, l.label);
+        if (l.forward) gxEdge(id, bid, l.link, l.label, key); else gxEdge(bid, id, l.link, l.label, key);
         continue;
       }
       delete S.gx.nodes[bid];
       S.gx.edges = S.gx.edges.filter((e) => e.source !== bid && e.target !== bid);
       for (const it of l.items) {
         const other = gxAdd({ type: l.type, key: it.key, label: l.type_label, title: it.title || '' });
-        if (l.forward) gxEdge(id, other, l.link, l.label); else gxEdge(other, id, l.link, l.label);
+        if (l.forward) gxEdge(id, other, l.link, l.label, key); else gxEdge(other, id, l.link, l.label, key);
       }
     }
     const n = S.gx.nodes[id];
@@ -1285,7 +1442,7 @@
     if (b && b.type === 'bundle') { gxGrow(b.of.id, b.of.link, b.of.forward, true); return; }
     S.gx.sel = id;
     gxInfo(id);
-    drawGraph();
+    gxRedraw();
     await gxLinks(id);
     const left = $('#gxgrow'), side = $('#gxside');
     if (left) left.innerHTML = gxGrowCard();
@@ -1317,10 +1474,11 @@
     const g = S.gx, r = g.links[g.sel], n = g.nodes[g.sel];
     if (!n) return '<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty">그래프에서 레코드를 고르면 그 레코드의 관계가 여기에 나옵니다.</div></div></div>';
     if (!r) return `<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty"><span class="spin"></span>${esc(n.label)} ${esc(n.key)}의 관계를 읽는 중입니다.</div></div></div>`;
-    const rows = r.links.map((l) => `<div class="gxrow"><span><b>${esc(l.type_label)}</b> <span class="muted">${esc(l.label)}</span></span><span class="chip sm">${l.count}${l.more ? '+' : ''}</span>
-      <button class="btn sm" data-act="gxgrow" data-link="${esc(l.link)}" data-fw="${l.forward ? 1 : 0}"${l.count ? '' : ' disabled'}>펼치기</button></div>`).join('');
+    const rows = r.links.map((l) => `<label class="gxrow${l.count ? '' : ' off'}"><input type="checkbox" data-in="gxrel" data-link="${esc(l.link)}" data-fw="${l.forward ? 1 : 0}"${g.open.includes(gxGroup(g.sel, l.link, l.forward)) ? ' checked' : ''}${l.count ? '' : ' disabled'}>
+      <span>${esc(l.label)} → <b>${esc(l.type_label)}</b></span><span class="chip sm">${l.count}${l.more ? '+' : ''}</span></label>`).join('');
     return `<div class="card"><div class="ch">관계로 펼치기<div class="right"><button class="btn sm" data-act="gxgrowall">모두</button></div></div><div class="cb">
-      <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(n.label)} ${esc(n.key)}에서 한 번에 관계마다 25건까지 펼칩니다.</div>${rows || '<div class="empty">관계가 없습니다.</div>'}</div></div>`;
+      <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(n.label)} ${esc(n.key)}의 관계를 골라 펼칩니다.</div>${rows || '<div class="empty">관계가 없습니다.</div>'}
+      <div class="muted" style="font-size:11.5px;margin-top:6px">한 번에 25개까지 펼치고, ${BUNDLE}개가 넘으면 묶음으로 보여 줍니다.</div></div></div>`;
   }
 
   function gxSide() {
@@ -1355,11 +1513,17 @@
     const to = g.to.key ? `${esc((S.st.graph.nodes.find((x) => x.id === g.to.type) || {}).label || g.to.type)} ${esc(g.to.key)}` : '';
     const path = `<div class="card"><div class="ch">경로 찾기</div><div class="cb"><div class="muted" style="font-size:12px;margin-bottom:6px">출발 · ${g.nodes[g.sel] && g.nodes[g.sel].type !== 'bundle' ? `${esc(g.nodes[g.sel].label)} ${esc(g.nodes[g.sel].key)}` : '그래프에서 고른 레코드'}${to ? ` → 도착 · <b>${to}</b>` : ''}</div>
       <div class="srform"><input type="search" id="gxtoq" data-in="gxtoq" value="${esc(g.toq)}" placeholder="도착 레코드, 예: 니트" aria-label="도착 레코드 찾기"><button class="btn sm" data-act="gxfind" data-w="to">찾기</button></div>${gxFound('to')}
-      <button class="btn sm primary" data-act="gxpath" style="margin-top:8px"${g.busy || !g.to.key ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px"><button class="btn sm primary" data-act="gxpath"${g.busy || !g.to.key ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>${g.route && g.route.length ? `<span class="muted" style="font-size:12px">${g.route.length - 1}단계 경로 1개 · 주황색으로 표시</span>` : ''}</div>
       <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지, 짧은 경로부터 질의로 찾습니다. SQL 원천에서도 같습니다.</div></div></div>`;
     const n = Object.keys(g.nodes).length;
     const seed = g.nodes[gxId(g.seed.type, g.seed.key)];
-    const canvas = n ? `<div class="card"><div class="ch">${seed ? `${esc(seed.label)} ${esc(seed.key)}${seed.title ? ` ${esc(seed.title)}` : ''}에서 시작` : '레코드 그래프'}<div class="right"><span class="muted" style="font-size:12px">레코드 ${n} · 관계 ${g.edges.length}</span><button class="btn sm ghost" data-act="gxreset">초기화</button></div></div><div class="cb" style="padding:0"><div class="kg" id="gxgraph"></div></div><div class="cb muted" style="font-size:11.5px;border-top:1px solid var(--line)">관계마다 ${BUNDLE}건이 넘으면 '펼치기' 묶음으로 접어 둡니다. 묶음을 누르면 펼칩니다.</div></div>`
+    const shownTypes = [...new Set(Object.values(g.nodes).map((x) => x.type))].filter((t) => t !== 'bundle');
+    const legend = shownTypes.map((t) => { const [ink, fill] = gxColor(t); return `<span class="gxleg"><i style="background:${fill};border-color:${ink}"></i>${esc((S.st.graph.nodes.find((x) => x.id === t) || {}).label || t)} ${Object.values(g.nodes).filter((x) => x.type === t).length}</span>`; }).join('');
+    const canvas = n ? `<div class="card"><div class="ch">${seed ? `${esc(seed.label)} ${esc(seed.key)}${seed.title ? ` ${esc(seed.title)}` : ''}에서 시작` : '레코드 그래프'}
+        <div class="right"><label class="chip chipsel">레이아웃: <select data-in="gxlayout" aria-label="레이아웃">${[['layered', '계층'], ['radial', '방사형']].map(([k, w]) => opt(k, w, g.layout)).join('')}</select></label><button class="btn sm ghost" data-act="gxreset">초기화</button>
+        <span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="gxzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="gxzoom" data-z="0" title="화면에 맞춤">${Math.round((g.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="gxzoom" data-z="1" aria-label="확대">+</button></span></div></div>
+      <div class="cb gxcanvas" id="gxcanvas">${gxSvg()}</div>
+      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">레코드 ${n} · 관계 ${g.edges.length} · 빈 곳을 끌어 이동 · 상자를 끌어 옮김 · Ctrl + 휠 확대</span></div></div>`
       : '<div class="card"><div class="cb"><div class="empty">시작할 레코드를 번호나 이름으로 찾으세요. 레코드 화면의 [그래프로 보기]에서도 시작할 수 있습니다.</div></div></div>';
     return `${head}<div class="grid gxgrid"><div class="hcol">${start}<div id="gxgrow">${gxGrowCard()}</div>${path}${gxViewCard()}</div>${canvas}<div class="hcol" id="gxside">${gxSide()}</div></div>`;
   }
@@ -1491,14 +1655,14 @@
       return r;
     };
     const top = place(order, ER.pad, ER.pad, ER.cols, home, false);
-    let y = top.y + top.h + 28;
+    // the modules it reaches stand in a column beside it, one card wide, so its relations stay short
     const byMod = {};
     [...near].map((n) => mgObj(n)).filter(Boolean).forEach((x) => { (byMod[modOf(x)] = byMod[modOf(x)] || []).push(x); });
-    let x = ER.pad;
+    const x = top.x + top.w + 56;
+    let y = ER.pad;
     Object.entries(byMod).forEach(([label, list]) => {
-      const r = place(list, x, y, Math.min(list.length, 2), label, md.fold);
-      x += r.w + 24;
-      if (x > 900) { x = ER.pad; y += r.h + 24; }
+      const r = place(list, x, y, 1, label, md.fold);
+      y += r.h + 24;
     });
     return { boxes, regions, home };
   }
@@ -1546,7 +1710,8 @@
         ${tag ? `<text class="tag" x="${b.x + b.w - 10}" y="${b.y + 21}" text-anchor="end">${esc(tag)}</text>` : ''}
         <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}</g>`;
     }).join('');
-    return `<svg class="ersvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 객체와 관계">
+    const z = md.zoom || 1;
+    return `<svg class="ersvg" width="${Math.round(W * z)}" height="${Math.round(H * z)}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 객체와 관계">
       <defs><marker id="erarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
       ${regions}${edges.join('')}${nodes}</svg>`;
   }
@@ -1555,8 +1720,9 @@
     const md = S.md, o = mgObj(md.sel);
     const ver = o ? (S.st.layers || []).flatMap((l) => l.modules).find((x) => x.label === (o.module_label || o.module)) : null;
     return `<div class="card"><div class="ch">${esc(o ? (o.module_label || o.module) : '스키마')}${ver ? ` <span class="muted mono" style="font-weight:600">${esc(ver.version)}</span>` : ''}
-      <div class="right"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button><button class="btn sm" data-act="erfold" aria-pressed="${!!md.fold}">${md.fold ? '모듈 펼치기' : '모듈 접기'}</button></div></div>
-      <div class="cb ercanvas" id="ercanvas">${erSvg()}</div><div class="cb ernote muted">카드를 끌어 옮기고, 눌러 오른쪽에서 고칩니다. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+      <div class="right"><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-z="0" title="화면에 맞춤">${Math.round((md.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-z="1" aria-label="확대">+</button></span></div></div>
+      <div class="cb ertools"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button><button class="btn sm" data-act="erfold" aria-pressed="${!!md.fold}">${md.fold ? '모듈 펼치기' : '모듈 접기'}</button></div>
+      <div class="cb ercanvas" id="ercanvas">${erSvg()}</div><div class="cb ernote muted">카드를 끌어 옮기고, 빈 곳을 끌거나 스크롤해 둘러봅니다. Ctrl + 휠로 확대합니다. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
   }
 
   function mountEr() {
@@ -1566,24 +1732,44 @@
     let drag = null;
     box.addEventListener('pointerdown', (ev) => {
       const g = ev.target.closest('[data-er]');
-      if (!g) return;
-      const L = erLayout(), b = L && L.boxes[g.dataset.er];
-      if (!b || b.folded) return;
-      drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
-      g.setPointerCapture(ev.pointerId);
+      const L = g && erLayout(), b = L && L.boxes[g.dataset.er];
+      if (g && b && !b.folded) drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
+      else drag = { pan: true, x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
+      box.setPointerCapture(ev.pointerId);
     });
     box.addEventListener('pointermove', (ev) => {
       if (!drag) return;
       const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
       if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       drag.moved = true;
-      S.md.pos[drag.name] = { x: Math.max(4, drag.bx + dx), y: Math.max(30, drag.by + dy) };
+      if (drag.pan) { box.scrollLeft = drag.sl - dx; box.scrollTop = drag.st - dy; box.classList.add('panning'); return; }
+      const z = S.md.zoom || 1;
+      S.md.pos[drag.name] = { x: Math.max(4, drag.bx + dx / z), y: Math.max(30, drag.by + dy / z) };
       box.innerHTML = erSvg();
     });
-    box.addEventListener('pointerup', () => {
-      if (drag && !drag.moved) modelPick(drag.name);
+    const end = () => {
+      if (drag && !drag.moved && !drag.pan) modelPick(drag.name);
       drag = null;
-    });
+      box.classList.remove('panning');
+    };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+    box.addEventListener('wheel', (ev) => {
+      if (!ev.ctrlKey && !ev.metaKey) return;  // a plain wheel scrolls
+      ev.preventDefault();
+      erZoom(ev.deltaY < 0 ? 1 : -1);
+    }, { passive: false });
+    if (S.md.zoom === undefined) erZoom(0, 0.75);  // the first look fits the width, as far as the names stay readable
+  }
+
+  function erZoom(step, floor = 0.4) {  // 0 fits the diagram to the canvas's width
+    const md = S.md, box = $('#ercanvas');
+    if (step === 0 && box) {
+      const svg = box.querySelector('svg'), w = svg ? Number(svg.getAttribute('viewBox').split(' ')[2]) : 0;
+      md.zoom = w ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / w)) : 1;
+    } else md.zoom = Math.min(1.6, Math.max(0.4, Math.round(((md.zoom || 1) + step * 0.1) * 10) / 10));
+    const card = $('#ercard');
+    if (card) { const sl = box ? box.scrollLeft : 0, st = box ? box.scrollTop : 0; card.innerHTML = erCard(); mountEr(); const nb = $('#ercanvas'); if (nb) { nb.scrollLeft = sl; nb.scrollTop = st; } }
   }
 
   // what the definition check would refuse in a property, said under its field, with the way to fix it
@@ -1665,7 +1851,7 @@
     if (md.sel && !S.mg.form) mgOpen('object', md.sel, true);
     const head = mgHead(title, sub, '<a class="btn sm" href="#objects">표로 보기</a><button class="btn sm primary" data-act="mgobjnew">새 객체</button>');
     return `${head}<div class="grid mdgrid"><div class="card"><div class="cb" style="padding:10px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 테이블 검색" aria-label="객체 검색"></div><div class="cb mdtree" id="mdtree">${modelTree()}</div></div>
-      ${erCard()}<div id="mdside">${modelSide()}</div></div>${modelFoot()}`;
+      <div id="ercard">${erCard()}</div><div id="mdside">${modelSide()}</div></div>${modelFoot()}`;
   }
 
   function modelPick(name) {
@@ -1674,10 +1860,17 @@
     S.mg.keep = true;
     mgOpen('object', name, true);
     S.gsel = name;
-    drawGraph();
-    const tree = $('#mdtree'), side = $('#mdside');
+    const tree = $('#mdtree'), side = $('#mdside'), card = $('#ercard');
     if (tree) tree.innerHTML = modelTree();
     if (side) side.innerHTML = modelSide();
+    if (card) { card.innerHTML = erCard(); mountEr(); erReveal(name); }
+  }
+
+  function erReveal(name) {  // the picked card comes into view, wherever the diagram was scrolled to
+    const box = $('#ercanvas'), L = erLayout(), b = L && L.boxes[name];
+    if (!box || !b) return;
+    const z = S.md.zoom || 1;
+    box.scrollTo({ left: Math.max(0, b.x * z - box.clientWidth / 2 + (b.w * z) / 2), top: Math.max(0, b.y * z - 40), behavior: 'smooth' });
   }
 
   // ---- library -------------------------------------------------------------------------------------------------
@@ -1694,12 +1887,17 @@
         return `<button class="tab${S.kind === k ? ' on' : ''}" data-act="kind" data-kind="${esc(k)}">${esc(r.kind_label)} ` +
           `${st.library.filter((x) => x.kind === k).length}</button>`;
       }));
+    const all = (S.changes && S.changes.changes) || [];
+    if (!S.changes) loadChanges();
     const rows = st.library.filter((r) => S.kind === 'all' || r.kind === S.kind).map((r) => {
       const req = r.requires.length ? r.requires.map((x) => `<span class="chip sm mono">${esc(x)}</span>`).join(' ') : '<span class="muted">-</span>';
+      const waiting = all.filter((c) => c.module === r.name && c.status === 'pending');
+      const first = (S.st.graph.nodes.find((n) => n.module === r.name) || {}).id;
       return `<tr class="${S.impact && S.impact.module === r.name ? 'sel' : ''}">
         <td><b>${esc(r.label || r.name)}</b><div class="muted mono">${esc(r.name)}</div>
           ${r.description ? `<div class="muted" style="font-size:12px;margin-top:3px;line-height:1.45">${esc(r.description)}</div>` : ''}
-          <button class="chip sm" data-act="medit" data-mod="${esc(r.name)}" style="margin-top:6px">편집</button></td>
+          ${waiting.map((c) => `<button class="chip sm warn" data-act="cshow" data-id="${esc(c.id)}" style="margin-top:6px">${esc(c.id)} 검토 중 → ${esc(c.version)}</button>`).join(' ')}
+          <div class="chips" style="margin-top:6px">${first ? `<button class="chip sm b" data-act="libmodel" data-name="${esc(first)}">작업 공간에서 고치기</button>` : ''}<button class="chip sm" data-act="medit" data-mod="${esc(r.name)}">파일 편집</button></div></td>
         <td><span class="kind"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</span></td>
         <td class="mono" style="white-space:nowrap">${esc(r.version)}</td><td>${req}</td>
         <td class="muted" style="font-size:12.5px">${esc(counts(r.counts))}</td>
@@ -1708,8 +1906,10 @@
     }).join('');
     const layers = st.layers.map((l) => `<div class="layer"><div class="lbl"><i style="background:${esc(l.color)}"></i>${esc(l.kind_label)}</div>
       <div class="chips">${l.modules.map((m) => `<span class="chip">${esc(m.label)} <span class="muted mono">${esc(m.version)}</span></span>`).join('')}</div></div>`).join('');
-    const log = st.log.length ? st.log.slice(0, 8).map((x) => `<div>${esc(x.text)}</div>`).join('')
-      : '<div class="muted">변경 이력이 없습니다.</div>';
+    const decided = ((S.changes && S.changes.changes) || []).filter((c) => c.status !== 'pending').slice(0, 6)
+      .map((c) => `<button class="hrow" data-act="cshow" data-id="${esc(c.id)}"><span class="chip sm ${CHANGE_STATUS[c.status] || ''}">${esc(c.status_label)}</span><b>${esc(c.module_label)} ${esc(c.version)}</b><span class="muted" style="font-size:12px">${esc(c.requested_by)} 작성${c.decided_by ? ` · ${esc(c.decided_by)} 결정` : ''}</span></button>`).join('');
+    const log = decided || st.log.length ? `${decided}${st.log.slice(0, 6).map((x) => `<div class="muted" style="font-size:12.5px">${esc(x.text)}</div>`).join('')}`
+      : '<div class="muted">변경 이력이 없습니다. 승인하거나 반려한 변경 요청이 여기에 남습니다.</div>';
     return `
 <div class="head"><div><h1>온톨로지 라이브러리</h1><div class="sub">도메인별 온톨로지 모듈과 버전을 관리하고 스페이스 적용 여부를 설정합니다</div></div>
   <div class="right">${st.ask ? '<button class="btn" data-act="popen">정책서로 규칙 초안</button>' : ''}<button class="btn" data-act="mnew">새 모듈</button><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
@@ -1868,7 +2068,9 @@
 
   function changesCard() {
     const ch = S.changes;
-    if (!ch || ch.busy || !ch.changes || !ch.changes.length) return '';
+    if (!ch || ch.busy || !ch.changes) return '';
+    if (!ch.changes.length) return `<div class="card"><div class="ch">변경 요청</div><div class="cb"><div class="muted" style="font-size:12.5px">검토할 변경 요청이 없습니다. 모델링 작업 공간이나 규칙 · 액션에서 고친 내용을 [변경 요청 만들기]로 보내면 여기와 변경 요청 화면에서 항목별로 검토합니다.</div>
+      <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#model">모델링 작업 공간</a><a class="btn sm" href="#changes">변경 요청 화면</a></div></div></div>`;
     return `<div class="card"><div class="ch">변경 요청<div class="right muted" style="font-weight:600;font-size:12px">${ch.writes_folder ? '승인하면 라이브러리 폴더에 저장' : '승인하면 현재 세션에 저장'}</div></div><div class="cb loglist">${ch.changes.slice(0, 8).map((c) => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="chip sm ${CHANGE_STATUS[c.status] || ''}">${esc(c.status_label)}</span><b>${esc(c.module_label)} ${esc(c.version)}</b><span class="muted" style="font-size:12px">${esc(c.requested_by)}</span>
       <span style="flex:1"></span><button class="chip sm" data-act="cshow" data-id="${esc(c.id)}">검토 보기</button></div>`).join('')}</div></div>`;
@@ -3614,7 +3816,7 @@ ${controls}${body}`;
   // ---- the draft as a review: each table a proposal to adopt, bound to a standard or kept as a new object ------------
 
   const MATCH_SURE = 0.85;  // a standard match this close is adopted unless a person says otherwise
-  const REVIEW = [['read', '파일 · 테이블'], ['objects', '객체 · 키'], ['properties', '속성 · 타입'], ['links', '관계'], ['queries', '질의'], ['rules', '상태 · 규칙'], ['review', '검토 · 적용']];
+  const REVIEW = [['read', '파일 선택'], ['objects', '객체 · 키'], ['properties', '속성 · 타입'], ['links', '관계'], ['queries', '질의'], ['rules', '상태 · 규칙'], ['review', '검토 · 적용']];
   const reviewStep = () => (REVIEW.some((x) => x[0] === S.dr.view) ? S.dr.view : 'objects');
   const shortModule = (label) => String(label || '').replace(/\s*온톨로지$/, '').replace(/^이커머스\s+/, '');
 
@@ -3845,7 +4047,7 @@ ${controls}${body}`;
         ${x.tables.map((t) => `<div class="muted" style="font-size:12px"><label class="tick inline-tick"><input type="checkbox" data-in="dtable" data-t="${esc(t.name)}"${S.dr.tables[t.name] === false ? '' : ' checked'}>${x.tables.length > 1 ? esc(t.sheet) + ' · ' : ''}테이블 <span class="mono">${esc(t.name)}</span> · ${show(t.rows)}행 · 컬럼 ${t.columns.length}개${t.truncated ? ' · 행 한도까지 읽음' : ''}</label>
           <div class="chips" style="margin-top:4px">${t.columns.slice(0, 10).map((c) => `<span class="chip sm">${esc(c)}</span>`).join('')}${t.columns.length > 10 ? `<span class="chip sm">외 ${t.columns.length - 10}개</span>` : ''}</div></div>`).join('')}</div>
         <button class="btn sm ghost" data-act="fout" data-name="${esc(x.source)}" aria-label="${esc(x.source)} 초안에서 제외">제외</button></div>`).join('')
-      : (f.definitions.length ? '' : '<div class="muted" style="font-size:12.5px">초안에 포함한 파일이 없습니다. <a href="#catalog">데이터 카탈로그</a>에서 파일을 업로드해 주세요.</div>');
+      : (f.definitions.length ? '' : `<div class="muted" style="font-size:12.5px">초안에 포함한 파일이 없습니다. <a href="#catalog">데이터 카탈로그</a>에서 파일을 업로드해 주세요.</div>${S.st.data.samples ? '<button class="btn sm" data-act="dsample" style="margin-top:8px">샘플 데이터 불러오기</button>' : ''}`);
     const defFacts = (x) => [['테이블', x.tables.length], ['컬럼', x.columns], ['참조', x.references], ['코드 그룹', x.codes], ['코드값', x.code_values], ['용어', x.terms], ['메시지', x.messages], ['문서', x.documents]]
       .filter(([, n]) => n).map(([k, n]) => `${k} ${show(n)}`).join(' · ');
     const docKind = { policy: '정책', screen: '화면', other: '문서' };
@@ -3859,11 +4061,19 @@ ${controls}${body}`;
     const defHint = f.definitions.length ? `<div class="hint" style="margin-top:10px">${f.files.length ? '정의서의 테이블 한글명, 컬럼 한글명, 코드값과 코드명으로 초안의 이름과 허용값을 입력합니다.' : '데이터 파일 없이 정의서만 있으면 행 없이 Schema(키, 참조, 코드값)로 초안을 생성합니다.'}</div>` : '';
     const left = `<div class="card"><div class="ch">초안에 넣을 파일<span class="chip sm">${esc(S.st.repository.label)}</span></div><div class="cb">
       ${list}${defs}${defHint}
-      <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="온톨로지 이름" style="flex:1;min-width:0">
-        <button class="btn primary" data-act="draft"${(f.files.length || f.definitions.some((x) => x.tables.length)) && !S.dr.busy ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '초안 생성'}</button></div></div></div>`;
+      <div class="field" style="margin-top:14px"><label>온톨로지 이름</label><input type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="예: 가상 쇼핑몰"></div>
+      ${f.pending ? `<button class="btn primary" data-act="draft"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? '<span class="spin"></span>처리 중' : '이 파일로 다시 생성'}</button>` : ''}</div></div>`;
     const setup = `<div class="grid" style="grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);align-items:start">${left}<div class="hcol">${rulesCard(f)}${standardsCard()}</div></div>`;
-    if (!f.pending) return `${head}${setup}`;
     if (!S.map.standards) mapLoad();
+    if (!f.pending) {
+      const tables = f.files.flatMap((x) => x.tables).filter((t) => S.dr.tables[t.name] !== false);
+      const defs = f.definitions.flatMap((x) => x.tables).filter((t) => S.dr.tables[t.name] !== false);
+      const steps = `<nav class="rvsteps" aria-label="초안 검토 단계">${REVIEW.map(([id, word], i) => `${i ? '<i class="rvline" aria-hidden="true"></i>' : ''}<span class="rvstep${i ? ' wait' : ' on'}"${i ? '' : ' aria-current="step"'}>${word}</span>`).join('')}</nav>`;
+      const ready = (f.files.length || f.definitions.some((x) => x.tables.length)) && !S.dr.busy;
+      const foot = `<div class="rvfoot"><b>${f.files.length ? `파일 ${f.files.length}개 · 테이블 ${tables.length}개 선택` : '고른 파일이 없습니다'}</b><span class="muted">${defs.length ? `정의서 테이블 ${defs.length}개로 이름과 코드값을 채웁니다 · ` : ''}생성하면 표준과 비교한 제안을 단계마다 검토합니다</span>
+        <span style="flex:1"></span>${f.files.length ? '' : '<a class="btn" href="#catalog">데이터 카탈로그에서 올리기</a>'}<button class="btn primary" data-act="draft"${ready ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>초안을 만드는 중' : '초안 생성 · 다음: 객체 · 키'}</button></div>`;
+      return `${head}<div class="rvwrap"><div class="rvhead"><div><h2>${esc(S.dr.label || '새')} 초안</h2><div class="sub">${esc(S.st.repository.label)} · 초안에 넣을 파일과 생성 설정을 고릅니다</div></div></div>${steps}${setup}${foot}</div>`;
+    }
     return `${head}${S.dr.setup ? setup : ''}<div id="draft" class="rvwrap">${draftBody()}</div>`;
   }
 
@@ -5440,13 +5650,14 @@ ${controls}${body}`;
   const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, drel: null, vemb: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
     gxfind: (t) => gxFind(t.dataset.w),
+    gxzoom: (t) => gxZoom(Number(t.dataset.z)),
     gxfound: (t) => {
       const g = S.gx;
       g.found = null;
       if (t.dataset.w === 'to') { g.to = { type: t.dataset.type, key: t.dataset.key }; render(); return; }
       gxStart(t.dataset.type, t.dataset.key);
     },
-    gxreset: () => { S.gx.pos = {}; S.gx.hide = []; gxStart(S.gx.seed.type, S.gx.seed.key); },
+    gxreset: () => { S.gx.pos = {}; S.gx.hide = []; S.gx.zoom = 1; S.gx.zoomed = false; gxStart(S.gx.seed.type, S.gx.seed.key); },
     gxviewsave: () => {
       const name = (window.prompt('관점 이름', S.gx.view || '고객 상담') || '').trim();
       if (!name) return;
@@ -5460,13 +5671,14 @@ ${controls}${body}`;
     gxgrow: (t) => gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'),
     gxgrowall: () => gxGrow(S.gx.sel),
     gxpath: () => gxPath(),
-    gxsel: (t) => { gxPick(t.dataset.id); if (window.SpaceGraph.focus) window.SpaceGraph.focus(t.dataset.id); },
+    gxsel: (t) => gxPick(t.dataset.id),
     gxroot: (t) => { const n = S.gx.nodes[t.dataset.id]; if (n) gxStart(n.type, n.key); },
     recgraph: () => { const r = S.rec; S.gx.seed = { type: r.type, key: r.key }; location.hash = '#graph'; gxStart(r.type, r.key); },
     mdpick: (t) => modelPick(t.dataset.name),
     mdobjnew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.mg.form = { kind: 'object', mode: 'new', v: { table: '', name: '', label: '', key: '', parent: '', description: '', cols: true } }; render(); },
     mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
     erreset: () => { S.md.pos = {}; const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
+    erzoom: (t) => erZoom(Number(t.dataset.z)),
     erfold: () => { S.md.fold = !S.md.fold; render(); },
     mgfix: (t) => { if (S.mg.form) { S.mg.form.v[t.dataset.f] = t.dataset.v; render(); } },
     mdyamlreset: () => { const y = S.md.yaml; if (y) { y.text = y.was; y.err = ''; } render(); },
@@ -5709,14 +5921,7 @@ ${controls}${body}`;
         toast('흐름 설정을 저장했습니다.');
       } catch (e) { fail(e); }
     },
-    cshow: (t) => {
-      const c = (S.changes.changes || []).find((x) => x.id === t.dataset.id);
-      if (!c) return;
-      if (!S.ed || S.ed.name !== c.module) S.ed = { name: c.module, label: c.module_label, applied: true, isNew: false, text: '', check: null, busy: false, readonly: true };
-      S.change = c;
-      render();
-      requestAnimationFrame(() => { const e = $('#editor'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-    },
+    cshow: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },
     capprove: (t) => decideChange(t.dataset.id, true),
     creject: (t) => decideChange(t.dataset.id, false),
     dinduce: async () => {
@@ -5765,7 +5970,9 @@ ${controls}${body}`;
       window.SpaceScene.sweep();
     },
     fsample: () => catalogCall('files/sample', {}, () => { S.cat.next = { files: 0 }; }),
+    dsample: async () => { try { await api('files/sample', {}); S.files = await api('files'); render(); } catch (e) { fail(e); } },
     cnextx: () => { S.cat.next = null; render(); },
+    libmodel: (t) => { S.md.sel = t.dataset.name; S.mg.form = null; location.hash = '#model'; },
     exrecords: (t) => { Object.assign(S.rl, { type: t.dataset.type, q: '', res: null }); location.hash = '#records'; },
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
@@ -6289,6 +6496,8 @@ ${controls}${body}`;
 
   const CHANGE = {
     srfdec: (t) => { S.sr.fix.decision = t.value; render(); },
+    gxlayout: (t) => { S.gx.layout = t.value; S.gx.pos = {}; S.gx.zoomed = false; gxRedraw(); },
+    gxrel: (t) => { if (t.checked) gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); else gxShrink(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); },
     gxshow: (t) => { S.gx.hide = t.checked ? S.gx.hide.filter((x) => x !== t.dataset.t) : [...S.gx.hide, t.dataset.t]; S.gx.view = ''; render(); },
     gxview: (t) => { S.gx.view = t.value; S.gx.hide = t.value ? [...((gxViews()[t.value] || {}).hide || [])] : []; render(); },
     simkey: (t) => { S.sim.key = t.value; S.sim.vals = {}; simulateNow(t.value, {}); },

@@ -82,6 +82,14 @@
   is the 자산 탐색기 and an object there leads to its records.
 - An edit with an unknown property type or a hit policy the rules cannot take is refused; a rule-level issue no longer
   reads as a decision called "x rule y" when a module is settled.
+- The sidebar follows the proposal: 업무 has 객체 탐색 and 그래프 탐색 apart; 구축 has 규칙 · 액션 and 변경 요청 (with the
+  number waiting), the library its second tab. A library module shows its change under review and opens in the
+  modelling workspace; decided changes are its history.
+- 그래프 탐색 draws records as boxes by type with each relation's name, in layers or rings, with the found path in
+  orange; relations of the picked record are ticked open and closed; the canvas pans, zooms and fits.
+- The modelling diagram follows a pick in the tree, scrolls, pans by dragging the empty canvas, zooms (Ctrl + wheel)
+  and fits the width on opening; the modules it reaches stand beside it.
+- 초안 생성 opens at its first step, the files and the settings, in the same stepper as the review.
 - The README's table of screens follows the new sidebar.
 
 ## 0.13.0
