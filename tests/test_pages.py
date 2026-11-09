@@ -96,6 +96,8 @@ def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_n
     assert "액션 반품 신청" in rule["readers"]  # what the rule reaches
     assert d["before"]["decide.min_agreement"] >= next(g["value"] for g in d["gates"] if g["stage"] == "decide")
     assert not d["can_decide"] and d["can_mark"]  # its author cannot approve it
+    assert d["module_label"] == "관리 변경" and "검증 질문 A1" in d["affected"] and not d["self_approve"]
+    assert any(t == "+" and "<= 21" in line for t, line in d["yaml"])  # the module file, line by line
     d = session.change_mark(cid, rule["element"], "fix")
     d = session.change_comment(cid, rule["element"], "개정 문서를 올려 주세요")
     assert d["marks"] == {rule["element"]: "fix"} and d["items"][0]["comments"][0]["text"] == "개정 문서를 올려 주세요"

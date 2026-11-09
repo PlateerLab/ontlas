@@ -1947,13 +1947,25 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     # ---- definition changes: a module version is proposed, reviewed on a copy, approved by a person ------------
 
+    def _change_label(self, cr) -> str:
+        """A change's module by its name for people: the library's, else the label its own file gives."""
+        import yaml
+
+        label = self._label(cr.module)
+        if label != cr.module:
+            return label
+        try:
+            return str((yaml.safe_load(cr.text) or {}).get("label") or cr.module)
+        except yaml.YAMLError:
+            return cr.module
+
     def _change(self, cr) -> dict:
         rv = cr.review
         gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
                   "stage_label": STAGE_LABEL.get(g["stage"], g["stage"])} for g in rv.get("gates") or []]
         m = rv.get("measured") or {}
         return plain({
-            "id": cr.id, "module": cr.module, "module_label": self._label(cr.module), "version": cr.version,
+            "id": cr.id, "module": cr.module, "module_label": self._change_label(cr), "version": cr.version,
             "base_version": rv.get("base_version", ""), "mode": rv.get("mode", ""), "status": cr.status,
             "status_label": CHANGE_STATUS.get(cr.status, cr.status), "requested_by": cr.requested_by,
             "decided_by": cr.decided_by, "reason": cr.reason, "at": cr.at, "passed": rv.get("passed"),

@@ -839,3 +839,11 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .rtable tr.dragging { opacity:.45; }
 .rtable tr.dropat td { box-shadow:inset 0 2px 0 var(--blue); }
 .rparams { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); font-size:12.5px; }
+
+/* change review: a dot for an element not yet looked at, the module file before and after */
+.cdot { width:8px; height:8px; border-radius:50%; background:#d9a03f; flex:none; }
+.cyaml { max-height:420px; overflow:auto; font-size:11.5px; line-height:1.5; background:#fbfcfe; color:var(--ink); border:1px solid var(--line); }
+.cyaml span { display:block; }
+.cyaml .yadd { background:#e6f4ea; color:#137a44; }
+.cyaml .ydel { background:#fdecea; color:#a3261e; text-decoration:line-through; }
+.cyaml .yhit { font-weight:800; }
