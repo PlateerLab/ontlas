@@ -461,6 +461,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.module_source(a["name"], a.get("version", ""))
                 if route == "object/rows":
                     return s.object_rows(a["name"], int(a.get("limit", 20)))
+                if route == "record":
+                    return s.record_page(a["type"], a["key"])
+                if route == "records":
+                    return s.record_list(a["type"], a.get("q", ""), int(a.get("limit", 50)))
+                if route == "inbox":
+                    return s.inbox()
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")

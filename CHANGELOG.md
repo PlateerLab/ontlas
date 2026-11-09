@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- The page starts from what a person comes to do. The sidebar is three sections, 업무 (home, 할 일, search and questions,
+  records, decisions), 구축 (bringing data in, modelling, the library and its changes) and 운영 (the pipeline board, the data
+  map, stores and links, checks, the guide), and the first screen is a home instead of the pipeline board.
+- 홈: one box to search or ask, what waits on the person, the measured pass conditions in brief, the records they opened last
+  and the registered queries. What it leads with follows the role picked on it (운영 담당, 도메인 전문가, 모델러).
+- 할 일 (`GET inbox`): action requests waiting for a person, change requests under review, source conflicts to pick and edits
+  not filed yet, in one list, each saying who asked and what it would change. An action is approved or rejected from the list.
+  On a visitor's own page what they asked for is theirs to settle too; in a team studio it waits for someone else.
+- 레코드 (`GET records`, `GET record`): records of a type found by their key or the name they carry, and one record on a page of
+  its own: each value with its column or formula, the state it is in and where it can go, the records it links to either way
+  round, what each decision says of it now and by which rule, the actions it can take (requested from the page under a role),
+  its functions to run, the documents that name it or its type, and its requests, approvals and runs. Opening a page runs no
+  function and writes nothing.
+- 통합 검색 says what it took the question to be (the record, the decision, the time it counts to) and where the answer came
+  from (a decision table or a registered query with no model, a model's wording, or nothing found). A decision's answer opens
+  its record, and one judged right is kept as a validation question among the pending edits. A question nothing answers is
+  answered that it is not known.
+
 ## 0.12.0
 
 - An interface is queried like a parent type: `{match: {x: Named}}` reads every type that implements it, on every store. A role reads

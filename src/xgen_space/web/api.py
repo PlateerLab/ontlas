@@ -26,6 +26,7 @@ from xgen_space.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _
 from xgen_space.repository import Repositories, clean_path, is_litter
 from xgen_space.roles import apply_role
 from xgen_space.studio import Studio
+from xgen_space.web.pages_api import PagesMixin
 from xgen_space.web.space_api import SpaceMixin, attach
 
 KIND_ORDER = list(MODULE_KIND)
@@ -247,7 +248,7 @@ class DataOptions:
     rest: bool = False  # /v1 is on: the page says so, and how to reach it
 
 
-class StudioSession(SpaceMixin):
+class StudioSession(SpaceMixin, PagesMixin):
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
     def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
