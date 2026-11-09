@@ -196,11 +196,12 @@ class PagesMixin:
                 try:
                     rows = self.studio.run(q).rows
                 except Exception as e:  # a relation the source cannot answer says why instead of hiding the page
-                    out.append({"link": lk.name, "label": lk.label or lk.name, "forward": forward, "type": other,
+                    out.append({"link": lk.name, "base": lk.name, "base_label": lk.label or lk.name, "label": lk.label or lk.name, "forward": forward, "type": other,
                                 "type_label": ot.label or other, "count": 0, "more": False, "items": [], "error": str(e)})
                     continue
                 name = lk.name if forward else (lk.inverse or lk.name)
-                out.append({"link": name, "label": (lk.label or lk.name) if forward else (ot.label or other),
+                out.append({"link": name, "base": lk.name, "base_label": lk.label or lk.name,  # one relation read either way
+                            "label": (lk.label or lk.name) if forward else (ot.label or other),
                             "forward": forward, "type": other, "type_label": ot.label or other,
                             "cardinality": lk.cardinality, "count": min(len(rows), LINK_COUNT), "more": len(rows) > LINK_COUNT,
                             "items": [{"key": str(r[0]), "title": r[1] if len(r) > 1 else None} for r in rows[:rows_max]]})
