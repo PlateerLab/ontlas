@@ -365,7 +365,8 @@
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
-      q: '', toq: '', found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [] },
+      q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [] },
+    ov: { sel: '', pos: {} },
     md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
@@ -624,12 +625,13 @@
     }
     if (S.tab === 'convert' && !S.conv) loadConvert();
     if (S.tab === 'onto') {
-      mountGraph($('#graph'), S.st.graph, { key: 'onto', pos: S.pos, sel: () => S.gsel, pick: (id) => selectObject(id), clear: () => { S.gsel = null; } });
+      if (!S.mg.st) { if (!S.mg.busy) loadManage().then(() => { if (S.tab === 'onto') render(); }); } else mountEr('onto');
       if (!S.sel) {
         const d = S.st.decisions[0];
         S.sel = (d && S.st.graph.nodes.some((x) => x.id === d.target)) ? d.target : (S.st.graph.nodes[0] || {}).id;
       }
       if (S.sel && (!S.obj || S.obj.name !== S.sel)) selectObject(S.sel, true);
+      if (!S.ov.sel) S.ov.sel = S.sel;
     }
     if (S.tab === 'query' && !S.q.res && !S.q.busy && S.q.mode === 'list') {
       if (!S.q.name && S.st.queries.length) pickQuery(S.st.queries[0].name);
@@ -1198,18 +1200,101 @@
   }
 
   // where a graph starts or ends: a record found by its key or its name, of any type
-  async function gxFind(which) {
-    const g = S.gx, q = (which === 'to' ? g.toq : g.q).trim();
-    if (!q) { g.found = null; render(); return; }
-    try { g.found = { which, ...(await api(`records/find?q=${encodeURIComponent(q)}`)) }; } catch (e) { g.found = { which, items: [], error: e.message }; }
-    if (S.tab === 'graph') render();
+  // ---- finding a record: as a person types, by key, name or definition ("VIP 고객"); Enter takes the best one --------
+
+  const FIND_FIELD = { start: 'q', from: 'fromq', to: 'toq' };
+  let findTimer = 0;
+
+  function gxFindSoon(which) {
+    clearTimeout(findTimer);
+    findTimer = setTimeout(() => gxFind(which), 220);
+  }
+
+  async function gxFind(which, take) {
+    const g = S.gx, q = String(g[FIND_FIELD[which]] || '').trim();
+    if (!q) { g.found = null; gxFoundPaint(which); return; }
+    let got;
+    try { got = await api(`records/find?q=${encodeURIComponent(q)}&limit=8`); } catch (e) { got = { items: [], error: e.message }; }
+    if (String(g[FIND_FIELD[which]] || '').trim() !== q) return;  // typed on since
+    g.found = { which, ...got };
+    if (take) { gxTake(which); return; }
+    gxFoundPaint(which);
+  }
+
+  function gxTake(which) {  // Enter: the record the words name exactly, else the first one found
+    const f = S.gx.found;
+    if (!f || f.which !== which || !f.items.length) { toast(`'${S.gx[FIND_FIELD[which]]}'에 맞는 레코드가 없습니다. 정의(예: VIP 고객)나 번호 일부로 찾거나 [목록에서 찾기]를 써 보세요.`, true); return; }
+    gxChoose(which, f.items[0]);
+  }
+
+  function gxChoose(which, x) {
+    const g = S.gx;
+    g.found = null;
+    const word = `${x.type_label} ${x.key}${x.title ? ` ${x.title}` : ''}`;
+    if (which === 'start') { g.q = word; gxStart(x.type, x.key); return; }
+    if (which === 'from') { g.from = { type: x.type, key: x.key, label: x.type_label, title: x.title || '' }; g.fromq = word; }
+    if (which === 'to') { g.to = { type: x.type, key: x.key }; g.toq = word; }
+    gxPathPaint();
+  }
+
+  function gxFoundPaint(which) {
+    const box = $(`#gxfound-${which}`);
+    if (box) box.innerHTML = gxFound(which);
   }
 
   function gxFound(which) {
     const f = S.gx.found;
     if (!f || f.which !== which) return '';
-    if (!f.items.length) return `<div class="muted" style="font-size:12px;margin-top:6px">'${esc(f.q)}'에 맞는 레코드가 없습니다.</div>`;
-    return `<div class="gxfound">${f.items.map((x) => `<button class="hrow" data-act="gxfound" data-w="${which}" data-type="${esc(x.type)}" data-key="${esc(x.key)}"><span class="rtag">${esc(x.type_label)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span></button>`).join('')}</div>`;
+    if (!f.items.length) return `<div class="muted" style="font-size:12px;margin-top:6px">'${esc(f.q)}'에 맞는 레코드가 없습니다. 정의(예: VIP 고객, 취소된 주문)나 번호 일부로 찾아 보세요.</div>`;
+    const head = f.type_label ? `<div class="muted" style="font-size:11.5px;margin:6px 0 2px">${esc(f.type_label)} ${count(f.total)}건 중</div>` : '';
+    return `${head}<div class="gxfound">${f.items.map((x) => `<button class="hrow" data-act="gxfound" data-w="${which}" data-type="${esc(x.type)}" data-key="${esc(x.key)}" data-label="${esc(x.type_label)}" data-title="${esc(x.title || '')}"><span class="rtag">${esc(x.type_label)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || x.sub || '')}</span></button>`).join('')}</div>
+      ${f.more ? `<button class="btn sm ghost" data-act="rpopen" data-w="${which}" style="margin-top:4px">더 많은 결과는 목록에서 찾기</button>` : ''}`;
+  }
+
+  function gxPathCard() {
+    const g = S.gx;
+    const sel = g.nodes[g.sel] && g.nodes[g.sel].type !== 'bundle' ? g.nodes[g.sel] : null;
+    const from = g.from || (sel ? { type: sel.type, key: sel.key, label: sel.label, title: sel.title } : null);
+    const fromWord = from ? `${from.label} ${from.key}${from.title ? ` ${from.title}` : ''}` : '';
+    const field = (which, label, value, hold) => `<div class="field" style="margin-bottom:8px"><label for="gx${which}q">${label}</label>
+      <div class="gxfield"><input type="search" id="gx${which}q" data-in="gx${which}q" value="${esc(value)}" placeholder="${hold}" autocomplete="off"><button class="iconbtn" data-act="rpopen" data-w="${which}" title="목록에서 찾기" aria-label="${label} 목록에서 찾기">☰</button></div><div id="gxfound-${which}">${gxFound(which)}</div></div>`;
+    return `<div class="card"><div class="ch">경로 찾기</div><div class="cb">
+      ${field('from', '시작', g.fromq || fromWord, '그래프에서 고르거나 입력')}${field('to', '도착', g.toq, '예: 카테고리 K3 니트, 니트')}
+      <div style="display:flex;align-items:center;gap:8px"><button class="btn sm primary" data-act="gxpath"${g.busy || !g.to.key || !from ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '찾기'}</button>${g.route && g.route.length ? `<span class="muted" style="font-size:12px">${g.route.length - 1}단계 경로 1개</span>` : ''}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지 짧은 경로부터 질의로 찾아 캔버스에 주황색으로 그립니다.</div></div></div>`;
+  }
+
+  function gxPathPaint() {
+    const box = $('#gxpathcard');
+    if (box) box.innerHTML = gxPathCard(); else render();
+  }
+
+  // ---- a window to find a record among many: by type, by words or a definition, a page at a time ------------------
+
+  async function rpLoad(more) {
+    const r = S.rp;
+    if (!r) return;
+    r.busy = true; paintLayer();
+    const offset = more ? r.items.length : 0;
+    let got;
+    try { got = await api(`records/find?q=${encodeURIComponent(r.q)}&type=${encodeURIComponent(r.type)}&limit=30&offset=${offset}`); } catch (e) { got = { items: [], error: e.message }; }
+    if (!S.rp) return;
+    r.items = more ? [...r.items, ...got.items] : got.items;
+    Object.assign(r, { total: got.total, more: got.more, label: got.type_label, busy: false, error: got.error || '' });
+    paintLayer();
+  }
+
+  function pickerBox() {
+    const r = S.rp, types = recordTypes();
+    const rows = r.items.map((x) => `<button class="rprow" data-act="rppick" data-type="${esc(x.type)}" data-key="${esc(x.key)}" data-label="${esc(x.type_label)}" data-title="${esc(x.title || '')}"><span class="rtag">${esc(x.type_label)}</span><b>${esc(x.key)}</b><span>${esc(x.title || '')}</span><span class="muted">${esc(x.sub || '')}</span></button>`).join('');
+    const say = r.error ? `<div class="hint warn">${esc(r.error)}</div>` : r.busy && !r.items.length ? '<div class="empty"><span class="spin"></span></div>'
+      : !r.items.length ? `<div class="empty">${r.q || r.type ? '맞는 레코드가 없습니다.' : '타입을 고르거나 찾을 말을 입력하세요.'}</div>` : '';
+    return `<div class="rpback" data-act="rpclose"></div><div class="rpbox" role="dialog" aria-label="레코드 찾기">
+      <div class="rphead"><b>${{ start: '시작 레코드', from: '경로의 시작', to: '경로의 도착' }[r.which] || '레코드'} 찾기</b><button class="iconbtn" data-act="rpclose" aria-label="닫기">×</button></div>
+      <div class="rpform"><select id="rptype" aria-label="타입"><option value="">모든 타입</option>${types.map((n) => `<option value="${esc(n.id)}"${n.id === r.type ? ' selected' : ''}>${esc(n.label)}</option>`).join('')}</select>
+        <input type="search" id="rpq" value="${esc(r.q)}" placeholder="번호, 이름, 정의 — 예: VIP 고객, 취소된 주문, I100" autocomplete="off"></div>
+      <div class="muted" style="font-size:12px;padding:0 16px 8px">${r.label && r.total !== undefined ? `${esc(r.label)} ${count(r.total)}건${r.q ? ` · '${esc(r.q)}'` : ''}` : '타입 이름이 들어간 말은 그 타입의 값에서 찾습니다.'}</div>
+      <div class="rplist">${rows}${say}${r.more ? `<button class="btn sm" data-act="rpmore"${r.busy ? ' disabled' : ''}>${r.busy ? '<span class="spin"></span>' : '더 보기'}</button>` : ''}</div></div>`;
   }
 
   // what this viewer keeps of how they like to see records: which types are shown, under a name
@@ -1452,8 +1537,10 @@
     const b = S.gx.nodes[id];
     if (b && b.type === 'bundle') { gxGrow(b.of.id, b.of.link, b.of.forward, true); return; }
     S.gx.sel = id;
+    S.gx.from = null; S.gx.fromq = '';
     gxInfo(id);
     gxRedraw();
+    gxPathPaint();
     await gxLinks(id);
     const left = $('#gxgrow'), side = $('#gxside');
     if (left) left.innerHTML = gxGrowCard();
@@ -1461,8 +1548,11 @@
   }
 
   async function gxPath() {
-    const g = S.gx, from = g.nodes[g.sel];
-    if (!from) { toast('경로의 출발 레코드를 그래프에서 먼저 고르세요.', true); return; }
+    const g = S.gx;
+    const sel = g.nodes[g.sel] && g.nodes[g.sel].type !== 'bundle' ? g.nodes[g.sel] : null;
+    const from = g.from || sel;
+    if (!from) { toast('경로의 시작 레코드를 고르세요. 그래프에서 상자를 누르거나 시작 칸에서 찾습니다.', true); return; }
+    if (!g.nodes[gxId(from.type, from.key)]) { await gxStart(from.type, from.key); g.from = null; }
     if (!g.to.type || !g.to.key.trim()) { toast('도착 레코드의 타입과 번호를 입력해 주세요.', true); return; }
     g.busy = true; render();
     try {
@@ -1519,13 +1609,9 @@
       if (r) { g.seed = { type: r.type, key: r.key }; gxStart(r.type, r.key); } else g.seed = { type: (types[0] || {}).id || '', key: '' };
     }
     const head = pageHead('그래프 탐색', '레코드 하나에서 시작해 관계를 따라 펼치고, 두 레코드를 잇는 경로를 찾습니다');
-    const start = `<div class="card"><div class="ch">시작 레코드</div><div class="cb"><div class="srform"><input type="search" id="gxq" data-in="gxq" value="${esc(g.q)}" placeholder="번호나 이름, 예: C001, 김하늘" aria-label="시작 레코드 찾기"><button class="btn sm primary" data-act="gxfind" data-w="from">찾기</button></div>
-      ${gxFound('from')}${g.err ? `<div class="hint warn" style="margin-top:8px">${esc(g.err)}</div>` : ''}</div></div>`;
-    const to = g.to.key ? `${esc((S.st.graph.nodes.find((x) => x.id === g.to.type) || {}).label || g.to.type)} ${esc(g.to.key)}` : '';
-    const path = `<div class="card"><div class="ch">경로 찾기</div><div class="cb"><div class="muted" style="font-size:12px;margin-bottom:6px">출발 · ${g.nodes[g.sel] && g.nodes[g.sel].type !== 'bundle' ? `${esc(g.nodes[g.sel].label)} ${esc(g.nodes[g.sel].key)}` : '그래프에서 고른 레코드'}${to ? ` → 도착 · <b>${to}</b>` : ''}</div>
-      <div class="srform"><input type="search" id="gxtoq" data-in="gxtoq" value="${esc(g.toq)}" placeholder="도착 레코드, 예: 니트" aria-label="도착 레코드 찾기"><button class="btn sm" data-act="gxfind" data-w="to">찾기</button></div>${gxFound('to')}
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px"><button class="btn sm primary" data-act="gxpath"${g.busy || !g.to.key ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>${g.route && g.route.length ? `<span class="muted" style="font-size:12px">${g.route.length - 1}단계 경로 1개 · 주황색으로 표시</span>` : ''}</div>
-      <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지, 짧은 경로부터 질의로 찾습니다. SQL 원천에서도 같습니다.</div></div></div>`;
+    const start = `<div class="card"><div class="cb"><div class="gxfield big"><span class="gxlens" aria-hidden="true">⌕</span><input type="search" id="gxq" data-in="gxq" value="${esc(g.q)}" placeholder="시작 레코드 · 번호, 이름, 정의 (예: VIP 고객)" aria-label="시작 레코드 찾기" autocomplete="off"><button class="iconbtn" data-act="rpopen" data-w="start" title="목록에서 찾기" aria-label="목록에서 찾기">☰</button></div>
+      <div id="gxfound-start">${gxFound('start')}</div>${g.err ? `<div class="hint warn" style="margin-top:8px">${esc(g.err)}</div>` : ''}</div></div>`;
+    const path = `<div id="gxpathcard">${gxPathCard()}</div>`;
     const n = Object.keys(g.nodes).length;
     const seed = g.nodes[gxId(g.seed.type, g.seed.key)];
     const shownTypes = [...new Set(Object.values(g.nodes).map((x) => x.type))].filter((t) => t !== 'bundle');
@@ -1613,11 +1699,34 @@
     return rows;
   }
 
-  function erLayout() {
-    const m = S.mg.st, md = S.md, sel = mgObj(md.sel);
-    if (!sel) return null;
+  const ER_VIEW = {
+    model: { state: () => S.md, box: 'ercanvas', card: 'ercard', pick: (n) => modelPick(n), html: () => erCard() },
+    onto: { state: () => S.ov, box: 'ontocanvas', card: 'ontocard', pick: (n) => ontoPick(n), html: () => ontoCard(), all: true },
+  };
+
+  function erLayout(v = 'model') {
+    const m = S.mg.st, md = ER_VIEW[v].state(), sel = mgObj(md.sel);
+    if (!sel && !ER_VIEW[v].all) return null;
     const modOf = (x) => x.module_label || x.module || '정의';
-    const home = modOf(sel);
+    const deg = (n) => m.links.filter((l) => l.source === n || l.target === n).length;
+    const ordered = (list) => {  // neighbours sit next to each other: breadth first from the most connected object
+      const order = [];
+      const left = [...list].sort((a, b) => deg(b.name) - deg(a.name));
+      while (left.length) {
+        const queue = [left.shift()];
+        while (queue.length) {
+          const x = queue.shift();
+          order.push(x);
+          m.links.filter((l) => l.source === x.name || l.target === x.name).forEach((l) => {
+            const other = l.source === x.name ? l.target : l.source;
+            const i = left.findIndex((y) => y.name === other);
+            if (i >= 0) queue.push(left.splice(i, 1)[0]);
+          });
+        }
+      }
+      return order;
+    };
+    const home = sel ? modOf(sel) : '';
     const inMod = m.objects.filter((x) => modOf(x) === home);
     const names = new Set(inMod.map((x) => x.name));
     const near = new Set();
@@ -1626,22 +1735,7 @@
       if (names.has(l.target) && !names.has(l.source)) near.add(l.source);
     });
     inMod.forEach((x) => { if (x.parent && !names.has(x.parent)) near.add(x.parent); });
-    // neighbours sit next to each other: breadth first from the most connected object of the module
-    const deg = (n) => m.links.filter((l) => l.source === n || l.target === n).length;
-    const order = [];
-    const left = [...inMod].sort((a, b) => deg(b.name) - deg(a.name));
-    while (left.length) {
-      const queue = [left.shift()];
-      while (queue.length) {
-        const x = queue.shift();
-        order.push(x);
-        m.links.filter((l) => l.source === x.name || l.target === x.name).forEach((l) => {
-          const other = l.source === x.name ? l.target : l.source;
-          const i = left.findIndex((y) => y.name === other);
-          if (i >= 0) queue.push(left.splice(i, 1)[0]);
-        });
-      }
-    }
+    const order = ordered(inMod);
     const boxes = {}, regions = [];
     const place = (list, x0, y0, cols, label, fold) => {
       if (fold) {
@@ -1665,6 +1759,16 @@
       regions.push(r);
       return r;
     };
+    if (ER_VIEW[v].all) {  // every module a region of its own, two to a row
+      const mods = [...new Set(m.objects.map(modOf))];
+      let x = ER.pad, y = ER.pad, rowH = 0;
+      mods.forEach((label, i) => {
+        const r = place(ordered(m.objects.filter((o) => modOf(o) === label)), x, y, ER.cols, label, false);
+        rowH = Math.max(rowH, r.h);
+        if (i % 2 === 1) { x = ER.pad; y += rowH + 28; rowH = 0; } else x += r.w + 40;
+      });
+      return { boxes, regions, home: '온톨로지 전체' };
+    }
     const top = place(order, ER.pad, ER.pad, ER.cols, home, false);
     // the modules it reaches stand in a column beside it, one card wide, so its relations stay short
     const byMod = {};
@@ -1703,13 +1807,13 @@
     return [cut(a, ca, cb), cut(b, cb, ca)];
   }
 
-  function erSvg() {
-    const L = erLayout();
+  function erSvg(v = 'model') {
+    const L = erLayout(v);
     if (!L) return '<div class="empty">트리에서 객체를 고르세요.</div>';
-    const m = S.mg.st, md = S.md;
+    const m = S.mg.st, md = ER_VIEW[v].state();
     const W = Math.max(...Object.values(L.boxes).map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad;
     const H = Math.max(...Object.values(L.boxes).map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
-    const regions = L.regions.map((r, i) => `<g class="erreg${i ? ' near' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
+    const regions = L.regions.map((r, i) => `<g class="erreg${i && !ER_VIEW[v].all ? ' near' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
     const edges = [];
     const drawn = m.links.filter((l) => { const a = L.boxes[l.source], b = L.boxes[l.target]; return a && b && l.source !== l.target && !(a.folded && b.folded); });
     const place = pairs(drawn, (l) => [L.boxes[l.source].folded ? L.boxes[l.source].folded.label : l.source, L.boxes[l.target].folded ? L.boxes[l.target].folded.label : l.target]);
@@ -1751,14 +1855,14 @@
       <div class="cb ercanvas" id="ercanvas">${erSvg()}</div><div class="cb ernote muted">카드를 끌어 옮기고, 빈 곳을 끌거나 스크롤해 둘러봅니다. Ctrl + 휠로 확대합니다. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
   }
 
-  function mountEr() {
-    const box = $('#ercanvas');
+  function mountEr(v = 'model') {
+    const box = $(`#${ER_VIEW[v].box}`), md = ER_VIEW[v].state();
     if (!box || box.dataset.on) return;
     box.dataset.on = '1';
     let drag = null;
     box.addEventListener('pointerdown', (ev) => {
       const g = ev.target.closest('[data-er]');
-      const L = g && erLayout(), b = L && L.boxes[g.dataset.er];
+      const L = g && erLayout(v), b = L && L.boxes[g.dataset.er];
       if (g && b && !b.folded) drag = { name: g.dataset.er, x0: ev.clientX, y0: ev.clientY, bx: b.x, by: b.y, moved: false };
       else drag = { pan: true, x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
       box.setPointerCapture(ev.pointerId);
@@ -1769,12 +1873,12 @@
       if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       drag.moved = true;
       if (drag.pan) { box.scrollLeft = drag.sl - dx; box.scrollTop = drag.st - dy; box.classList.add('panning'); return; }
-      const z = S.md.zoom || 1;
-      S.md.pos[drag.name] = { x: Math.max(4, drag.bx + dx / z), y: Math.max(30, drag.by + dy / z) };
-      box.innerHTML = erSvg();
+      const z = md.zoom || 1;
+      md.pos[drag.name] = { x: Math.max(4, drag.bx + dx / z), y: Math.max(30, drag.by + dy / z) };
+      box.innerHTML = erSvg(v);
     });
     const end = () => {
-      if (drag && !drag.moved && !drag.pan) modelPick(drag.name);
+      if (drag && !drag.moved && !drag.pan) ER_VIEW[v].pick(drag.name);
       drag = null;
       box.classList.remove('panning');
     };
@@ -1783,19 +1887,39 @@
     box.addEventListener('wheel', (ev) => {
       if (!ev.ctrlKey && !ev.metaKey) return;  // a plain wheel scrolls
       ev.preventDefault();
-      erZoom(ev.deltaY < 0 ? 1 : -1);
+      erZoom(ev.deltaY < 0 ? 1 : -1, 0.4, v);
     }, { passive: false });
-    if (S.md.zoom === undefined) erZoom(0, 0.75);  // the first look fits the width, as far as the names stay readable
+    if (md.zoom === undefined) erZoom(0, ER_VIEW[v].all ? 0.6 : 0.75, v);  // the first look fits the width, as far as names stay readable
   }
 
-  function erZoom(step, floor = 0.4) {  // 0 fits the diagram to the canvas's width
-    const md = S.md, box = $('#ercanvas');
+  function erZoom(step, floor = 0.4, v = 'model') {  // 0 fits the diagram to the canvas's width
+    const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
     if (step === 0 && box) {
       const svg = box.querySelector('svg'), w = svg ? Number(svg.getAttribute('viewBox').split(' ')[2]) : 0;
       md.zoom = w ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / w)) : 1;
     } else md.zoom = Math.min(1.6, Math.max(0.4, Math.round(((md.zoom || 1) + step * 0.1) * 10) / 10));
-    const card = $('#ercard');
-    if (card) { const sl = box ? box.scrollLeft : 0, st = box ? box.scrollTop : 0; card.innerHTML = erCard(); mountEr(); const nb = $('#ercanvas'); if (nb) { nb.scrollLeft = sl; nb.scrollTop = st; } }
+    const card = $(`#${ER_VIEW[v].card}`);
+    if (card) {
+      const sl = box ? box.scrollLeft : 0, st = box ? box.scrollTop : 0;
+      card.innerHTML = ER_VIEW[v].html(); mountEr(v);
+      const nb = $(`#${ER_VIEW[v].box}`);
+      if (nb) { nb.scrollLeft = sl; nb.scrollTop = st; }
+    }
+  }
+
+  // the whole ontology as the same cards: every module a region, a press opens the object's definition beside it
+  function ontoCard() {
+    const ov = S.ov;
+    return `<div class="card"><div class="ch">온톨로지 전체<div class="right"><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-v="onto" data-z="0" title="화면에 맞춤">${Math.round((ov.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="1" aria-label="확대">+</button></span></div></div>
+      <div class="cb ercanvas" id="ontocanvas">${S.mg.st ? erSvg('onto') : '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>'}</div>
+      <div class="cb ernote muted">카드를 누르면 오른쪽에 정의가 나옵니다. 고치려면 [작업 공간에서 열기]를 쓰세요. 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
+  }
+
+  function ontoPick(name) {
+    S.ov.sel = name;
+    const box = $('#ontocanvas');
+    if (box) box.innerHTML = erSvg('onto');
+    selectObject(name, true);
   }
 
   // what the definition check would refuse in a property, said under its field, with the way to fix it
@@ -2170,9 +2294,8 @@
   <div class="right"><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
 <div class="stats">${stats}</div>
 <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr)">
-  <div class="card"><div class="ch">온톨로지 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span></div></div>
-    <div class="cb" style="padding:0"><div class="kg" id="graph"></div></div></div>
-  <div class="card"><div class="cb scroll" id="objdetail" style="max-height:640px">${S.obj ? objDetail(S.obj) : '<div class="empty">Node를 선택하면 정의가 표시됩니다.</div>'}</div></div>
+  <div id="ontocard">${ontoCard()}</div>
+  <div class="card"><div class="ch">정의<div class="right"><button class="btn sm" data-act="ontoedit">작업 공간에서 열기</button></div></div><div class="cb scroll" id="objdetail" style="max-height:640px">${S.obj ? objDetail(S.obj) : '<div class="empty">Node를 선택하면 정의가 표시됩니다.</div>'}</div></div>
 </div>`;
   }
 
@@ -4330,11 +4453,12 @@ ${controls}${body}`;
     }
     if (c.file) html += fileDrawer(c);
     if (S.pal) html += paletteBox();
-    const keep = layer.querySelector('#palq');
+    if (S.rp) html += pickerBox();
+    const keep = layer.querySelector('#palq') || layer.querySelector('#rpq');
     const at = keep ? keep.selectionStart : null;
     const typing = document.activeElement && document.activeElement.id === 'repolabel';
     layer.innerHTML = html;
-    const box = $('#palq');
+    const box = $('#palq') || $('#rpq');
     if (box) { box.focus(); if (at !== null) box.setSelectionRange(at, at); }
     if (typing && $('#repolabel')) $('#repolabel').focus();
   }
@@ -5676,13 +5800,12 @@ ${controls}${body}`;
   const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, drel: null, vemb: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
     gxfind: (t) => gxFind(t.dataset.w),
+    rpopen: (t) => { const w = t.dataset.w, f = S.gx.found; S.rp = { which: w, type: f && f.which === w ? f.type || '' : '', q: f && f.which === w ? f.q : '', items: [], busy: false }; paintLayer(); rpLoad(); setTimeout(() => { const i = $('#rpq'); if (i) i.focus(); }, 0); },
+    rpclose: () => { S.rp = null; paintLayer(); },
+    rpmore: () => rpLoad(true),
+    rppick: (t) => { const w = S.rp.which; S.rp = null; paintLayer(); gxChoose(w, { type: t.dataset.type, key: t.dataset.key, type_label: t.dataset.label, title: t.dataset.title }); },
     gxzoom: (t) => gxZoom(Number(t.dataset.z)),
-    gxfound: (t) => {
-      const g = S.gx;
-      g.found = null;
-      if (t.dataset.w === 'to') { g.to = { type: t.dataset.type, key: t.dataset.key }; render(); return; }
-      gxStart(t.dataset.type, t.dataset.key);
-    },
+    gxfound: (t) => gxChoose(t.dataset.w, { type: t.dataset.type, key: t.dataset.key, type_label: t.dataset.label, title: t.dataset.title }),
     gxreset: () => { S.gx.pos = {}; S.gx.hide = []; S.gx.zoom = 1; S.gx.zoomed = false; gxStart(S.gx.seed.type, S.gx.seed.key); },
     gxviewsave: () => {
       const name = (window.prompt('관점 이름', S.gx.view || '고객 상담') || '').trim();
@@ -5704,7 +5827,8 @@ ${controls}${body}`;
     mdobjnew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.mg.form = { kind: 'object', mode: 'new', v: { table: '', name: '', label: '', key: '', parent: '', description: '', cols: true } }; render(); },
     mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
     erreset: () => { S.md.pos = {}; const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
-    erzoom: (t) => erZoom(Number(t.dataset.z)),
+    erzoom: (t) => erZoom(Number(t.dataset.z), t.dataset.v === 'onto' ? 0.3 : 0.4, t.dataset.v || 'model'),
+    ontoedit: () => { S.md.sel = S.ov.sel || S.sel; S.mg.form = null; location.hash = '#model'; },
     erfold: () => { S.md.fold = !S.md.fold; render(); },
     mgfix: (t) => { if (S.mg.form) { S.mg.form.v[t.dataset.f] = t.dataset.v; render(); } },
     mdyamlreset: () => { const y = S.md.yaml; if (y) { y.text = y.was; y.err = ''; } render(); },
@@ -6436,8 +6560,9 @@ ${controls}${body}`;
   };
 
   const INPUT = {
-    gxq: (t) => { S.gx.q = t.value; },
-    gxtoq: (t) => { S.gx.toq = t.value; },
+    gxq: (t) => { S.gx.q = t.value; gxFindSoon('start'); },
+    gxfromq: (t) => { S.gx.fromq = t.value; S.gx.from = null; gxFindSoon('from'); },
+    gxtoq: (t) => { S.gx.toq = t.value; S.gx.to = { type: '', key: '' }; gxFindSoon('to'); },
     mdq: (t) => { S.md.q = t.value; const b = $('#mdtree'); if (b) b.innerHTML = modelTree(); },
     chgtext: (t) => { S.chg.text = t.value; },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
@@ -6681,12 +6806,14 @@ ${controls}${body}`;
     });
     document.addEventListener('keydown', (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ACT.palette(); }
-      if (ev.key === 'Escape') { if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
+      if (ev.key === 'Escape') { if (S.rp) ACT.rpclose(); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
     });
     layer.addEventListener('input', (ev) => {
       if (ev.target.id === 'repolabel') S.pick.label = ev.target.value;
       if (ev.target.id === 'palq') { S.pal.q = ev.target.value; S.pal.i = 0; paintLayer(); }
+      if (ev.target.id === 'rpq' && S.rp) { S.rp.q = ev.target.value; clearTimeout(findTimer); findTimer = setTimeout(() => rpLoad(), 250); }
     });
+    layer.addEventListener('change', (ev) => { if (ev.target.id === 'rptype' && S.rp) { S.rp.type = ev.target.value; rpLoad(); } });
     layer.addEventListener('keydown', (ev) => {
       if (ev.target.id === 'repolabel' && ev.key === 'Enter') { ev.preventDefault(); ACT.repomake(); }
       if (ev.target.id !== 'palq') return;
@@ -6745,8 +6872,8 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && ev.target.id === 'srfkey') ACT.srrefix();
       if (ev.key === 'Enter' && ev.target.id === 'homeq') ACT.homego();
       if (ev.key === 'Enter' && ev.target.id === 'rlq') ACT.rlgo();
-      if (ev.key === 'Enter' && ev.target.id === 'gxq') gxFind('from');
-      if (ev.key === 'Enter' && ev.target.id === 'gxtoq') gxFind('to');
+      const finding = { gxq: 'start', gxfromq: 'from', gxtoq: 'to' }[ev.target.id];
+      if (ev.key === 'Enter' && finding) { ev.preventDefault(); clearTimeout(findTimer); gxFind(finding, true); }
       if (ev.key === 'Enter' && ev.target.id === 'chgtext') { const b = $('[data-act=chgcomment]'); if (b) ACT.chgcomment(b); }
     });
     window.addEventListener('hashchange', () => {

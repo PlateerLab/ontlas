@@ -476,7 +476,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "element/readers":
                     return s.element_readers(a["id"])
                 if route == "records/find":
-                    return s.record_find(a.get("q", ""))
+                    return s.record_find(a.get("q", ""), a.get("limit", 10), a.get("type", ""), a.get("offset", 0))
                 if route == "element/yaml":
                     return s.element_yaml(a["id"])
                 if route == "element/comments":

@@ -908,3 +908,20 @@ label.gxrow { display:flex; align-items:center; gap:8px; padding:6px 0; border-b
 label.gxrow span:nth-child(2) { flex:1; }
 label.gxrow.off { color:var(--muted); cursor:default; }
 .rvstep.wait { background:var(--panel); color:#98a2b3; cursor:default; }
+
+/* finding a record: a field with a list button, suggestions as it is typed, and a window for many */
+.gxfield { display:flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:9px; background:#fff; padding:0 4px 0 10px; }
+.gxfield:focus-within { border-color:var(--blue); box-shadow:0 0 0 2px var(--blue-line); }
+.gxfield input { flex:1; min-width:0; border:0 !important; outline:none !important; box-shadow:none !important; height:34px; padding:0; font:inherit; font-size:13px; background:transparent; }
+.gxfield.big input { height:40px; font-size:13.5px; }
+.gxlens { color:#98a2b3; font-size:16px; }
+.rpback { position:fixed; inset:0; background:rgba(16, 24, 40, .35); z-index:60; }
+.rpbox { position:fixed; z-index:61; top:8vh; left:50%; transform:translateX(-50%); width:min(720px, calc(100vw - 32px)); max-height:80vh; display:flex; flex-direction:column; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(16, 24, 40, .25); }
+.rphead { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px; font-size:15px; }
+.rpform { display:grid; grid-template-columns:160px 1fr; gap:8px; padding:0 16px 8px; }
+.rpform select, .rpform input { height:36px; font:inherit; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:0 10px; }
+.rplist { overflow:auto; padding:0 12px 14px; display:grid; gap:4px; align-content:start; }
+.rprow { display:grid; grid-template-columns:auto 80px minmax(0, 1fr) minmax(0, 1fr); align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.rprow:hover { border-color:var(--blue-line); background:#f8fbff; }
+.rprow span:last-child { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width: 640px) { .rpform { grid-template-columns:1fr; } .rprow { grid-template-columns:auto 1fr; } .rprow span:nth-child(n+3) { grid-column:2; } }

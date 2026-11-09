@@ -155,10 +155,24 @@ def test_a_record_graph_grows_by_relation_and_finds_what_joins_two_records(sessi
 
 
 def test_a_record_is_found_by_its_key_or_its_name_whatever_its_type(session):
-    assert session.record_find("C001")["items"][0] == {"type": "Customer", "type_label": "고객", "key": "C001", "title": "김하늘"}
+    first = session.record_find("C001")["items"][0]
+    assert (first["type"], first["key"], first["title"]) == ("Customer", "C001", "김하늘")
+    assert session.record_find("c001")["items"][0]["key"] == "C001"  # however it is typed
     found = session.record_find("니트")["items"]
     assert {(x["type"], x["key"]) for x in found} >= {("Category", "K3"), ("Product", "P1")}
+    assert {x["key"] for x in session.record_find("I100")["items"]} >= {"I1001", "I1002"}  # part of a key
     assert session.record_find("  ")["items"] == []
+
+
+def test_a_record_is_found_by_a_definition(session):
+    vip = session.record_find("VIP 고객")
+    assert vip["type"] == "Customer" and vip["items"] and all(x["sub"].startswith("VIP") for x in vip["items"])
+    every = session.record_find("고객")
+    assert every["type"] == "Customer" and every["total"] > vip["total"]
+    gone = session.record_find("취소된 주문")  # a Korean word for an English code: 취소 is CANCELLED
+    assert gone["type"] == "Order" and gone["items"] and all("CANCELLED" in x["sub"] for x in gone["items"])
+    page = session.record_find("", 2, "OrderItem", 2)
+    assert len(page["items"]) == 2 and page["more"] and page["total"] > 4
 
 
 def test_a_relation_read_from_either_end_is_the_same_relation(session):

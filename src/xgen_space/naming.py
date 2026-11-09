@@ -30,6 +30,8 @@ BASE = {
     "택배사": "Carrier", "송장": "Invoice", "할인": "Discount", "적립": "Reward", "멤버십": "Membership", "구독": "Subscription",
     "센터": "Center", "담당자": "Manager", "사원": "Employee", "급여": "Payroll", "근태": "Attendance", "설비": "Equipment",
     "점검": "Inspection", "생산": "Production", "공정": "Process", "라인": "Line", "불량": "Defect", "품질": "Quality",
+    "완료": "Complete", "배송완료": "Delivered", "발송": "Shipped", "배송중": "Shipped", "결제완료": "Paid", "입금": "Paid",
+    "승인": "Approved", "거절": "Rejected", "반려": "Rejected", "대기": "Pending", "진행": "Progress", "활성": "Active",
 }
 _WORD = re.compile(r"[^0-9A-Za-z가-힣]+")
 
@@ -90,4 +92,13 @@ def english(label: str, vocab: dict[str, str]) -> tuple[str, list[list[str]]] | 
     return (name if not name[0].isdigit() else f"N{name}"), [[p, vocab.get(p) or p] for p in parts]
 
 
-__all__ = ["BASE", "english", "vocabulary"]
+def stem(word: str) -> str:
+    """An English word without the ending a code may drop or change: Cancellation is CANCELL, Delivered DELIVER."""
+    w = word.upper()
+    for end in ("ATION", "MENT", "ING", "ED", "S"):
+        if len(w) > len(end) + 3 and w.endswith(end):
+            return w[: -len(end)]
+    return w
+
+
+__all__ = ["BASE", "english", "stem", "vocabulary"]
