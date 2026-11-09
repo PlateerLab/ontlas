@@ -302,11 +302,35 @@ class PagesMixin:
                               "comments": [c for c in cr.comments if c["element"] == el]})
         order = ["object", "property", "link", "decision", "rule", "action", "function", "role", "query", "identity", "question"]
         items.sort(key=lambda x: (order.index(x["kind"]) if x["kind"] in order else len(order), x["element"]))
+        affected = list(dict.fromkeys(r for x in items for r in x["readers"]))
         out.update({"items": items, "comments": [c for c in cr.comments if not c["element"]], "marks": dict(cr.marks),
+                    "affected": affected, "who": self.who, "self_approve": st.changes.self_approve,
+                    "yaml": self._change_yaml(cr), "question_notes": [c for c in cr.comments if c["element"].startswith("question:")],
                     "before": self._standing_gates() if cr.status == "pending" else {},
                     "can_decide": cr.status == "pending" and (st.changes.self_approve or cr.requested_by != self.who),
                     "can_mark": cr.status == "pending"})
         return plain(out)
+
+    def _change_yaml(self, cr) -> list[list[str]]:
+        """The module file before and after the change, line by line: [' ', line], ['-', line] or ['+', line]."""
+        import difflib
+
+        import yaml
+
+        lib = self.studio.changes.store or self.studio.library
+        before = ""
+        if lib is not None and cr.module in lib.names():
+            try:
+                versions = [v for v in lib.versions(cr.module) if v != cr.version]
+                if versions:
+                    before = yaml.safe_dump(lib.get(cr.module, versions[-1]).to_dict(), allow_unicode=True, sort_keys=False)
+            except Exception:  # a version that no longer reads is compared as nothing
+                before = ""
+        out = []
+        for line in difflib.ndiff(before.splitlines(), (cr.text or "").splitlines()):
+            if line[:1] in (" ", "-", "+"):
+                out.append([line[:1], line[2:]])
+        return out
 
     def change_mark(self, change_id: str, element: str, verdict: str) -> dict:
         from xgen_space.review import ChangeError

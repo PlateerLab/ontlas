@@ -1009,8 +1009,13 @@
       : `<div class="hint">${x.change === 'removed' ? '이 항목이 정의에서 빠집니다.' : '항목 단위 비교를 만들 수 없는 상태입니다. 모듈 파일을 확인해 주세요.'}</div>`;
     const marks = d.can_mark ? `<div class="cmark"><button class="btn sm${x.mark === 'ok' ? ' primary' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'ok' ? '' : 'ok'}">이 항목 승인</button><button class="btn sm${x.mark === 'fix' ? ' danger on' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'fix' ? '' : 'fix'}">수정 요청</button></div>` : '';
     const notes = x.comments.map((n) => `<div class="cnote"><b>${esc(n.by)}</b><span class="muted">${esc(dayOf(n.at))}</span><div>${esc(n.text)}</div></div>`).join('');
-    return `<div class="card"><div class="ch"><span class="chip sm ${cls}">${word}</span>${esc(KIND_WORD[x.kind] || x.kind)} · ${esc(x.label)}<div class="right"><span class="muted mono" style="font-size:11.5px">${esc(x.name)}</span></div></div>
-      <div class="cb">${fields}${x.readers.length ? `<div class="sec">이 항목을 읽는 요소</div><div class="chips">${x.readers.map((r) => `<span class="chip sm">${esc(r)}</span>`).join('')}</div>` : ''}${marks}
+    const view = S.chg.view === 'yaml' ? 'yaml' : 'fields';
+    const seg = `<div class="seg" style="margin:0" role="group" aria-label="비교 방식">${[['fields', '의미 비교'], ['yaml', 'YAML 비교']].map(([k, w]) => `<button class="${view === k ? 'on' : ''}" data-act="chgview" data-k="${k}" aria-pressed="${view === k}">${w}</button>`).join('')}</div>`;
+    const name = x.name.split('.').pop();
+    const lines = (d.yaml || []).map(([t, l]) => `<span class="${t === '+' ? 'yadd' : t === '-' ? 'ydel' : ''}${l.includes(name) ? ' yhit' : ''}">${t === ' ' ? ' ' : t} ${esc(l) || ' '}</span>`).join('');
+    const yamlView = `<pre class="code cyaml">${lines || '비교할 파일이 없습니다.'}</pre><div class="muted" style="font-size:12px;margin-top:6px">모듈 파일 전체의 앞뒤입니다. 이 항목이 나오는 줄을 굵게 표시했습니다.</div>`;
+    return `<div class="card"><div class="ch"><span class="chip sm ${cls}">${word}</span>${esc(KIND_WORD[x.kind] || x.kind)} · ${esc(x.label)}<div class="right">${seg}</div></div>
+      <div class="cb">${view === 'yaml' ? yamlView : fields}${x.readers.length ? `<div class="sec">이 항목을 읽는 요소</div><div class="chips">${x.readers.map((r) => `<span class="chip sm">${esc(r)}</span>`).join('')}</div>` : ''}${marks}
         <div class="sec">댓글 ${x.comments.length}</div>${notes}
         <div class="srform" style="margin-top:8px"><input type="text" id="chgtext" data-in="chgtext" value="${esc(S.chg.text)}" placeholder="이 항목에 댓글 쓰기" aria-label="댓글"><button class="btn sm" data-act="chgcomment" data-el="${esc(x.element)}">남기기</button></div></div></div>`;
   }
@@ -1023,7 +1028,10 @@
       const worse = was !== undefined && was !== null && g.value !== null && (g.condition.startsWith('max_') ? g.value > was : g.value < was);
       return `<div class="gline"><div><b>${esc(g.label)}</b><div class="muted">기준 ${g.condition.startsWith('max_') ? show(g.limit) : pct(g.limit)}</div></div><span class="mono">${fmt(was)} → <span class="${worse ? 'warnv' : ''}">${fmt(g.value)}</span></span><span class="chip sm ${g.passed ? 'ok' : 'bad'}">${g.passed ? '통과' : '미통과'}</span></div>`;
     }).join('');
-    const wrong = ((d.measured.check || {}).wrong || []).map((w) => `<div class="hint warn" style="margin-top:6px"><b>${esc(w.id)}</b> ${esc(w.text)} · 기대 ${esc(JSON.stringify(w.expected))} → 결과 ${esc(JSON.stringify(w.got))}</div>`).join('');
+    const said = (id) => (d.question_notes || []).filter((n) => n.element === `question:${id}`);
+    const wrong = ((d.measured.check || {}).wrong || []).map((w) => `<div class="hint warn" style="margin-top:6px"><b>${esc(w.id)}</b> ${esc(w.text)} · 기대 ${esc(JSON.stringify(w.expected))} → 결과 ${esc(JSON.stringify(w.got))}
+      ${d.id && d.status === 'pending' ? `<div style="margin-top:6px"><button class="btn sm" data-act="chgsuggest" data-q="${esc(w.id)}" data-got="${esc(JSON.stringify(w.got))}">${esc(w.id)} 기대값을 이 결과로 바꾸자고 제안</button></div>` : ''}
+      ${said(w.id).map((n) => `<div class="cnote" style="margin-top:6px"><b>${esc(n.by)}</b><span class="muted">${esc(dayOf(n.at))}</span><div>${esc(n.text)}</div></div>`).join('')}</div>`).join('');
     const issues = d.issues.map((x) => `<div class="hint warn" style="margin-top:6px">${esc(x)}</div>`).join('');
     return `<div class="card"><div class="ch">사본에서 시험한 결과<div class="right"><span class="muted" style="font-size:12px">지금 → 바뀐 뒤</span></div></div><div class="cb">${rows || '<div class="empty">측정한 통과 조건이 없습니다.</div>'}${wrong}${issues}</div></div>`;
   }
@@ -1045,17 +1053,18 @@
     const list2 = items.map((x) => {
       const [cls, word] = CHANGE_WORD[x.change] || ['', x.change];
       const m = MARK_WORD[x.mark];
-      return `<button class="hrow${x.element === c.item ? ' on' : ''}" data-act="chgitem" data-el="${esc(x.element)}"><span class="chip sm ${cls}">${word}</span><span style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${esc(KIND_WORD[x.kind] || x.kind)}</b> ${esc(x.label)}</span>${m ? `<span class="chip sm ${m[0]}">${m[1]}</span>` : ''}${x.comments.length ? `<span class="muted" style="font-size:11.5px">댓글 ${x.comments.length}</span>` : ''}</button>`;
+      return `<button class="hrow${x.element === c.item ? ' on' : ''}" data-act="chgitem" data-el="${esc(x.element)}"><span class="chip sm ${cls}">${word}</span><span style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${esc(KIND_WORD[x.kind] || x.kind)}</b> ${esc(x.label)}</span>${m ? `<span class="chip sm ${m[0]}">${m[1]}</span>` : (d.status === 'pending' ? '<span class="cdot" title="검토 전" aria-label="검토 전"></span>' : '')}${x.comments.length ? `<span class="muted" style="font-size:11.5px">댓글 ${x.comments.length}</span>` : ''}</button>`;
     }).join('');
+    const reach = (d.affected || []).length ? `<div class="card"><div class="ch">영향 받는 요소 <span class="chip sm">${d.affected.length}</span></div><div class="cb"><div class="chips">${d.affected.map((r) => `<span class="chip sm">${esc(r)}</span>`).join('')}</div></div></div>` : '';
     const ready = d.can_decide && !sent && done === items.length;
     const why = !d.can_decide ? (d.status === 'pending' ? '작성자는 자기 변경을 승인할 수 없습니다.' : `${d.status_label} · ${d.decided_by || ''}`)
       : sent ? `수정 요청한 항목 ${sent}개가 있습니다.` : (done < items.length ? `검토하지 않은 항목 ${items.length - done}개가 남았습니다.` : '모든 항목을 검토했습니다.');
     const decide = d.status === 'pending' ? `<div class="cdecide"><button class="btn primary" data-act="chgdecide" data-yes="1"${ready ? '' : ' disabled'}>변경 요청 승인</button><button class="btn" data-act="chgdecide" data-yes="0"${d.can_decide ? '' : ' disabled'}>반려</button><span class="muted" style="font-size:12.5px">${esc(why)}</span></div>` : `<div class="muted" style="font-size:12.5px">${esc(why)}</div>`;
     const top = `<div class="card"><div class="cb"><div class="ctop"><div><div class="rtitle" style="font-size:19px">${esc(d.module_label)} ${esc(d.base_version || '새 모듈')} → ${esc(d.version)}<span class="chip ${CHANGE_STATUS[d.status] || ''}">${esc(d.status_label)}</span></div>
-      <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(d.id)} · ${esc(d.requested_by)} 작성 · ${esc(dayOf(d.at))} · 사본 시험 ${d.passed ? '통과' : '미통과'}</div></div>
+      <div class="muted" style="font-size:12.5px;margin-top:4px">${esc(d.id)} · ${esc(d.requested_by)} 작성 · ${esc(dayOf(d.at))} · 사본 시험 ${d.passed ? '통과' : '미통과'}${d.status === 'pending' && d.who ? ` · 검토자 ${esc(d.who)}${d.who === d.requested_by ? '' : '(나)'}` : ''}${d.self_approve ? '' : ' · 작성자는 승인할 수 없습니다'}</div></div>
       <div class="cprog"><span class="muted">검토 ${done} / ${items.length}</span><span class="bar"><i style="width:${items.length ? Math.round(done / items.length * 100) : 0}%"></i></span></div></div>${decide}</div></div>`;
     const cur = items.find((x) => x.element === c.item);
-    return `${head}${tabs}${top}<div class="grid cgrid"><div class="card"><div class="ch">바뀐 항목 ${items.length}</div><div class="cb" style="padding:6px 8px">${list2 || '<div class="empty">바뀐 항목이 없습니다.</div>'}</div></div>
+    return `${head}${tabs}${top}<div class="grid cgrid"><div class="hcol"><div class="card"><div class="ch">바뀐 항목 ${items.length}</div><div class="cb" style="padding:6px 8px">${list2 || '<div class="empty">바뀐 항목이 없습니다.</div>'}</div></div>${reach}</div>
       <div class="hcol">${cur ? changeItem(d, cur) : ''}</div><div class="hcol">${changeGates(d)}</div></div>`;
   }
 
@@ -5292,6 +5301,15 @@ ${controls}${body}`;
     mdedit: async (t) => { location.hash = '#library'; await openModule(t.dataset.module).catch(fail); },
     ibchange: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },
     chgsel: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; S.chg.text = ''; render(); },
+    chgview: (t) => { S.chg.view = t.dataset.k; render(); },
+    chgsuggest: async (t) => {
+      const c = S.chg;
+      try {
+        await api('change/comment', { id: c.sel, element: `question:${t.dataset.q}`, text: `검증 질문 ${t.dataset.q}의 기대값을 ${t.dataset.got}(으)로 바꾸자고 제안합니다. 이 변경이 의도한 결과라면 질문도 함께 고쳐 주세요.` });
+        toast(`작성자에게 ${t.dataset.q} 기대값 변경을 제안했습니다.`);
+        await loadChange(c.sel);
+      } catch (e) { fail(e); }
+    },
     chgitem: (t) => { S.chg.item = t.dataset.el; S.chg.text = ''; render(); },
     chgmark: async (t) => {
       try { S.chg.det = await api('change/mark', { id: S.chg.sel, element: t.dataset.el, mark: t.dataset.mark }); render(); } catch (e) { fail(e); }
