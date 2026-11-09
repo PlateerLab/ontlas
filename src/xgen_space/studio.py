@@ -439,11 +439,12 @@ class Studio:
         return {"measured": measured, "gates": [_asdict(g) for g in results], "passed": all(g.passed for g in results)}
 
     def function(self, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
-                 principal: dict | None = None, by: str = "", trial: bool = False) -> dict[str, Any]:
-        """Run a registered function (see functions.py). With `trial`, a person tries out one still in draft."""
+                 principal: dict | None = None, by: str = "", trial: bool = False, log: bool = True) -> dict[str, Any]:
+        """Run a registered function (see functions.py). With `trial`, a person tries out one still in draft; without
+        `log`, the run is not kept in the function log."""
         from xgen_space.functions import run_function
 
-        return run_function(self, name, key, params, role=role, principal=principal, by=by, trial=trial)
+        return run_function(self, name, key, params, role=role, principal=principal, by=by, trial=trial, log=log)
 
     def keep_journal(self, path):
         """Keep requests, approvals, change requests and the audit trail in a file, so a restart forgets none of them.

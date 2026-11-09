@@ -73,8 +73,17 @@ class PagesMixin:
                           "module_label": self._label(owner) if owner else ""})
         tp = _title(o, type_name)
         title = row.get(tp) if tp and tp != t.key else None
+        context = self._to_one(type_name, key, depth=2)
+        flat = [x for c in context for x in (c, *c["next"])]
+        # a thing is read by the name of what it is (the product), not of the person it belongs to: a type that hides
+        # some of its values is about a person
+        person = {x["type"] for x in flat if any(find_prop(o, x["type"], p).mask for p in all_props(o, x["type"]))}
+        named = None if title is not None else next((x for x in flat if x["title"] and x["type"] not in person),
+                                                    next((x for x in flat if x["title"]), None))
         return plain({
             "type": type_name, "label": t.label or type_name, "key": key, "title": title, "table": t.table,
+            "context": context, "named_by": named,
+            "computed": self._computed(o, type_name, key),
             "description": t.description, "props": props, "state": self._record_state(t, row),
             "links": self._record_links(type_name, key), "decisions": self._record_decisions(type_name, key),
             "functions": [{"name": f.name, "label": f.label or f.name, "outputs": list(f.outputs), "status": f.status,
@@ -86,6 +95,68 @@ class PagesMixin:
             "key_documents": self._key_mentions(key),
             "history": self._record_history(type_name, key),
         })
+
+    def _to_one(self, type_name: str, key: str, depth: int = 1, seen: frozenset = frozenset()) -> list[dict]:
+        """The records this one refers to, one each (an order item's order and its SKU), and theirs in turn up to
+        `depth`: what a person reads a record by when it has no name of its own."""
+        o, st = self.studio.onto, self.studio
+        mine = set(_lineage(o, type_name))
+        out = []
+        for lk in o.links.values():
+            # one record on the other side: a relation to one, or a relation from one read backwards
+            ahead = lk.source in mine and lk.cardinality in ("many_to_one", "one_to_one")
+            back = lk.target in mine and lk.cardinality in ("one_to_many", "one_to_one") and not ahead
+            other = lk.target if ahead else lk.source
+            if not (ahead or back) or other in seen or other in mine:
+                continue
+            ot = o.obj(other)
+            edge = Edge("x", lk.name, "y") if ahead else Edge("y", lk.name, "x")
+            q = Query(nodes={"x": type_name, "y": other}, edges=[edge],
+                      where=Cmp(Ref("x", o.obj(type_name).key), "eq", key), columns=[Column(Ref("y", ot.key), "k")], limit=2)
+            try:
+                rows = st.run(q).rows
+            except Exception:  # a relation the source cannot answer is left out of the summary
+                continue
+            if len(rows) != 1:
+                continue
+            k = str(rows[0][0])
+            row = st.fetch(other, k) or {}
+            tp = _title(o, other)
+            item = {"type": other, "type_label": ot.label or other, "key": k, "via": (lk.label or lk.name) if ahead else (ot.label or other),
+                    "title": row.get(tp) if tp and tp != ot.key else None, "sub": self._summary(other, row), "next": []}
+            if depth > 1:
+                item["next"] = self._to_one(other, k, depth - 1, seen | mine)
+            out.append(item)
+        return out
+
+    def _summary(self, type_name: str, row: dict) -> str:
+        """Two values a person tells a record by, besides its key and name: a state, a date, a grade."""
+        o = self.studio.onto
+        t = o.obj(type_name)
+        tp = _title(o, type_name)
+        picks = []
+        for p in all_props(o, type_name):
+            prop = find_prop(o, type_name, p)
+            v = row.get(p)
+            if p in (t.key, tp) or v in (None, "") or prop.expr or prop.mask or p.endswith("_id"):
+                continue
+            rank = 0 if prop.type == "enum" or (t.states and p == t.states.property) else 1 if prop.type in ("date", "datetime") else 2
+            picks.append((rank, str(v)[:16].replace("T", " ") if prop.type in ("date", "datetime") else str(v)))
+        return " · ".join(v for _, v in sorted(picks, key=lambda x: x[0])[:2])
+
+    def _computed(self, o, type_name: str, key: str) -> list[dict]:
+        """What the record's functions give, worked out on opening when they only read: a formula, a table or a query.
+        The runs are not kept in the function log."""
+        out = []
+        for f in o.functions.values():
+            if f.target not in _lineage(o, type_name) or f.status != "active" or f.runtime not in ("expr", "decision", "query"):
+                continue
+            try:
+                got = self.studio.function(f.name, key, {}, by=self.who, log=False)
+                out.append({"name": f.name, "label": f.label or f.name, "outputs": got["outputs"]})
+            except Exception as e:  # one that needs a value from a person waits for the person
+                out.append({"name": f.name, "label": f.label or f.name, "error": str(e)})
+        return out
 
     def _record_state(self, t, row: dict) -> dict | None:
         sm = t.states
@@ -193,7 +264,16 @@ class PagesMixin:
                    if p.status == "pending" and p.target in mine and str(p.key) == key]
         done = [{k: a[k] for k in ("at", "event", "actor", "kind", "proposal", "action")}
                 for a in self.audit() if a["target"] in mine and str(a["key"]) == key]
-        return waiting + done[:20]
+        o = self.studio.onto
+        row = self.studio.fetch(type_name, key) or {}
+        source = []  # the moments the source itself keeps on the record: ordered at, delivered at
+        for p in all_props(o, type_name):
+            prop = find_prop(o, type_name, p)
+            if prop.type in ("date", "datetime") and row.get(p) and not prop.expr:
+                word = re.sub(r"\s*(일시|일자|시각|날짜|일)$", "", prop.label or p) or (prop.label or p)
+                source.append({"at": str(row[p]), "event": word, "actor": "원천 DB", "kind": "source", "proposal": "",
+                               "action": ""})
+        return waiting + sorted(done[:20] + source, key=lambda x: str(x["at"]), reverse=True)
 
     # ---- lists of records -------------------------------------------------------------------------------------------
 
@@ -240,21 +320,36 @@ class PagesMixin:
                           "target": p.target, "key": str(p.key), "by": p.requested_by.id, "by_kind": p.requested_by.kind,
                           "mine": p.requested_by.id == self.who, "change": change, "failed": failed,
                           "outside": len(outside), "waits": v["waits"]})
+        from xgen_space.web.api import GATE_LABEL
+
+        standing = self._standing_gates() if any(c.status == "pending" for c in st.changes.requests.values()) else {}
         for c in st.changes.requests.values():
             if c.status != "pending":
                 continue
             rv = c.review or {}
             gates = rv.get("gates") or []
-            items.append({"kind": "change", "id": c.id, "title": f"{self._label(c.module)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
+            worse = []
+            for g in gates:  # what the change would make worse, the way the review says it
+                was, now = standing.get(f"{g['stage']}.{g['condition']}"), g.get("value")
+                if was is not None and now is not None and (now > was if g["condition"].startswith("max_") else now < was):
+                    worse.append({"label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]), "was": was, "now": now,
+                                  "rate": not g["condition"].startswith("max_")})
+            items.append({"kind": "change", "id": c.id, "title": f"{self._change_label(c)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
                           "module": c.module, "by": c.requested_by, "mine": c.requested_by == self.who, "at": c.at,
                           "passed": rv.get("passed"), "gates": [sum(bool(g.get("passed")) for g in gates), len(gates)],
-                          "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}})
+                          "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}, "worse": worse})
         for c in st.onto.source_conflicts():
             if not c.open:
                 continue
             answers = " ↔ ".join(f"{a.source} {', '.join(f'{k} {v}' for k, v in a.says.items())}".strip() for a in c.answers)
             items.append({"kind": "conflict", "id": c.id, "title": c.label or c.id, "decision": c.decision,
                           "detail": answers[:160], "mine": False})
+        bind = (self._standing_measured() or {}).get("bind") or {}
+        warned = [f for f in bind.get("findings") or [] if f.get("severity") in ("warning", "error")]
+        if warned:  # what the last check of the source against the definition found, for whoever looks after it
+            items.append({"kind": "check", "id": "bind", "title": f"DB 대조 {'오류' if bind.get('errors') else '경고'} {len(warned)}건",
+                          "detail": " · ".join(str(f.get("detail") or f.get("message") or "") for f in warned[:2])[:160],
+                          "mine": False})
         ws = self.workspace
         if ws is not None and ws.dirty:
             items.append({"kind": "workspace", "id": "workspace", "title": f"정의 관리 변경 {len(ws.edits)}건",
@@ -359,11 +454,17 @@ class PagesMixin:
         if self._standing is not None and self._standing[0] == sig:
             return self._standing[1]
         try:
-            got = {f"{g.stage}.{g.condition}": g.value for g in gates(measure(st, st.flow), st.flow)}
+            measured = measure(st, st.flow)
+            got = {f"{g.stage}.{g.condition}": g.value for g in gates(measured, st.flow)}
         except Exception:  # the studio as it stands cannot be measured: the review shows the change's numbers alone
-            got = {}
-        self._standing = (sig, got)
+            measured, got = {}, {}
+        self._standing = (sig, got, measured)
         return got
+
+    def _standing_measured(self) -> dict:
+        """What the last standing measurement found, measuring once if nothing has."""
+        self._standing_gates()
+        return self._standing[2] if self._standing else {}
 
     _standing: tuple | None = None
 
