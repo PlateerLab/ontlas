@@ -102,15 +102,16 @@ class SpaceMixin:
                 "store": hits[0]["store"] if hits else sp.primary(), "can_answer": self.llm is not None,
                 "compare": sp.compare(text, min(int(k or 5), K_MAX)) if len(sp.stores) > 1 else None}
 
-    def space_ask(self, text: str, role: str = "", principal: dict | None = None) -> dict:
-        """One question over everything here. The engine answers what it can, and says when a model could go further."""
+    def space_ask(self, text: str, role: str = "", principal: dict | None = None, pick: dict | None = None) -> dict:
+        """One question over everything here. The engine answers what it can, and says when a model could go further.
+        `pick` is how a person corrected what the question was taken to be."""
         from xgen_space.tools import StudioTools
 
         self._sync_space()
         tools = StudioTools(self.studio, role=role or None, principal=principal, actor_id=self.who or "page")
         tools.terms = self._terms()
         try:
-            out = tools.answer_question(text)
+            out = tools.answer_question(text, pick if isinstance(pick, dict) else None)
         except (VectorError, OSError, EmbedError) as e:
             raise ValueError(f"검색 엔진에서 찾지 못했습니다. {_human(e)}") from None
         except PermissionError:

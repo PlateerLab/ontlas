@@ -330,7 +330,7 @@
 
   const S = {
     st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
-    ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
+    ru: null, met: {}, sp: null, sr: { text: '', res: null, busy: false, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: '' }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {},
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
     ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null,
@@ -923,30 +923,54 @@
     return ROUTE_BADGE[res.route] || ['', res.route];
   }
 
-  function understood(res, more) {
-    const chips = [];
-    const d = (res.decisions || [])[0];
-    if (d) chips.push(`레코드 · ${d.target_label} ${d.key}`, `판정 · ${d.label}`);
-    if (res.record) chips.push(`레코드 · ${res.record.label} ${res.record.key}`);
-    if (res.query) chips.push(`등록 질의 · ${res.query.label}`);
-    if (!chips.length) chips.push(res.route === 'none' ? '찾을 대상 없음' : '문서와 규칙에서 찾기');
-    if (d && res.now) chips.push(`기준 시각 · ${res.now.replace('T', ' ')}`);
-    const [cls, word] = answerBadge(res, more);
-    return `<div class="understood"><span class="label">이렇게 이해했습니다</span>${chips.map((c) => `<span class="chip b">${esc(c)}</span>`).join('')}<span class="chip ${cls}" style="margin-left:auto">${esc(word)}</span></div>
-      <div class="muted" style="font-size:12px;margin-top:4px">다르게 이해했다면 번호나 이름, 정의된 용어를 넣어 다시 물어 주세요.</div>`;
+  // 은/는, 이/가, 을/를 by the last letter: a Hangul syllable by its final consonant, a digit as it is read, anything else both
+  function josa(word, withFinal, without) {
+    const c = String(word ?? '').trim().slice(-1);
+    const code = c.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) return (code - 0xac00) % 28 ? withFinal : without;
+    if (/\d/.test(c)) return '013678'.includes(c) ? withFinal : without;
+    return `${withFinal}(${without})`;
   }
 
-  function feedbackCard(r) {
-    const d = (r.res.decisions || [])[0];
+  const pickedDecision = (res) => (res.decisions || [])[S.sr.di || 0] || null;
+
+  function understood(res) {
+    const d = pickedDecision(res), rec = res.record;
+    const fixable = !!(d || rec);
+    const chip = (word, k) => (fixable ? `<button class="chip b" data-act="srfix" data-k="${k}" aria-expanded="${!!S.sr.fix}">${esc(word)}<span aria-hidden="true">▾</span></button>` : `<span class="chip b">${esc(word)}</span>`);
+    const chips = [];
+    if (d) chips.push(chip(`레코드 · ${d.target_label} ${d.key}`, 'key'), chip(`판정 · ${d.label}`, 'decision'), chip(`기준 시각 · ${d.at.replace('T', ' ')}`, 'at'));
+    else if (rec) chips.push(chip(`레코드 · ${rec.label} ${rec.key}`, 'key'), ...((res.choices || []).length ? [chip('판정 · 없음', 'decision')] : []));
+    else if (res.query) chips.push(chip(`등록 질의 · ${res.query.label}`));
+    else chips.push(`<span class="chip">${res.route === 'none' ? '찾을 대상 없음' : '문서와 규칙에서 찾기'}</span>`);
+    const hint = fixable ? '다르게 이해했다면 칩을 눌러 고친 뒤 다시 물을 수 있습니다.' : '레코드 번호나 등록 질의 이름을 넣으면 데이터에서 바로 답합니다.';
+    return `<div class="understood"><span class="label">이렇게 이해했습니다</span>${chips.join('')}<span class="muted" style="font-size:12px">${hint}</span></div>${S.sr.fix && fixable ? fixRow(res) : ''}`;
+  }
+
+  // what a person corrects of how the question was taken: the record, the decision, the time days are counted to
+  function fixRow(res) {
+    const f = S.sr.fix, d = pickedDecision(res);
+    const type = d ? d.target_label : res.record.label;
+    return `<div class="srfix" role="group" aria-label="질문 고치기">
+      <div class="field"><label for="srfkey">${esc(type)} 번호</label><input id="srfkey" type="text" data-in="srfkey" value="${esc(f.key)}"></div>
+      <div class="field"><label for="srfdec">판정</label><select id="srfdec" data-in="srfdec"><option value="">판정 없이 값 보기</option>${(res.choices || []).map((c) => `<option value="${esc(c.name)}"${c.name === f.decision ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
+      ${f.decision ? `<div class="field"><label for="srfat">기준 시각</label><input id="srfat" type="datetime-local" data-in="srfat" value="${esc(f.at)}"></div>` : ''}
+      <div class="srfixgo"><button class="btn sm primary" data-act="srrefix"${S.sr.busy ? ' disabled' : ''}>${S.sr.busy ? '<span class="spin"></span>묻는 중' : '다시 묻기'}</button><button class="btn sm" data-act="srfixx">취소</button></div>
+      <div class="muted srfixnote">기준 시각은 배송 완료 후 며칠처럼 경과일을 셀 때 씁니다. 바꿔 물어도 저장되지 않습니다.</div></div>`;
+  }
+
+  function feedbackCard(r, d) {
     if (!d) return '';
-    if (r.fb === 'saved') return `<div class="hint ok" style="margin-top:10px">검증 질문을 정의 관리의 대기 중인 변경에 추가했습니다. 변경 요청으로 반영하면 규칙이 바뀔 때마다 이 질문으로 다시 확인합니다. <a href="#check">검증 질문 보기</a></div>`;
-    if (r.fb === 'bad') return `<div class="hint warn" style="margin-top:10px">판정이 틀렸다면 규칙과 판정에 쓴 값을 확인해 주세요. <a href="#mgrules">규칙 관리</a> · <button class="btn sm" data-act="srdecide" data-name="${esc(d.name)}" data-key="${esc(d.key)}">판정 · 처리 열기</button></div>`;
-    const save = r.fb === 'good' ? `<button class="btn sm primary" data-act="srsave">검증 질문으로 저장 · 정답 ${esc(d.verdict)}</button>` : '';
-    return `<div class="fbrow"><b>이 답이 맞나요?</b><button class="btn sm${r.fb === 'good' ? ' on' : ''}" data-act="srgood">맞아요</button><button class="btn sm" data-act="srbad">틀려요</button>${save}<span class="muted" style="font-size:12px">맞은 답은 검증 질문으로 남겨 규칙이 바뀔 때 다시 확인합니다.</span></div>`;
+    const body = r.fb === 'saved' ? `<div class="hint ok">검증 질문을 정의 관리의 대기 중인 변경에 추가했습니다. 변경 요청으로 반영하면 규칙이 바뀔 때마다 이 질문으로 다시 확인합니다. <a href="#check">검증 질문 보기</a></div>`
+      : `<div class="fbrow"><button class="btn sm${r.fb === 'good' ? ' on' : ''}" data-act="srgood" aria-pressed="${r.fb === 'good'}">맞아요</button><button class="btn sm${r.fb === 'bad' ? ' on' : ''}" data-act="srbad" aria-pressed="${r.fb === 'bad'}">틀려요</button></div>
+      ${r.fb === 'good' ? `<button class="btn sm primary" data-act="srsave" style="margin-top:10px">검증 질문으로 저장 · 정답 ${esc(d.verdict)}</button>` : ''}
+      ${r.fb === 'bad' ? `<div class="hint warn" style="margin-top:10px">판정에 쓴 값과 규칙을 확인해 주세요. [조건 바꿔 보기]에서 어떤 값일 때 답이 바뀌는지 볼 수 있습니다. <a href="#mgrules">규칙 관리</a></div>` : ''}
+      <div class="muted" style="font-size:12px;margin-top:10px">맞은 답을 검증 질문으로 저장하면 규칙이 바뀔 때마다 이 질문으로 다시 확인합니다.</div>`;
+    return `<div class="card"><div class="ch">이 답이 맞나요?</div><div class="cb">${body}</div></div>`;
   }
 
   function unknownCard(res) {
-    return `<div class="banner no" style="margin-top:14px"><span class="ic x" style="width:30px;height:30px;font-size:16px">?</span><div><div class="big">답하지 않았습니다</div>
+    return `<div class="banner no"><span class="ic x" style="width:30px;height:30px;font-size:16px">?</span><div><div class="big">답하지 않았습니다</div>
       <div class="why">${esc(res.answer)} 근거 없이 추측하지 않습니다.</div><div class="cite">번호, 이름, 정의된 용어를 넣어 다시 묻거나 <a href="#records">레코드 탐색</a>에서 찾아 주세요.</div></div></div>`;
   }
 
@@ -1646,36 +1670,132 @@
       ${(h.concepts || []).length ? `<div class="chips">${h.concepts.map((c) => `<span class="chip sm b">${esc(c)}</span>`).join('')}</div>` : ''}</div>`;
   }
 
-  function askDecision(d) {
-    const rows = d.evidence.map((e) => `<tr><td>${esc(e.label)}</td><td>${yesNo(e.value)}</td><td class="mono muted" style="font-size:12px">${esc(e.source)}</td></tr>`).join('');
-    const cites = d.rules.map((x) => x.cite).filter(Boolean);
-    return `<div class="banner ${d.good ? 'ok' : 'no'}" style="margin-top:14px"><span class="ic ${d.good ? 'y' : 'x'}" style="width:30px;height:30px;font-size:16px">${d.good ? '✓' : '!'}</span>
-      <div><div class="big">${esc(d.target_label)} ${esc(d.key)} · ${esc(d.label)} · ${esc(d.verdict)}</div><div class="why">${esc(d.reason)}</div>${cites.length ? `<div class="cite">근거 규정 · ${esc(cites.join(', '))}</div>` : ''}</div>
-      <div style="margin-left:auto" class="chips">${d.rules.map((x) => `<span class="chip b">규칙 ${esc(x.id)}</span>`).join('')}<button class="btn sm primary" data-act="rec" data-type="${esc(d.target)}" data-key="${esc(d.key)}">${esc(d.target_label)} ${esc(d.key)} 열기</button><button class="btn sm" data-act="srdecide" data-name="${esc(d.name)}" data-key="${esc(d.key)}">판정 · 처리 열기</button></div></div>
-      ${rows ? `<div class="card" style="margin-top:12px"><div class="ch">판정에 사용한 값</div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>입력값</th><th>값</th><th>원천</th></tr>${rows}</table></div></div>` : ''}`;
+  // ---- one answer: what it is and where it came from, what can be done next, then why in three layers --------------
+
+  function answerCard(res, d, more) {
+    const [cls, word] = answerBadge(res, more);
+    const uniq = (xs) => [...new Set(xs.filter(Boolean))];
+    const badges = [`<span class="chip ${cls}">${esc(word)}</span>`, ...d.rules.map((x) => `<span class="chip">규칙 ${esc(x.id)}</span>`),
+      ...uniq(d.rules.map((x) => x.cite)).map((c) => `<span class="chip">근거 ${esc(c)}</span>`),
+      ...uniq(d.rules.map((x) => (x.module ? `${x.module_label} ${x.version}` : ''))).map((m) => `<span class="chip" title="이 규칙을 정의한 모듈과 버전">모듈 ${esc(m)}</span>`)];
+    const acts = d.actions.map((a) => `<button class="btn${a.ready ? ' primary' : ''}" data-act="sract" data-type="${esc(d.target)}" data-key="${esc(d.key)}" data-name="${esc(a.name)}"${a.ready ? '' : ' disabled'}>${esc(a.label)}하기</button>`).join('');
+    const held = d.actions.filter((a) => !a.ready).map((a) => `${a.label}: ${a.met ? '지금 상태에서는 할 수 없습니다' : '판정 결과가 조건에 맞지 않습니다'}`);
+    return `<div class="card acard ${d.good ? 'ok' : 'no'}"><div class="cb"><span class="aic ${d.good ? 'y' : 'x'}" aria-hidden="true">${d.good ? '✓' : '!'}</span>
+      <div class="amain"><div class="akey">${esc(d.target_label)} ${esc(d.key)} · ${esc(d.label)}</div><div class="averdict">${esc(d.verdict)}</div>
+        ${d.reason ? `<div class="areason">${esc(d.reason)}</div>` : ''}<div class="chips abadges">${badges.join('')}</div>
+        <div class="aacts">${acts}<button class="btn" data-act="rec" data-type="${esc(d.target)}" data-key="${esc(d.key)}">${esc(d.target_label)} ${esc(d.key)} 열기</button><button class="btn" data-act="srsim" data-name="${esc(d.name)}" data-key="${esc(d.key)}">조건 바꿔 보기</button></div>
+        ${held.length ? `<div class="muted" style="font-size:12px;margin-top:6px">${held.map(esc).join(' · ')}</div>` : ''}</div></div></div>`;
   }
 
-  function askTable(q) {
+  function recordAnswer(res) {
+    const rec = res.record, [cls, word] = answerBadge(res);
+    return `<div class="card"><div class="ch">${esc(rec.label)} ${esc(rec.key)}<span class="chip sm ${cls}">${esc(word)}</span><div class="right"><button class="btn sm primary" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><button class="btn sm" data-act="srobj" data-obj="${esc(rec.type)}">객체 정의 보기</button></div></div>
+      <div class="cb scroll" style="padding:0"><table class="tight">${rec.values.map((v) => `<tr><td style="width:40%"><b>${esc(v.label)}</b></td><td>${typeof v.value === 'boolean' ? yesNo(v.value) : show(v.value)}</td></tr>`).join('')}</table></div></div>`;
+  }
+
+  function queryAnswer(res, more, q) {
     const cell = (v) => (v === null || v === undefined ? '' : show(v));
-    return `<div class="card" style="margin-top:14px"><div class="ch">${esc(q.label)}<div class="right"><span class="chip sm">${esc(count(q.total))}건</span></div></div>
+    const [cls, word] = answerBadge(res, more);
+    const open = q === res.query ? `<div class="right"><button class="btn sm" data-act="homeq2" data-q="${esc(q.name)}">질의 화면에서 열기</button></div>` : '';
+    return `<div class="card"><div class="ch">${esc(q.label)} 결과 ${esc(count(q.total))}건<span class="chip sm ${cls}">${esc(word)}</span>${open}</div>
       <div class="cb scroll" style="padding:0"><table class="tight"><tr>${q.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>${q.rows.map((r) => `<tr>${q.columns.map((c) => `<td>${cell(r[c])}</td>`).join('')}</tr>`).join('')}</table></div></div>`;
   }
 
-  function askRecord(rec) {
-    return `<div class="card" style="margin-top:14px"><div class="ch">${esc(rec.label)} ${esc(rec.key)}<div class="right"><button class="btn sm primary" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><button class="btn sm" data-act="srobj" data-obj="${esc(rec.type)}">객체 정의 보기</button></div></div>
-      <div class="cb scroll" style="padding:0"><table class="tight">${rec.values.map((v) => `<tr><td style="width:40%"><b>${esc(v.label)}</b></td><td>${v.value === null || v.value === undefined ? '<span class="muted">-</span>' : show(v.value)}</td></tr>`).join('')}</table></div></div>`;
+  function textAnswer(res, more, nearest) {
+    const [cls, word] = answerBadge(res, more);
+    return `<div class="card"><div class="cb"><div class="chips" style="margin-bottom:8px"><span class="chip ${cls}">${esc(word)}</span></div>
+      ${nearest ? '<div class="label" style="margin-bottom:4px">질문과 가장 가까운 근거</div>' : ''}<div class="atext">${esc(more && more.ok ? more.answer : res.answer)}</div></div></div>`;
   }
 
-  function askAnswer(r) {
-    const res = r.res, more = r.more;
-    const query = (more && more.ok && more.query) || res.query;
-    const text = more && more.ok ? more.answer : res.answer;
-    const wait = r.moreBusy ? '<div class="hint" style="margin-top:8px"><span class="spin"></span>언어 모델이 찾은 근거로 답변을 작성하는 중입니다. 1분 정도 걸릴 수 있습니다.</div>' : '';
-    const failed = more && !more.ok ? `<div class="hint warn" style="margin-top:8px">${esc(more.error)}</div>` : '';
+  function policyStep(d) {
+    const used = d.rules.map((x) => x.id), first = d.rules[0];
+    if (!first) return '맞는 규칙이 없습니다.';
+    const rule = (id) => `<b>${esc(id)}</b>`;
+    const others = d.also.filter((x) => !x.fallback).map((x) => x.id);
+    const test = (t) => ({ true: '예', false: '아니요' }[t] || cellWord(t));
+    const cond = first.when.length ? ` 규칙 ${esc(first.id)}의 조건은 ${first.when.map((w) => `${esc(w.input)} ${esc(test(w.test))}`).join(', ')}입니다.` : ` 규칙 ${esc(first.id)}${josa(first.id, '은', '는')} 조건이 없는 기본 규칙입니다.`;
+    if (d.hit_policy === 'first') return `결정표는 위에서부터 처음 맞는 규칙 하나를 씁니다. 처음 맞는 규칙은 ${rule(first.id)}입니다.${others.length ? ` ${others.map(esc).join(', ')} 규칙도 맞지만 순서가 뒤라 쓰지 않았습니다.` : ''}${cond}`;
+    if (d.hit_policy === 'priority') return `결정표는 맞는 규칙 가운데 우선순위가 가장 높은 규칙을 씁니다. 쓴 규칙은 ${rule(first.id)}입니다.${cond}`;
+    if (d.hit_policy === 'collect') return `결정표는 맞는 규칙을 모두 모읍니다. 맞은 규칙은 ${used.map(rule).join(', ')}입니다.`;
+    return `결정표는 맞는 규칙이 하나뿐이어야 합니다. 맞은 규칙은 ${rule(first.id)}입니다.${cond}`;
+  }
+
+  function howSteps(d) {
+    const val = (e) => (e.value === null || e.value === undefined ? '<b>값 없음</b>' : `<b>${typeof e.value === 'boolean' ? yesNo(e.value) : show(e.value)}</b>`);
+    const steps = [[`${esc(d.target_label)} <b>${esc(d.key)}</b>${josa(d.key, '을', '를')} 찾았습니다.`, d.target]];
+    d.evidence.forEach((e) => {
+      const name = e.property || e.label;
+      const where = e.path.length ? `${e.path.join(' → ')} · ${e.source}` : e.source;
+      if (e.kind === 'param') steps.push([`입력한 ${esc(e.label)}${josa(e.label, '은', '는')} ${val(e)}입니다.`, '']);
+      else if (e.kind === 'count') steps.push([`${esc(e.path.join(' → '))} 수는 <b>${show(e.value)}</b>개입니다.`, e.source]);
+      else if (e.kind === 'days_since') {
+        steps.push([e.value === null || e.value === undefined ? `${esc(name)} 값이 없어 경과일을 셀 수 없습니다.` : `${esc(name)}${e.since ? ` ${show(e.since)}` : ''}, 기준 시각까지 <b>${show(e.value)}일</b>입니다.`, where]);
+      } else steps.push([`${e.path.length && e.key ? `${esc(e.type_label)} ${esc(e.key)}의 ` : ''}${esc(name)}${josa(name, '은', '는')} ${val(e)}입니다.`, where]);
+    });
+    steps.push([policyStep(d), '']);
+    return `<ol class="asteps">${steps.map(([t, m], i) => `<li><span class="sno">${i + 1}</span><div>${t}${m ? ` <span class="mono muted">${esc(m)}</span>` : ''}</div></li>`).join('')}</ol>`;
+  }
+
+  function valuesTable(d) {
+    const rows = d.evidence.map((e) => `<tr><td>${esc(e.label)}</td><td>${typeof e.value === 'boolean' ? yesNo(e.value) : show(e.value)}${e.kind === 'days_since' && e.since ? `<div class="muted" style="font-size:11.5px">${show(e.since)}부터</div>` : ''}</td>
+      <td>${e.type_label ? `${esc(e.type_label)} ${esc(e.key)}` : '<span class="muted">입력값</span>'}</td><td class="mono muted" style="font-size:12px">${esc(e.source)}${e.path.length ? `<div>${esc(e.path.join(' → '))}</div>` : ''}</td></tr>`).join('');
+    return `<table class="tight"><tr><th>입력값</th><th>값</th><th>읽은 레코드</th><th>원천</th></tr>${rows}</table>`;
+  }
+
+  function codePane(res, d, q) {
+    if (!d) {
+      const text = (q && q.text) || (res.record && res.record.query) || '';
+      return text ? `<div class="label">${q ? `${esc(q.label)} · ${esc(q.backend || '')}` : '레코드를 읽은 질의'}</div><pre class="acode">${esc(text)}</pre>` : '<div class="empty">실행한 질의가 없습니다.</div>';
+    }
+    const r = d.rules[0];
+    const when = r ? `<div class="label">적용한 규칙 · ${esc(r.id)}${r.cite ? ` · ${esc(r.cite)}` : ''}</div><table class="tight" style="margin-top:6px"><tr><th>입력값</th><th>조건</th></tr>${r.when.map((w) => `<tr><td>${esc(w.input)}</td><td class="mono">${esc(w.test)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">조건 없음 · 기본 규칙</td></tr>'}</table>` : '';
+    const sql = d.reading ? `<div class="label" style="margin-top:14px">판정에 쓴 값을 원천에서 읽는 SQL</div><pre class="acode">${esc(d.reading)}</pre>
+      <div class="muted" style="font-size:12px">엔진은 값마다 관계를 따라 읽은 뒤 결정표를 직접 평가합니다. 이 SQL은 같은 값을 한 번에 읽어 원천과 대조할 때 씁니다. 경과일은 기준 시각 ${esc(d.at.replace('T', ' '))}에서 날짜를 뺀 값입니다.</div>` : '';
+    return when + sql;
+  }
+
+  function whyCard(res, d, q) {
+    const tabs = d ? [['how', '어떻게 판단했나', 0], ['values', '사용한 값', d.evidence.length]] : [];
+    tabs.push(['docs', '근거', res.sources.length]);
+    if (d || (q && q.text) || (res.record && res.record.query)) tabs.push(['code', '실행한 질의', 0]);
+    if (tabs.length === 1 && !res.sources.length) return '';
+    const on = tabs.some((t) => t[0] === S.sr.tab) ? S.sr.tab : tabs[0][0];
+    const bar = tabs.length > 1 ? `<div class="atabs" role="tablist" aria-label="답의 근거">${tabs.map(([k, w, n]) => `<button role="tab" aria-selected="${k === on}" class="${k === on ? 'on' : ''}" data-act="srtab" data-k="${k}">${w}${n ? `<span class="n">${n}</span>` : ''}</button>`).join('')}</div>`
+      : `<div class="ch">근거 ${res.sources.length}건</div>`;
+    const body = on === 'how' ? howSteps(d) : on === 'values' ? valuesTable(d) : on === 'code' ? codePane(res, d, q)
+      : res.sources.map(sourceCard).join('') || '<div class="empty">찾은 근거가 없습니다.</div>';
+    return `<div class="card">${bar}<div class="cb${on === 'values' ? ' scroll' : ''}" role="tabpanel"${on === 'values' ? ' style="padding:0"' : ''}>${body}</div></div>`;
+  }
+
+  function answerMain(r) {
+    const res = r.res, more = r.more, d = pickedDecision(res);
+    const q = (more && more.ok && more.query) || res.query;
+    const wait = r.moreBusy ? '<div class="hint"><span class="spin"></span>언어 모델이 찾은 근거로 답변을 작성하는 중입니다. 1분 정도 걸릴 수 있습니다.</div>' : '';
+    const failed = more && !more.ok ? `<div class="hint warn">${esc(more.error)}</div>` : '';
     // a passage the engine found is not an answer: until a model words one, it is shown as what it is
     const nearest = res.needs_model && !(more && more.ok) && res.route !== 'none';
-    const words = res.decisions || (nearest && r.moreBusy) ? '' : res.route === 'none' && !(more && more.ok) ? unknownCard(res) : `<div class="banner plain" style="margin-top:14px"><div class="why" style="white-space:pre-wrap">${nearest ? '<span class="label" style="display:block;margin-bottom:4px">질문과 가장 가까운 근거</span>' : ''}${esc(text)}</div></div>`;
-    return `${understood(res, more)}${(res.decisions || []).map(askDecision).join('')}${feedbackCard(r)}${words}${wait}${failed}${res.record ? askRecord(res.record) : ''}${query ? askTable(query) : ''}`;
+    let top;
+    if (d) top = answerCard(res, d, more);
+    else if (res.record) top = recordAnswer(res);
+    else if (q) top = queryAnswer(res, more, q);
+    else if (res.route === 'none' && !(more && more.ok)) top = r.moreBusy ? '' : unknownCard(res);
+    else top = nearest && r.moreBusy ? '' : textAnswer(res, more, nearest);
+    return `${top}${wait}${failed}${whyCard(res, d, q)}`;
+  }
+
+  function otherDecisions(res) {
+    const all = res.decisions || [];
+    if (all.length < 2) return '';
+    return `<div class="card"><div class="ch">함께 찾은 판정</div><div class="cb alist">${all.map((x, i) => `<button class="arow${i === (S.sr.di || 0) ? ' on' : ''}" data-act="srdi" data-i="${i}" aria-pressed="${i === (S.sr.di || 0)}"><span>${esc(x.label)}</span><span class="chip sm ${x.good ? 'ok' : 'warn'}">${esc(x.verdict)}</span></button>`).join('')}</div></div>`;
+  }
+
+  function relatedCard(res) {
+    const defs = res.definitions.length ? res.definitions.map((c) => (c.element.startsWith('object:')
+      ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.title)} · ${esc(c.kind_label)}</button>`
+      : `<span class="chip">${esc(c.title)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">관련 정의가 없습니다.</span>';
+    const rel = res.relations.length ? `<div class="sec">연결 관계</div><div class="muted" style="font-size:12.5px;line-height:1.7">${res.relations.slice(0, 6).map((x) => esc(x)).join('<br>')}</div>` : '';
+    return `<div class="card"><div class="ch">관련 정의</div><div class="cb"><div class="chips">${defs}</div>${rel}
+      <div class="sec">검색 엔진</div><div class="muted" style="font-size:12.5px"><span class="mono">${esc(res.engine)}</span></div></div></div>`;
   }
 
   function viewSearch() {
@@ -1688,29 +1808,25 @@
     if (!r.res) return head + form;
     if (r.res.error) return head + form + `<div class="banner no" style="margin-top:12px"><div class="why">${esc(r.res.error)}</div></div>`;
     const res = r.res;
-    const defs = res.definitions.length ? res.definitions.map((c) => (c.element.startsWith('object:')
-      ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.title)} · ${esc(c.kind_label)}</button>`
-      : `<span class="chip">${esc(c.title)} · ${esc(c.kind_label)}</span>`)).join('') : '<span class="muted" style="font-size:12.5px">관련 정의가 없습니다.</span>';
-    const rel = res.relations.length ? `<div class="sec">연결 관계</div><div class="muted" style="font-size:12.5px;line-height:1.7">${res.relations.slice(0, 6).map((x) => esc(x)).join('<br>')}</div>` : '';
-    return `${head}${form}${askAnswer(r)}
-      <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);margin-top:14px;align-items:start">
-        <div class="card"><div class="ch">근거 ${res.sources.length}건</div><div class="cb">${res.sources.map(sourceCard).join('') || '<div class="empty">찾은 근거가 없습니다.</div>'}</div></div>
-        <div class="card"><div class="ch">관련 정보</div><div class="cb"><div class="sec" style="margin-top:0">관련 정의</div><div class="chips">${defs}</div>${rel}
-          <div class="sec">검색 엔진</div><div class="muted" style="font-size:12.5px"><span class="mono">${esc(res.engine)}</span></div></div></div>
-      </div>`;
+    return `${head}${form}${understood(res)}
+      <div class="grid agrid"><div class="acol">${answerMain(r)}</div><div class="acol">${feedbackCard(r, pickedDecision(res))}${otherDecisions(res)}${relatedCard(res)}</div></div>`;
   }
 
-  async function searchNow() {
+  // `pick` asks the same question again as a person corrected it; when that fails, the answer before stays
+  async function searchNow(pick) {
     const r = S.sr;
-    if (!r.text.trim()) return toast('질문이 없어 검색하지 못했습니다. 질문을 입력해 주세요.', true);
-    const asked = r.text;
-    r.busy = true; r.more = null; r.moreBusy = false; r.fb = '';
+    const asked = pick && r.res ? r.res.question : r.text;
+    if (!asked.trim()) return toast('질문이 없어 검색하지 못했습니다. 질문을 입력해 주세요.', true);
+    r.busy = true;
     render();
-    try { r.res = await api('space/ask', { text: asked }); } catch (e) { r.res = { error: e.message }; }
-    if (r.res && r.res.ok === false) r.res = { error: r.res.error };
+    let res;
+    try { res = await api('space/ask', pick ? { text: asked, pick } : { text: asked }); } catch (e) { res = { error: e.message }; }
+    if (res && res.ok === false) res = { error: res.error };
     r.busy = false;
+    if (pick && res.error) { render(); return toast(res.error, true); }
+    Object.assign(r, { res, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: pick ? r.tab : '' });
     render();
-    if (r.res && r.res.needs_model && r.res.can_model) {
+    if (!pick && res && res.needs_model && res.can_model) {
       r.moreBusy = true;
       render();
       let more;
@@ -4613,7 +4729,7 @@ ${controls}${body}`;
     srgood: () => { S.sr.fb = 'good'; render(); },
     srbad: () => { S.sr.fb = 'bad'; render(); },
     srsave: async () => {
-      const res = S.sr.res, d = res.decisions[0];
+      const res = S.sr.res, d = pickedDecision(res);
       try {
         await api('manage/edit', { op: 'add_question', args: { id: `ask-${Date.now().toString(36)}`, text: res.question, decision: d.name, key: d.key, expect: d.outputs } });
         S.mg.st = null; S.sr.fb = 'saved'; render();
@@ -4635,6 +4751,30 @@ ${controls}${body}`;
     srex: (t) => { S.sr.text = t.dataset.text; searchNow(); },
     srobj: (t) => { location.hash = '#onto'; selectObject(t.dataset.obj); },
     srdecide: async (t) => { S.d.name = t.dataset.name; S.d.key = t.dataset.key; S.d.proposal = null; S.d.res = null; location.hash = '#decide'; },
+    srfix: (t) => {
+      const res = S.sr.res, d = pickedDecision(res);
+      if (S.sr.fix) { S.sr.fix = null; render(); return; }
+      S.sr.fix = d ? { key: d.key, decision: d.name, at: d.at } : { key: res.record.key, decision: '', at: res.now || '' };
+      render();
+      const el = $({ decision: '#srfdec', at: '#srfat' }[t.dataset.k] || '#srfkey');
+      if (el) el.focus();
+    },
+    srfixx: () => { S.sr.fix = null; render(); },
+    srrefix: () => {
+      const f = S.sr.fix, res = S.sr.res, d = pickedDecision(res);
+      if (!f.key.trim()) { toast('레코드 번호가 없어 다시 묻지 못했습니다. 번호를 입력해 주세요.', true); return; }
+      const type = d ? d.target : res.record.type;
+      searchNow(f.decision ? { decision: f.decision, key: f.key.trim(), at: f.at } : { type, key: f.key.trim() });
+    },
+    srtab: (t) => { S.sr.tab = t.dataset.k; render(); },
+    srdi: (t) => { S.sr.di = Number(t.dataset.i); S.sr.fb = ''; S.sr.fix = null; render(); },
+    sract: (t) => { openRecord(t.dataset.type, t.dataset.key); S.rec.act = t.dataset.name; },
+    srsim: (t) => {
+      S.mg.dec = t.dataset.name; S.mg.form = null; S.mg.sel = '';
+      Object.assign(S.sim, { dec: t.dataset.name, key: t.dataset.key, vals: {}, res: null, err: '' });
+      location.hash = '#mgrules';
+      simulateNow(t.dataset.key, {});
+    },
     dsecclose: () => { S.dsec = null; S.dgsel = null; drawGraph(); $('#docside').innerHTML = docSide(); },
     dread: async () => {
       for (let i = 0; i < 5; i += 1) {  // a few sections per press: each takes the model tens of seconds
@@ -5201,6 +5341,8 @@ ${controls}${body}`;
     gwdialect: (t) => { S.gw.dialect = t.value; },
     gwtoken: (t) => { S.gw.token = t.value; },
     srtext: (t) => { S.sr.text = t.value; },
+    srfkey: (t) => { S.sr.fix.key = t.value; },
+    srfat: (t) => { S.sr.fix.at = t.value; },
     vkind: (t) => { S.vs.kind = t.value; render(); },
     vurl: (t) => { S.vs.url = t.value; },
     cedit: (t) => { if (S.cat.edit) S.cat.edit.value = t.value; },
@@ -5258,6 +5400,7 @@ ${controls}${body}`;
   };
 
   const CHANGE = {
+    srfdec: (t) => { S.sr.fix.decision = t.value; render(); },
     gxtype: (t) => { S.gx.seed.type = t.value; },
     gxtotype: (t) => { S.gx.to.type = t.value; },
     simkey: (t) => { S.sim.key = t.value; S.sim.vals = {}; simulateNow(t.value, {}); },
@@ -5461,6 +5604,7 @@ ${controls}${body}`;
     main.addEventListener('drop', (ev) => { const z = ev.target.closest('[data-drop]'); if (z) { ev.preventDefault(); z.classList.remove('over'); dropped(ev.dataTransfer); } });
     document.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && ev.target.id === 'srtext') searchNow();
+      if (ev.key === 'Enter' && ev.target.id === 'srfkey') ACT.srrefix();
       if (ev.key === 'Enter' && ev.target.id === 'homeq') ACT.homego();
       if (ev.key === 'Enter' && ev.target.id === 'rlq') ACT.rlgo();
       if (ev.key === 'Enter' && ev.target.id === 'gxkey') ACT.gxstart();

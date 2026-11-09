@@ -16,9 +16,19 @@
   its functions to run, the documents that name it or its type, and its requests, approvals and runs. Opening a page runs no
   function and writes nothing.
 - 통합 검색 says what it took the question to be (the record, the decision, the time it counts to) and where the answer came
-  from (a decision table or a registered query with no model, a model's wording, or nothing found). A decision's answer opens
-  its record, and one judged right is kept as a validation question among the pending edits. A question nothing answers is
-  answered that it is not known.
+  from (a decision table or a registered query with no model, a model's wording, or nothing found). What it took can be
+  corrected and the same question asked again (`space/ask` with `pick`: another record, another decision of its type or
+  none, another time to count days to); the time is the question's only and the studio's clock does not move. A decision's
+  answer carries the rule, the clause it cites and the module and version that wrote the rule, and leads to what can be done
+  next: the actions the decision gates (their form opens on the record page, ready only when the verdict and the record's
+  state allow it), the record itself, and the rules page trying the table on this record. Below it the answer is explained
+  three ways: the steps in plain sentences (each value read, where from and along which relations, and why this rule and
+  not the others that also held), the values with their records and columns, and the rule's conditions with one SQL query
+  that reads the same values from the source. A registered query's answer shows the query it ran, a record its read. Beside
+  the answer, a judgement of right or wrong; one judged right is kept as a validation question among the pending edits. A
+  question nothing answers is answered that it is not known.
+- A decision's result lists the rules that held but the hit policy did not use (`also`), and a decision can be counted to
+  another time (`Studio.decide(..., at=)`).
 - 변경 요청 (`GET change`, `POST change/mark`, `POST change/comment`): a change request element by element. Each element it
   adds, changes or removes shows field by field what it is now and what it becomes (a rule's condition by its input's name),
   and what in the definition reads it now. The pass conditions show the number the studio meets now beside the number on the
