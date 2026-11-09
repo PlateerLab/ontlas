@@ -164,7 +164,7 @@ running (운영). The page opens on 홈. A group's screens are tabs on its page,
 
 | Section | Group | Screen | Use it to |
 |---|---|---|---|
-| 업무 | 홈 | 홈 | Search or ask from one box, see what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
+| 업무 | 홈 | 홈 | Search or ask from one box, see the eight steps an ontology is built in with where this space stands on each, what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
 | | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick, check warnings and edits not filed yet, each saying who asked, what changes and by how much against its automatic-approval limit |
 | | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question; when nothing answers it says what it did understand and whom to ask |
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |

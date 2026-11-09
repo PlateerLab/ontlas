@@ -26,6 +26,12 @@
   its first steps are the eight steps a person builds an ontology in. The README's how-to follows the same order and its
   screenshots are the current screens.
 - Fixed: 객체 제외 on a parent object showed the engine's words; the message is in Korean and names the subtypes.
+- The home shows the eight steps an ontology is built in, each with where this space stands on it (`GET build/steps`,
+  read from what is here, nothing measured anew), the next step marked, each leading to its screen.
+- The ontology cards, the modelling canvas and the record graph zoom with the wheel alone, around the pointer on the
+  card canvases; Ctrl is no longer needed. The canvases pan by dragging as before.
+- Fixed: opening 모델링 folded the sidebar on its own and unfolded it on leaving, so the menu shrank and grew as a person
+  moved between screens. The sidebar stays as the person set it.
 
 - An alert leads to its fix. `GET issues` turns a measurement into what can be acted on: the items behind each failure, the module
   or change that brought them, what reads them and the ways to fix each (here, at once, or at the source with the list to hand

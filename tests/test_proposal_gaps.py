@@ -133,3 +133,19 @@ def test_in_a_team_an_approver_applies_a_draft_and_a_viewer_moves_nothing():
     assert NEEDS["draft/review/preview"] == NEEDS["draft/table"] == "editor"
     assert NEEDS["catalog/move"] == NEEDS["catalog/trash"] == NEEDS["catalog/use"] == "editor"
     assert NEEDS["graph/view"] == NEEDS["graph/view/forget"] == NEEDS["workspace/layout"] == "editor"
+
+
+def test_the_build_steps_say_where_the_space_stands(session):
+    got = session.build_steps()
+    ids = [s["id"] for s in got["steps"]]
+    assert ids == ["catalog", "data", "model", "mgrules", "changes", "check", "search", "connect"]
+    by = {s["id"]: s for s in got["steps"]}
+    assert by["model"]["done"] and "객체" in by["model"]["detail"]  # the example library is a built ontology
+    assert by["mgrules"]["done"] and not by["changes"]["done"] and not by["search"]["done"]
+    assert by["catalog"]["done"] and "원천 테이블" in by["catalog"]["detail"]  # bound tables count as data brought in
+    assert got["next"] == "changes"  # nothing has been reviewed and approved yet
+    session.catalog_upload("쿠폰.csv", "쿠폰번호,할인율\nCP1,10\nCP2,20\n".encode("utf-8"))
+    session.manage_edit("update_object", {"name": "Order", "label": "주문서"})
+    got = session.build_steps()
+    by = {s["id"]: s for s in got["steps"]}
+    assert by["catalog"]["done"] and "파일" in by["catalog"]["detail"] and "대기 중인 변경 1" in by["model"]["detail"]

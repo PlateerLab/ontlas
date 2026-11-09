@@ -662,6 +662,50 @@ class PagesMixin:
     def _layout_of(self) -> dict:
         return dict((self._prefs("layout", "_layouts").get(self.pipeline) or {}).get("positions") or {})
 
+    # ---- the order an ontology is built in, as this space stands -------------------------------------------------------
+
+    def build_steps(self) -> dict:
+        """The eight steps a person builds an ontology in, each with where this space stands on it, read from what is
+        here (nothing is measured anew): files and tables, a draft and its pipelines, the definition and its pending
+        edits, rules and actions, change requests, the last check, requests handled, and how agents come in."""
+        st, o = self.studio, self.studio.onto
+        files = self.repositories.files(self.repo)
+        kept = [f for f in files.values() if f["included"] and not f.get("error") and (f.get("facts") or {}).get("kind") != "raw"]
+        tables = {t.table for t in o.objects.values() if t.table}
+        ws = self.workspace
+        pending = len(ws.edits) if ws is not None and ws.dirty else 0
+        requests = list(st.changes.requests.values())
+        decided = sum(1 for c in requests if c.status in ("approved", "rejected"))
+        waiting = sum(1 for c in requests if c.status == "pending")
+        from xgen_space.review import gates as flow_gates
+
+        measured = self._measured or {}
+        check = measured.get("check") or {}
+        gates = [{"passed": g.passed} for g in flow_gates(measured, st.flow)] if measured else []  # the last measurement, read again
+        audit = list(st.actions.audit)
+        agents = sum(1 for p in st.actions.proposals.values() if p.requested_by.kind != "human")
+        steps = [
+            {"id": "catalog", "title": "데이터 가져오기", "done": bool(kept or tables),
+             "detail": " · ".join(x for x in (f"파일 {len(kept)}개" if kept else "", f"원천 테이블 {len(tables)}개" if tables else "") if x) or "파일을 올리거나 DB를 연결합니다"},
+            {"id": "data", "title": "초안 검토", "done": bool(o.objects) or self.pending is not None,
+             "detail": "초안 검토 중" if self.pending is not None else (f"파이프라인 {len(self.pipelines)}개 · 객체 {len(o.objects)}개" if o.objects else "초안을 만들어 제안을 검토합니다")},
+            {"id": "model", "title": "모델링", "done": bool(o.objects and o.links),
+             "detail": f"객체 {len(o.objects)} · 관계 {len(o.links)}" + (f" · 대기 중인 변경 {pending}" if pending else "")},
+            {"id": "mgrules", "title": "규칙 · 액션", "done": bool(o.decisions or o.actions),
+             "detail": f"결정표 {len(o.decisions)} · 액션 {len(o.actions)} · 역할 {len(o.roles)}"},
+            {"id": "changes", "title": "변경 요청", "done": decided > 0,
+             "detail": " · ".join(x for x in (f"결정 {decided}" if decided else "", f"대기 {waiting}" if waiting else "") if x) or "변경은 검토와 승인을 거쳐 반영됩니다"},
+            {"id": "check", "title": "검증", "done": bool(gates) and all(g.get("passed") for g in gates),
+             "detail": (f"통과 조건 {sum(1 for g in gates if g.get('passed'))} / {len(gates)}" if gates else "아직 재지 않음")
+             + (f" · 검증 질문 {check.get('right', check.get('passed', ''))} / {check.get('questions', len(o.questions))}" if check.get("questions") else (f" · 검증 질문 {len(o.questions)}개" if o.questions else ""))},
+            {"id": "search", "title": "사용", "done": bool(audit),
+             "detail": f"처리 요청 {len(audit)}건" if audit else "홈에서 묻고, 레코드와 그래프로 찾고, 판정 · 처리합니다"},
+            {"id": "connect", "title": "연동", "done": bool(agents) or not self.self_approve,
+             "detail": (f"Agent 요청 {agents}건" if agents else "") + (" · 팀 스페이스" if not self.self_approve else "") or "MCP · REST /v1 로 Agent와 플랫폼이 같은 공간을 씁니다"},
+        ]
+        nxt = next((s["id"] for s in steps if not s["done"]), "")
+        return plain({"steps": steps, "next": nxt})
+
     def _standing_gates(self) -> dict:
         """The pass conditions as the studio meets them before any change, measured once per definition."""
         from xgen_space.review import gates, measure

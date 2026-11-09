@@ -226,7 +226,7 @@
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
     ['onto', '객체와 관계 전체를 카드로 펼쳐 보고, 카드를 누르면 연결된 카드만 모아 봅니다.', [
-      '모듈마다 영역으로 묶인 카드에 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 확대 · 축소와 화면 맞춤으로 전체를 훑습니다.',
+      '모듈마다 영역으로 묶인 카드에 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 휠이나 − + 버튼으로 확대 · 축소하고, 빈 곳을 끌어 이동하고, 100% 버튼으로 화면에 맞춥니다.',
       '카드를 누르면 그 카드가 가리키는 것은 오른쪽, 그것을 가리키는 것은 왼쪽, 상위는 위, 하위는 아래에 모이고 나머지는 흐려집니다. 다른 카드를 누르면 초점이 옮겨 가고, 빈 곳이나 Esc, [전체 보기]로 돌아옵니다.',
       '오른쪽 정의에는 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. [작업 공간에서 열기]로 바로 고칩니다.',
       '관계를 선택하면 연결된 객체로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
@@ -417,7 +417,7 @@
     mg: { st: null, busy: false, sel: '', form: null, q: '', obj: '', table: '', open: false, keep: false, qt: 0, review: null },
     cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false,
     mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
-    home: { role: 'ops', box: null, busy: false, tab: 'assigned', q: '' },
+    home: { role: 'ops', box: null, busy: false, tab: 'assigned', q: '', steps: null, stepsBusy: false },
     rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', seeAs: '', params: {}, fn: {}, tab: 'overview' },
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
@@ -496,7 +496,7 @@
   function stale() {
     S.q.res = null; S.d.res = null; S.d.proposal = null; S.d.keys = {}; S.qa = null; S.bind = null; S.obj = null; S.fl = null;
     S.mg.st = null; S.iss.list = null; S.home.box = null;
-    S.home.sug = null; S.q.props = {}; S.md.trial = null;  // read from a definition that is no longer the one shown
+    S.home.sug = null; S.home.steps = null; S.q.props = {}; S.md.trial = null;  // read from a definition that is no longer the one shown
   }
 
   // ---- frame ---------------------------------------------------------------------------------------------------
@@ -628,7 +628,7 @@
       const on = $('#side .nav.on');
       if (on) on.scrollIntoView({ block: 'nearest' });
     }
-    $('#app').classList.toggle('slim', S.tab === 'model' ? S.md.wide : S.slim);  // the workspace takes the room for its canvas
+    $('#app').classList.toggle('slim', S.slim);  // the sidebar is as the person left it, on every screen
   }
 
   function render() {
@@ -649,6 +649,7 @@
   function after() {
     if ((S.tab === 'home' || S.tab === 'inbox') && !S.home.box && !S.home.busy) loadInbox();
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
+    if (S.tab === 'home' && !S.home.steps && !S.home.stepsBusy) loadSteps();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
     if (S.tab === 'graph' && $('#gxcanvas')) { mountGx(); gxPaint(); }
     if (S.tab === 'graph' && !S.gx.views) gxLoadViews();
@@ -746,6 +747,7 @@
   async function loadHomeFlow() {
     S.fl = { busy: true };
     try { S.fl = await api('flow'); S.fl.at = new Date().toTimeString().slice(0, 5); } catch (e) { S.fl = { error: e.message }; }
+    if (S.home.steps) { S.home.steps = null; loadSteps(); }  // the build steps read the measurement the flow just took
     if (S.tab === 'home' || S.tab === 'flow') render();
   }
 
@@ -841,6 +843,22 @@
       ${link('#model', '작업 공간', ws ? ws.title : '객체 · 속성 · 관계')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
   }
 
+  async function loadSteps() {  // where this space stands on each step of building an ontology, read from what is here
+    S.home.stepsBusy = true;
+    try { S.home.steps = await api('build/steps'); } catch (e) { S.home.steps = { steps: [], next: '', error: e.message }; }
+    S.home.stepsBusy = false;
+    if (S.tab === 'home') render();
+  }
+
+  function stepsCard() {  // the order to build in, as a strip the person can follow from the home
+    const s = S.home.steps;
+    if (!s || !s.steps.length) return '';
+    const items = s.steps.map((x, i) => `<a href="#${x.id}" class="bstep${x.done ? ' done' : ''}${x.id === s.next ? ' next' : ''}" title="${esc(x.detail)}">
+      <span class="bno">${x.done ? '✓' : i + 1}</span><span class="bttl">${esc(x.title)}</span><span class="bdet">${esc(x.detail)}</span>${x.id === s.next ? '<span class="chip sm warn">다음</span>' : ''}</a>`).join('<i class="bline"></i>');
+    return `<div class="card bsteps"><div class="ch">온톨로지를 구성하는 순서<div class="right"><span class="muted" style="font-size:12px">${s.next ? '다음 단계가 표시됩니다' : '여덟 단계가 모두 되어 있습니다'}</span><a class="btn sm ghost" href="#guide">사용 안내</a></div></div>
+      <div class="cb bstrip">${items}</div></div>`;
+  }
+
   function viewHome() {
     const h = S.home;
     const name = (S.me && S.me.user && S.me.user.name) || '';
@@ -858,7 +876,7 @@
       domain: [recentCard() + savedCard(), inboxCard(4)],
       model: [buildCard() + inboxCard(5), opsCard()],
     }[h.role] || [inboxCard(6), opsCard()];
-    return `${head}${ask}<div class="grid hgrid"><div class="hcol">${cols[0]}</div><div class="hcol">${cols[1]}</div></div>`;
+    return `${head}${ask}${stepsCard()}<div class="grid hgrid"><div class="hcol">${cols[0]}</div><div class="hcol">${cols[1]}</div></div>`;
   }
 
   function viewInbox() {
@@ -1557,7 +1575,7 @@
     const end = () => { if (drag && !drag.moved && !drag.pan) gxPick(drag.id); drag = null; box.classList.remove('panning'); };
     box.addEventListener('pointerup', end);
     box.addEventListener('pointercancel', end);
-    box.addEventListener('wheel', (ev) => { if (!ev.ctrlKey && !ev.metaKey) return; ev.preventDefault(); gxZoom(ev.deltaY < 0 ? 1 : -1); }, { passive: false });
+    box.addEventListener('wheel', (ev) => { ev.preventDefault(); gxZoom(ev.deltaY < 0 ? 1 : -1); }, { passive: false });  // the wheel zooms; the canvas pans by dragging
   }
 
   function gxZoom(step) {
@@ -1740,7 +1758,7 @@
         <div class="right"><label class="chip chipsel">레이아웃: <select data-in="gxlayout" aria-label="레이아웃">${[['layered', '계층'], ['radial', '방사형']].map(([k, w]) => opt(k, w, g.layout)).join('')}</select></label><button class="btn sm ghost" data-act="gxreset">초기화</button>
         <span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="gxzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="gxzoom" data-z="0" title="화면에 맞춤">${Math.round((g.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="gxzoom" data-z="1" aria-label="확대">+</button></span></div></div>
       <div class="cb gxcanvas" id="gxcanvas">${gxSvg()}</div>
-      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">레코드 ${n} · 관계 ${g.edges.length} · 빈 곳을 끌어 이동 · 상자를 끌어 옮김 · Ctrl + 휠 확대</span></div></div>`
+      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">레코드 ${n} · 관계 ${g.edges.length} · 빈 곳을 끌어 이동 · 상자를 끌어 옮김 · 휠로 확대 · 축소</span></div></div>`
       : '<div class="card"><div class="cb"><div class="empty">시작할 레코드를 번호나 이름으로 찾으세요. 레코드 화면의 [그래프로 보기]에서도 시작할 수 있습니다.</div></div></div>';
     return `${head}<div class="grid gxgrid"><div class="hcol">${start}<div id="gxgrow">${gxGrowCard()}</div>${path}${gxViewCard()}</div>${canvas}<div class="hcol" id="gxside">${gxSide()}</div></div>`;
   }
@@ -2072,7 +2090,7 @@
       <button class="btn sm${md.focus ? ' primary' : ''}" data-act="mdfocus" aria-pressed="${!!md.focus}">연결만 보기</button><button class="btn sm${md.only ? ' primary' : ''}" data-act="mdonly" aria-pressed="${!!md.only}">문제만 보기</button>
       <span class="grow"></span><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-z="0" title="화면에 맞춤">${Math.round((md.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-z="1" aria-label="확대">+</button></span></div>
       <div class="ercanvas${md.focus ? ' focused' : ''}" id="ercanvas">${erSvg()}</div>
-      <div class="ernote muted">카드를 끌어 옮기고, 카드 테두리의 + 를 끌어 다른 카드에 놓으면 관계를 만듭니다. 관계선을 누르면 오른쪽에서 열립니다.</div>`;
+      <div class="ernote muted">카드를 끌어 옮기고, 카드 테두리의 + 를 끌어 다른 카드에 놓으면 관계를 만듭니다. 관계선을 누르면 오른쪽에서 열립니다. 휠로 확대 · 축소하고 빈 곳을 끌어 이동합니다.</div>`;
   }
 
   function mountEr(v = 'model') {
@@ -2149,12 +2167,22 @@
     };
     box.addEventListener('pointerup', end);
     box.addEventListener('pointercancel', end);
-    box.addEventListener('wheel', (ev) => {
-      if (!ev.ctrlKey && !ev.metaKey) return;  // a plain wheel scrolls
+    box.addEventListener('wheel', (ev) => {  // the wheel zooms, around where the pointer is; the canvas pans by dragging
       ev.preventDefault();
-      erZoom(ev.deltaY < 0 ? 1 : -1, 0.4, v);
+      erZoomAt(ev, ev.deltaY < 0 ? 1 : -1, v);
     }, { passive: false });
     if (md.zoom === undefined) erZoom(0, ER_VIEW[v].all ? 0.6 : 0.75, v);  // the first look fits the width, as far as names stay readable
+  }
+
+  function erZoomAt(ev, step, v) {  // zoom so that the point under the pointer stays under it
+    const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
+    if (!box) return;
+    const r = box.getBoundingClientRect(), z0 = md.zoom || 1;
+    const px = ev.clientX - r.left, py = ev.clientY - r.top;
+    const cx = (box.scrollLeft + px) / z0, cy = (box.scrollTop + py) / z0;
+    erZoom(step, 0.4, v);
+    const after = $(`#${ER_VIEW[v].box}`), z1 = md.zoom || 1;
+    if (after) { after.scrollLeft = cx * z1 - px; after.scrollTop = cy * z1 - py; }
   }
 
   function erZoom(step, floor = 0.4, v = 'model') {  // 0 fits the diagram to the canvas's width
@@ -2178,7 +2206,7 @@
     const ov = S.ov, o = ov.focus && S.mg.st ? mgObj(ov.focus) : null;
     const zoom = `<span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-v="onto" data-z="0" title="화면에 맞춤">${Math.round((ov.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-v="onto" data-z="1" aria-label="확대">+</button></span>`;
     const note = o ? '다른 카드를 누르면 그 카드로 옮겨 갑니다. 빈 곳을 누르거나 Esc를 누르면 전체 보기로 돌아갑니다.'
-      : '카드를 누르면 연결된 카드만 한 화면에 모아 보여 주고, 오른쪽에 정의가 나옵니다.';
+      : '카드를 누르면 연결된 카드만 한 화면에 모아 보여 주고, 오른쪽에 정의가 나옵니다. 휠로 확대 · 축소하고 빈 곳을 끌어 이동합니다.';
     return `<div class="card"><div class="ch">${o ? `${esc(o.label)}${josa(o.label, '과', '와')} 연결된 카드 <span class="chip sm b">${ov.near || 0}</span>` : '온톨로지 전체'}<div class="right">${o ? '<button class="btn sm" data-act="ontoall">전체 보기</button>' : ''}${zoom}</div></div>
       <div class="cb ercanvas${o ? ' focused' : ''}" id="ontocanvas">${S.mg.st ? erSvg('onto') : '<div class="empty"><span class="spin"></span>정의를 읽는 중입니다.</div>'}</div>
       <div class="cb ernote muted">${note} 🔑 키 · <span class="erk expr">= 계산 속성</span> · <span class="erk ext">다른 모듈이 더한 속성</span></div></div>`;
@@ -7005,7 +7033,6 @@ ${controls}${body}`;
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
     ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
     slim: () => {
-      if (S.tab === 'model') { S.md.wide = !S.md.wide; renderSide(); return; }
       S.slim = !S.slim;
       try { localStorage.setItem('xspace-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
       renderSide();

@@ -1125,3 +1125,19 @@ button.ihint span { font-weight:700; white-space:nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .erplus { transition:none; } .wscol.arrive .wscolh, .wscol.arrive .wscolq { animation:none; } }
 .ibody .scroll td, .ibody .scroll th { white-space:nowrap; }
+
+/* the order an ontology is built in, on the home: eight steps, each with where the space stands on it */
+.bsteps { margin:14px 0 0; }
+.bstrip { display:flex; align-items:stretch; gap:0; overflow-x:auto; padding:10px 14px 14px; }
+.bstep { display:flex; flex-direction:column; align-items:center; text-align:center; gap:4px; min-width:118px; flex:1; padding:8px 6px; border-radius:10px; color:var(--ink); text-decoration:none; position:relative; }
+.bstep:hover { background:var(--panel); }
+.bstep .bno { width:26px; height:26px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12.5px; color:var(--muted); background:#fff; }
+.bstep.done .bno { background:#12805c; border-color:#12805c; color:#fff; }
+.bstep.next .bno { border-color:var(--blue); color:var(--blue); }
+.bstep .bttl { font-weight:700; font-size:13px; }
+.bstep.done .bttl { color:var(--muted); font-weight:600; }
+.bstep.next .bttl { color:var(--blue); }
+.bstep .bdet { font-size:11.5px; color:var(--muted); line-height:1.35; max-width:150px; }
+.bstep .chip { position:absolute; top:4px; right:4px; }
+.bline { flex:0 0 18px; height:2px; background:var(--line); align-self:flex-start; margin-top:20px; }
+@media (max-width: 900px) { .bstrip { flex-wrap:wrap; } .bline { display:none; } .bstep { min-width:45%; } }
