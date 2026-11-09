@@ -746,3 +746,39 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .mdcode { max-height:520px; overflow:auto; font-size:11.5px; line-height:1.55; }
 .mdhi { display:inline-block; width:100%; background:rgba(37, 99, 235, .22); }
 @media (max-width: 1100px) { .gxgrid, .mdgrid { grid-template-columns:minmax(0, 1fr); } }
+
+/* draft review: a stepper, the proposals of a step with their evidence beside them, and what is left at the foot */
+.rvwrap { display:flex; flex-direction:column; gap:14px; margin-top:6px; }
+.rvhead { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.rvhead h2 { margin:0; font-size:19px; font-weight:800; }
+.rvhead .sub { color:var(--muted); font-size:12.5px; margin-top:3px; }
+.rvsteps { display:flex; align-items:center; gap:0; flex-wrap:wrap; row-gap:8px; }
+.rvstep { display:inline-flex; align-items:center; padding:6px 12px; border:1px solid var(--line); border-radius:999px; background:#fff; font:inherit; font-size:12.5px; font-weight:700; color:#475467; cursor:pointer; white-space:nowrap; }
+.rvstep:hover { border-color:var(--blue-line); }
+.rvstep.done { background:var(--ok-soft); border-color:#bfe5cf; color:#137a44; }
+.rvstep.warn { background:var(--warn-soft); border-color:#f2d9a8; color:#8a5a12; }
+.rvstep.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+.rvline { width:18px; height:1px; background:var(--line); flex:none; }
+.rvgrid { grid-template-columns:minmax(0, 1fr) 350px; align-items:start; }
+.rvgrid #ddetail { max-height:none; }
+.rvtable td { vertical-align:top; }
+.rvtable input.inline { width:92px; }
+.rvtable input.inline.mono { width:128px; }
+.rvtable select.inline { max-width:120px; }
+.rvtable th, .rvtable td { padding-left:6px; padding-right:6px; }
+.rvtable tr.sel td { background:#f1f6ff; }
+.rvtable tr.sel td:first-child { box-shadow:inset 3px 0 0 var(--blue); }
+.rvpick { cursor:pointer; }
+.rvok { color:#137a44; font-weight:700; font-size:12.5px; }
+.rvwarn { color:#a15c00; font-weight:700; font-size:12.5px; }
+.rvbad { color:var(--bad); font-size:11px; font-weight:700; }
+.rvsample th, .rvsample td { font-size:12px; white-space:nowrap; }
+.rvline2 { border-top:1px solid var(--line); }
+.rvfacts { display:grid; gap:8px; font-size:12.5px; }
+.rvbar { display:grid; grid-template-columns:96px 1fr 42px; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+.rvbar i { display:block; height:6px; border-radius:3px; background:#eef0f3; overflow:hidden; }
+.rvbar b { display:block; height:100%; background:var(--blue); }
+.rvbar .mono { text-align:right; color:var(--ink); }
+.rvfoot { position:sticky; bottom:0; z-index:5; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 16px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 -4px 16px rgba(19, 33, 60, .06); font-size:13px; }
+.rvfoot .muted { font-size:12.5px; }
+@media (max-width: 1100px) { .rvgrid { grid-template-columns:minmax(0, 1fr); } }

@@ -21,7 +21,7 @@ from xgen_space.compile.base import CompileError, compiler_for
 from xgen_space.conformance import normalize_rows
 from xgen_space.ir import Column, Query, Ref
 from xgen_space.library import OverlayLibrary
-from xgen_space.modules import Module, ModuleError, compose
+from xgen_space.modules import Module, ModuleError, Requirement, compose
 from xgen_space.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_text
 from xgen_space.repository import Repositories, clean_path, is_litter
 from xgen_space.roles import apply_role
@@ -89,6 +89,9 @@ RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", 
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
+SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
+PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
+                      r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
     (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
@@ -1465,7 +1468,57 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     def _draft_view(self) -> dict:
         d = self.pending[0]
-        return {"label": d.label, "origin": d.origin, "steps": d.steps(), **self._revised(d)}
+        return {"label": d.label, "origin": d.origin, "steps": d.steps(), "names": self._english(d), **self._revised(d)}
+
+    def _english(self, d) -> dict:
+        """An English name for each object the draft named by romanizing it: from the library's words and the
+        glossaries, or nothing when a part of its name is not a known word."""
+        from xgen_space.naming import english, vocabulary
+
+        ontos = [self.studio.onto]
+        names = [r["name"] for r in self.standards()["standards"]]
+        if names:
+            try:
+                ontos.append(self._standard(names)[1])
+            except ValueError:  # standards that do not compose together still leave the space's own words
+                pass
+        words = vocabulary(ontos, [*self._terms(), *(d.terms or [])])
+        out = {}
+        for o in d.objects:
+            got = english(o.label, words) or english(o.table, words)
+            out[o.name] = {"name": got[0], "parts": got[1]} if got else {"name": "", "parts": []}
+        return out
+
+    def draft_table(self, table: str) -> dict:
+        """One table of the draft as a person checks it: a few rows, how unique its key is, what each column holds,
+        and the columns that look personal enough to hide."""
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 테이블을 보여 주지 못했습니다. 초안을 먼저 생성해 주세요.")
+        d, b = self.pending[0], self.pending[1]
+        prof = next((t for t in d.tables if t.name == table), None)
+        if prof is None:
+            raise LookupError(table)
+        from xgen_space.compile.sql import qi
+
+        cols = [c.name for c in prof.columns]
+        pick = ", ".join(qi(c) for c in cols)
+        dialect = b.capabilities.dialect
+        sql = (f"SELECT TOP {SAMPLE_ROWS} {pick} FROM {qi(table)}" if dialect == "tsql" else
+               f"SELECT {pick} FROM {qi(table)} FETCH FIRST {SAMPLE_ROWS} ROWS ONLY" if dialect == "oracle" else
+               f"SELECT {pick} FROM {qi(table)} LIMIT {SAMPLE_ROWS}")
+        try:
+            rows = [list(r) for r in b.fetch(sql)]
+        except Exception:  # a source that will not show rows still has its profile
+            rows = []
+        o = next((x for x in d.objects if x.table == table), None)
+        key_col = next((p.column for p in o.properties if p.name == o.key), "") if o else ""
+        kp = next((c for c in prof.columns if c.name == key_col), None)
+        return plain({"table": table, "rows": prof.rows, "columns": cols, "sample": rows,
+                      "key": {"column": key_col, "distinct": kp.distinct if kp else 0, "nulls": kp.nulls if kp else 0,
+                              "why": o.key_why if o else ""},
+                      "profile": [{"name": c.name, "type": c.type, "distinct": c.distinct, "nulls": c.nulls,
+                                   "values": len(c.values)} for c in prof.columns],
+                      "personal": [c for c in cols if PERSONAL.search(c)]})
 
     @staticmethod
     def _revised(d) -> dict:
@@ -1502,7 +1555,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         return d.revise(drop=[str(x) for x in e.get("drop") or []],
                         labels={k: v[:60] for k, v in pairs("labels").items() if v.strip()},
                         keys=pairs("keys"), types=pairs("types"), values=values, cardinality=pairs("cardinality"),
-                        add_links=[x for x in e.get("add_links") or [] if isinstance(x, dict)])
+                        add_links=[x for x in e.get("add_links") or [] if isinstance(x, dict)],
+                        names={k: v.strip() for k, v in pairs("names").items() if v.strip()})
 
     # ---- a decision table from past outcomes, and bindings onto a standard ----------------------------------------
 
@@ -1559,15 +1613,16 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 연결을 제안하지 못했습니다. 초안을 먼저 생성해 주세요.")
-        _, onto = self._standard(standard)
+        mods, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
         if tables:
             s = retarget(s, d, onto, {str(k): str(v) for k, v in tables.items() if v}, self._terms())
+        owner = {o: m.label or m.name for m in mods for o in (m.body.get("objects") or {})}
         objs = []
         for m in s.objects:
             o = onto.objects[m.object]
-            objs.append({**m.__dict__, "label": o.label or m.object,
+            objs.append({**m.__dict__, "label": o.label or m.object, "module_label": owner.get(m.object, ""),
                          "columns": [{**c.__dict__, "label": (find_prop(onto, m.object, c.property).label
                                                               or c.property)} for c in m.columns],
                          "missing": [{"property": p, "label": find_prop(onto, m.object, p).label or p}
@@ -1578,7 +1633,95 @@ class StudioSession(SpaceMixin, PagesMixin):
                       "unbound_objects": [{"name": t, "label": onto.objects[t].label or t} for t in s.unbound_objects],
                       "tables": tables, "standard": [str(x) for x in standard]})
 
-    def apply_mapping(self, standard: list, edits: dict | None = None, mapping: dict | None = None) -> dict:
+    def apply_review(self, standard: list, edits: dict | None = None, choices: dict | None = None,
+                     mapping: dict | None = None) -> dict:
+        """The draft as its review left it, table by table: a table a person bound to the standard becomes a binding
+        of the standard's object, the others new objects beside the standard, joined to it where the draft found the
+        tables joined."""
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 적용하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not any(c == "standard" for c in (choices or {}).values()):
+            return self.apply_draft(edits)
+        objects, extra = self._review_plan(standard, edits, choices)
+        return self.apply_mapping(standard, edits, {**(mapping or {}), "objects": objects}, extra=extra)
+
+    def _review_plan(self, standard: list, edits: dict | None, choices: dict | None) -> tuple[dict, list[Module]]:
+        """Which standard object each bound table binds, and the modules of the tables kept as new objects."""
+        from xgen_space.mapping import suggest
+
+        bound = {str(t) for t, c in (choices or {}).items() if c == "standard"}
+        _, onto = self._standard(standard)
+        d = self._edit(self.pending[0], edits)
+        s = suggest(d, onto, [str(x) for x in standard], self._terms())
+        to_std = {m.table: m for m in s.objects if m.table in bound}
+        objects = {m.object: (m.table if m.table in to_std else None) for m in s.objects}
+        kept = [o for o in d.objects if o.table not in to_std]
+        return objects, (self._beside(d, kept, to_std, onto, [str(x) for x in standard]) if kept else [])
+
+    def review_preview(self, standard: list, edits: dict | None = None, choices: dict | None = None) -> dict:
+        """What applying the review would plug in, before it does: the module files and the checks they fail."""
+        import yaml
+
+        from xgen_space.mapping import binding, suggest
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 미리 보지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not any(c == "standard" for c in (choices or {}).values()):
+            return self.preview_draft(edits)
+        try:
+            objects, extra = self._review_plan(standard, edits, choices)
+            mods, onto = self._standard(standard)
+            d = self._edit(self.pending[0], edits)
+            m = binding(suggest(d, onto, [str(x) for x in standard], self._terms()), onto, name=f"{d.name}-standard",
+                        label=f"{d.label} 표준 연결", edits={"objects": objects}, draft=d, terms=self._terms(), base=mods)
+        except ValueError as e:
+            return {"ok": False, "issues": [str(e)]}
+        comp = compose([*mods, m, *extra], **self.studio._compose_kw)
+        return plain({"ok": True, "issues": list(comp.issues),
+                      "modules": [{"name": x.name, "kind": x.kind, "label": x.label,
+                                   "yaml": yaml.safe_dump(x.to_dict(), allow_unicode=True, sort_keys=False)}
+                                  for x in [m, *extra]]})
+
+    @staticmethod
+    def _beside(d, kept, to_std: dict, onto, standard: list[str]) -> list[Module]:
+        """The draft's other tables as modules over the standard: their objects, and the relations the draft found
+        between them and the tables bound to the standard, now on the standard's objects."""
+        clash = sorted(o.name for o in kept if o.name in onto.objects)
+        if clash:
+            raise ValueError(f"새 객체 {', '.join(clash)}의 이름이 표준 객체와 같아 적용하지 못했습니다. API 이름을 바꾸거나 "
+                             "표준에 연결해 주세요.")
+        names = {o.name for o in kept}
+        by_name = {o.name: o for o in d.objects}
+        rest = d.revise(drop=[f"object:{o.name}" for o in d.objects if o.name not in names])
+        mods = rest.modules()
+        dom, bind = mods[0], mods[1]
+        dom.requires = [*dom.requires, *[Requirement(n) for n in standard]]
+        for lk in d.links:
+            out_, in_ = lk.source in names, lk.target in names
+            if out_ == in_ or lk.via or not lk.on:
+                continue
+            std = to_std.get(by_name[lk.target if out_ else lk.source].table)
+            if std is None:
+                continue
+            so = onto.objects[std.object]
+            if out_:  # a new object refers to a bound one: by the standard's key, if it reads the same column
+                key_col = next((c.column for c in std.columns if c.property == so.key), "")
+                target_key = next((p.column for p in by_name[lk.target].properties if p.name == lk.on[1]), "")
+                if not key_col or key_col != target_key:
+                    continue
+                spec, on = {"from": lk.source, "to": std.object}, {lk.on[0]: so.key}
+            else:  # a bound object refers to a new one: on the standard property its column is bound to
+                prop = next((c.property for c in std.columns if c.column == lk.column), None)
+                if prop is None:
+                    continue
+                spec, on = {"from": std.object, "to": lk.target}, {prop: lk.on[1]}
+            name = lk.name if lk.name not in onto.links else f"{lk.name}Link"
+            dom.body["links"][name] = {**spec, "cardinality": lk.cardinality, "label": lk.label}
+            bind.extend.setdefault("links", {})[name] = {"on": on}
+        return mods
+
+    def apply_mapping(self, standard: list, edits: dict | None = None, mapping: dict | None = None,
+                      extra: list[Module] | None = None) -> dict:
         from xgen_space.backends.rdf import RdflibBackend
         from xgen_space.draft import LABELS
         from xgen_space.mapping import binding, suggest
@@ -1591,12 +1734,13 @@ class StudioSession(SpaceMixin, PagesMixin):
         m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, draft=d,
                     terms=self._terms(), base=mods)
         m.terms, m.messages = list(d.terms), list(d.messages)  # the system's words go with its binding
-        comp = compose([*mods, m], **self.studio._compose_kw)
+        extra = list(extra or [])
+        comp = compose([*mods, m, *extra], **self.studio._compose_kw)
         if comp.issues:
             raise ValueError("정의 검사에서 오류가 발견되어 연결하지 못했습니다. " + "; ".join(comp.issues[:5]))
 
         def build() -> Studio:
-            st = Studio.from_modules([*mods, m], library=OverlayLibrary(self.studio.library, [m]),
+            st = Studio.from_modules([*mods, m, *extra], library=OverlayLibrary(self.studio.library, [m, *extra]),
                                      use_zen=self.studio.use_zen, **self.studio._compose_kw)
             st.add_backend("source", self.pending[1], source=True)
             st.add_backend("graph", RdflibBackend())
@@ -1640,9 +1784,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
                                                               ("actions", "Action")) if m.remove.get(k)]
+        news = len(extra[0].body.get("objects") or {}) if extra else 0
         self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
                             f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
-                            f"테이블에 없는 속성 {removed}개 제외"
+                            + (f"새 객체 {news}개, " if news else "")
+                            + f"테이블에 없는 속성 {removed}개 제외"
                             + (f"(이 속성을 사용하는 {', '.join(uses)} 제외)" if uses else "")
                             + (f", 예시 데이터 기준 표준 검증 질문 {renewed}개는 업로드 데이터의 답으로 다시 등록" if renewed else "")
                             + (f", 업로드 데이터로 답할 수 없는 표준 검증 질문 {len(wrong) - renewed}개 제외"

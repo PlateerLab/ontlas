@@ -644,6 +644,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.suggest_mapping(a.get("standard") or [], a.get("edits"), a.get("tables"))
             if route == "draft/map/apply":
                 return s.apply_mapping(a.get("standard") or [], a.get("edits"), a.get("mapping"))
+            if route == "draft/table":
+                return s.draft_table(str(a.get("table", "")))
+            if route == "draft/review/preview":
+                return s.review_preview(a.get("standard") or [], a.get("edits"), a.get("choices"))
+            if route == "draft/review/apply":
+                return s.apply_review(a.get("standard") or [], a.get("edits"), a.get("choices"), a.get("mapping"))
             if route == "connect/gateway":
                 return s.connect_gateway(a.get("url", ""), a.get("connection", ""), a.get("token", ""), a.get("dialect", "postgres"),
                                          str(a.get("label", "")), a.get("rules"))

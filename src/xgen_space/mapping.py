@@ -93,6 +93,8 @@ class ObjectMatch:
     columns: list[ColumnMatch] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)  # standard properties no column carries
     extra: list[str] = field(default_factory=list)  # columns the standard has no property for
+    name_score: float = 0.0  # how alike the names are, with the glossary's words
+    cover: float = 0.0  # how much of the standard the columns carry
 
 
 @dataclass
@@ -237,16 +239,17 @@ def suggest(draft, onto, standard: list[str], terms: list[dict] | None = None) -
             name, why = similarity(_names_of(onto, t, words), [po.table, po.label, po.name])
             cols, missing, extra, cover = _match_columns(onto, t, po, words)
             score = 0.4 * name + 0.6 * cover + (MASTER_BONUS if MASTER.search(f"{po.label} {po.table}") else 0)
-            scored.append((score, t, po, why, cols, missing, extra))
+            scored.append((score, t, po, why, cols, missing, extra, name, cover))
     scored.sort(key=lambda x: -x[0])
     taken_t, taken_o, matches = set(), set(), []
-    for score, t, po, why, cols, missing, extra in scored:
+    for score, t, po, why, cols, missing, extra, name, cover in scored:
         if score < OBJECT_MIN or t in taken_t or po.table in taken_o:
             continue
         taken_t.add(t)
         taken_o.add(po.table)
         reason = "; ".join(x for x in (why, f"컬럼 {len(cols)}개 연결") if x)
-        matches.append(ObjectMatch(t, po.table, round(score, 3), reason, cols, missing, extra))
+        matches.append(ObjectMatch(t, po.table, round(score, 3), reason, cols, missing, extra, round(name, 3),
+                                   round(cover, 3)))
     links = _links(draft, onto, matches)
     unbound = [t for t in _candidates(onto) if t not in taken_t]
     return Suggestion(list(standard), matches, links, [o.table for o in draft.objects if o.table not in taken_o],
