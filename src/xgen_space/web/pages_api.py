@@ -12,10 +12,13 @@ import re
 from typing import Any
 
 from xgen_space.check import all_props, column_of, find_prop
-from xgen_space.ir import Agg, Cmp, Column, Contains, Edge, Or, Order, Query, Ref
+from xgen_space.ir import Agg, And, Cmp, Column, Contains, Edge, Or, Order, Query, Ref
 from xgen_space.web.space_api import plain
 
 LINK_ROWS = 8  # linked records shown under each relation of a record page
+GRAPH_ROWS = 25  # records one relation adds to the record graph at a time; past it the rest wait behind a count
+PATH_HOPS = 5  # how far apart two records may be for a path between them to be looked for
+PATH_TRIES = 12  # chains of relations tried, shortest first
 LINK_COUNT = 50  # past this a relation says "50+" instead of counting on
 LIST_ROWS = 100  # records a list returns at a time
 KEY_MENTIONS = 4  # passages that name a record's own key
@@ -100,7 +103,7 @@ class PagesMixin:
                           "after": dict(tr.after), "guarded": bool(tr.guard)})
         return {"property": sm.property, "now": now, "states": list(sm.states), "initial": sm.initial, "next": moves}
 
-    def _record_links(self, type_name: str, key: str) -> list[dict]:
+    def _record_links(self, type_name: str, key: str, rows_max: int = LINK_ROWS) -> list[dict]:
         """Each relation the record takes part in, either way round, with the first records on the other side."""
         o = self.studio.onto
         mine = set(_lineage(o, type_name))
@@ -129,7 +132,7 @@ class PagesMixin:
                 out.append({"link": name, "label": (lk.label or lk.name) if forward else (ot.label or other),
                             "forward": forward, "type": other, "type_label": ot.label or other,
                             "cardinality": lk.cardinality, "count": min(len(rows), LINK_COUNT), "more": len(rows) > LINK_COUNT,
-                            "items": [{"key": str(r[0]), "title": r[1] if len(r) > 1 else None} for r in rows[:LINK_ROWS]]})
+                            "items": [{"key": str(r[0]), "title": r[1] if len(r) > 1 else None} for r in rows[:rows_max]]})
         return out
 
     def _record_decisions(self, type_name: str, key: str) -> list[dict]:
@@ -502,3 +505,76 @@ class PagesMixin:
                 words = {w for c in cells for w in re.findall(r'"([^"]*)"', c)}
                 out += [(i, w) for w in sorted(words) if w != values.get(i)][:4]
         return out
+
+    # ---- records as a graph -------------------------------------------------------------------------------------------
+
+    def record_links(self, type_name: str, key: str) -> dict:
+        """The relations of one record with up to GRAPH_ROWS records each, for the record graph to grow from it."""
+        o = self.studio.onto
+        t = o.obj(type_name)
+        tp = _title(o, type_name)
+        row = self.studio.fetch(type_name, str(key))
+        if row is None:
+            raise LookupError(f"{t.label or type_name} {key}")
+        return plain({"type": type_name, "label": t.label or type_name, "key": str(key),
+                      "title": row.get(tp) if tp and tp != t.key else None,
+                      "links": self._record_links(type_name, str(key), GRAPH_ROWS)})
+
+    def record_path(self, from_type: str, from_key: str, to_type: str, to_key: str) -> dict:
+        """The records that join two records, along the shortest chain of relations that joins them in the data. Chains
+        are tried shortest first; each is one ontology query, so it runs on whatever store the source is."""
+        st, o = self.studio, self.studio.onto
+        for name in (from_type, to_type):
+            o.obj(name)  # an unknown type is said before any path is tried
+        ways: dict[str, list[tuple[str, bool, str]]] = {}
+        for lk in o.links.values():
+            ways.setdefault(lk.source, []).append((lk.name, True, lk.target))
+            ways.setdefault(lk.target, []).append((lk.name, False, lk.source))
+        chains, frontier = [], [(from_type, [])]
+        for _ in range(PATH_HOPS):
+            grown = []
+            for here, path in frontier:
+                seen = {from_type, *(s[3] for s in path)}
+                for link, forward, there in ways.get(here, []):
+                    if there in seen and not (there == to_type and path):
+                        continue
+                    step = path + [(link, forward, here, there)]
+                    if there == to_type:
+                        chains.append(step)
+                    elif len(grown) < 4000:
+                        grown.append((there, step))
+            frontier = grown
+            if len(chains) >= PATH_TRIES:
+                break
+        for chain in chains[:PATH_TRIES]:
+            nodes = {f"x{i + 1}": s[3] for i, s in enumerate(chain)}
+            nodes = {"x0": from_type, **nodes}
+            edges = [Edge(f"x{i}", s[0], f"x{i + 1}") if s[1] else Edge(f"x{i + 1}", s[0], f"x{i}") for i, s in enumerate(chain)]
+            last = f"x{len(chain)}"
+            where = And([Cmp(Ref("x0", o.obj(from_type).key), "eq", str(from_key)), Cmp(Ref(last, o.obj(to_type).key), "eq", str(to_key))])
+            cols = [Column(Ref(a, o.obj(tn).key), a) for a, tn in nodes.items()]
+            try:
+                rows = st.run(Query(nodes=nodes, edges=edges, where=where, columns=cols, limit=1)).rows
+            except Exception:  # a chain one store cannot answer is passed over for the next
+                continue
+            if not rows:
+                continue
+            keys = [str(v) for v in rows[0]]
+            types = list(nodes.values())
+            out_nodes = []
+            for tn, k in zip(types, keys):
+                tp = _title(o, tn)
+                rec = st.fetch(tn, k) if tp else None
+                out_nodes.append({"type": tn, "key": k, "label": o.obj(tn).label or tn,
+                                  "title": (rec or {}).get(tp) if tp and tp != o.obj(tn).key else None})
+            out_edges = []
+            for i, s in enumerate(chain):
+                lk = o.links[s[0]]
+                a, b = (i, i + 1) if s[1] else (i + 1, i)
+                out_edges.append({"source": f"{types[a]}:{keys[a]}", "target": f"{types[b]}:{keys[b]}", "link": lk.name,
+                                  "label": lk.label or lk.name})
+            return plain({"ok": True, "hops": len(chain), "nodes": out_nodes, "edges": out_edges})
+        return {"ok": False, "error": f"{PATH_HOPS}단계 안에서 두 레코드를 잇는 관계를 찾지 못했습니다. 다른 레코드로 다시 찾아 주세요."}
+
+    def element_readers(self, element: str) -> dict:
+        return {"element": element, "label": self._element_label(element), "readers": self._readers(element)}

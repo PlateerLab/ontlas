@@ -4,6 +4,7 @@
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
     inbox: '<path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2.5h4l1-2.5h5"/>',
     records: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    model: '<rect x="3" y="4" width="6" height="16" rx="1.5"/><circle cx="14" cy="8" r="2.2"/><circle cx="19" cy="16" r="2.2"/><path d="M15.6 9.7l2.2 4.4"/>',
     explorer: '<path d="M3 6.5a1.5 1.5 0 011.5-1.5H9l2 2h8.5A1.5 1.5 0 0121 8.5v9a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 17.5z"/><path d="M7 11h6M7 14.5h9"/>',
     map: '<path d="M9 4L3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/>',
     docs: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><circle cx="10" cy="13" r="1.4"/><circle cx="15" cy="16" r="1.4"/><path d="M11.2 13.8l2.6 1.4"/>',
@@ -44,21 +45,21 @@
     catalog2: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
-  const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['explorer', '데이터 탐색기'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
+  const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['graph', '그래프 탐색'], ['model', '작업 공간'], ['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['explorer', '데이터 탐색기'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '통합 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: what a person comes to do (use), then what builds the definition (build), then what keeps it running (run).
   // A group's screens are tabs on its page.
-  const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '검색 · 질문', ['search', 'query']], ['use', '레코드', ['records', 'record']],
+  const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '검색 · 질문', ['search', 'query']], ['use', '레코드', ['records', 'record', 'graph']],
     ['use', '판정 · 처리', ['decide', 'rules']], ['build', '데이터 가져오기', ['catalog', 'db', 'convert', 'sources', 'data']],
-    ['build', '모델링', ['onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles']], ['build', '라이브러리 · 변경', ['library', 'changes']],
+    ['build', '모델링', ['model', 'onto', 'docs', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles']], ['build', '라이브러리 · 변경', ['library', 'changes']],
     ['run', '파이프라인 관제', ['monitor', 'flow']], ['run', '데이터 지도', ['explorer', 'map']], ['run', '저장소 · 연동', ['adapters', 'vectors', 'connect']],
     ['run', '검증', ['check', 'bind']], ['run', '사용 안내', ['guide']]];
   const SECTION = [['use', '업무'], ['build', '구축'], ['run', '운영']];
   const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '탐색기', map: '자산 그래프' };
+  const TAB_WORD = { model: '작업 공간', graph: '그래프 탐색', records: '레코드 탐색', monitor: '현황', catalog: '카탈로그', convert: '결과', library: '라이브러리', adapters: '구성', check: '검증 질문', explorer: '탐색기', map: '자산 그래프' };
   const TAB_SETS = [['온톨로지', [['onto', '도메인'], ['docs', '문서']]], ['정의 관리', [['objects', '객체'], ['props', '속성'], ['links', '관계'], ['states', '상태'], ['mgrules', '규칙'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
@@ -350,6 +351,8 @@
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
+    gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {} },
+    md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
   S.cat = NEW_CAT();
@@ -551,7 +554,7 @@
     if (!S.st) return;
     renderTop();
     renderSide();
-    const views = { changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
+    const views = { graph: viewGraph, model: viewModel, changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, objects: viewObjects, props: viewProps, links: viewLinks, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
     const main = $('#main');
     main.innerHTML = subTabs() + (views[S.tab] || viewHome)();
@@ -563,6 +566,8 @@
     if ((S.tab === 'home' || S.tab === 'inbox') && !S.home.box && !S.home.busy) loadInbox();
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
+    if (S.tab === 'graph' && $('#gxgraph')) mountGraph($('#gxgraph'), gxData(), { key: 'records', pos: S.gx.pos, sel: () => S.gx.sel, pick: (id) => gxPick(id), clear: () => {} });
+    if (S.tab === 'model' && $('#mdgraph')) mountGraph($('#mdgraph'), S.st.graph, { key: 'model', pos: S.pos, sel: () => S.md.sel, pick: (id) => modelPick(id), clear: () => {} });
     if (S.tab === 'record' && !S.rec.res && !S.rec.busy && !S.rec.err) loadRecord();
     if (S.tab === 'guide') mountGuide();
     if (S.tab === 'docs') mountDocs();
@@ -768,7 +773,7 @@
   function viewRecords() {
     const r = S.rl, res = r.res;
     const types = recordTypes();
-    const head = pageHead('레코드 탐색', '타입을 고르고 번호나 이름으로 찾아 레코드 한 건을 엽니다');
+    const head = pageHead('레코드 탐색', '타입을 고르고 번호나 이름으로 찾아 레코드 한 건을 엽니다', '<a class="btn" href="#graph">그래프 탐색</a>');
     const form = `<div class="card"><div class="cb"><div class="srform"><select data-in="rltype" aria-label="타입" style="width:auto;flex:none;min-width:180px">${types.map((n) => `<option value="${esc(n.id)}"${n.id === r.type ? ' selected' : ''}>${esc(n.label)} · ${esc(n.id)}</option>`).join('')}</select>
       <input type="search" id="rlq" data-in="rlq" value="${esc(r.q)}" placeholder="번호나 이름으로 찾기" aria-label="찾을 말"><button class="btn primary" data-act="rlgo">찾기</button></div>
       ${RECENT.length ? `<div class="chips" style="margin-top:10px"><span class="muted" style="font-size:12px">최근 본 레코드</span>${RECENT.slice(0, 6).map(recChip).join('')}</div>` : ''}</div></div>`;
@@ -842,7 +847,7 @@
     const empty = d.links.filter((l) => !l.count && !l.error);
     const group = (l) => `<div class="lgrp"><div class="lgh"><b>${esc(l.type_label)}</b><span class="muted">${esc(l.label)} · ${l.count}${l.more ? '+' : ''}건</span></div>
       ${l.error ? `<div class="hint warn">${esc(l.error)}</div>` : `<div class="chips">${l.items.map((i) => `<button class="chip" data-act="rec" data-type="${esc(l.type)}" data-key="${esc(i.key)}">${esc(i.key)}${i.title ? ` · ${esc(i.title)}` : ''}</button>`).join('')}${l.count > l.items.length ? `<span class="muted" style="font-size:12px">외 ${l.count - l.items.length}${l.more ? '+' : ''}건</span>` : ''}</div>`}</div>`;
-    return `<div class="card"><div class="ch">연결된 레코드</div><div class="cb">${full.map(group).join('') || '<div class="empty">연결된 레코드가 없습니다.</div>'}
+    return `<div class="card"><div class="ch">연결된 레코드<div class="right"><button class="btn sm ghost" data-act="recgraph">그래프로 보기</button></div></div><div class="cb">${full.map(group).join('') || '<div class="empty">연결된 레코드가 없습니다.</div>'}
       ${empty.length ? `<div class="muted" style="font-size:12px;margin-top:8px">연결 없음 · ${empty.map((l) => esc(l.type_label)).join(', ')}</div>` : ''}</div></div>`;
   }
 
@@ -1090,6 +1095,221 @@
     if (!m.picked.length) return;
     try { m.sug = await api('draft/map', { standard: m.picked, edits: { objects: {}, columns: {} } }); } catch (e) { m.sug = { ok: false, error: e.message }; }
     if (S.tab === 'data') render();
+  }
+
+  // ---- records as a graph: start from one record, grow by relation, find what joins two -----------------------------
+
+  const gxId = (type, key) => `${type}:${key}`;
+
+  function gxAdd(n) {
+    const id = gxId(n.type, n.key);
+    const was = S.gx.nodes[id];
+    S.gx.nodes[id] = { type: n.type, key: String(n.key), label: n.label || (was && was.label) || n.type, title: n.title || (was && was.title) || '' };
+    return id;
+  }
+
+  function gxEdge(source, target, link, label) {
+    if (!S.gx.edges.some((e) => e.source === source && e.target === target && e.link === link)) S.gx.edges.push({ source, target, link, label });
+  }
+
+  function gxData() {
+    const nodes = Object.entries(S.gx.nodes).map(([id, n]) => ({ id, module: n.type, label: `${n.label} ${n.key}${n.title ? ` · ${n.title}` : ''}` }));
+    const types = [...new Set(nodes.map((n) => n.module))];
+    return { nodes, edges: S.gx.edges.map((e) => ({ source: e.source, target: e.target, label: e.label })),
+      clusters: types.map((t) => ({ id: t, label: (S.st.graph.nodes.find((x) => x.id === t) || {}).label || t })) };
+  }
+
+  async function gxLinks(id) {
+    const n = S.gx.nodes[id];
+    if (!n || S.gx.links[id]) return;
+    try {
+      const r = await api(`record/links?type=${encodeURIComponent(n.type)}&key=${encodeURIComponent(n.key)}`);
+      S.gx.links[id] = r;
+      gxAdd({ type: r.type, key: r.key, label: r.label, title: r.title || '' });
+    } catch (e) { S.gx.links[id] = { links: [], error: e.message }; }
+  }
+
+  async function gxStart(type, key) {
+    Object.assign(S.gx, { nodes: {}, edges: [], links: {}, sel: '', route: [], err: '' });
+    const id = gxAdd({ type, key, label: (S.st.graph.nodes.find((x) => x.id === type) || {}).label || type });
+    S.gx.seed = { type, key: String(key) };
+    S.gx.sel = id;
+    await gxLinks(id);
+    if (S.gx.links[id] && S.gx.links[id].error) { S.gx.err = S.gx.links[id].error; S.gx.nodes = {}; S.gx.sel = ''; }
+    if (S.tab === 'graph') render();
+  }
+
+  function gxGrow(id, link, forward) {
+    const r = S.gx.links[id];
+    if (!r) return;
+    const groups = r.links.filter((l) => (link === undefined || (l.link === link && l.forward === forward)) && l.count);
+    for (const l of groups) {
+      for (const it of l.items) {
+        const other = gxAdd({ type: l.type, key: it.key, label: l.type_label, title: it.title || '' });
+        if (l.forward) gxEdge(id, other, l.link, l.label); else gxEdge(other, id, l.link, l.label);
+      }
+    }
+    render();
+  }
+
+  async function gxPick(id) {
+    S.gx.sel = id;
+    drawGraph();
+    await gxLinks(id);
+    const left = $('#gxgrow'), side = $('#gxside');
+    if (left) left.innerHTML = gxGrowCard();
+    if (side) side.innerHTML = gxSide();
+  }
+
+  async function gxPath() {
+    const g = S.gx, from = g.nodes[g.sel];
+    if (!from) { toast('경로의 출발 레코드를 그래프에서 먼저 고르세요.', true); return; }
+    if (!g.to.type || !g.to.key.trim()) { toast('도착 레코드의 타입과 번호를 입력해 주세요.', true); return; }
+    g.busy = true; render();
+    try {
+      const r = await api(`record/path?from_type=${encodeURIComponent(from.type)}&from_key=${encodeURIComponent(from.key)}&to_type=${encodeURIComponent(g.to.type)}&to_key=${encodeURIComponent(g.to.key.trim())}`);
+      if (!r.ok) { g.route = []; toast(r.error, true); } else {
+        const ids = r.nodes.map((n) => gxAdd(n));
+        r.edges.forEach((e) => gxEdge(e.source, e.target, e.link, e.label));
+        g.route = r.nodes.map((n, i) => ({ id: ids[i], ...n }));
+        g.routeEdges = r.edges;
+        g.sel = ids[ids.length - 1];
+      }
+    } catch (e) { fail(e); }
+    g.busy = false; render();
+    if (g.sel && !g.links[g.sel]) { await gxLinks(g.sel); if (S.tab === 'graph') render(); }
+  }
+
+  function gxGrowCard() {
+    const g = S.gx, r = g.links[g.sel], n = g.nodes[g.sel];
+    if (!n) return '<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty">그래프에서 레코드를 고르면 그 레코드의 관계가 여기에 나옵니다.</div></div></div>';
+    if (!r) return `<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty"><span class="spin"></span>${esc(n.label)} ${esc(n.key)}의 관계를 읽는 중입니다.</div></div></div>`;
+    const rows = r.links.map((l) => `<div class="gxrow"><span><b>${esc(l.type_label)}</b> <span class="muted">${esc(l.label)}</span></span><span class="chip sm">${l.count}${l.more ? '+' : ''}</span>
+      <button class="btn sm" data-act="gxgrow" data-link="${esc(l.link)}" data-fw="${l.forward ? 1 : 0}"${l.count ? '' : ' disabled'}>펼치기</button></div>`).join('');
+    return `<div class="card"><div class="ch">관계로 펼치기<div class="right"><button class="btn sm" data-act="gxgrowall">모두</button></div></div><div class="cb">
+      <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(n.label)} ${esc(n.key)}에서 한 번에 관계마다 25건까지 펼칩니다.</div>${rows || '<div class="empty">관계가 없습니다.</div>'}</div></div>`;
+  }
+
+  function gxSide() {
+    const g = S.gx, n = g.nodes[g.sel];
+    const route = g.route && g.route.length ? `<div class="card"><div class="ch">찾은 경로 · ${g.route.length - 1}단계</div><div class="cb">${g.route.map((x, i) => `${i ? `<div class="muted gxhop">↓ ${esc((g.routeEdges[i - 1] || {}).label || '')}</div>` : ''}<button class="hrow" data-act="gxsel" data-id="${esc(x.id)}"><span class="rtag">${esc(x.label)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span></button>`).join('')}</div></div>` : '';
+    const card = n ? `<div class="card"><div class="ch"><span class="rtag">${esc(n.label)}</span>${esc(n.key)}</div><div class="cb">
+      ${n.title ? `<div style="font-weight:700;margin-bottom:8px">${esc(n.title)}</div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" data-act="rec" data-type="${esc(n.type)}" data-key="${esc(n.key)}">레코드 열기</button><button class="btn sm" data-act="gxroot" data-id="${esc(g.sel)}">여기서 다시 시작</button></div></div></div>` : '';
+    return card + route;
+  }
+
+  function viewGraph() {
+    const g = S.gx;
+    const types = recordTypes();
+    if (!g.seed.type) {
+      const r = RECENT[0];
+      if (r) { g.seed = { type: r.type, key: r.key }; gxStart(r.type, r.key); } else g.seed = { type: (types[0] || {}).id || '', key: '' };
+    }
+    if (!g.to.type) g.to.type = (types[types.length - 1] || {}).id || '';
+    const head = pageHead('그래프 탐색', '레코드 하나에서 시작해 관계를 따라 펼치고, 두 레코드를 잇는 경로를 찾습니다');
+    const typeSel = (dataIn, cur) => `<select data-in="${dataIn}" aria-label="타입">${types.map((n) => `<option value="${esc(n.id)}"${n.id === cur ? ' selected' : ''}>${esc(n.label)}</option>`).join('')}</select>`;
+    const start = `<div class="card"><div class="ch">시작 레코드</div><div class="cb"><div class="gxform">${typeSel('gxtype', g.seed.type)}<input type="text" id="gxkey" data-in="gxkey" value="${esc(g.seed.key)}" placeholder="번호" aria-label="번호"></div>
+      <button class="btn sm primary" data-act="gxstart" style="margin-top:8px">여기서 시작</button>${g.err ? `<div class="hint warn" style="margin-top:8px">${esc(g.err)}</div>` : ''}</div></div>`;
+    const path = `<div class="card"><div class="ch">경로 찾기</div><div class="cb"><div class="muted" style="font-size:12px;margin-bottom:6px">출발 · ${g.nodes[g.sel] ? `${esc(g.nodes[g.sel].label)} ${esc(g.nodes[g.sel].key)}` : '그래프에서 고른 레코드'}</div>
+      <div class="gxform">${typeSel('gxtotype', g.to.type)}<input type="text" data-in="gxtokey" value="${esc(g.to.key)}" placeholder="도착 번호" aria-label="도착 번호"></div>
+      <button class="btn sm" data-act="gxpath" style="margin-top:8px"${g.busy ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지, 짧은 경로부터 원천 DB에서 찾습니다.</div></div></div>`;
+    const n = Object.keys(g.nodes).length;
+    const canvas = n ? `<div class="card"><div class="ch">레코드 그래프<div class="right"><span class="muted" style="font-size:12px">레코드 ${n} · 관계 ${g.edges.length}</span></div></div><div class="cb" style="padding:0"><div class="kg" id="gxgraph"></div></div></div>`
+      : '<div class="card"><div class="cb"><div class="empty">시작할 레코드의 타입과 번호를 입력하세요. 레코드 화면의 [그래프로 보기]에서도 시작할 수 있습니다.</div></div></div>';
+    return `${head}<div class="grid gxgrid"><div class="hcol">${start}<div id="gxgrow">${gxGrowCard()}</div>${path}</div>${canvas}<div class="hcol" id="gxside">${gxSide()}</div></div>`;
+  }
+
+  // ---- one workspace for the definition: modules and objects, the schema graph, and the object's form or file --------
+
+  function modelTree() {
+    const m = S.mg.st, md = S.md;
+    const q = md.q.trim().toLowerCase();
+    const groups = {};
+    m.objects.forEach((o) => {
+      if (q && !`${o.name} ${o.label} ${o.table}`.toLowerCase().includes(q)) return;
+      const k = o.module_label || o.module || '정의';
+      (groups[k] = groups[k] || []).push(o);
+    });
+    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${!o.links && !o.concept ? '<span class="chip sm warn">관계 없음</span>' : ''}${o.pending ? '<span class="chip sm b">변경</span>' : ''}</button>`).join('')}</div>`).join('') || '<div class="empty">찾은 객체가 없습니다.</div>';
+  }
+
+  function modelFile(o) {
+    const f = S.md.file;
+    if (!f || f.module !== o.module) {
+      if (!S.md.fileBusy) {
+        S.md.fileBusy = true;
+        api(`module?name=${encodeURIComponent(o.module)}`).then((x) => { S.md.file = { module: o.module, yaml: x.yaml || '' }; }).catch((e) => { S.md.file = { module: o.module, error: e.message }; })
+          .finally(() => { S.md.fileBusy = false; const box = $('#mdside'); if (box) { box.innerHTML = modelSide(); mdScroll(); } });
+      }
+      return '<div class="empty"><span class="spin"></span>정의 파일을 읽는 중입니다.</div>';
+    }
+    if (f.error) return `<div class="hint warn">${esc(f.error)}</div>`;
+    const lines = f.yaml.split('\n');
+    const at = lines.findIndex((l) => new RegExp(`^\\s{2}${o.name}:`).test(l));
+    let end = at;
+    if (at >= 0) { const pad = lines[at].search(/\S/); end = at + 1; while (end < lines.length && (lines[end].trim() === '' || lines[end].search(/\S/) > pad)) end += 1; }
+    const shown = lines.map((l, i) => `<span class="${i >= at && i < end && at >= 0 ? 'mdhi' : ''}">${esc(l) || ' '}</span>`).join('\n');
+    return `<div class="muted" style="font-size:12px;margin-bottom:6px">${esc(o.module_label || o.module)} 모듈 파일 · ${at >= 0 ? `${o.name} 정의를 표시했습니다` : '이 객체는 다른 모듈에서 확장됩니다'}</div>
+      <pre class="code mdcode">${shown}</pre><div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" data-act="mdedit" data-module="${esc(o.module)}">라이브러리에서 파일 편집</button></div>`;
+  }
+
+  function modelUses(o) {
+    const u = S.md.uses;
+    if (!u || u.id !== `object:${o.name}`) {
+      api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; const box = $('#mdside'); if (box) box.innerHTML = modelSide(); }).catch(fail);
+      return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
+    }
+    return u.list.length ? `<div class="chips">${u.list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div><div class="hint" style="margin-top:10px">이 객체를 바꾸면 위 요소가 함께 영향을 받습니다. 지우면 정의 관리가 함께 제외되는 항목을 알려 줍니다.</div>` : '<div class="empty">이 객체를 읽는 질의, 결정, 액션이 없습니다.</div>';
+  }
+
+  function modelSide() {
+    const m = S.mg.st, md = S.md, o = mgObj(md.sel);
+    if (!o) return '<div class="card"><div class="cb"><div class="empty">트리나 그래프에서 객체를 고르세요.</div></div></div>';
+    const tabs = [['form', '폼'], ['file', '정의 파일'], ['uses', '사용처']].map(([k, w]) => `<button class="${md.tab === k ? 'on' : ''}" data-act="mdtab" data-k="${k}">${w}</button>`).join('');
+    let body = '';
+    if (md.tab === 'file') body = `<div class="card"><div class="cb">${modelFile(o)}</div></div>`;
+    else if (md.tab === 'uses') body = `<div class="card"><div class="cb">${modelUses(o)}</div></div>`;
+    else {
+      const props = mgProps(o.name).map((p) => `<tr class="${S.mg.sel === `${o.name}.${p.name}` ? 'sel' : ''}" data-act="mdprop" data-name="${esc(`${o.name}.${p.name}`)}" style="cursor:pointer"><td>${esc(p.label || p.name)}<div class="muted mono">${esc(p.name)}</div></td><td><span class="chip sm${p.expr ? ' b' : ''}">${p.expr ? '계산' : esc(p.type)}</span></td><td class="mono muted" style="font-size:11.5px">${esc(p.column || '')}</td></tr>`).join('');
+      const links = m.links.filter((l) => l.source === o.name || l.target === o.name).map((l) => `<tr class="${S.mg.sel === l.name ? 'sel' : ''}" data-act="mdlink" data-name="${esc(l.name)}" style="cursor:pointer"><td>${esc(l.label || l.name)}<div class="muted mono">${esc(l.name)}</div></td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="mono">${esc(CARD[l.cardinality] || l.cardinality)}</td></tr>`).join('');
+      const f = S.mg.form;
+      const form = f && f.kind === 'prop' ? propForm() : f && f.kind === 'link' ? linkForm() : objectForm();
+      body = `${form}<div class="card"><div class="ch">속성 ${mgProps(o.name).length}</div><div class="cb scroll" style="padding:0;max-height:260px"><table class="tight">${props}</table></div></div>
+        <div class="card"><div class="ch">관계</div><div class="cb scroll" style="padding:0">${links ? `<table class="tight">${links}</table>` : '<div class="empty" style="padding:12px">관계가 없습니다.</div>'}</div></div>`;
+    }
+    return `<div class="seg" style="margin:0 0 12px">${tabs}</div>${body}`;
+  }
+
+  function viewModel() {
+    const title = '모델링 작업 공간', sub = '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다. 고친 내용은 변경 요청으로 반영됩니다';
+    const wait = mgWait(title, sub);
+    if (wait) return wait;
+    const md = S.md;
+    if (!md.sel || !mgObj(md.sel)) md.sel = (S.st.decisions[0] && mgObj(S.st.decisions[0].target) ? S.st.decisions[0].target : (S.mg.st.objects[0] || {}).name) || '';
+    if (md.sel && !S.mg.form) mgOpen('object', md.sel, true);
+    const head = mgHead(title, sub, '<a class="btn sm" href="#objects">표로 보기</a><button class="btn sm primary" data-act="mgobjnew">새 객체</button>');
+    return `${head}${pendingBar()}<div class="grid mdgrid"><div class="card"><div class="cb" style="padding:10px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 테이블 검색" aria-label="객체 검색"></div><div class="cb mdtree" id="mdtree">${modelTree()}</div></div>
+      <div class="card"><div class="ch">스키마 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span><i class="ring"></i>상위 개념</span></div></div><div class="cb" style="padding:0"><div class="kg" id="mdgraph"></div></div></div>
+      <div id="mdside">${modelSide()}</div></div>`;
+  }
+
+  function mdScroll() {  // the object's own lines in its module file come into view
+    const pre = $('#mdside .mdcode'), hi = pre && pre.querySelector('.mdhi');
+    if (hi) pre.scrollTop = Math.max(0, hi.offsetTop - pre.offsetTop - 12);
+  }
+
+  function modelPick(name) {
+    const md = S.md;
+    md.sel = name; md.tab = md.tab || 'form';
+    S.mg.keep = true;
+    mgOpen('object', name, true);
+    S.gsel = name;
+    drawGraph();
+    const tree = $('#mdtree'), side = $('#mdside');
+    if (tree) tree.innerHTML = modelTree();
+    if (side) { side.innerHTML = modelSide(); mdScroll(); }
   }
 
   // ---- library -------------------------------------------------------------------------------------------------
@@ -3297,7 +3517,7 @@ ${controls}${body}`;
   // Every edit lands in one overlay module ("관리 변경") over the standard modules, and reaches the other screens only
   // once it is filed as a change request and approved.
 
-  const MG_TABS = ['sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles'];
+  const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles'];
   const OP_WORD = { add_object: '객체 추가', update_object: '객체 변경', delete_object: '객체 제외', add_property: '속성 추가',
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
@@ -4298,7 +4518,7 @@ ${controls}${body}`;
     if (f.kind === 'link') mgEdit('delete_link', { name: v.name }, `${say}을 제외했습니다.`);
   }
 
-  function mgOpen(kind, key) {
+  function mgOpen(kind, key, quiet) {
     const m = S.mg.st;
     S.mg.sel = key;
     if (kind === 'object') {
@@ -4315,7 +4535,7 @@ ${controls}${body}`;
       const v = { name: l.name, label: l.label, source: l.source, target: l.target, sp: l.on ? l.on[0] : '', tp: l.on ? l.on[1] : '', cardinality: l.cardinality, inverse: l.inverse, required: l.required };
       S.mg.form = { kind, mode: 'edit', orig: { ...v, module: l.module }, v: { ...v } };
     }
-    render();
+    if (!quiet) render();
   }
 
   // ---- events --------------------------------------------------------------------------------------------------
@@ -4345,6 +4565,18 @@ ${controls}${body}`;
 
   const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
+    gxstart: () => { const k = S.gx.seed.key.trim(); if (!k) { toast('시작할 레코드의 번호를 입력해 주세요.', true); return; } gxStart(S.gx.seed.type, k); },
+    gxgrow: (t) => gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'),
+    gxgrowall: () => gxGrow(S.gx.sel),
+    gxpath: () => gxPath(),
+    gxsel: (t) => { gxPick(t.dataset.id); if (window.SpaceGraph.focus) window.SpaceGraph.focus(t.dataset.id); },
+    gxroot: (t) => { const n = S.gx.nodes[t.dataset.id]; if (n) gxStart(n.type, n.key); },
+    recgraph: () => { const r = S.rec; S.gx.seed = { type: r.type, key: r.key }; location.hash = '#graph'; gxStart(r.type, r.key); },
+    mdpick: (t) => modelPick(t.dataset.name),
+    mdprop: (t) => { mgOpen('prop', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
+    mdlink: (t) => { mgOpen('link', t.dataset.name, true); const b = $('#mdside'); if (b) b.innerHTML = modelSide(); },
+    mdtab: (t) => { S.md.tab = t.dataset.k; const b = $('#mdside'); if (b) { b.innerHTML = modelSide(); mdScroll(); } },
+    mdedit: async (t) => { location.hash = '#library'; await openModule(t.dataset.module).catch(fail); },
     ibchange: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },
     chgsel: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; S.chg.text = ''; render(); },
     chgitem: (t) => { S.chg.item = t.dataset.el; S.chg.text = ''; render(); },
@@ -4954,6 +5186,9 @@ ${controls}${body}`;
   };
 
   const INPUT = {
+    gxkey: (t) => { S.gx.seed.key = t.value; },
+    gxtokey: (t) => { S.gx.to.key = t.value; },
+    mdq: (t) => { S.md.q = t.value; const b = $('#mdtree'); if (b) b.innerHTML = modelTree(); },
     chgtext: (t) => { S.chg.text = t.value; },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
     homeq: (t) => { S.home.q = t.value; },
@@ -5023,6 +5258,8 @@ ${controls}${body}`;
   };
 
   const CHANGE = {
+    gxtype: (t) => { S.gx.seed.type = t.value; },
+    gxtotype: (t) => { S.gx.to.type = t.value; },
     simkey: (t) => { S.sim.key = t.value; S.sim.vals = {}; simulateNow(t.value, {}); },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
     rltype: (t) => { S.rl.type = t.value; S.rl.q = ''; S.rl.res = null; render(); },
@@ -5226,6 +5463,7 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && ev.target.id === 'srtext') searchNow();
       if (ev.key === 'Enter' && ev.target.id === 'homeq') ACT.homego();
       if (ev.key === 'Enter' && ev.target.id === 'rlq') ACT.rlgo();
+      if (ev.key === 'Enter' && ev.target.id === 'gxkey') ACT.gxstart();
       if (ev.key === 'Enter' && ev.target.id === 'chgtext') { const b = $('[data-act=chgcomment]'); if (b) ACT.chgcomment(b); }
     });
     window.addEventListener('hashchange', () => {

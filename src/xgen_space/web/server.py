@@ -469,6 +469,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.inbox()
                 if route == "change":
                     return s.change_detail(a["id"])
+                if route == "record/links":
+                    return s.record_links(a["type"], a["key"])
+                if route == "record/path":
+                    return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
+                if route == "element/readers":
+                    return s.element_readers(a["id"])
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")

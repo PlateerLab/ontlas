@@ -32,6 +32,14 @@
   writes nothing.
 - 초안 생성 scores the draft's tables against every domain standard on its own and shows the match beside each object
   (`결제 · Payment 94%`), with the way to bind the tables to the standard instead of naming new objects.
+- 그래프 탐색 (`GET record/links`, `GET record/path`): records as a graph. It starts from one record and grows relation by
+  relation, up to 25 records a relation at a time, with the count on each relation before it is opened. Two records are
+  joined by the shortest chain of relations that joins them in the data: chains are tried shortest first, up to five hops,
+  each as one ontology query, so it runs on the source whatever store that is.
+- 모델링 · 작업 공간: the modules and their objects as a tree, the schema graph, and the picked object's form, its lines in
+  its module file, and what reads it (`GET element/readers`), side by side. Edits go to the pending changes as on the
+  definition screens.
+- The README's table of screens follows the new sidebar.
 
 ## 0.12.0
 
