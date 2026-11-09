@@ -159,3 +159,11 @@ def test_a_record_is_found_by_its_key_or_its_name_whatever_its_type(session):
     found = session.record_find("니트")["items"]
     assert {(x["type"], x["key"]) for x in found} >= {("Category", "K3"), ("Product", "P1")}
     assert session.record_find("  ")["items"] == []
+
+
+def test_a_relation_read_from_either_end_is_the_same_relation(session):
+    order = session.record_links("Order", "O2")["links"]
+    item = session.record_links("OrderItem", "I1005")["links"]
+    down = next(x for x in order if x["type"] == "OrderItem" and x["forward"])
+    up = next(x for x in item if x["type"] == "Order" and not x["forward"])
+    assert down["base"] == up["base"] and down["base_label"] == up["base_label"]  # one edge on the graph, not two

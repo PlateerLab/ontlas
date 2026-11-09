@@ -1188,7 +1188,13 @@
   }
 
   function gxEdge(source, target, link, label, group) {
-    if (!S.gx.edges.some((e) => e.source === source && e.target === target && e.link === link)) S.gx.edges.push({ source, target, link, label, group: group || '' });
+    const was = S.gx.edges.find((e) => e.source === source && e.target === target && e.link === link);
+    if (was) {
+      if (group && !was.groups.includes(group)) was.groups.push(group);
+      if (!group) was.route = true;
+      return;
+    }
+    S.gx.edges.push({ source, target, link, label, groups: group ? [group] : [], route: !group });
   }
 
   // where a graph starts or ends: a record found by its key or its name, of any type
@@ -1298,14 +1304,15 @@
     const L = gxLayout(), z = g.zoom || 1;
     const way = new Set((g.routeEdges || []).map((e) => `${e.source}|${e.target}`));
     const onWay = new Set((g.route || []).map((x) => x.id));
+    const place = pairs(g.edges, (e) => [e.source, e.target]);
     const edges = g.edges.map((e) => {
       const a = L.boxes[e.source], b = L.boxes[e.target];
       if (!a || !b) return '';
       const [p, q] = erEdge(a, b);
       const hot = way.has(`${e.source}|${e.target}`) || way.has(`${e.target}|${e.source}`);
       const on = g.sel === e.source || g.sel === e.target;
-      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
-      return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#${hot ? 'gxhot' : 'gxarrow'})"/><text x="${mx}" y="${my - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
+      const c = bend(p, q, ...place(e));
+      return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><path d="${c.d}" marker-end="url(#${hot ? 'gxhot' : 'gxarrow'})"/><text x="${c.x}" y="${c.y - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
     }).join('');
     const nodes = Object.entries(L.boxes).map(([id, b]) => {
       const n = g.nodes[id], [ink, fill] = gxColor(n.type);
@@ -1404,7 +1411,8 @@
   function gxShrink(id, link, forward) {
     const g = S.gx, key = gxGroup(id, link, forward);
     g.open = g.open.filter((x) => x !== key);
-    g.edges = g.edges.filter((e) => e.group !== key);
+    g.edges.forEach((e) => { e.groups = e.groups.filter((x) => x !== key); });
+    g.edges = g.edges.filter((e) => e.groups.length || e.route);
     const held = new Set([gxId(g.seed.type, g.seed.key), g.sel, ...(g.route || []).map((x) => x.id)]);
     g.edges.forEach((e) => { held.add(e.source); held.add(e.target); });
     Object.keys(g.nodes).forEach((n) => { if (!held.has(n)) delete g.nodes[n]; });
@@ -1422,14 +1430,14 @@
       const bid = `bundle:${id}:${l.link}:${l.forward ? 1 : 0}`;
       if (l.count > BUNDLE && !open) {
         S.gx.nodes[bid] = { type: 'bundle', key: `${l.count}${l.more ? '+' : ''}`, label: `${l.type_label}`, title: '펼치기', of: { id, link: l.link, forward: l.forward } };
-        if (l.forward) gxEdge(id, bid, l.link, l.label, key); else gxEdge(bid, id, l.link, l.label, key);
+        if (l.forward) gxEdge(id, bid, l.base || l.link, l.base_label || l.label, key); else gxEdge(bid, id, l.base || l.link, l.base_label || l.label, key);
         continue;
       }
       delete S.gx.nodes[bid];
       S.gx.edges = S.gx.edges.filter((e) => e.source !== bid && e.target !== bid);
       for (const it of l.items) {
         const other = gxAdd({ type: l.type, key: it.key, label: l.type_label, title: it.title || '' });
-        if (l.forward) gxEdge(id, other, l.link, l.label, key); else gxEdge(other, id, l.link, l.label, key);
+        if (l.forward) gxEdge(id, other, l.base || l.link, l.base_label || l.label, key); else gxEdge(other, id, l.base || l.link, l.base_label || l.label, key);
       }
     }
     const n = S.gx.nodes[id];
@@ -1475,7 +1483,7 @@
     if (!n) return '<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty">그래프에서 레코드를 고르면 그 레코드의 관계가 여기에 나옵니다.</div></div></div>';
     if (!r) return `<div class="card"><div class="ch">관계로 펼치기</div><div class="cb"><div class="empty"><span class="spin"></span>${esc(n.label)} ${esc(n.key)}의 관계를 읽는 중입니다.</div></div></div>`;
     const rows = r.links.map((l) => `<label class="gxrow${l.count ? '' : ' off'}"><input type="checkbox" data-in="gxrel" data-link="${esc(l.link)}" data-fw="${l.forward ? 1 : 0}"${g.open.includes(gxGroup(g.sel, l.link, l.forward)) ? ' checked' : ''}${l.count ? '' : ' disabled'}>
-      <span>${esc(l.label)} → <b>${esc(l.type_label)}</b></span><span class="chip sm">${l.count}${l.more ? '+' : ''}</span></label>`).join('');
+      <span>${l.forward ? `${esc(l.base_label || l.label)} → <b>${esc(l.type_label)}</b>` : `← ${esc(l.base_label || l.label)} · <b>${esc(l.type_label)}</b>`}</span><span class="chip sm">${l.count}${l.more ? '+' : ''}</span></label>`).join('');
     return `<div class="card"><div class="ch">관계로 펼치기<div class="right"><button class="btn sm" data-act="gxgrowall">모두</button></div></div><div class="cb">
       <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(n.label)} ${esc(n.key)}의 관계를 골라 펼칩니다.</div>${rows || '<div class="empty">관계가 없습니다.</div>'}
       <div class="muted" style="font-size:11.5px;margin-top:6px">한 번에 25개까지 펼치고, ${BUNDLE}개가 넘으면 묶음으로 보여 줍니다.</div></div></div>`;
@@ -1667,6 +1675,20 @@
     return { boxes, regions, home };
   }
 
+  // the k-th of n relations between the same two boxes: a curve bent off the straight line, and where its name sits
+  function bend(p, q, k, n) {
+    const off = (k - (n - 1) / 2) * 26;
+    const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy) || 1;
+    const cx = mx - (dy / len) * off * 2, cy = my + (dx / len) * off * 2;
+    return { d: off ? `M${p[0]},${p[1]} Q${cx},${cy} ${q[0]},${q[1]}` : `M${p[0]},${p[1]} L${q[0]},${q[1]}`, x: off ? (mx + cx) / 2 : mx, y: off ? (my + cy) / 2 : my };
+  }
+
+  function pairs(list, ends) {  // each edge's place among the edges joining the same two boxes
+    const seen = {};
+    list.forEach((e) => { const [a, b] = ends(e); const k = [a, b].sort().join('|'); (seen[k] = seen[k] || []).push(e); });
+    return (e) => { const [a, b] = ends(e); const all = seen[[a, b].sort().join('|')]; return [all.indexOf(e), all.length]; };
+  }
+
   function erEdge(a, b) {  // where the straight line between two boxes leaves each of them
     const ca = [a.x + a.w / 2, a.y + a.h / 2], cb = [b.x + b.w / 2, b.y + b.h / 2];
     const cut = (box, from, to) => {
@@ -1686,20 +1708,21 @@
     const H = Math.max(...Object.values(L.boxes).map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad;
     const regions = L.regions.map((r, i) => `<g class="erreg${i ? ' near' : ''}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="14"/><text x="${r.x + 14}" y="${r.y + 19}">${esc(r.label)} · ${r.n}</text>${r.fold ? `<text class="erfoldt" x="${r.x + 14}" y="${r.y + 40}">${esc(r.names.map((n) => mgLabel(n)).join(', '))}</text>` : ''}</g>`).join('');
     const edges = [];
-    m.links.forEach((l) => {
+    const drawn = m.links.filter((l) => { const a = L.boxes[l.source], b = L.boxes[l.target]; return a && b && l.source !== l.target && !(a.folded && b.folded); });
+    const place = pairs(drawn, (l) => [L.boxes[l.source].folded ? L.boxes[l.source].folded.label : l.source, L.boxes[l.target].folded ? L.boxes[l.target].folded.label : l.target]);
+    drawn.forEach((l) => {
       const a = L.boxes[l.source], b = L.boxes[l.target];
-      if (!a || !b || l.source === l.target || (a.folded && b.folded)) return;
       const [p, q] = erEdge(a.folded ? { ...a.folded } : a, b.folded ? { ...b.folded } : b);
-      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      const c = bend(p, q, ...place(l));
       const on = md.sel === l.source || md.sel === l.target;
-      edges.push(`<g class="ered${on ? ' on' : ''}"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#erarrow)"/>
-        <text x="${mx + 6}" y="${my - 4}">${esc(l.label || l.name)}</text><text class="card" x="${mx + 6}" y="${my + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`);
+      edges.push(`<g class="ered${on ? ' on' : ''}"><path d="${c.d}" marker-end="url(#erarrow)"/>
+        <text x="${c.x + 6}" y="${c.y - 4}">${esc(l.label || l.name)}</text><text class="card" x="${c.x + 6}" y="${c.y + 10}">${esc(CARD_WORD[l.cardinality] || '')}</text></g>`);
     });
     m.objects.forEach((o) => {
       const a = L.boxes[o.name], b = o.parent && L.boxes[o.parent];
       if (!a || !b || a.folded) return;
       const [p, q] = erEdge(a, b.folded ? b.folded : b);
-      edges.push(`<g class="ered isa"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" marker-end="url(#erarrow)"/><text x="${(p[0] + q[0]) / 2 + 6}" y="${(p[1] + q[1]) / 2}">↑ 상위</text></g>`);
+      edges.push(`<g class="ered isa"><path d="M${p[0]},${p[1]} L${q[0]},${q[1]}" marker-end="url(#erarrow)"/><text x="${(p[0] + q[0]) / 2 + 6}" y="${(p[1] + q[1]) / 2}">↑ 상위</text></g>`);
     });
     const nodes = Object.values(L.boxes).filter((b) => !b.folded).map((b) => {
       const o = b.o, on = md.sel === o.name;
