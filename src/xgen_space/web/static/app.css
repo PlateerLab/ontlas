@@ -860,3 +860,11 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .lrow.deep { margin-left:28px; width:calc(100% - 28px); }
 .lrow .lmain { flex:1; min-width:0; display:flex; flex-direction:column; }
 .lrow .lmain .muted { font-size:12px; }
+
+/* graph exploration: records found to start from, the types a perspective shows, the picked record's values */
+.gxfound { display:grid; gap:4px; margin-top:8px; max-height:220px; overflow:auto; }
+.gxticks { display:flex; flex-wrap:wrap; gap:4px 10px; }
+.gxkv { display:grid; grid-template-columns:96px 1fr; gap:6px 10px; margin:0; font-size:12.5px; }
+.gxkv dt { color:var(--muted); }
+.gxkv dd { margin:0; font-weight:600; }
+.gxdec { display:flex; align-items:center; gap:8px; font-size:12px; margin:2px 0; }

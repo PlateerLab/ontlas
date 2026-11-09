@@ -359,7 +359,8 @@
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
-    gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {} },
+    gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
+      q: '', toq: '', found: null, hide: [], view: '', log: [], info: {} },
     md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false },
   };
   const NEW_CAT = () => ({ st: null, folder: '', sel: {}, sort: 'name', dir: 1, ext: '', busy: false, up: null, file: null, view: 'preview', edit: null, paste: null });
@@ -577,7 +578,8 @@
     if ((S.tab === 'home' || S.tab === 'inbox') && !S.home.box && !S.home.busy) loadInbox();
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
-    if (S.tab === 'graph' && $('#gxgraph')) mountGraph($('#gxgraph'), gxData(), { key: 'records', pos: S.gx.pos, sel: () => S.gx.sel, pick: (id) => gxPick(id), clear: () => {} });
+    if (S.tab === 'graph' && $('#gxgraph')) mountGraph($('#gxgraph'), gxData(), { key: 'records', pos: S.gx.pos, sel: () => S.gx.sel, pick: (id) => gxPick(id), clear: () => {}, labels: true,
+      shown: (kind, x) => kind !== 'node' || !S.gx.hide.includes(x.module) });
     if (S.tab === 'model') mountEr();
     if (S.tab === 'record' && !S.rec.res && !S.rec.busy && !S.rec.err) loadRecord();
     if (S.tab === 'guide') mountGuide();
@@ -1188,7 +1190,45 @@
     const nodes = Object.entries(S.gx.nodes).map(([id, n]) => ({ id, module: n.type, label: `${n.label} ${n.key}${n.title ? ` · ${n.title}` : ''}` }));
     const types = [...new Set(nodes.map((n) => n.module))];
     return { nodes, edges: S.gx.edges.map((e) => ({ source: e.source, target: e.target, label: e.label })),
-      clusters: types.map((t) => ({ id: t, label: (S.st.graph.nodes.find((x) => x.id === t) || {}).label || t })) };
+      clusters: types.map((t) => ({ id: t, label: t === 'bundle' ? '묶음' : (S.st.graph.nodes.find((x) => x.id === t) || {}).label || t })) };
+  }
+
+  // where a graph starts or ends: a record found by its key or its name, of any type
+  async function gxFind(which) {
+    const g = S.gx, q = (which === 'to' ? g.toq : g.q).trim();
+    if (!q) { g.found = null; render(); return; }
+    try { g.found = { which, ...(await api(`records/find?q=${encodeURIComponent(q)}`)) }; } catch (e) { g.found = { which, items: [], error: e.message }; }
+    if (S.tab === 'graph') render();
+  }
+
+  function gxFound(which) {
+    const f = S.gx.found;
+    if (!f || f.which !== which) return '';
+    if (!f.items.length) return `<div class="muted" style="font-size:12px;margin-top:6px">'${esc(f.q)}'에 맞는 레코드가 없습니다.</div>`;
+    return `<div class="gxfound">${f.items.map((x) => `<button class="hrow" data-act="gxfound" data-w="${which}" data-type="${esc(x.type)}" data-key="${esc(x.key)}"><span class="rtag">${esc(x.type_label)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span></button>`).join('')}</div>`;
+  }
+
+  // what this viewer keeps of how they like to see records: which types are shown, under a name
+  const gxViews = () => { try { return JSON.parse(localStorage.getItem('xspace-views') || '{}'); } catch (e) { return {}; } };
+
+  function gxViewCard() {
+    const g = S.gx, views = gxViews();
+    const types = [...new Set(Object.values(g.nodes).map((n) => n.type))].filter((t) => t !== 'bundle');
+    const ticks = types.map((t) => `<label class="tick"><input type="checkbox" data-in="gxshow" data-t="${esc(t)}"${g.hide.includes(t) ? '' : ' checked'}>${esc((S.st.graph.nodes.find((x) => x.id === t) || {}).label || t)}</label>`).join('');
+    return `<div class="card"><div class="ch">관점</div><div class="cb">
+      ${Object.keys(views).length ? `<select data-in="gxview" aria-label="저장한 관점" style="width:100%;margin-bottom:8px"><option value="">저장한 관점 고르기</option>${Object.keys(views).map((k) => `<option value="${esc(k)}"${g.view === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
+      ${ticks ? `<div class="gxticks">${ticks}</div>` : '<div class="muted" style="font-size:12px">레코드를 펼치면 보여 줄 타입을 고를 수 있습니다.</div>'}
+      <div class="muted" style="font-size:11.5px;margin-top:6px">보여 줄 타입을 관점으로 저장해 역할마다 다르게 씁니다. 이 브라우저에만 저장됩니다.</div>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm" data-act="gxviewsave"${ticks ? '' : ' disabled'}>관점 저장</button><button class="btn sm" data-act="gxlink"${g.seed.key ? '' : ' disabled'}>링크 복사</button></div></div></div>`;
+  }
+
+  function gxInfo(id) {  // what the side says of a record: a few values and what the rules say of it now
+    const n = S.gx.nodes[id];
+    if (!n || n.type === 'bundle' || S.gx.info[id]) return;
+    S.gx.info[id] = { busy: true };
+    api(`record?type=${encodeURIComponent(n.type)}&key=${encodeURIComponent(n.key)}`)
+      .then((r) => { S.gx.info[id] = r; }).catch((e) => { S.gx.info[id] = { error: e.message }; })
+      .finally(() => { const side = $('#gxside'); if (side && S.gx.sel === id) side.innerHTML = gxSide(); });
   }
 
   async function gxLinks(id) {
@@ -1206,26 +1246,44 @@
     const id = gxAdd({ type, key, label: (S.st.graph.nodes.find((x) => x.id === type) || {}).label || type });
     S.gx.seed = { type, key: String(key) };
     S.gx.sel = id;
+    S.gx.log = [{ id, word: `${key}에서 시작` }];
+    S.gx.info = {};
+    gxInfo(id);
     await gxLinks(id);
     if (S.gx.links[id] && S.gx.links[id].error) { S.gx.err = S.gx.links[id].error; S.gx.nodes = {}; S.gx.sel = ''; }
     if (S.tab === 'graph') render();
   }
 
-  function gxGrow(id, link, forward) {
+  const BUNDLE = 6;  // more records than this on one relation are folded into one node until it is opened
+
+  function gxGrow(id, link, forward, open) {
     const r = S.gx.links[id];
     if (!r) return;
     const groups = r.links.filter((l) => (link === undefined || (l.link === link && l.forward === forward)) && l.count);
     for (const l of groups) {
+      const bid = `bundle:${id}:${l.link}:${l.forward ? 1 : 0}`;
+      if (l.count > BUNDLE && !open) {
+        S.gx.nodes[bid] = { type: 'bundle', key: `${l.count}${l.more ? '+' : ''}`, label: `${l.type_label}`, title: '펼치기', of: { id, link: l.link, forward: l.forward } };
+        if (l.forward) gxEdge(id, bid, l.link, l.label); else gxEdge(bid, id, l.link, l.label);
+        continue;
+      }
+      delete S.gx.nodes[bid];
+      S.gx.edges = S.gx.edges.filter((e) => e.source !== bid && e.target !== bid);
       for (const it of l.items) {
         const other = gxAdd({ type: l.type, key: it.key, label: l.type_label, title: it.title || '' });
         if (l.forward) gxEdge(id, other, l.link, l.label); else gxEdge(other, id, l.link, l.label);
       }
     }
+    const n = S.gx.nodes[id];
+    S.gx.log.push({ id, word: link === undefined ? `${n.key} 모두 펼침` : `${(groups[0] || {}).type_label || ''} 펼침` });
     render();
   }
 
   async function gxPick(id) {
+    const b = S.gx.nodes[id];
+    if (b && b.type === 'bundle') { gxGrow(b.of.id, b.of.link, b.of.forward, true); return; }
     S.gx.sel = id;
+    gxInfo(id);
     drawGraph();
     await gxLinks(id);
     const left = $('#gxgrow'), side = $('#gxside');
@@ -1246,6 +1304,8 @@
         g.route = r.nodes.map((n, i) => ({ id: ids[i], ...n }));
         g.routeEdges = r.edges;
         g.sel = ids[ids.length - 1];
+        g.log.push({ id: g.sel, word: `경로: ${g.to.key}` });
+        gxInfo(g.sel);
       }
     } catch (e) { fail(e); }
     g.busy = false; render();
@@ -1265,32 +1325,42 @@
   function gxSide() {
     const g = S.gx, n = g.nodes[g.sel];
     const route = g.route && g.route.length ? `<div class="card"><div class="ch">찾은 경로 · ${g.route.length - 1}단계</div><div class="cb">${g.route.map((x, i) => `${i ? `<div class="muted gxhop">↓ ${esc((g.routeEdges[i - 1] || {}).label || '')}</div>` : ''}<button class="hrow" data-act="gxsel" data-id="${esc(x.id)}"><span class="rtag">${esc(x.label)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span></button>`).join('')}</div></div>` : '';
-    const card = n ? `<div class="card"><div class="ch"><span class="rtag">${esc(n.label)}</span>${esc(n.key)}</div><div class="cb">
-      ${n.title ? `<div style="font-weight:700;margin-bottom:8px">${esc(n.title)}</div>` : ''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" data-act="rec" data-type="${esc(n.type)}" data-key="${esc(n.key)}">레코드 열기</button><button class="btn sm" data-act="gxroot" data-id="${esc(g.sel)}">여기서 다시 시작</button></div></div></div>` : '';
-    return card + route;
+    let card = '';
+    if (n) {
+      const info = g.info[g.sel];
+      const vals = info && info.props ? info.props.filter((p) => !p.key && p.value !== null && p.value !== '' && !p.mask).slice(0, 4)
+        .map((p) => `<dt>${esc(p.label)}</dt><dd>${recordValue(p)}</dd>`).join('') : '';
+      const decs = info && info.decisions ? info.decisions.filter((x) => !x.error).map((x) => `<div class="gxdec"><span class="chip sm ${x.yes ? 'ok' : 'warn'}">${esc(x.label)} · ${esc(x.verdict)}</span><span class="muted">${esc(x.matched.join(', '))}</span></div>`).join('') : '';
+      card = `<div class="card"><div class="ch"><span class="rtag">${esc(n.label)}</span>${esc(n.key)}${n.title ? ` <span class="muted" style="font-weight:600">${esc(n.title)}</span>` : ''}</div>
+        ${info && info.busy ? '<div class="cb"><span class="spin"></span></div>' : ''}${vals ? `<dl class="gxkv cb">${vals}</dl>` : ''}${decs ? `<div class="cb" style="border-top:1px solid var(--line)">${decs}</div>` : ''}
+        <div class="cb" style="border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" data-act="rec" data-type="${esc(n.type)}" data-key="${esc(n.key)}">레코드 열기</button><button class="btn sm" data-act="gxroot" data-id="${esc(g.sel)}">여기서 다시 시작</button></div></div>`;
+    }
+    const log = g.log.length ? `<div class="card"><div class="ch">탐색 기록</div><div class="cb"><div class="chips">${g.log.map((x) => `<button class="chip sm" data-act="gxsel" data-id="${esc(x.id)}">${esc(x.word)}</button>`).join('')}</div></div></div>` : '';
+    return card + route + log;
   }
 
   function viewGraph() {
     const g = S.gx;
     const types = recordTypes();
     if (!g.seed.type) {
-      const r = RECENT[0];
+      const asked = new URLSearchParams(location.search).get('gx');  // a link someone copied from this screen
+      const [t, ...k] = (asked || '').split(':');
+      const r = t && types.some((x) => x.id === t) ? { type: t, key: k.join(':') } : RECENT[0];
       if (r) { g.seed = { type: r.type, key: r.key }; gxStart(r.type, r.key); } else g.seed = { type: (types[0] || {}).id || '', key: '' };
     }
-    if (!g.to.type) g.to.type = (types[types.length - 1] || {}).id || '';
     const head = pageHead('그래프 탐색', '레코드 하나에서 시작해 관계를 따라 펼치고, 두 레코드를 잇는 경로를 찾습니다');
-    const typeSel = (dataIn, cur) => `<select data-in="${dataIn}" aria-label="타입">${types.map((n) => `<option value="${esc(n.id)}"${n.id === cur ? ' selected' : ''}>${esc(n.label)}</option>`).join('')}</select>`;
-    const start = `<div class="card"><div class="ch">시작 레코드</div><div class="cb"><div class="gxform">${typeSel('gxtype', g.seed.type)}<input type="text" id="gxkey" data-in="gxkey" value="${esc(g.seed.key)}" placeholder="번호" aria-label="번호"></div>
-      <button class="btn sm primary" data-act="gxstart" style="margin-top:8px">여기서 시작</button>${g.err ? `<div class="hint warn" style="margin-top:8px">${esc(g.err)}</div>` : ''}</div></div>`;
-    const path = `<div class="card"><div class="ch">경로 찾기</div><div class="cb"><div class="muted" style="font-size:12px;margin-bottom:6px">출발 · ${g.nodes[g.sel] ? `${esc(g.nodes[g.sel].label)} ${esc(g.nodes[g.sel].key)}` : '그래프에서 고른 레코드'}</div>
-      <div class="gxform">${typeSel('gxtotype', g.to.type)}<input type="text" data-in="gxtokey" value="${esc(g.to.key)}" placeholder="도착 번호" aria-label="도착 번호"></div>
-      <button class="btn sm" data-act="gxpath" style="margin-top:8px"${g.busy ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>
-      <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지, 짧은 경로부터 원천 DB에서 찾습니다.</div></div></div>`;
+    const start = `<div class="card"><div class="ch">시작 레코드</div><div class="cb"><div class="srform"><input type="search" id="gxq" data-in="gxq" value="${esc(g.q)}" placeholder="번호나 이름, 예: C001, 김하늘" aria-label="시작 레코드 찾기"><button class="btn sm primary" data-act="gxfind" data-w="from">찾기</button></div>
+      ${gxFound('from')}${g.err ? `<div class="hint warn" style="margin-top:8px">${esc(g.err)}</div>` : ''}</div></div>`;
+    const to = g.to.key ? `${esc((S.st.graph.nodes.find((x) => x.id === g.to.type) || {}).label || g.to.type)} ${esc(g.to.key)}` : '';
+    const path = `<div class="card"><div class="ch">경로 찾기</div><div class="cb"><div class="muted" style="font-size:12px;margin-bottom:6px">출발 · ${g.nodes[g.sel] && g.nodes[g.sel].type !== 'bundle' ? `${esc(g.nodes[g.sel].label)} ${esc(g.nodes[g.sel].key)}` : '그래프에서 고른 레코드'}${to ? ` → 도착 · <b>${to}</b>` : ''}</div>
+      <div class="srform"><input type="search" id="gxtoq" data-in="gxtoq" value="${esc(g.toq)}" placeholder="도착 레코드, 예: 니트" aria-label="도착 레코드 찾기"><button class="btn sm" data-act="gxfind" data-w="to">찾기</button></div>${gxFound('to')}
+      <button class="btn sm primary" data-act="gxpath" style="margin-top:8px"${g.busy || !g.to.key ? ' disabled' : ''}>${g.busy ? '<span class="spin"></span>찾는 중' : '경로 찾기'}</button>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">관계 5단계까지, 짧은 경로부터 질의로 찾습니다. SQL 원천에서도 같습니다.</div></div></div>`;
     const n = Object.keys(g.nodes).length;
-    const canvas = n ? `<div class="card"><div class="ch">레코드 그래프<div class="right"><span class="muted" style="font-size:12px">레코드 ${n} · 관계 ${g.edges.length}</span></div></div><div class="cb" style="padding:0"><div class="kg" id="gxgraph"></div></div></div>`
-      : '<div class="card"><div class="cb"><div class="empty">시작할 레코드의 타입과 번호를 입력하세요. 레코드 화면의 [그래프로 보기]에서도 시작할 수 있습니다.</div></div></div>';
-    return `${head}<div class="grid gxgrid"><div class="hcol">${start}<div id="gxgrow">${gxGrowCard()}</div>${path}</div>${canvas}<div class="hcol" id="gxside">${gxSide()}</div></div>`;
+    const seed = g.nodes[gxId(g.seed.type, g.seed.key)];
+    const canvas = n ? `<div class="card"><div class="ch">${seed ? `${esc(seed.label)} ${esc(seed.key)}${seed.title ? ` ${esc(seed.title)}` : ''}에서 시작` : '레코드 그래프'}<div class="right"><span class="muted" style="font-size:12px">레코드 ${n} · 관계 ${g.edges.length}</span><button class="btn sm ghost" data-act="gxreset">초기화</button></div></div><div class="cb" style="padding:0"><div class="kg" id="gxgraph"></div></div><div class="cb muted" style="font-size:11.5px;border-top:1px solid var(--line)">관계마다 ${BUNDLE}건이 넘으면 '펼치기' 묶음으로 접어 둡니다. 묶음을 누르면 펼칩니다.</div></div>`
+      : '<div class="card"><div class="cb"><div class="empty">시작할 레코드를 번호나 이름으로 찾으세요. 레코드 화면의 [그래프로 보기]에서도 시작할 수 있습니다.</div></div></div>';
+    return `${head}<div class="grid gxgrid"><div class="hcol">${start}<div id="gxgrow">${gxGrowCard()}</div>${path}${gxViewCard()}</div>${canvas}<div class="hcol" id="gxside">${gxSide()}</div></div>`;
   }
 
   // ---- one workspace for the definition: modules and objects, the schema graph, and the object's form or file --------
@@ -5298,7 +5368,24 @@ ${controls}${body}`;
 
   const spaceChanged = () => { Object.assign(S, { ru: null, met: {}, sp: null, dg: null, dq: null, dsec: null, drel: null, vemb: null, amap: null, mapn: null, ad: null, adrep: null, adrs: null }); Object.assign(S.ex, { tree: null, items: null, hits: null }); };
   const ACT = {
-    gxstart: () => { const k = S.gx.seed.key.trim(); if (!k) { toast('시작할 레코드의 번호를 입력해 주세요.', true); return; } gxStart(S.gx.seed.type, k); },
+    gxfind: (t) => gxFind(t.dataset.w),
+    gxfound: (t) => {
+      const g = S.gx;
+      g.found = null;
+      if (t.dataset.w === 'to') { g.to = { type: t.dataset.type, key: t.dataset.key }; render(); return; }
+      gxStart(t.dataset.type, t.dataset.key);
+    },
+    gxreset: () => { S.gx.pos = {}; S.gx.hide = []; gxStart(S.gx.seed.type, S.gx.seed.key); },
+    gxviewsave: () => {
+      const name = (window.prompt('관점 이름', S.gx.view || '고객 상담') || '').trim();
+      if (!name) return;
+      try { localStorage.setItem('xspace-views', JSON.stringify({ ...gxViews(), [name]: { hide: S.gx.hide } })); } catch (e) { fail(e); return; }
+      S.gx.view = name; toast(`관점 '${name}'을 저장했습니다.`); render();
+    },
+    gxlink: async () => {
+      const u = `${location.origin}${location.pathname}?gx=${encodeURIComponent(`${S.gx.seed.type}:${S.gx.seed.key}`)}#graph`;
+      try { await navigator.clipboard.writeText(u); toast('이 탐색을 여는 링크를 복사했습니다.'); } catch (_) { toast(u); }
+    },
     gxgrow: (t) => gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'),
     gxgrowall: () => gxGrow(S.gx.sel),
     gxpath: () => gxPath(),
@@ -6035,8 +6122,8 @@ ${controls}${body}`;
   };
 
   const INPUT = {
-    gxkey: (t) => { S.gx.seed.key = t.value; },
-    gxtokey: (t) => { S.gx.to.key = t.value; },
+    gxq: (t) => { S.gx.q = t.value; },
+    gxtoq: (t) => { S.gx.toq = t.value; },
     mdq: (t) => { S.md.q = t.value; const b = $('#mdtree'); if (b) b.innerHTML = modelTree(); },
     chgtext: (t) => { S.chg.text = t.value; },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
@@ -6118,8 +6205,8 @@ ${controls}${body}`;
 
   const CHANGE = {
     srfdec: (t) => { S.sr.fix.decision = t.value; render(); },
-    gxtype: (t) => { S.gx.seed.type = t.value; },
-    gxtotype: (t) => { S.gx.to.type = t.value; },
+    gxshow: (t) => { S.gx.hide = t.checked ? S.gx.hide.filter((x) => x !== t.dataset.t) : [...S.gx.hide, t.dataset.t]; S.gx.view = ''; render(); },
+    gxview: (t) => { S.gx.view = t.value; S.gx.hide = t.value ? [...((gxViews()[t.value] || {}).hide || [])] : []; render(); },
     simkey: (t) => { S.sim.key = t.value; S.sim.vals = {}; simulateNow(t.value, {}); },
     simval: (t) => { S.sim.vals[t.dataset.k] = t.value; },
     rltype: (t) => { S.rl.type = t.value; S.rl.q = ''; S.rl.res = null; render(); },
@@ -6335,7 +6422,8 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && ev.target.id === 'srfkey') ACT.srrefix();
       if (ev.key === 'Enter' && ev.target.id === 'homeq') ACT.homego();
       if (ev.key === 'Enter' && ev.target.id === 'rlq') ACT.rlgo();
-      if (ev.key === 'Enter' && ev.target.id === 'gxkey') ACT.gxstart();
+      if (ev.key === 'Enter' && ev.target.id === 'gxq') gxFind('from');
+      if (ev.key === 'Enter' && ev.target.id === 'gxtoq') gxFind('to');
       if (ev.key === 'Enter' && ev.target.id === 'chgtext') { const b = $('[data-act=chgcomment]'); if (b) ACT.chgcomment(b); }
     });
     window.addEventListener('hashchange', () => {
