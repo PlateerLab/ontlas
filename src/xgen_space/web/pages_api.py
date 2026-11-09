@@ -301,6 +301,29 @@ class PagesMixin:
                       "labels": labels, "total": total[0][0] if total else len(rows), "q": q,
                       "rows": [{"key": str(r[0]), "fields": dict(zip(show[1:], r[1:]))} for r in rows]})
 
+    def record_find(self, q: str, limit: int = 10) -> dict:
+        """Records of any type whose key is the words or whose name holds them: where a graph or a search starts."""
+        st, o = self.studio, self.studio.onto
+        q = " ".join(str(q or "").split())[:60]
+        if not q:
+            return {"q": q, "items": []}
+        out = []
+        for name, t in o.objects.items():
+            if not t.table or len(out) >= limit:
+                continue
+            tp = _title(o, name)
+            parts = [Cmp(Ref("x", t.key), "eq", q)] + ([Contains(Ref("x", tp), q)] if tp and tp != t.key else [])
+            cols = [Column(Ref("x", t.key), "k")] + ([Column(Ref("x", tp), "t")] if tp and tp != t.key else [])
+            try:
+                rows = st.run(Query(nodes={"x": name}, where=Or(parts) if len(parts) > 1 else parts[0], columns=cols,
+                                    order=[Order("k")], limit=3)).rows
+            except Exception:  # a type the source cannot search is passed over
+                continue
+            out += [{"type": name, "type_label": t.label or name, "key": str(r[0]), "title": r[1] if len(r) > 1 else None}
+                    for r in rows]
+        exact = [x for x in out if x["key"] == q]
+        return plain({"q": q, "items": (exact + [x for x in out if x["key"] != q])[:limit]})
+
     # ---- what waits on a person ------------------------------------------------------------------------------------
 
     def inbox(self) -> dict:

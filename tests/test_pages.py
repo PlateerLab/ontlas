@@ -152,3 +152,10 @@ def test_a_record_graph_grows_by_relation_and_finds_what_joins_two_records(sessi
     with pytest.raises(ValueError):  # an unknown type is said before any path is tried
         session.record_path("Customer", "C001", "Nowhere", "X")
     assert "결정 반품 가능 여부" in session.element_readers("object:OrderItem")["readers"]
+
+
+def test_a_record_is_found_by_its_key_or_its_name_whatever_its_type(session):
+    assert session.record_find("C001")["items"][0] == {"type": "Customer", "type_label": "고객", "key": "C001", "title": "김하늘"}
+    found = session.record_find("니트")["items"]
+    assert {(x["type"], x["key"]) for x in found} >= {("Category", "K3"), ("Product", "P1")}
+    assert session.record_find("  ")["items"] == []
