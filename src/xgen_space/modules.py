@@ -486,7 +486,9 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                         _forget_in_roles(acc, prop=f"{t}.{p}")
                 continue
             if s == "questions":
-                acc["questions"] = [q for q in acc["questions"] if q["id"] not in items]
+                own = {q.get("id") for q in m.body.get("questions") or []}  # one it takes over and writes itself stays
+                last = {q["id"]: i for i, q in enumerate(acc["questions"])}
+                acc["questions"] = [q for i, q in enumerate(acc["questions"]) if q["id"] not in items or (q["id"] in own and last[q["id"]] == i)]
                 removed.update({f"question:{q}": m.name for q in items})
                 continue
             if s == "states":  # a type's state machine, when the source has no state column
@@ -570,7 +572,7 @@ def settle(module: Module, base: list[Module], **compose_kw) -> list[str]:
                        "link": "links", "identity": "identities", "metric": "metrics",
                        "conflict": "conflicts", "function": "functions"}.get(kind)
             if kind == "decision":
-                ident = ident.split(".", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
+                ident = ident.split(".", 1)[0].split(" ", 1)[0]  # an input's or a rule's issue: the decision cannot be fed
             if section and f"{SINGULAR.get(section, 'question')}:{ident}" not in own:
                 if ident not in module.remove.get(section, []):
                     module.remove.setdefault(section, []).append(ident)

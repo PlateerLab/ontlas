@@ -122,17 +122,23 @@ def _reading(st, table, key: str) -> str:
         return ""
 
 
-def _rule_module(st, name: str, rule_id: str) -> dict:
-    """The module that wrote a rule and its version: the one that defined the table, or a later one that added it."""
-    comp = st.composition
-    if comp is None:
-        return {"module": "", "module_label": "", "version": st.onto.version}
+def rule_owner(comp, name: str, rule_id: str) -> str:
+    """The module that wrote a rule: the one that defined the table, or a later one that added or rewrote it."""
     owner = comp.owner(f"decision:{name}")
     for m in comp.modules:
         patch = ((m.extend or {}).get("decisions") or {}).get(name) or {}
         added = {r.get("id") for k in ("rules_prepend", "rules_append") for r in patch.get(k) or []}
         if rule_id in added | set(patch.get("rules_replace") or {}):
             owner = m.name
+    return owner
+
+
+def _rule_module(st, name: str, rule_id: str) -> dict:
+    """The module that wrote a rule and its version."""
+    comp = st.composition
+    if comp is None:
+        return {"module": "", "module_label": "", "version": st.onto.version}
+    owner = rule_owner(comp, name, rule_id)
     mod = next((m for m in comp.modules if m.name == owner), None)
     return {"module": owner, "module_label": (mod.label or owner) if mod else owner, "version": mod.version if mod else ""}
 

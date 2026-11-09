@@ -414,7 +414,7 @@ window.SpaceGraph = (function () {
       nodeReducer(id, a) {
         const o = { ...a, label: !a.raw ? a.label : (st.opt.label ? st.opt.label(a.raw) : a.raw.label) };
         if (!seen(st, id, a)) { o.hidden = true; return o; }
-        if (prefs.nodeLabels) o.forceLabel = true;
+        if (prefs.nodeLabels || st.opt.labels) o.forceLabel = true;
         if (st.only) {
           const mine = id === selected(st) || (st.route && st.route.nodes);
           if (mine) { o.highlighted = true; o.forceLabel = true; o.zIndex = 2; }
@@ -426,7 +426,7 @@ window.SpaceGraph = (function () {
         if (id === f || st.graph.areNeighbors(id, f)) {
           o.highlighted = true; o.forceLabel = true; o.zIndex = 2;
           if (id === selected(st)) o.borderColor = FOCUS;
-        } else {
+        } else if (!st.opt.labels) {  // a graph that keeps every name shows the focus without dimming the rest
           o.color = DIM; o.borderColor = '#F1F2F4'; o.label = ''; o.forceLabel = false; o.zIndex = 0;
         }
         return o;
@@ -436,12 +436,12 @@ window.SpaceGraph = (function () {
         const both = seen(st, s, g.getNodeAttributes(s)) && seen(st, t, g.getNodeAttributes(t));
         if (!both || (st.opt.shown && !st.opt.shown('edge', raw))) { o.hidden = true; return o; }
         const word = a.raw ? a.raw.label : a.label;
-        if (prefs.edgeLabels) { o.label = word; o.forceLabel = true; }
+        if (prefs.edgeLabels || st.opt.labels) { o.label = word; o.forceLabel = true; }
         const way = st.route && st.route.keys;
         if (way && !way.has(key)) { o.hidden = true; return o; }
         const f = st.only ? selected(st) : focusOf(st);
         if (!f) return o;
-        if (!way && s !== f && t !== f) { if (!st.only) o.hidden = true; return o; }
+        if (!way && s !== f && t !== f) { if (!st.only && !st.opt.labels) o.hidden = true; return o; }
         o.color = FOCUS; o.size = Math.max(a.size, 1.8); o.zIndex = 1;
         if (way || g.degree(f) <= EDGE_NAMES) { o.label = word; o.forceLabel = true; }
         return o;

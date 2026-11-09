@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
 import threading
 import time
 import uuid
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,7 @@ from xgen_space.compile.base import CompileError, compiler_for
 from xgen_space.conformance import normalize_rows
 from xgen_space.ir import Column, Query, Ref
 from xgen_space.library import OverlayLibrary
-from xgen_space.modules import Module, ModuleError, compose
+from xgen_space.modules import Module, ModuleError, Requirement, compose
 from xgen_space.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_text
 from xgen_space.repository import Repositories, clean_path, is_litter
 from xgen_space.roles import apply_role
@@ -89,7 +90,17 @@ RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", 
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
+SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
+IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "questions", "액션": "actions", "역할": "roles",
+                "함수": "functions", "계산 속성": "computed"}  # what _readers says each reader is
+PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
+                      r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
+    (r"^query '(.+)' already exists$", r"질의 '\1'이(가) 이미 있어 저장하지 못했습니다. 다른 영문 이름을 입력해 주세요."),
+    (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
+    (r"^hit policy priority needs a priority on every rule; (.+) have none$", r"우선순위 방식은 규칙마다 우선순위가 있어야 합니다. \1에 우선순위를 먼저 정해 주세요."),
+    (r"^hit policy '(.+)' is not one of .*$", r"적용 방식 '\1'은 쓸 수 없습니다."),
+    (r"^type '(.+)' is not one of .*$", r"자료형 '\1'은 쓸 수 없습니다. 문자열, 정수, 소수, 참 · 거짓, 날짜, 일시, 허용값 중에서 골라 주세요."),
     (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^rule '(.+)' is unknown in (\S+)$", r"규칙 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
@@ -261,6 +272,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.origin = origin or {"kind": "config"}
         self.lock = threading.RLock()
         self.log: list[dict] = []
+        self._measured: dict = {}  # what the last look at the flow found, item by item
+        self._issue_open: dict | None = None  # issue id -> when it opened and what it was called
         self.used = time.time()
         if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
             studio.library = OverlayLibrary(studio.library, [])  # a visitor's edited modules are kept here
@@ -299,7 +312,7 @@ class StudioSession(SpaceMixin, PagesMixin):
     # ---- helpers -------------------------------------------------------------------------------------------
 
     def _note(self, kind: str, text: str, **detail) -> None:
-        self.log.insert(0, {"kind": kind, "text": text, **plain(detail)})
+        self.log.insert(0, {"kind": kind, "text": text, "at": datetime.now().isoformat(timespec="seconds"), **plain(detail)})
         del self.log[30:]
         self.event(kind, text)
 
@@ -1118,9 +1131,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 tuple(f["sha256"] for f in self.repositories.files(self.repo).values()), tuple(self.space.stores),
                 id(self.log[0]) if self.log else 0, sum(c.status == "pending" for c in st.changes.requests.values()))
 
-    def monitor(self) -> dict:
-        """The board: measured when something changed or a while has passed, and read at every look."""
-        from xgen_space.web.monitor import board, failed
+    def _watched(self) -> tuple[dict, bool]:
+        """The last measurement, taken again when something changed or a while has passed; whether it is new."""
+        from xgen_space.web.monitor import failed
 
         sig, now = self._monitor_sig(), time.time()
         w = self._watch
@@ -1131,10 +1144,79 @@ class StudioSession(SpaceMixin, PagesMixin):
             bind = next(s for s in flow["steps"] if s["id"] == "bind")
             findings = self.bindings()["findings"] if failed(bind) else []
             took = round((time.perf_counter() - started) * 1000)
-            w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took,
+            w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took, "measured": self._measured,
                                "stamp": datetime.now().isoformat(timespec="seconds")}
             gates = [g for s in flow["steps"] for g in s["gates"]]
             self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
+        return w, fresh
+
+    def _issues(self, w: dict, *, changes: int, actions: int, dirty: bool) -> list[dict]:
+        """What is wrong as things stand: built once per measurement, with what waits on a person read every time."""
+        from xgen_space.web import issues
+
+        if "built" not in w:
+            w["built"] = plain(issues.build(self, w))
+        out = [*w["built"], *plain(issues.waiting(self, dirty=dirty, changes=changes, actions=actions))]
+        self._track_issues(out)
+        return sorted(out, key=lambda x: (x["level"] != "bad", not x["members"]))
+
+    def _track_issues(self, issues: list[dict]) -> None:
+        """When each issue opened and closed, in the journal so a restart still knows how long it has been open."""
+        journal = self.studio.changes.journal
+        if self._issue_open is None:
+            self._issue_open = {}
+            for r in journal.read() if journal is not None else []:
+                if r.get("kind") == "issue" and r.get("event") == "open":
+                    self._issue_open[r["id"]] = {"at": r.get("at", ""), "title": r.get("title", "")}
+                elif r.get("kind") == "issue":
+                    self._issue_open.pop(r.get("id"), None)
+        now = datetime.now().isoformat(timespec="seconds")
+        here = {x["id"] for x in issues if not x["direct"]}
+        for x in issues:
+            if x["direct"]:
+                continue
+            if x["id"] not in self._issue_open:
+                self._issue_open[x["id"]] = {"at": now, "title": x["title"]}
+                if journal is not None:
+                    journal.write("issue", {"event": "open", "id": x["id"], "at": now, "title": x["title"], "level": x["level"]})
+            x["since"] = self._issue_open[x["id"]]["at"]
+        for gone in [k for k in self._issue_open if k not in here]:
+            if journal is not None:
+                journal.write("issue", {"event": "resolved", "id": gone, "at": now, "title": self._issue_open[gone]["title"]})
+            self.event("issue", f"해결됨 · {self._issue_open[gone]['title']}")
+            del self._issue_open[gone]
+
+    def issues(self) -> dict:
+        """What is wrong right now and how to fix it, for every page that says so."""
+        st = self.studio
+        w, _ = self._watched()
+        gates = [g for s in w["flow"]["steps"] for g in s["gates"]]
+        return plain({"issues": self._issues(w, changes=sum(c.status == "pending" for c in st.changes.requests.values()),
+                                             actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
+                                             dirty=bool(self.workspace and self.workspace.dirty)),
+                      "measured_at": w["stamp"], "gates": {"met": sum(g["passed"] for g in gates), "all": len(gates)}})
+
+    def module_preview(self, name: str) -> dict:
+        """What taking a module off would do, tried on a copy before it is done."""
+        from xgen_space.review import gates, measure, trial
+
+        st = self.studio
+        imp = st.detach_impact(name)
+        out = {"module": name, "label": self._label(name), "impact": imp.to_dict(), "removed": [self._element_label(x) for x in imp.removed]}
+        if imp.ok and st.composition is not None:
+            try:
+                copy = trial(st, [m for m in st.composition.modules if m.name != name], st.flow)
+                results = gates(measure(copy, copy.flow), copy.flow)
+                out["gates"] = {"met": sum(g.passed for g in results), "all": len(results), "failed": [g.condition for g in results if not g.passed]}
+            except Exception as e:  # a copy that cannot be measured: the page says what would be removed and no more
+                out["error"] = str(e)
+        return plain(out)
+
+    def monitor(self) -> dict:
+        """The board: measured when something changed or a while has passed, and read at every look."""
+        from xgen_space.web.monitor import board
+
+        w, fresh = self._watched()
         st = self.studio
         comp = st.composition
         on = {m.name for m in comp.modules} if comp else set()
@@ -1145,13 +1227,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         def owner(element: str) -> str:
             return self._label(comp.owner(element)) if comp else ""
 
+        changes = sum(c.status == "pending" for c in st.changes.requests.values())
+        actions = sum(p.status == "pending" for p in st.actions.proposals.values())
+        dirty = bool(self.workspace and self.workspace.dirty)
         out = board(w["flow"], files=self.repositories.files(self.repo), onto=st.onto, owner_label=owner,
                     reasoners=[r.name for r in st.reasoners.values()], graphs=[{"name": n, "language": b.capabilities.language}
                                                                                 for n, b in st.backends.items() if b.capabilities.load],
-                    modules=[], findings=w["findings"], faults=faults,
-                    changes=sum(c.status == "pending" for c in st.changes.requests.values()),
-                    actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
-                    dirty=bool(self.workspace and self.workspace.dirty))
+                    modules=[], findings=w["findings"], faults=faults, changes=changes, actions=actions, dirty=dirty)
+        out["issues"] = [x for x in self._issues(w, changes=changes, actions=actions, dirty=dirty) if x["alert"]]
         return plain({**out, "now": datetime.now().isoformat(timespec="seconds"), "measured_at": w["stamp"],
                       "measured": fresh, "took": w["took"], "events": list(self.events)[:12],
                       "repository": self._repository_row()["label"], "notice": self.origin.get("notice", "")})
@@ -1465,7 +1548,57 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     def _draft_view(self) -> dict:
         d = self.pending[0]
-        return {"label": d.label, "origin": d.origin, "steps": d.steps(), **self._revised(d)}
+        return {"label": d.label, "origin": d.origin, "steps": d.steps(), "names": self._english(d), **self._revised(d)}
+
+    def _english(self, d) -> dict:
+        """An English name for each object the draft named by romanizing it: from the library's words and the
+        glossaries, or nothing when a part of its name is not a known word."""
+        from xgen_space.naming import english, vocabulary
+
+        ontos = [self.studio.onto]
+        names = [r["name"] for r in self.standards()["standards"]]
+        if names:
+            try:
+                ontos.append(self._standard(names)[1])
+            except ValueError:  # standards that do not compose together still leave the space's own words
+                pass
+        words = vocabulary(ontos, [*self._terms(), *(d.terms or [])])
+        out = {}
+        for o in d.objects:
+            got = english(o.label, words) or english(o.table, words)
+            out[o.name] = {"name": got[0], "parts": got[1]} if got else {"name": "", "parts": []}
+        return out
+
+    def draft_table(self, table: str) -> dict:
+        """One table of the draft as a person checks it: a few rows, how unique its key is, what each column holds,
+        and the columns that look personal enough to hide."""
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 테이블을 보여 주지 못했습니다. 초안을 먼저 생성해 주세요.")
+        d, b = self.pending[0], self.pending[1]
+        prof = next((t for t in d.tables if t.name == table), None)
+        if prof is None:
+            raise LookupError(table)
+        from xgen_space.compile.sql import qi
+
+        cols = [c.name for c in prof.columns]
+        pick = ", ".join(qi(c) for c in cols)
+        dialect = b.capabilities.dialect
+        sql = (f"SELECT TOP {SAMPLE_ROWS} {pick} FROM {qi(table)}" if dialect == "tsql" else
+               f"SELECT {pick} FROM {qi(table)} FETCH FIRST {SAMPLE_ROWS} ROWS ONLY" if dialect == "oracle" else
+               f"SELECT {pick} FROM {qi(table)} LIMIT {SAMPLE_ROWS}")
+        try:
+            rows = [list(r) for r in b.fetch(sql)]
+        except Exception:  # a source that will not show rows still has its profile
+            rows = []
+        o = next((x for x in d.objects if x.table == table), None)
+        key_col = next((p.column for p in o.properties if p.name == o.key), "") if o else ""
+        kp = next((c for c in prof.columns if c.name == key_col), None)
+        return plain({"table": table, "rows": prof.rows, "columns": cols, "sample": rows,
+                      "key": {"column": key_col, "distinct": kp.distinct if kp else 0, "nulls": kp.nulls if kp else 0,
+                              "why": o.key_why if o else ""},
+                      "profile": [{"name": c.name, "type": c.type, "distinct": c.distinct, "nulls": c.nulls,
+                                   "values": len(c.values)} for c in prof.columns],
+                      "personal": [c for c in cols if PERSONAL.search(c)]})
 
     @staticmethod
     def _revised(d) -> dict:
@@ -1502,7 +1635,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         return d.revise(drop=[str(x) for x in e.get("drop") or []],
                         labels={k: v[:60] for k, v in pairs("labels").items() if v.strip()},
                         keys=pairs("keys"), types=pairs("types"), values=values, cardinality=pairs("cardinality"),
-                        add_links=[x for x in e.get("add_links") or [] if isinstance(x, dict)])
+                        add_links=[x for x in e.get("add_links") or [] if isinstance(x, dict)],
+                        names={k: v.strip() for k, v in pairs("names").items() if v.strip()})
 
     # ---- a decision table from past outcomes, and bindings onto a standard ----------------------------------------
 
@@ -1559,15 +1693,16 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 연결을 제안하지 못했습니다. 초안을 먼저 생성해 주세요.")
-        _, onto = self._standard(standard)
+        mods, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
         if tables:
             s = retarget(s, d, onto, {str(k): str(v) for k, v in tables.items() if v}, self._terms())
+        owner = {o: m.label or m.name for m in mods for o in (m.body.get("objects") or {})}
         objs = []
         for m in s.objects:
             o = onto.objects[m.object]
-            objs.append({**m.__dict__, "label": o.label or m.object,
+            objs.append({**m.__dict__, "label": o.label or m.object, "module_label": owner.get(m.object, ""),
                          "columns": [{**c.__dict__, "label": (find_prop(onto, m.object, c.property).label
                                                               or c.property)} for c in m.columns],
                          "missing": [{"property": p, "label": find_prop(onto, m.object, p).label or p}
@@ -1578,7 +1713,95 @@ class StudioSession(SpaceMixin, PagesMixin):
                       "unbound_objects": [{"name": t, "label": onto.objects[t].label or t} for t in s.unbound_objects],
                       "tables": tables, "standard": [str(x) for x in standard]})
 
-    def apply_mapping(self, standard: list, edits: dict | None = None, mapping: dict | None = None) -> dict:
+    def apply_review(self, standard: list, edits: dict | None = None, choices: dict | None = None,
+                     mapping: dict | None = None) -> dict:
+        """The draft as its review left it, table by table: a table a person bound to the standard becomes a binding
+        of the standard's object, the others new objects beside the standard, joined to it where the draft found the
+        tables joined."""
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 적용하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not any(c == "standard" for c in (choices or {}).values()):
+            return self.apply_draft(edits)
+        objects, extra = self._review_plan(standard, edits, choices)
+        return self.apply_mapping(standard, edits, {**(mapping or {}), "objects": objects}, extra=extra)
+
+    def _review_plan(self, standard: list, edits: dict | None, choices: dict | None) -> tuple[dict, list[Module]]:
+        """Which standard object each bound table binds, and the modules of the tables kept as new objects."""
+        from xgen_space.mapping import suggest
+
+        bound = {str(t) for t, c in (choices or {}).items() if c == "standard"}
+        _, onto = self._standard(standard)
+        d = self._edit(self.pending[0], edits)
+        s = suggest(d, onto, [str(x) for x in standard], self._terms())
+        to_std = {m.table: m for m in s.objects if m.table in bound}
+        objects = {m.object: (m.table if m.table in to_std else None) for m in s.objects}
+        kept = [o for o in d.objects if o.table not in to_std]
+        return objects, (self._beside(d, kept, to_std, onto, [str(x) for x in standard]) if kept else [])
+
+    def review_preview(self, standard: list, edits: dict | None = None, choices: dict | None = None) -> dict:
+        """What applying the review would plug in, before it does: the module files and the checks they fail."""
+        import yaml
+
+        from xgen_space.mapping import binding, suggest
+
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 미리 보지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not any(c == "standard" for c in (choices or {}).values()):
+            return self.preview_draft(edits)
+        try:
+            objects, extra = self._review_plan(standard, edits, choices)
+            mods, onto = self._standard(standard)
+            d = self._edit(self.pending[0], edits)
+            m = binding(suggest(d, onto, [str(x) for x in standard], self._terms()), onto, name=f"{d.name}-standard",
+                        label=f"{d.label} 표준 연결", edits={"objects": objects}, draft=d, terms=self._terms(), base=mods)
+        except ValueError as e:
+            return {"ok": False, "issues": [str(e)]}
+        comp = compose([*mods, m, *extra], **self.studio._compose_kw)
+        return plain({"ok": True, "issues": list(comp.issues),
+                      "modules": [{"name": x.name, "kind": x.kind, "label": x.label,
+                                   "yaml": yaml.safe_dump(x.to_dict(), allow_unicode=True, sort_keys=False)}
+                                  for x in [m, *extra]]})
+
+    @staticmethod
+    def _beside(d, kept, to_std: dict, onto, standard: list[str]) -> list[Module]:
+        """The draft's other tables as modules over the standard: their objects, and the relations the draft found
+        between them and the tables bound to the standard, now on the standard's objects."""
+        clash = sorted(o.name for o in kept if o.name in onto.objects)
+        if clash:
+            raise ValueError(f"새 객체 {', '.join(clash)}의 이름이 표준 객체와 같아 적용하지 못했습니다. API 이름을 바꾸거나 "
+                             "표준에 연결해 주세요.")
+        names = {o.name for o in kept}
+        by_name = {o.name: o for o in d.objects}
+        rest = d.revise(drop=[f"object:{o.name}" for o in d.objects if o.name not in names])
+        mods = rest.modules()
+        dom, bind = mods[0], mods[1]
+        dom.requires = [*dom.requires, *[Requirement(n) for n in standard]]
+        for lk in d.links:
+            out_, in_ = lk.source in names, lk.target in names
+            if out_ == in_ or lk.via or not lk.on:
+                continue
+            std = to_std.get(by_name[lk.target if out_ else lk.source].table)
+            if std is None:
+                continue
+            so = onto.objects[std.object]
+            if out_:  # a new object refers to a bound one: by the standard's key, if it reads the same column
+                key_col = next((c.column for c in std.columns if c.property == so.key), "")
+                target_key = next((p.column for p in by_name[lk.target].properties if p.name == lk.on[1]), "")
+                if not key_col or key_col != target_key:
+                    continue
+                spec, on = {"from": lk.source, "to": std.object}, {lk.on[0]: so.key}
+            else:  # a bound object refers to a new one: on the standard property its column is bound to
+                prop = next((c.property for c in std.columns if c.column == lk.column), None)
+                if prop is None:
+                    continue
+                spec, on = {"from": std.object, "to": lk.target}, {prop: lk.on[1]}
+            name = lk.name if lk.name not in onto.links else f"{lk.name}Link"
+            dom.body["links"][name] = {**spec, "cardinality": lk.cardinality, "label": lk.label}
+            bind.extend.setdefault("links", {})[name] = {"on": on}
+        return mods
+
+    def apply_mapping(self, standard: list, edits: dict | None = None, mapping: dict | None = None,
+                      extra: list[Module] | None = None) -> dict:
         from xgen_space.backends.rdf import RdflibBackend
         from xgen_space.draft import LABELS
         from xgen_space.mapping import binding, suggest
@@ -1591,12 +1814,13 @@ class StudioSession(SpaceMixin, PagesMixin):
         m = binding(s, onto, name=f"{d.name}-standard", label=f"{d.label} 표준 연결", edits=mapping or {}, draft=d,
                     terms=self._terms(), base=mods)
         m.terms, m.messages = list(d.terms), list(d.messages)  # the system's words go with its binding
-        comp = compose([*mods, m], **self.studio._compose_kw)
+        extra = list(extra or [])
+        comp = compose([*mods, m, *extra], **self.studio._compose_kw)
         if comp.issues:
             raise ValueError("정의 검사에서 오류가 발견되어 연결하지 못했습니다. " + "; ".join(comp.issues[:5]))
 
         def build() -> Studio:
-            st = Studio.from_modules([*mods, m], library=OverlayLibrary(self.studio.library, [m]),
+            st = Studio.from_modules([*mods, m, *extra], library=OverlayLibrary(self.studio.library, [m, *extra]),
                                      use_zen=self.studio.use_zen, **self.studio._compose_kw)
             st.add_backend("source", self.pending[1], source=True)
             st.add_backend("graph", RdflibBackend())
@@ -1640,9 +1864,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
                                                               ("actions", "Action")) if m.remove.get(k)]
+        news = len(extra[0].body.get("objects") or {}) if extra else 0
         self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
                             f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
-                            f"테이블에 없는 속성 {removed}개 제외"
+                            + (f"새 객체 {news}개, " if news else "")
+                            + f"테이블에 없는 속성 {removed}개 제외"
                             + (f"(이 속성을 사용하는 {', '.join(uses)} 제외)" if uses else "")
                             + (f", 예시 데이터 기준 표준 검증 질문 {renewed}개는 업로드 데이터의 답으로 다시 등록" if renewed else "")
                             + (f", 업로드 데이터로 답할 수 없는 표준 검증 질문 {len(wrong) - renewed}개 제외"
@@ -1795,13 +2021,25 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     # ---- definition changes: a module version is proposed, reviewed on a copy, approved by a person ------------
 
+    def _change_label(self, cr) -> str:
+        """A change's module by its name for people: the library's, else the label its own file gives."""
+        import yaml
+
+        label = self._label(cr.module)
+        if label != cr.module:
+            return label
+        try:
+            return str((yaml.safe_load(cr.text) or {}).get("label") or cr.module)
+        except yaml.YAMLError:
+            return cr.module
+
     def _change(self, cr) -> dict:
         rv = cr.review
         gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
                   "stage_label": STAGE_LABEL.get(g["stage"], g["stage"])} for g in rv.get("gates") or []]
         m = rv.get("measured") or {}
         return plain({
-            "id": cr.id, "module": cr.module, "module_label": self._label(cr.module), "version": cr.version,
+            "id": cr.id, "module": cr.module, "module_label": self._change_label(cr), "version": cr.version,
             "base_version": rv.get("base_version", ""), "mode": rv.get("mode", ""), "status": cr.status,
             "status_label": CHANGE_STATUS.get(cr.status, cr.status), "requested_by": cr.requested_by,
             "decided_by": cr.decided_by, "reason": cr.reason, "at": cr.at, "passed": rv.get("passed"),
@@ -1879,7 +2117,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             old = self.workspace
             ws = Workspace(list(comp.modules), current, compose_kw=self.studio._compose_kw)
             if old is not None and old.dirty:  # unsent edits carry over to the new modules; they are checked again
-                ws.module, ws.edits = old.module, old.edits
+                ws.module, ws.edits, ws._before, ws._undone = old.module, old.edits, old._before, old._undone
             self.workspace, self._ws_sig = ws, sig
         return self.workspace
 
@@ -1899,6 +2137,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         o, base = comp.ontology, self.studio.onto
         issues += list(comp.issues)
         mine = ws.module
+        pending_check = []
+        if ws.dirty and self.studio.source and not comp.issues:  # whether the unsent edits already mend what the source lacks
+            try:
+                from xgen_space.bindings import check_bindings
+
+                pending_check = [asdict(f) for f in check_bindings(o, self.studio.backends[self.studio.source], data=False).findings]
+            except Exception:  # the source could not be read: the page goes by the last measurement
+                pending_check = []
         diff = element_diff(base, o) if ws.dirty else {"added": [], "removed": [], "changed": []}
         touched = set(diff["changed"])  # what the unsent edits change; what they add is marked new
 
@@ -1913,6 +2159,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             if t.table:
                 bound.setdefault(t.table, []).append(t.name)
         linked = {lk.source for lk in o.links.values()} | {lk.target for lk in o.links.values()}
+        kinds = {m.name: m.kind for m in comp.modules}
         objects = []
         for t in o.objects.values():
             props = all_props(o, t.name)
@@ -1921,7 +2168,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "key": t.key, "parent": t.parent, "concept": not t.table, "properties": len(props),
                 "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
-                "rows": rows.get(t.table) if t.table else None, "states": bool(t.states),
+                "rows": rows.get(t.table) if t.table else None, "states": bool(t.states), "series": bool(t.series),
+                "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"object:{t.name}", [])
+                                if x != comp.owner(f"object:{t.name}") and kinds.get(x) != "binding"],  # a binding only places it
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
         from xgen_space.model import RAW_SUFFIX
 
@@ -1940,6 +2189,8 @@ class StudioSession(SpaceMixin, PagesMixin):
                     "unit": p.unit,
                     "description": p.description, "key": pname == t.key, "inherited": from_type if from_type != t.name else "",
                     "pending": f"property:{t.name}.{pname}" in touched,
+                    "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"property:{from_type}.{pname}", [])
+                                    if x != comp.owner(f"property:{from_type}.{pname}") and kinds.get(x) != "binding"],
                     "new": t.name not in base.objects or pname not in all_props(base, t.name),
                     **owner(f"property:{from_type}.{pname}")})
         links = [{"name": lk.name, "label": lk.label, "source": lk.source, "target": lk.target,
@@ -1960,6 +2211,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                    "objects": bound.get(t, []), "links": via.get(t, [])} for t, cols, pk, fks in catalog]
         import yaml
 
+        from xgen_space.answer import rule_owner
         from xgen_space.decide.words import cell_parts, cell_words, input_label, labels_of, reads, unit_of
 
         decisions = []
@@ -1971,7 +2223,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "name": t.name, "label": t.label or t.name, "target": t.target, "target_label": t.target and mine_label(o, t.target),
                 "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
                 "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
-                "rules": [{"id": r.id, "cite": r.cite, "then": r.then,
+                "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "module": rule_owner(comp, t.name, r.id),
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
                            "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
                           for r in t.rules]})
@@ -2025,6 +2277,8 @@ class StudioSession(SpaceMixin, PagesMixin):
             "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
             "folders": self.studio.space.folders() if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
+            "unread": [x["name"] for x in objects if not x["concept"] and not self._readers(f"object:{x['name']}")],
+            "comments": {k: len(v) for k, v in self._notes().items() if v},
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,
                                    "unbound": [x["table"] for x in tables if not x["objects"] and not x["links"]]},
@@ -2032,10 +2286,219 @@ class StudioSession(SpaceMixin, PagesMixin):
                                    for n, b in self.studio.backends.items() if n != self.studio.source]},
             "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label,
                           "version": ws.current.version if ws.current else "",
-                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits],
-                          "issues": issues, "diff": diff,
+                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits], "redo": len(ws._undone),
+                          "issues": issues, "diff": diff, "impact": self._impact(diff), "findings": pending_check,
                           "yaml": yaml.safe_dump(mine.to_dict(), allow_unicode=True, sort_keys=False)},
         })
+
+    def _impact(self, diff: dict) -> dict:
+        """How many queries, decisions, questions, actions and roles read what the pending edits change or take out."""
+        seen: set[str] = set()
+        for el in [*diff.get("changed", []), *diff.get("removed", [])]:
+            if el.split(":", 1)[0] in ("object", "property", "link", "decision", "rule", "query"):
+                seen.update(self._readers(el))
+        out: dict[str, int] = {}
+        for r in seen:
+            kind = next((w for w in IMPACT_KINDS if r.startswith(w)), "")
+            if kind:
+                out[IMPACT_KINDS[kind]] = out.get(IMPACT_KINDS[kind], 0) + 1
+        return out
+
+    def manage_undo(self) -> dict:
+        ws = self._ws()
+        if ws.undo() is None:
+            raise ValueError("되돌릴 변경이 없습니다.")
+        return {"ok": True, **self.manage_state()}
+
+    def manage_redo(self) -> dict:
+        from xgen_space.manage import EditError
+
+        try:
+            if self._ws().redo() is None:
+                raise ValueError("다시 실행할 변경이 없습니다.")
+        except EditError as e:
+            raise ValueError(_edit_text(str(e))) from None
+        return {"ok": True, **self.manage_state()}
+
+    def manage_revert(self, index: int) -> dict:
+        """One pending edit taken back, the ones after it kept."""
+        from xgen_space.manage import EditError
+
+        try:
+            self._ws().revert(int(index))
+        except EditError as e:
+            raise ValueError(f"뒤에 있는 변경({e})이 이 변경에 기대고 있어 되돌리지 못했습니다. 그 변경을 먼저 되돌려 주세요.") from None
+        return {"ok": True, **self.manage_state()}
+
+    def link_suggest(self, source: str, target: str) -> dict:
+        """How two objects would join, from the names and references the source shows, and how many rows would meet."""
+        from xgen_space.check import columns_of
+        from xgen_space.compile.sql import qi
+
+        o, _ = self._pending_onto()
+        if source not in o.objects or target not in o.objects:
+            raise ValueError("객체를 찾지 못해 관계를 제안하지 못했습니다. 카드를 다시 선택해 주세요.")
+        a, b = o.objects[source], o.objects[target]
+        pa, pb = all_props(o, source), all_props(o, target)
+        fields = {p: find_prop(o, source, p) for p in pa}, {p: find_prop(o, target, p) for p in pb}
+        same = lambda p, x: p in x and not fields[x is pb][p].expr  # noqa: E731
+        options: list[tuple[str, str, str]] = []
+        if same(b.key, pa):
+            options.append((b.key, b.key, "many_to_one"))
+        if same(a.key, pb) and (a.key, a.key, "one_to_many") not in options:
+            options.append((a.key, a.key, "one_to_many"))
+        for p in pa:  # a column named for the other table's key: order_no for an Order keyed by no, buyer_id for Buyer
+            if (p == f"{target.lower()}_{b.key}" or p == f"{target.lower()}_id") and p != b.key and same(b.key, pb):
+                options.append((p, b.key, "many_to_one"))
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+        met = []
+        for sp, tp, card in options[:4]:
+            row = {"sp": sp, "tp": tp, "cardinality": card, "ratio": None, "matched": None, "total": None}
+            if src is not None and a.table and b.table:
+                try:
+                    s, t = columns_of(o, source, sp)[0], columns_of(o, target, tp)[0]
+                    many, m_col, one, o_col = (a.table, s, b.table, t) if card == "many_to_one" else (b.table, t, a.table, s)  # counted from the side that points
+                    got = src.fetch(f"SELECT COUNT(m.{qi(m_col)}), COUNT(u.{qi(o_col)}) FROM {qi(many)} m LEFT JOIN {qi(one)} u ON m.{qi(m_col)} = u.{qi(o_col)} "
+                                    f"WHERE m.{qi(m_col)} IS NOT NULL")[0]
+                    row.update({"total": got[0], "matched": got[1], "ratio": got[1] / got[0] if got[0] else None})
+                except Exception:  # columns that cannot be joined have no ratio to show
+                    row["ratio"] = None
+            met.append(row)
+        met.sort(key=lambda r: -(r["ratio"] or 0))
+        taken = {lk.name for lk in o.links.values()} | {lk.inverse for lk in o.links.values() if lk.inverse}
+        first = target[:1].lower() + target[1:]
+        name = first if first not in taken else f"{source[:1].lower()}{source[1:]}{target}"
+        return plain({"source": source, "target": target, "name": name, "label": b.label or target, "options": met,
+                      "props": {"source": [{"name": p, "label": f.label or p} for p, f in fields[0].items() if not f.expr],
+                                "target": [{"name": p, "label": f.label or p} for p, f in fields[1].items() if not f.expr]}})
+
+    def object_profile(self, name: str) -> dict:
+        """A few rows of an object as the source holds them, and for each column how full and how varied it is."""
+        from xgen_space.check import columns_of
+        from xgen_space.compile.sql import qi
+
+        o, _ = self._pending_onto()
+        t = o.objects.get(name)
+        if t is None or not t.table:
+            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+        if src is None:
+            return {"ok": False, "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다."}
+        have = src.columns(t.table) or {}
+        props = [p for p in all_props(o, name) if not find_prop(o, name, p).expr
+                 and len(columns_of(o, name, p)) == 1 and columns_of(o, name, p)[0].lower() in have][:14]
+        if not props:
+            return {"ok": False, "error": f"{t.table} 테이블에서 읽을 수 있는 컬럼이 없습니다."}
+        cols = [columns_of(o, name, p)[0] for p in props]
+        dialect = src.capabilities.dialect
+        top, first = ("TOP 6 " if dialect == "tsql" else ""), {"oracle": " FETCH FIRST 6 ROWS ONLY", "tsql": ""}.get(dialect, " LIMIT 6")
+        rows = src.fetch(f"SELECT {top}{', '.join(qi(c) for c in cols)} FROM {qi(t.table)}{first}")
+        counts = src.fetch(f"SELECT COUNT(*), {', '.join(f'COUNT({qi(c)}), COUNT(DISTINCT {qi(c)})' for c in cols)} FROM {qi(t.table)}")[0]
+        total = counts[0]
+        stats = [{"name": p, "label": find_prop(o, name, p).label or p, "column": c, "filled": counts[1 + i * 2], "distinct": counts[2 + i * 2],
+                  "empty": 1 - counts[1 + i * 2] / total if total else 0} for i, (p, c) in enumerate(zip(props, cols))]
+        return plain({"ok": True, "name": name, "table": t.table, "total": total, "columns": props, "rows": [list(r) for r in rows], "stats": stats})
+
+    def manage_trial(self) -> dict:
+        """The pending edits tried on a copy of the space, as a change request would be, without filing one: each pass
+        condition as it stands now and as it would be."""
+        from xgen_space.review import review
+
+        ws = self._ws()
+        if not ws.dirty:
+            raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
+        got = review(self.studio, ws.module, attach=ws.current is None)
+        gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"])} for g in got.get("gates") or []]
+        return plain({"ok": True, "passed": got.get("passed"), "issues": got.get("issues") or [], "gates": gates,
+                      "before": self._standing_gates(), "measured": got.get("measured") or {}, "diff": got.get("diff") or {}})
+
+    def element_yaml(self, element: str) -> dict:
+        """One object as the pending edits would leave it, in the shape a person writes it back."""
+        import yaml
+
+        kind, _, name = element.partition(":")
+        o = self._ws().composed().ontology
+        if kind != "object" or name not in o.objects:
+            raise LookupError(element)
+        t = o.objects[name]
+        spec: dict[str, Any] = {k: v for k, v in (("label", t.label), ("description", t.description), ("table", t.table),
+                                                  ("key", t.key), ("parent", t.parent), ("title", t.title)) if v}
+        props = {}
+        for p in t.properties:
+            d = find_prop(o, name, p)
+            col = column_of(o, name, p) if t.table and not d.expr else ""
+            props[p] = {k: v for k, v in (("label", d.label), ("type", d.type), ("column", col if col != p else ""),
+                                          ("unit", d.unit), ("values", list(d.values or [])), ("required", d.required),
+                                          ("mask", d.mask), ("expr", d.expr), ("description", d.description)) if v}
+        spec["properties"] = props
+        return {"element": element, "yaml": yaml.safe_dump({name: spec}, allow_unicode=True, sort_keys=False)}
+
+    def manage_yaml(self, element: str, text: str) -> dict:
+        """An object written back as YAML: what differs from the form becomes the same edits the form would make."""
+        import yaml
+
+        from xgen_space.manage import EditError
+
+        kind, _, name = element.partition(":")
+        try:
+            doc = yaml.safe_load(text or "")
+        except yaml.YAMLError as e:
+            raise ValueError(f"YAML을 읽지 못했습니다. {e}") from None
+        if kind != "object" or not isinstance(doc, dict) or list(doc) != [name] or not isinstance(doc[name], dict):
+            raise ValueError(f"'{name}:' 하나로 시작하는 객체 정의여야 합니다.")
+        new = doc[name]
+        old = yaml.safe_load(self.element_yaml(element)["yaml"])[name]
+        ws = self._ws()
+        snap, n = copy.deepcopy(ws.module.to_dict()), len(ws.edits)
+        try:
+            fields = {k: new.get(k, "") for k in ("label", "description", "table", "parent", "title") if new.get(k, "") != old.get(k, "")}
+            if new.get("key") and new.get("key") != old.get("key"):
+                fields["key"] = new["key"]
+            have, want = old.get("properties") or {}, new.get("properties") or {}
+            for p, spec in want.items():
+                spec = spec if isinstance(spec, dict) else {"type": str(spec)}
+                if p not in have:
+                    ws.apply("add_property", {"object": name, "name": p, **spec})
+                    continue
+                changed = {k: spec.get(k, "") for k in set(spec) | set(have[p]) if spec.get(k, "") != have[p].get(k, "")}
+                if changed:
+                    ws.apply("update_property", {"object": name, "name": p, **changed})
+            if fields:
+                ws.apply("update_object", {"name": name, **fields})
+            for p in have:
+                if p not in want:
+                    ws.apply("delete_property", {"object": name, "name": p})
+        except EditError as e:
+            ws.module, ws.edits, ws._before = Module.from_dict(snap), ws.edits[:n], ws._before[:n]
+            raise ValueError(_edit_text(str(e))) from None
+        return {"ok": True, **self.manage_state()}
+
+    def _notes(self) -> dict[str, list[dict]]:
+        """Comments on elements of the definition, kept in the journal with the change requests when there is one."""
+        if self._element_notes is None:
+            self._element_notes = {}
+            journal = self.studio.changes.journal
+            for r in journal.read() if journal is not None else []:
+                if r.get("kind") == "comment" and r.get("element"):
+                    self._element_notes.setdefault(r["element"], []).append(
+                        {k: r.get(k) for k in ("at", "by", "text")})
+        return self._element_notes
+
+    _element_notes: dict | None = None
+
+    def element_comments(self, element: str) -> dict:
+        return {"element": element, "comments": list(self._notes().get(element, []))}
+
+    def element_comment(self, element: str, text: str) -> dict:
+        text = " ".join(str(text or "").split())[:500]
+        if not element or not text:
+            raise ValueError("댓글이 없어 남기지 못했습니다. 내용을 입력해 주세요.")
+        note = {"at": self.studio.now().isoformat(timespec="minutes"), "by": self.who or "page", "text": text}
+        self._notes().setdefault(element, []).append(note)
+        journal = self.studio.changes.journal
+        if journal is not None:
+            journal.write("comment", {"element": element, **note})
+        return self.element_comments(element)
 
     def _source_catalog(self, src, read) -> tuple[list, dict]:
         """The source's tables and their row counts, read once per source (edits re-read the state often)."""
@@ -2221,7 +2684,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         from xgen_space.review import measure
 
         settings = st.flow
-        measured = measure(st, settings)
+        measured = self._measured = measure(st, settings)
         by = st.raised_gates()
         results = [{**g.__dict__, "label": GATE_LABEL.get((g.stage, g.condition), g.condition),
                     "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else ""}

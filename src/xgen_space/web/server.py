@@ -435,6 +435,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.function_log()
                 if route == "values":
                     return s.value_state()
+                if route == "issues":
+                    return s.issues()
+                if route == "issue/preview":
+                    return s.module_preview(a["module"])
+                if route == "manage/link/suggest":
+                    return s.link_suggest(a["source"], a["target"])
+                if route == "object/profile":
+                    return s.object_profile(a["name"])
                 if route == "files":
                     return s.files_state()
                 if route == "catalog":
@@ -475,6 +483,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
                 if route == "element/readers":
                     return s.element_readers(a["id"])
+                if route == "records/find":
+                    return s.record_find(a.get("q", ""), a.get("limit", 10), a.get("type", ""), a.get("offset", 0))
+                if route == "element/yaml":
+                    return s.element_yaml(a["id"])
+                if route == "element/comments":
+                    return s.element_comments(a["id"])
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
@@ -644,6 +658,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.suggest_mapping(a.get("standard") or [], a.get("edits"), a.get("tables"))
             if route == "draft/map/apply":
                 return s.apply_mapping(a.get("standard") or [], a.get("edits"), a.get("mapping"))
+            if route == "draft/table":
+                return s.draft_table(str(a.get("table", "")))
+            if route == "draft/review/preview":
+                return s.review_preview(a.get("standard") or [], a.get("edits"), a.get("choices"))
+            if route == "draft/review/apply":
+                return s.apply_review(a.get("standard") or [], a.get("edits"), a.get("choices"), a.get("mapping"))
             if route == "connect/gateway":
                 return s.connect_gateway(a.get("url", ""), a.get("connection", ""), a.get("token", ""), a.get("dialect", "postgres"),
                                          str(a.get("label", "")), a.get("rules"))
@@ -661,6 +681,18 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_import_questions(str(a.get("text", "")))
             if route == "manage/discard":
                 return s.manage_discard()
+            if route == "manage/undo":
+                return s.manage_undo()
+            if route == "manage/redo":
+                return s.manage_redo()
+            if route == "manage/revert":
+                return s.manage_revert(int(a.get("index", -1)))
+            if route == "manage/trial":
+                return s.manage_trial()
+            if route == "manage/yaml":
+                return s.manage_yaml(str(a.get("id", "")), str(a.get("text", "")))
+            if route == "element/comment":
+                return s.element_comment(str(a.get("id", "")), str(a.get("text", "")))
             if route == "manage/propose":
                 return s.manage_propose()
             if route == "change/mark":
