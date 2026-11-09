@@ -56,6 +56,7 @@ class DecisionResult:
     overridden: list[dict] = field(default_factory=list)  # {rule, priority, by, would_give}, under hit policy priority
     parameters: dict[str, Any] = field(default_factory=dict)  # the named values the matched rules read
     conflicts: list[dict] = field(default_factory=list)  # {rules, sources, says}: nobody has picked between them yet
+    also: list[str] = field(default_factory=list)  # rules that held too, which the hit policy did not use
 
     def __post_init__(self):
         self.overridden = self.overridden or getattr(self.matched, "overridden", [])
@@ -104,11 +105,16 @@ def _disagreements(table: DecisionTable, hits: list[DecisionRule]) -> list[dict]
             for a, b in combinations(hits, 2) if a.source and b.source and a.source != b.source and a.then != b.then]
 
 
+def holding(table: DecisionTable, inputs: dict[str, Any]) -> list[DecisionRule]:
+    """Every rule whose conditions the inputs meet, in table order, before the hit policy picks."""
+    named = table.named
+    return [r for r in table.rules
+            if all(evaluate(parse_test(cell, named), inputs.get(name)) for name, cell in r.when.items())]
+
+
 def evaluate_table(table: DecisionTable, inputs: dict[str, Any]) -> tuple[Any, list[str], list[str]]:
     """Return (outputs, matched rule ids, rule notes) under the table's hit policy."""
-    named = table.named
-    matching = [r for r in table.rules
-                if all(evaluate(parse_test(cell, named), inputs.get(name)) for name, cell in r.when.items())]
+    matching = holding(table, inputs)
     ids = {r.id for r in matching}
     aside = [r for r in matching if ids & set(r.overruled_by)]  # a person picked the other source here
     hits = [r for r in matching if not ids & set(r.overruled_by)]

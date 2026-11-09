@@ -461,6 +461,20 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.module_source(a["name"], a.get("version", ""))
                 if route == "object/rows":
                     return s.object_rows(a["name"], int(a.get("limit", 20)))
+                if route == "record":
+                    return s.record_page(a["type"], a["key"])
+                if route == "records":
+                    return s.record_list(a["type"], a.get("q", ""), int(a.get("limit", 50)))
+                if route == "inbox":
+                    return s.inbox()
+                if route == "change":
+                    return s.change_detail(a["id"])
+                if route == "record/links":
+                    return s.record_links(a["type"], a["key"])
+                if route == "record/path":
+                    return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
+                if route == "element/readers":
+                    return s.element_readers(a["id"])
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
@@ -550,7 +564,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.relations_forget(str(a.get("folder", "")))
             if route == "space/ask":
                 return s.space_ask(str(a.get("text", "")), str(a.get("role", "")), a.get("principal") or None,
-                                   str(a.get("folder", "")))
+                                   pick=a.get("pick") or None, folder=str(a.get("folder", "")))
             if route == "space/ask/more":
                 if not ask_limit.allow():
                     return {"ok": False, "error": "요청이 많아 답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."}
@@ -649,6 +663,13 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_discard()
             if route == "manage/propose":
                 return s.manage_propose()
+            if route == "change/mark":
+                return s.change_mark(str(a.get("id", "")), str(a.get("element", "")), str(a.get("mark", "")))
+            if route == "change/comment":
+                return s.change_comment(str(a.get("id", "")), str(a.get("element", "")), str(a.get("text", "")))
+            if route == "decide/simulate":
+                return s.simulate(str(a.get("name", "")), str(a.get("key", "") or ""),
+                                  a.get("inputs") if isinstance(a.get("inputs"), dict) else {})
             if route == "change/decide":
                 return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")))
             if route == "flow/save":

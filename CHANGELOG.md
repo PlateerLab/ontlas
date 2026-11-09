@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased
+
+- The page starts from what a person comes to do. The sidebar is three sections, 업무 (home, 할 일, search and questions,
+  records, decisions), 구축 (bringing data in, modelling, the library and its changes) and 운영 (the pipeline board, the data
+  map, stores and links, checks, the guide), and the first screen is a home instead of the pipeline board.
+- 홈: one box to search or ask, what waits on the person, the measured pass conditions in brief, the records they opened last
+  and the registered queries. What it leads with follows the role picked on it (운영 담당, 도메인 전문가, 모델러).
+- 할 일 (`GET inbox`): action requests waiting for a person, change requests under review, source conflicts to pick and edits
+  not filed yet, in one list, each saying who asked and what it would change. An action is approved or rejected from the list.
+  On a visitor's own page what they asked for is theirs to settle too; in a team studio it waits for someone else.
+- 레코드 (`GET records`, `GET record`): records of a type found by their key or the name they carry, and one record on a page of
+  its own: each value with its column or formula, the state it is in and where it can go, the records it links to either way
+  round, what each decision says of it now and by which rule, the actions it can take (requested from the page under a role),
+  its functions to run, the documents that name it or its type, and its requests, approvals and runs. Opening a page runs no
+  function and writes nothing.
+- 통합 검색 says what it took the question to be (the record, the decision, the time it counts to) and where the answer came
+  from (a decision table or a registered query with no model, a model's wording, or nothing found). What it took can be
+  corrected and the same question asked again (`space/ask` with `pick`: another record, another decision of its type or
+  none, another time to count days to); the time is the question's only and the studio's clock does not move. A decision's
+  answer carries the rule, the clause it cites and the module and version that wrote the rule, and leads to what can be done
+  next: the actions the decision gates (their form opens on the record page, ready only when the verdict and the record's
+  state allow it), the record itself, and the rules page trying the table on this record. Below it the answer is explained
+  three ways: the steps in plain sentences (each value read, where from and along which relations, and why this rule and
+  not the others that also held), the values with their records and columns, and the rule's conditions with one SQL query
+  that reads the same values from the source. A registered query's answer shows the query it ran, a record its read. Beside
+  the answer, a judgement of right or wrong; one judged right is kept as a validation question among the pending edits. A
+  question nothing answers is answered that it is not known.
+- A decision's result lists the rules that held but the hit policy did not use (`also`), and a decision can be counted to
+  another time (`Studio.decide(..., at=)`).
+- 변경 요청 (`GET change`, `POST change/mark`, `POST change/comment`): a change request element by element. Each element it
+  adds, changes or removes shows field by field what it is now and what it becomes (a rule's condition by its input's name),
+  and what in the definition reads it now. The pass conditions show the number the studio meets now beside the number on the
+  trial copy, with the validation questions that fail there. A reviewer approves each element or sends it back for a fix, and
+  comments stay on the element after the change is decided. A change with an element sent back is not approved. Marks and
+  comments go into the journal with the rest of the request. 할 일 opens a change on this screen.
+- 규칙 관리 says how a table applies its rules, what the table check finds (overlaps, rules that never apply, inputs no rule
+  answers), and tries the table while it is edited (`POST decide/simulate`): a record's values or typed ones, the rule that
+  answers, which single change of one input would give another answer, and what the table answers either side of every
+  number its rules compare. Past decisions decided again and the validation questions on the table sit beside it. Trying
+  writes nothing.
+- 초안 생성 scores the draft's tables against every domain standard on its own and shows the match beside each object
+  (`결제 · Payment 94%`), with the way to bind the tables to the standard instead of naming new objects.
+- 그래프 탐색 (`GET record/links`, `GET record/path`): records as a graph. It starts from one record and grows relation by
+  relation, up to 25 records a relation at a time, with the count on each relation before it is opened. Two records are
+  joined by the shortest chain of relations that joins them in the data: chains are tried shortest first, up to five hops,
+  each as one ontology query, so it runs on the source whatever store that is.
+- 모델링 · 작업 공간: the modules and their objects as a tree, the schema graph, and the picked object's form, its lines in
+  its module file, and what reads it (`GET element/readers`), side by side. Edits go to the pending changes as on the
+  definition screens.
+- The README's table of screens follows the new sidebar.
+
 ## 0.13.0
 
 - A file's embedding is turned on and off on its own, or for a whole folder: its documents leave the vector stores and the search, and

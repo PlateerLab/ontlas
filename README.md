@@ -133,38 +133,38 @@ xspace review examples/library/studio.yaml acme-1.1.0.yaml
 **6. Share it.** `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)), and
 `xspace mcp` gives agents the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
 
-The sidebar follows the data from raw files to checked answers. A stage's screens are tabs on its page, and `Ctrl K` jumps to any screen:
+The sidebar has three sections: what a person comes to do (업무), what builds the definition (구축) and what keeps it
+running (운영). The page opens on 홈. A group's screens are tabs on its page, and `Ctrl K` jumps to any screen:
 
-| Stage | Screen | Use it to |
-|---|---|---|
-| 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
-| | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| 데이터 지도 | 탐색기 | Browse everything the space holds as folders (repositories, databases, documents, ontology, stores, queries and decisions), with what each part went through; search names, paths, definitions and document text at once and see which of them found each hit; move, rename and delete files, with a trash and a work record |
-| | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
-| ① 원천 데이터 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, and turn a file's or a folder's embedding on and off |
-| | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
-| ② 변환 | 결과 | See what each file came to, and the one JSON they roll up into |
-| | 데이터 소스 | See the source's tables, keys and references, and what reads each |
-| ③ 온톨로지 구축 | 초안 생성 | Draft from the files in the catalog, step by step, and bind to a standard |
-| | 온톨로지 · 도메인 | See objects and relations as a graph |
-| | 온톨로지 · 문서 | See documents as documents, sections and concepts, tied to the definitions they mention; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | 정의 관리 · 객체 | Change an object's table, key and parent, or add one from a table |
-| | 정의 관리 · 속성 | Change a property's type, column, allowed values and their names, required flag and mask |
-| | 정의 관리 · 관계 | Change relations and their join columns, and add the ones foreign keys suggest |
-| | 정의 관리 · 상태 | Change an object's states, its first state and the moves between them |
-| | 정의 관리 · 규칙 | Change a decision's rules and the named values they read on a form, or start a new decision table |
-| | 정의 관리 · 액션 | Change what a request takes, the decision it must pass, the state it leads to and whether a person approves it |
-| | 정의 관리 · 권한 | Change what each role reads, runs and requests, and which properties it sees masked |
-| | 라이브러리 | Apply and remove modules, edit a module's file, review and approve changes |
-| ④ 저장소 어댑터 | 벡터 · 임베딩 | See the embedding model, the vector stores, each document's embedding and whether questions find their documents; see what a change of model embeds again, and change it |
-| | 구성 | See every swappable part as measured on opening: the registered queries each language compiles, whether the stores return the same rows, what each reasoner derives, and the modules the pipeline is built from |
-| ⑤ 활용 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause |
-| | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
-| | 판정 · 규칙 · 판정 | Decide a case with its grounds, request an action, approve it, roll it back |
-| | 판정 · 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
-| | 외부 연동 | See how MCP, REST and a platform's connection plug the space in |
-| ⑥ 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
-| | DB 대조 | Check the definition against the database |
+| Section | Group | Screen | Use it to |
+|---|---|---|---|
+| 업무 | 홈 | 홈 | Search or ask from one box, see what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
+| | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick and edits not filed yet, each saying who asked and what it changes |
+| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question |
+| | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
+| | 레코드 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take, its functions, the documents that name it and its history |
+| | | 그래프 탐색 | Start from one record, grow the graph relation by relation, and find the records that join two records |
+| | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back |
+| | | 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
+| 구축 | 데이터 가져오기 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, and turn a file's or a folder's embedding on and off |
+| | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
+| | | 결과 | See what each file came to, and the one JSON they roll up into |
+| | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
+| | | 초안 생성 | Draft from the files in the catalog, step by step, see which tables a standard already names, and bind to a standard |
+| | 모델링 | 작업 공간 | Pick an object from a tree of modules or the schema graph and change it on its form, read it in its module file, or see what uses it |
+| | | 온톨로지 | See objects and relations as a graph, and documents as documents, sections and concepts; read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
+| | | 정의 관리 | Change objects, properties, relations, states, rules, functions, actions and roles on forms; the rule form says how the table applies its rules, what the table check finds, and tries the table on a record's or typed values |
+| | 라이브러리 · 변경 | 라이브러리 | Apply and remove modules and edit a module's file |
+| | | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
+| 운영 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
+| | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
+| | 데이터 지도 | 탐색기 | Browse everything the space holds as folders, search names, paths, definitions and document text at once, and move, rename and delete files with a trash and a work record |
+| | | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
+| | 저장소 · 연동 | 구성 | See every swappable part as measured on opening |
+| | | 벡터 · 임베딩 | See the embedding model, the vector stores, each document's embedding and whether questions find their documents; see what a change of model embeds again, and change it |
+| | | 외부 연동 | See how MCP, REST and a platform's connection plug the space in |
+| | 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
+| | | DB 대조 | Check the definition against the database |
 
 ## What it looks like
 
@@ -513,7 +513,7 @@ refused with what to export it to.
 
 ## The pipeline board
 
-파이프라인 관제 is the page's first screen. It draws the pipeline as a building: raw data at the bottom, then conversion,
+파이프라인 관제, under 운영, draws the pipeline as a building: raw data at the bottom, then conversion,
 the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
 
 <p align="center">

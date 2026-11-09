@@ -12,7 +12,7 @@ from xgen_space.check import all_props, check, column_of, find_prop, interface_v
 from xgen_space.compile.base import Compiled, CompileError, compiler_for
 from xgen_space.conformance import ConformanceReport
 from xgen_space.conformance import run as run_conformance
-from xgen_space.decide.table import DecisionError, DecisionResult, Evidence, evaluate_table
+from xgen_space.decide.table import DecisionError, DecisionResult, Evidence, evaluate_table, holding
 from xgen_space.ir import Cmp, Column, Edge, Query, Ref
 from xgen_space.model import Ontology
 from xgen_space.modules import Composition, Impact, Module, ModuleError, compose, removal_impact
@@ -242,7 +242,7 @@ class Studio:
         return here, [str(r[0]) for r in self.run(q).rows]
 
     def decide(self, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
-               inputs: dict | None = None) -> DecisionResult:
+               inputs: dict | None = None, at: datetime | None = None) -> DecisionResult:
         table = self.onto.decisions.get(name)
         if table is None:
             raise KeyError(f"unknown decision '{name}'")
@@ -278,7 +278,7 @@ class Studio:
                 obj_row = self.fetch(here, obj_key) if keys else None
             raw = obj_row.get(prop) if obj_row else None
             if "days_since" in src:
-                value = None if raw is None else (self.now() - parse_datetime(raw)).days
+                value = None if raw is None else ((at or self.now()) - parse_datetime(raw)).days
             else:
                 value = raw
             values[inp.name] = value
@@ -294,6 +294,7 @@ class Studio:
         else:
             outputs, matched, notes = evaluate_table(table, values)
             engine = "native"
+        also = [r.id for r in holding(table, values) if r.id not in matched] if engine == "native" else []
         shown = dict(values)
         if role:  # the verdict uses the real values; what the role is shown of them follows its masks
             r = self.onto.roles[role]
@@ -303,7 +304,7 @@ class Studio:
                     ev.value = mask_value(ev.value, style)
                     shown[ev.input] = ev.value
         return DecisionResult(name, outputs, matched, shown, evidence, notes, engine, table.target,
-                              "" if key is None else str(key))
+                              "" if key is None else str(key), also=also)
 
     def project(self, *, into: list[str] | None = None, source: str | None = None) -> dict[str, Any]:
         """Re-read the source and bring each graph backend up to date with a change set."""

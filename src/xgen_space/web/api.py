@@ -26,6 +26,7 @@ from xgen_space.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _
 from xgen_space.repository import Repositories, clean_path, is_litter
 from xgen_space.roles import apply_role
 from xgen_space.studio import Studio
+from xgen_space.web.pages_api import PagesMixin
 from xgen_space.web.space_api import SpaceMixin, attach
 
 KIND_ORDER = list(MODULE_KIND)
@@ -247,7 +248,7 @@ class DataOptions:
     rest: bool = False  # /v1 is on: the page says so, and how to reach it
 
 
-class StudioSession(SpaceMixin):
+class StudioSession(SpaceMixin, PagesMixin):
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
     def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
@@ -1837,6 +1838,11 @@ class StudioSession(SpaceMixin):
         from xgen_space.review import ChangeError
 
         ch = self.studio.changes
+        held = ch.requests.get(change_id)
+        sent_back = [self._element_label(e) for e, v in (held.marks if held else {}).items() if v == "fix"]
+        if approve and sent_back:
+            return {"ok": False, "error": f"수정을 요청한 항목({', '.join(sent_back)})이 있어 승인하지 못했습니다. "
+                                          "작성자가 고친 뒤 다시 검토해 주세요.", "change": self._change(held)}
         try:
             cr = ch.approve(change_id, by=self.who) if approve else                 ch.reject(change_id, by=self.who, reason=reason or "검토 후 반려")
         except PermissionError:

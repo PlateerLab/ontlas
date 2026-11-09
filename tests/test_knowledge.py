@@ -87,6 +87,38 @@ def test_one_question_runs_the_table_when_it_names_a_key(shop, kind):
     assert not any(s["kind"] == "rule" and s["id"] != a["sources"][0]["id"] for s in a["sources"])  # rules that did not apply are not grounds
 
 
+def test_a_decision_answer_says_how_it_was_reached_and_what_can_follow(shop):
+    d = StudioTools(shop).answer_question("배송 완료 4일 된 주문상품 I1001 반품 되나요?")["decisions"][0]
+    vip = d["rules"][0]
+    assert (vip["id"], vip["module"], vip["version"]) == ("vip-window", "acme-overlay", "1.0.0")  # the overlay added it
+    assert {w["test"] for w in vip["when"]} >= {"<= 14", '"VIP"'}
+    assert d["hit_policy"] == "first" and [x["id"] for x in d["also"]] == ["in-window", "expired"]
+    assert next(x for x in d["also"] if x["id"] == "expired")["fallback"]  # the rule with no conditions
+    days = next(e for e in d["evidence"] if e["input"] == "days_since_delivery")
+    assert days["kind"] == "days_since" and days["value"] == 4 and days["since"].startswith("2026-10-25")
+    grade = next(e for e in d["evidence"] if e["input"] == "customer_grade")
+    assert grade["path"] == ["주문상품", "주문", "고객"] and (grade["type"], grade["key"]) == ("Customer", "C001")
+    assert d["actions"] == [{"name": "requestReturn", "label": "반품 신청", "ready": True, "met": True, "approval": True}]
+    assert d["at"] == "2026-10-30T12:00" and "JOIN" in d["reading"] and '"customers"' in d["reading"]
+
+
+def test_a_question_asked_again_as_a_person_corrected_it(shop):
+    t = StudioTools(shop)
+    q = "배송 완료 4일 된 주문상품 I1001 반품 되나요?"
+    assert [c["name"] for c in t.answer_question(q)["choices"]] == ["returnEligibility"]
+    later = t.answer_question(q, {"decision": "returnEligibility", "key": "I1001", "at": "2026-11-15T12:00"})
+    d = later["decisions"][0]
+    assert d["verdict"] == "불가" and d["rules"][0]["id"] == "expired" and d["at"] == "2026-11-15T12:00"
+    assert not d["actions"][0]["ready"] and not d["actions"][0]["met"]
+    assert shop.decide("returnEligibility", "I1001").outputs["eligible"]  # the space's own time did not move
+    rec = t.answer_question(q, {"type": "OrderItem", "key": "I1003"})
+    assert rec["route"] == "record" and rec["record"]["key"] == "I1003" and "item_id" in rec["record"]["query"]
+    with pytest.raises(ValueError):
+        t.answer_question(q, {"type": "OrderItem", "key": "NO-SUCH"})
+    with pytest.raises(ValueError):
+        t.answer_question(q, {"decision": "returnEligibility", "key": "I1001", "at": "someday"})
+
+
 def test_an_amount_reads_as_an_amount(shop):
     a = StudioTools(shop).answer_question("주문 O16 배송비 알려 주세요")
     assert a["route"] == "decision" and a["decisions"][0]["verdict"] == "3,000" and "불가" not in a["answer"]
