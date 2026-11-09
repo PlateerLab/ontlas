@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from xgen_space.model import _scope_filter
+from xgen_space.model import TYPES, _scope_filter
 from xgen_space.modules import Module, ModuleError, Requirement, compose, settle
 
 NAME = "workspace"
@@ -52,6 +52,7 @@ class Workspace:
         start.setdefault("description", "관리 화면(객체 · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
+        self._before: list[dict] = []  # the module before each edit, to take the last one back
         self._base_onto = compose(self.base, **self.kw).ontology
 
     # ---- reading ------------------------------------------------------------------------------------------------
@@ -103,7 +104,15 @@ class Workspace:
             raise EditError(str(e)) from None
         edit = Edit(op, target, took)
         self.edits.append(edit)
+        self._before.append(before)
         return edit
+
+    def undo(self) -> Edit | None:
+        """Take back the last edit: the module is as it was before it."""
+        if not self.edits:
+            return None
+        self.module = Module.from_dict(self._before.pop())
+        return self.edits.pop()
 
     def _section(self, part: str, section: str) -> dict:
         holder = self.module.body if part == "body" else self.module.extend
@@ -183,6 +192,7 @@ class Workspace:
             raise EditError(f"property name '{name}' must be letters, digits and _ starting with a letter")
         if name in _all_props(onto, obj):
             raise EditError(f"{obj} already has '{name}'")
+        _known_type(a)
         spec = _prop_spec(a)
         if self._owns_object(obj):
             self._section("body", "objects")[obj].setdefault("properties", {})[name] = spec
@@ -196,6 +206,7 @@ class Workspace:
         if obj not in onto.objects or name not in _all_props(onto, obj):
             raise EditError(f"{obj}.{name} is unknown")
         fields = {k: a[k] for k in PROP_FIELDS if k in a}
+        _known_type(fields)
         if self._added_prop(obj, name):
             holder = (self._section("body", "objects")[obj] if self._owns_object(obj)
                       else self._section("extend", "objects")[obj])
@@ -813,6 +824,11 @@ def _removals(d: dict) -> set[str]:
         else:
             out |= {f"{kinds.get(s, s)}:{k}" for k in items or []}
     return out
+
+
+def _known_type(a: dict) -> None:
+    if a.get("type") and a["type"] not in TYPES:
+        raise EditError(f"type '{a['type']}' is not one of {', '.join(TYPES)}")
 
 
 def _prop_spec(a: dict) -> dict:

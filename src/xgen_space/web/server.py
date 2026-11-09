@@ -475,6 +475,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.record_path(a["from_type"], a["from_key"], a["to_type"], a["to_key"])
                 if route == "element/readers":
                     return s.element_readers(a["id"])
+                if route == "element/yaml":
+                    return s.element_yaml(a["id"])
+                if route == "element/comments":
+                    return s.element_comments(a["id"])
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
@@ -667,6 +671,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_import_questions(str(a.get("text", "")))
             if route == "manage/discard":
                 return s.manage_discard()
+            if route == "manage/undo":
+                return s.manage_undo()
+            if route == "manage/trial":
+                return s.manage_trial()
+            if route == "manage/yaml":
+                return s.manage_yaml(str(a.get("id", "")), str(a.get("text", "")))
+            if route == "element/comment":
+                return s.element_comment(str(a.get("id", "")), str(a.get("text", "")))
             if route == "manage/propose":
                 return s.manage_propose()
             if route == "change/mark":

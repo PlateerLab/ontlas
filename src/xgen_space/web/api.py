@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
 import threading
@@ -90,6 +91,8 @@ MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the b
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
+IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "questions", "액션": "actions", "역할": "roles",
+                "함수": "functions", "계산 속성": "computed"}  # what _readers says each reader is
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
@@ -2059,6 +2062,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             if t.table:
                 bound.setdefault(t.table, []).append(t.name)
         linked = {lk.source for lk in o.links.values()} | {lk.target for lk in o.links.values()}
+        kinds = {m.name: m.kind for m in comp.modules}
         objects = []
         for t in o.objects.values():
             props = all_props(o, t.name)
@@ -2067,7 +2071,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "key": t.key, "parent": t.parent, "concept": not t.table, "properties": len(props),
                 "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
-                "rows": rows.get(t.table) if t.table else None, "states": bool(t.states),
+                "rows": rows.get(t.table) if t.table else None, "states": bool(t.states), "series": bool(t.series),
+                "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"object:{t.name}", [])
+                                if x != comp.owner(f"object:{t.name}") and kinds.get(x) != "binding"],  # a binding only places it
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
         from xgen_space.model import RAW_SUFFIX
 
@@ -2171,6 +2177,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             "documents": sorted(self.studio.space.documents()) if self.studio.space is not None else [],
             "folders": self.studio.space.folders() if self.studio.space is not None else [],
             "unlinked": [x["name"] for x in objects if not x["concept"] and x["name"] not in linked],
+            "comments": {k: len(v) for k, v in self._notes().items() if v},
             "sources": {"source": {"name": self.studio.source, "dialect": src.capabilities.dialect if src else "",
                                    "tables": tables,
                                    "unbound": [x["table"] for x in tables if not x["objects"] and not x["links"]]},
@@ -2179,9 +2186,129 @@ class StudioSession(SpaceMixin, PagesMixin):
             "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label,
                           "version": ws.current.version if ws.current else "",
                           "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits],
-                          "issues": issues, "diff": diff,
+                          "issues": issues, "diff": diff, "impact": self._impact(diff),
                           "yaml": yaml.safe_dump(mine.to_dict(), allow_unicode=True, sort_keys=False)},
         })
+
+    def _impact(self, diff: dict) -> dict:
+        """How many queries, decisions, questions, actions and roles read what the pending edits change or take out."""
+        seen: set[str] = set()
+        for el in [*diff.get("changed", []), *diff.get("removed", [])]:
+            if el.split(":", 1)[0] in ("object", "property", "link", "decision", "rule", "query"):
+                seen.update(self._readers(el))
+        out: dict[str, int] = {}
+        for r in seen:
+            kind = next((w for w in IMPACT_KINDS if r.startswith(w)), "")
+            if kind:
+                out[IMPACT_KINDS[kind]] = out.get(IMPACT_KINDS[kind], 0) + 1
+        return out
+
+    def manage_undo(self) -> dict:
+        ws = self._ws()
+        if ws.undo() is None:
+            raise ValueError("되돌릴 변경이 없습니다.")
+        return {"ok": True, **self.manage_state()}
+
+    def manage_trial(self) -> dict:
+        """The pending edits tried on a copy of the space, as a change request would be, without filing one: each pass
+        condition as it stands now and as it would be."""
+        from xgen_space.review import review
+
+        ws = self._ws()
+        if not ws.dirty:
+            raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
+        got = review(self.studio, ws.module, attach=ws.current is None)
+        gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"])} for g in got.get("gates") or []]
+        return plain({"ok": True, "passed": got.get("passed"), "issues": got.get("issues") or [], "gates": gates,
+                      "before": self._standing_gates(), "measured": got.get("measured") or {}, "diff": got.get("diff") or {}})
+
+    def element_yaml(self, element: str) -> dict:
+        """One object as the pending edits would leave it, in the shape a person writes it back."""
+        import yaml
+
+        kind, _, name = element.partition(":")
+        o = self._ws().composed().ontology
+        if kind != "object" or name not in o.objects:
+            raise LookupError(element)
+        t = o.objects[name]
+        spec: dict[str, Any] = {k: v for k, v in (("label", t.label), ("description", t.description), ("table", t.table),
+                                                  ("key", t.key), ("parent", t.parent), ("title", t.title)) if v}
+        props = {}
+        for p in t.properties:
+            d = find_prop(o, name, p)
+            col = column_of(o, name, p) if t.table and not d.expr else ""
+            props[p] = {k: v for k, v in (("label", d.label), ("type", d.type), ("column", col if col != p else ""),
+                                          ("unit", d.unit), ("values", list(d.values or [])), ("required", d.required),
+                                          ("mask", d.mask), ("expr", d.expr), ("description", d.description)) if v}
+        spec["properties"] = props
+        return {"element": element, "yaml": yaml.safe_dump({name: spec}, allow_unicode=True, sort_keys=False)}
+
+    def manage_yaml(self, element: str, text: str) -> dict:
+        """An object written back as YAML: what differs from the form becomes the same edits the form would make."""
+        import yaml
+
+        from xgen_space.manage import EditError
+
+        kind, _, name = element.partition(":")
+        try:
+            doc = yaml.safe_load(text or "")
+        except yaml.YAMLError as e:
+            raise ValueError(f"YAML을 읽지 못했습니다. {e}") from None
+        if kind != "object" or not isinstance(doc, dict) or list(doc) != [name] or not isinstance(doc[name], dict):
+            raise ValueError(f"'{name}:' 하나로 시작하는 객체 정의여야 합니다.")
+        new = doc[name]
+        old = yaml.safe_load(self.element_yaml(element)["yaml"])[name]
+        ws = self._ws()
+        snap, n = copy.deepcopy(ws.module.to_dict()), len(ws.edits)
+        try:
+            fields = {k: new.get(k, "") for k in ("label", "description", "table", "parent", "title") if new.get(k, "") != old.get(k, "")}
+            if new.get("key") and new.get("key") != old.get("key"):
+                fields["key"] = new["key"]
+            have, want = old.get("properties") or {}, new.get("properties") or {}
+            for p, spec in want.items():
+                spec = spec if isinstance(spec, dict) else {"type": str(spec)}
+                if p not in have:
+                    ws.apply("add_property", {"object": name, "name": p, **spec})
+                    continue
+                changed = {k: spec.get(k, "") for k in set(spec) | set(have[p]) if spec.get(k, "") != have[p].get(k, "")}
+                if changed:
+                    ws.apply("update_property", {"object": name, "name": p, **changed})
+            if fields:
+                ws.apply("update_object", {"name": name, **fields})
+            for p in have:
+                if p not in want:
+                    ws.apply("delete_property", {"object": name, "name": p})
+        except EditError as e:
+            ws.module, ws.edits, ws._before = Module.from_dict(snap), ws.edits[:n], ws._before[:n]
+            raise ValueError(_edit_text(str(e))) from None
+        return {"ok": True, **self.manage_state()}
+
+    def _notes(self) -> dict[str, list[dict]]:
+        """Comments on elements of the definition, kept in the journal with the change requests when there is one."""
+        if self._element_notes is None:
+            self._element_notes = {}
+            journal = self.studio.changes.journal
+            for r in journal.read() if journal is not None else []:
+                if r.get("kind") == "comment" and r.get("element"):
+                    self._element_notes.setdefault(r["element"], []).append(
+                        {k: r.get(k) for k in ("at", "by", "text")})
+        return self._element_notes
+
+    _element_notes: dict | None = None
+
+    def element_comments(self, element: str) -> dict:
+        return {"element": element, "comments": list(self._notes().get(element, []))}
+
+    def element_comment(self, element: str, text: str) -> dict:
+        text = " ".join(str(text or "").split())[:500]
+        if not element or not text:
+            raise ValueError("댓글이 없어 남기지 못했습니다. 내용을 입력해 주세요.")
+        note = {"at": self.studio.now().isoformat(timespec="minutes"), "by": self.who or "page", "text": text}
+        self._notes().setdefault(element, []).append(note)
+        journal = self.studio.changes.journal
+        if journal is not None:
+            journal.write("comment", {"element": element, **note})
+        return self.element_comments(element)
 
     def _source_catalog(self, src, read) -> tuple[list, dict]:
         """The source's tables and their row counts, read once per source (edits re-read the state often)."""
