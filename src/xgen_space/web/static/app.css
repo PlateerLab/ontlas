@@ -847,3 +847,16 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .cyaml .yadd { background:#e6f4ea; color:#137a44; }
 .cyaml .ydel { background:#fdecea; color:#a3261e; text-decoration:line-through; }
 .cyaml .yhit { font-weight:800; }
+
+/* record: the records it belongs with, a level deeper, and its tabs */
+.rctx { margin-top:4px; }
+.rlink { border:0; background:none; padding:0; font:inherit; font-size:12.5px; color:var(--muted); cursor:pointer; }
+.rlink b { color:#15509f; }
+.rlink:hover b { text-decoration:underline; }
+.rtabs { background:#fff; border:1px solid var(--line); border-radius:12px; margin:14px 0; padding:0 10px; }
+.ltree { display:grid; gap:4px; margin-bottom:12px; }
+.lrow { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:#fff; font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.lrow:hover { border-color:var(--blue-line); background:#f8fbff; }
+.lrow.deep { margin-left:28px; width:calc(100% - 28px); }
+.lrow .lmain { flex:1; min-width:0; display:flex; flex-direction:column; }
+.lrow .lmain .muted { font-size:12px; }

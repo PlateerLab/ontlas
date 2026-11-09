@@ -226,7 +226,7 @@ def _typed(f: Function, outputs: dict) -> dict:
 
 
 def run_function(studio, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
-                 principal: dict | None = None, by: str = "", trial: bool = False) -> dict[str, Any]:
+                 principal: dict | None = None, by: str = "", trial: bool = False, log: bool = True) -> dict[str, Any]:
     onto = studio.onto
     f = onto.functions.get(name)
     if f is None:
@@ -262,8 +262,9 @@ def run_function(studio, name: str, key: Any = None, params: dict | None = None,
     outputs = {k: normalize(v) if not isinstance(v, (list, dict)) else v for k, v in outputs.items()}
     out = {"function": name, "label": f.label or name, "version": f.version, "owner": f.owner, "runtime": f.runtime,
            "target": f.target, "key": "" if key is None else str(key), "inputs": values, "outputs": outputs, "evidence": evidence}
-    studio.function_log.append({"at": studio.now().isoformat(timespec="seconds"), "by": by or role or "", **{
-        k: out[k] for k in ("function", "version", "key", "inputs", "outputs")}})
+    if log:  # a page that only shows a value it computes keeps no record of having computed it
+        studio.function_log.append({"at": studio.now().isoformat(timespec="seconds"), "by": by or role or "", **{
+            k: out[k] for k in ("function", "version", "key", "inputs", "outputs")}})
     return out
 
 

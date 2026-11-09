@@ -112,6 +112,17 @@ def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_n
         session.change_mark(cid, rule["element"], "ok")  # decided: no more marks
 
 
+def test_a_record_is_read_by_what_it_belongs_with_and_its_values_are_worked_out_on_opening(session):
+    r = session.record_page("OrderItem", "I1001")
+    ctx = {c["type"]: c for c in r["context"]}
+    assert ctx["Order"]["key"] == "O1" and ctx["Order"]["next"][0]["key"] == "C001"  # the order, then its customer
+    assert r["title"] is None and r["named_by"]["type"] == "Product"  # read by what it is, not by whose it is
+    if r["computed"]:
+        assert all("outputs" in c or "error" in c for c in r["computed"])
+    assert not session.studio.function_log  # worked out, not run
+    assert any(h["kind"] == "source" and h["event"] == "배송 완료" for h in r["history"])
+
+
 def test_a_decision_is_tried_on_a_record_and_says_what_would_turn_it(session):
     sim = session.simulate("returnEligibility", "I1001")
     assert (sim["verdict"], sim["matched"]) == ("가능", ["vip-window"])
