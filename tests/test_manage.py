@@ -117,7 +117,7 @@ def test_the_state_shows_objects_properties_links_and_the_source(session):
 def test_edits_are_said_in_korean_and_filed_as_one_change(session):
     with pytest.raises(ValueError, match="표준 모듈에서 정해져"):
         session.manage_edit("update_property", {"object": "Customer", "name": "grade", "type": "integer"})
-    with pytest.raises(ValueError, match="상위 객체 Party"):
+    with pytest.raises(ValueError, match="상위 Entity Party"):
         session.manage_edit("delete_property", {"object": "Customer", "name": "name"})
     r = session.manage_edit("update_object", {"name": "Customer", "label": "회원"})
     assert r["workspace"]["dirty"] and r["workspace"]["diff"]["changed"] == ["object:Customer"]

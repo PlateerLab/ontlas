@@ -159,7 +159,7 @@ def test_pipelines_keep_to_their_limit_and_the_first_stays(session):
 @pytest.mark.parametrize("text,word", [
     ("module: t\nversion: 1.0.0\nkind: domain\nrequires: [nothing]\n", "의존 모듈"),
     ("module: t\nversion: 1.0.0\nkind: domain\nobjects: {A: {key: id, properties: {id: {type: nope}}}}\n", "타입"),
-    ("module: t\nversion: 1.0.0\nkind: domain\ndecisions: {d: {target: Zed, rules: []}}\n", "대상 객체"),
+    ("module: t\nversion: 1.0.0\nkind: domain\ndecisions: {d: {target: Zed, rules: []}}\n", "대상 Entity"),
 ])
 def test_a_module_check_speaks_the_product_language(session, text, word):
     issues = session.check_module(text)["issues"]
@@ -192,5 +192,5 @@ def test_a_database_that_does_not_answer_is_told_plainly(session, monkeypatch):
 
 
 def test_a_typed_query_error_says_what_to_fix(session):
-    assert "객체를 찾지 못했습니다" in session.run_text("cypher", "MATCH (n:Nope) RETURN n")["error"]
+    assert "Entity를 찾지 못했습니다" in session.run_text("cypher", "MATCH (n:Nope) RETURN n")["error"]
     assert "JSON 형식" in session.run_text("ir", "{bad")["error"]

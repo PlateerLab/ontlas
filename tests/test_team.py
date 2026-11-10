@@ -251,7 +251,7 @@ def test_an_editor_files_management_edits_and_an_approver_applies_them(team):
     assert code == 200 and out["workspace"]["dirty"]
     code, out, _ = _call(base, "/api/manage/edit", {"op": "delete_property", "args": {"object": "Customer",
                                                                                       "name": "name"}}, cookie=kim)
-    assert code == 400 and "상위 객체" in out["error"]
+    assert code == 400 and "상위 Entity" in out["error"]
     code, out, _ = _call(base, "/api/manage/propose", {}, cookie=kim)
     assert code == 200 and out["pending"] and out["change"]["module"] == "workspace"
     assert not out["workspace"]["dirty"]  # filed: the request holds the edits now

@@ -15,7 +15,7 @@ from xgen_space.manage import NAME as WORKSPACE
 from xgen_space.web.monitor import FINDING
 
 KEEP_ON = {"core", "domain", "binding"}  # what everything else stands on: taking one off is never offered as a fix
-KIND_WORD = {"property": "속성", "query": "질의", "link": "관계", "object": "객체", "decision": "결정", "action": "액션", "rule": "규칙",
+KIND_WORD = {"property": "속성", "query": "질의", "link": "관계", "object": "Entity", "decision": "결정", "action": "액션", "rule": "규칙",
              "function": "함수", "role": "역할", "question": "검증 질문"}
 SQL_TYPE = (("TIMESTAMP", "datetime"), ("DATETIME", "datetime"), ("DATE", "date"), ("TIME", "datetime"), ("BOOL", "boolean"), ("BIT", "boolean"),
             ("INT", "integer"), ("REAL", "decimal"), ("NUM", "decimal"), ("DEC", "decimal"), ("DOUBLE", "decimal"), ("FLOAT", "decimal"))

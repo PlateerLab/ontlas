@@ -66,7 +66,7 @@ def test_the_workspace_sets_a_status_and_a_parent_is_not_taken_out_from_under_it
     assert next(o for o in st["objects"] if o["name"] == "Order")["status"] == "active"
     with pytest.raises(ValueError) as e:
         session.manage_edit("delete_object", {"name": "Party"})
-    assert "하위 객체" in str(e.value) and "Customer" in str(e.value) and "parent" not in str(e.value)
+    assert "하위 Entity" in str(e.value) and "Customer" in str(e.value) and "parent" not in str(e.value)
 
 
 def test_the_inbox_says_how_much_a_request_changes_against_its_limit(session):
@@ -107,7 +107,7 @@ def test_an_unknown_answer_says_how_a_metric_is_not_split_and_how_to_ask_again(s
     reason, _ = _unknown(tools, "지난달 반품률은?", [])  # nothing to split by: the first sentence alone
     assert "나누어" not in reason
     reason, ask = _unknown(tools, "그거 어떻게 돼?", [])
-    assert reason.startswith("질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다.") and ask == []
+    assert reason.startswith("질문에서 정의된 Entity, 지표, 판정, 문서를 찾지 못했습니다.") and ask == []
     assert "레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요." in reason
 
 
@@ -190,7 +190,7 @@ def test_an_editor_files_the_draft_and_an_approver_applies_what_was_filed(drafte
     assert st["pending"] and st["request"] == out["request"]
     item = next(x for x in s.inbox()["items"] if x["kind"] == "draft")
     assert item["id"] == "draft" and item["title"] == "가상 쇼핑몰 초안 적용" and item["by"] == "방문자" and item["mine"]
-    assert item["waits"] == "approver" and item["detail"] == f"객체 {len(kept)}개 · 관계 {out['request']['links']}개"
+    assert item["waits"] == "approver" and item["detail"] == f"Entity {len(kept)}개 · 관계 {out['request']['links']}개"
     assert "적용 요청 대기" in next(x for x in s.build_steps()["steps"] if x["id"] == "model")["detail"]  # a draft under way is said on the ontology step
     assert s.apply_draft_request()["ok"]
     onto = s.studio.onto
@@ -227,7 +227,7 @@ def test_the_build_steps_say_where_the_space_stands(session):
     assert ids == ["model", "mgrules", "catalog", "check", "changes"]  # the definition, its rules, its data, the proof, the approval
     by = {s["id"]: s for s in got["steps"]}
     assert [by[i]["part"] for i in ids] == ["Ontology manager", "Semantic layer", "Data binder", "QA", ""]
-    assert by["model"]["done"] and "객체" in by["model"]["detail"] and not got["start"]  # the example library is a built ontology
+    assert by["model"]["done"] and "Entity" in by["model"]["detail"] and not got["start"]  # the example library is a built ontology
     assert by["mgrules"]["done"] and by["changes"]["done"]  # nothing waits, so the approval step is not owed
     assert by["catalog"]["done"] and by["catalog"]["optional"] and "원천 테이블" in by["catalog"]["detail"]
     assert got["next"] == "check"  # nothing has been measured yet

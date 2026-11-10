@@ -236,7 +236,7 @@ def _unknown(tools, text: str, found: list[dict]) -> tuple[str, list[dict]]:
             if by and by.group(1) not in (m.label, m.name):
                 reason += f" 지표 {m.label or m.name}은(는) {by.group(1)}별로 나누어 계산하도록 정의되어 있지 않습니다."
     else:
-        reason = "질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다. 레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요."
+        reason = "질문에서 정의된 Entity, 지표, 판정, 문서를 찾지 못했습니다. 레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요."
     ask = [{"who": m.owner, "about": f"지표 {m.label or m.name}"} for m in metrics if m.owner]
     return reason, ask
 
