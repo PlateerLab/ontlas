@@ -31,9 +31,20 @@ The page is rebuilt around how a space is built and used, with less to read on i
   in Korean with the record and what to do; the record search keeps its words across types and offers the types that
   hold them; a node opens its relations on a double press and a small first hop opens by itself; a change filed from
   the workspace is compared field by field, also after it is applied; a lone visitor's 변경 요청 says 검토 후 적용; the
-  draft's last step settles the tables it waits on where it stands; applying a draft says which pipeline it switched
-  to; a failed 할 일 load says so with a retry; the new-Entity and property forms ask for a display name first and
-  suggest the English name; a citation chip opens the rule that cites it.
+  draft's last step settles the tables it waits on where it stands; applying a draft says which data it moved to and
+  where the original is; a failed 할 일 load says so with a retry; the new-Entity and property forms ask for a display
+  name first and suggest the English name; a citation chip opens the rule that cites it.
+- **Fixed from a second first-time-user test.** 검토 후 적용 shows the review before anything changes: the edits, what
+  they reach and a run on a copy, then [적용] (or the change request in a team), in the workspace and on every page's
+  pending bar. A number changed in a rule's condition names the reasons that still say the old number (the rule and
+  any other in the table) and changes them on one press. The Object form suggests the English name as the Entity form
+  does and asks for a name before saving; the new Object opens next, and a new Entity made in it says so. The workspace
+  toolbar has 파일로 초안; canvas cards show property labels and say 계산 for a formula. The library keeps its 적용
+  switch in view (version beside the name, row actions on hover, the side cards below on narrow windows). The flow's
+  source names its tables and says uploaded files as such; the top bar's data switcher says 데이터 and names the first
+  one 기본 데이터. Each menu item says what its screen is for on hover; the search page asks with 질문 as the home does;
+  the build steps' part names moved to their hover; a decided change no longer shows an item review count; the
+  sidebar head of the section a person is in is no longer a button that does nothing.
 
 ## 0.15.1
 

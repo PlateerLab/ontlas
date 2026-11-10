@@ -157,7 +157,9 @@ def changes_screen(page, base: str, out: Path) -> None:
     page.fill("[data-in=mgf][data-f=label]", "주문서")
     page.click("[data-act=mgsave]")
     settle(page, 800)
-    page.click("[data-act=mgpropose]")
+    page.click("[data-act=mdreview]")  # the review first: the edits and a run on a copy, then the apply in that panel
+    page.wait_for_selector(".wsleft .wstrial", timeout=60000)
+    page.click(".wsleft [data-act=mgpropose]")
     page.wait_for_function("() => { const t = document.querySelector('#toast'); return t && /변경/.test(t.innerText); }", timeout=60000)
     open_tab(page, base, "changes")
     page.wait_for_selector("[data-act=chgsel]", timeout=30000)

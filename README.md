@@ -102,13 +102,15 @@ holds the canvas in the middle, the tree on the left (by Object, or by module) a
 uses, YAML and comments on the right, all of the same element. Each Entity shows how far it has come: L0 개념
 (defined), L1 논리 (properties or relations), L2 연결 (bound to a table and its columns), L3 검증 (the database check finds
 nothing against it). Draw a relation from a card's + to another card, drop a source column on a card to make a
-property, give an element a status (초안 · 사용 중 · 폐기 예정), take back any one edit, and try the pending edits on a
-copy of the space before filing them. The canvas lays the cards out for its width and zooms with the wheel.
+property, give an element a status (초안 · 사용 중 · 폐기 예정) and take back any one edit. 검토 후 적용 first shows the
+pending edits, what they reach and a run on a copy of the space; [적용] (in a team, the change request) is pressed
+there. The canvas lays the cards out for its width and zooms with the wheel.
 
 **3. Rules (구축 › 2 규칙).** A decision table is edited where it stands: cells in place and in plain words ("14일 이하",
 "NORMAL 아님", "A, B 중", "값 없음" set the comparison and the value together), rows by dragging, the hit policy and the
-modules in the header, overlaps and gaps above the table. The simulator decides a record or typed values on the table
-as edited and says which single change would turn the answer; the tests recompute past cases, generate boundary
+modules in the header, overlaps and gaps above the table. Change the number in a condition and the reasons that still
+say the old number are named, with one press to change them too. The simulator decides a record or typed values on the
+table as edited and says which single change would turn the answer; the tests recompute past cases, generate boundary
 values and run the validation questions on the edited table. 액션 and 함수 are forms beside it.
 
 **4. Connect data (구축 › 3 데이터 연결), when you want live values.** Definitions, rules and decisions on typed values
@@ -583,8 +585,8 @@ monitor:
     - {label: 식품 업종 모듈 적용, attach: food}
 ```
 
-Each draft you apply becomes a pipeline of its own. The list at the top of the page switches between them, the one you
-started with included, and 초기화 is no longer the only way back. A visitor keeps up to five.
+Each draft you apply becomes a pipeline of its own. The 데이터 list at the top of the page switches between them, the one
+you started with (기본 데이터) included, and 초기화 is no longer the only way back. A visitor keeps up to five.
 
 ## The data catalog
 
