@@ -71,5 +71,5 @@ def test_some_tables_bind_to_the_standard_and_the_rest_stay_new(session):
 
 def test_a_new_object_cannot_take_a_standard_name(session):
     std = [r["name"] for r in session.standards()["standards"] if r["kind"] == "domain"]
-    with pytest.raises(ValueError, match="표준 객체와 같아"):
+    with pytest.raises(ValueError, match="표준 Entity와 같아"):
         session.apply_review(std, {"names": {"Jumun": "Order"}}, {"결제": "standard", "주문": "new"})

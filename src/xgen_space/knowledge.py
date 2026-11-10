@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable
 
 from xgen_space.embed import shared_wording
 
-KIND_WORD = {"document": "문서", "rule": "규칙", "object": "객체", "query": "등록 질의", "action": "Action"}
+KIND_WORD = {"document": "문서", "rule": "규칙", "object": "Entity", "query": "등록 질의", "action": "Action"}
 SPACES = re.compile(r"\s+")
 ARTICLE = re.compile(r"(\d+)(?:\.\d+)?\s*조")
 KEPT_FROM_STORE = 2  # passages the vector store ranks highest stay among the found, whatever the fusion made of them

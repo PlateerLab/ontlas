@@ -37,7 +37,7 @@ _ENDINGS = ("합니다", "습니다", "됩니다", "입니다", "있습니다", 
 _STOP = {"경우", "대한", "관한", "위한", "따라", "다음", "해당", "이상", "이내", "이하", "미만", "각호", "사항", "내용", "기준", "가능", "모든", "또는",
          "그리고", "있는", "없는", "있다", "없다", "같은", "등의", "다시", "돌려", "보내", "받은", "받습", "the", "and", "for", "with", "that", "this", "from"}
 SAMPLE = 6  # passages a change of model is timed on
-KIND_WORD = {"object": "객체", "property": "속성", "value": "허용값", "decision": "결정", "action": "Action", "term": "용어",
+KIND_WORD = {"object": "Entity", "property": "속성", "value": "허용값", "decision": "결정", "action": "Action", "term": "용어",
              "keyword": "키워드"}
 
 

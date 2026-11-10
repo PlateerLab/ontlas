@@ -1208,3 +1208,4 @@ tr.unasked td { color:#98a2b3; }
 .empty.wsstart { display:flex; flex-direction:column; align-items:center; gap:10px; padding:80px 20px; text-align:center; }
 .empty.wsstart b { font-size:15px; color:var(--ink); }
 .empty.wsstart span { font-size:12.5px; }
+.drcard.shut > .cb { display:none; }  /* the draft's settings: defaults until someone opens them */

@@ -176,7 +176,7 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
                     _tag("convert.unread", "읽기 실패", counts["unread"], "warn" if counts["unread"] else "ok", "catalog"),
                     _tag("convert.json", "변환 테이블", one["tables"], tab="convert")],
         "ontology": [_tag("ontology.modules", "모듈", len(define["modules"]), tab="library"),
-                     _tag("ontology.objects", "객체", define["objects"], tab="objects"),
+                     _tag("ontology.objects", "Entity", define["objects"], tab="objects"),
                      _tag("ontology.links", "관계", define["links"], tab="links"),
                      _tag("ontology.findings", "DB 대조 오류", bind.get("findings") or 0, state("bind"), "bind")],
         "store": [_tag("store.nodes", "그래프 Node", project.get("nodes") or 0, tab="onto"),

@@ -20,7 +20,7 @@ MODULE_COLOR = {"core": "#7a5af8", "domain": "#1a73e8", "industry": "#0f9d8a", "
 MODULE_KIND = {"core": "공통 개념", "domain": "도메인", "industry": "업종 확장", "customer": "고객사 차이",
                "binding": "Binding", "quality": "검증 기준", "method": "구축 규칙", "dictionary": "용어 사전"}
 KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의", "decision": "결정", "action": "Action",
-              "role": "역할", "agent": "Agent", "link": "관계", "object": "객체", "table": "테이블", "file": "파일",
+              "role": "역할", "agent": "Agent", "link": "관계", "object": "Entity", "table": "테이블", "file": "파일",
               "collection": "컬렉션", "folder": "폴더", "database": "데이터베이스"}
 
 CSS = """
@@ -295,7 +295,7 @@ def _schema_svg(studio: Studio, selected: str) -> str:
 def _screen_ontology(studio: Studio, selected: str, counts) -> str:
     o = studio.onto
     obj = o.obj(selected)
-    stats = [(len(o.objects), "객체"), (len(o.links), "관계"), (sum(len(x.properties) for x in o.objects.values()),
+    stats = [(len(o.objects), "Entity"), (len(o.links), "관계"), (sum(len(x.properties) for x in o.objects.values()),
              "속성"), (len(o.decisions), "결정"), (len(o.actions), "Action"), (len(o.queries), "등록 질의")]
     stat_html = "".join(f'<div class="stat"><b>{n}</b><span>{_e(lbl)}</span></div>' for n, lbl in stats)
     def owner_chip(p) -> str:
@@ -317,7 +317,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
                          for k in dict.fromkeys(kinds) if k != "binding") + '<span>- - 하위 유형</span>'
     else:
         legend = ('<span><i style="background:#13213c"></i>선택</span><span><i style="background:#fff;'
-                  'border:1px solid #c9d2de"></i>객체</span>')
+                  'border:1px solid #c9d2de"></i>Entity</span>')
     aligned = "".join(f'<span class="chip mono" style="font-size:11px">{_e(a.split("//", 1)[-1])}</span>'
                       for a in obj.aligned)
     if aligned:
@@ -339,7 +339,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
         f'<span class="chip">{_e(lk.label or lk.name)} · {_e(o.obj(lk.target if lk.source == selected else lk.source).label)}'
         f'</span>' for lk in links)
     body = f"""
-<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">Entity, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
   <div class="right"><span class="btn ghost">OWL 내보내기</span><span class="btn ghost">SHACL</span>
   <span class="btn ghost">R2RML</span><span class="btn primary">변경 제안</span></div></div>
 <div class="stats">{stat_html}</div>
@@ -377,7 +377,7 @@ def _screen_library(studio: Studio, counts) -> str:
     body_rows = []
     for r in rows:
         c = r["counts"]
-        parts = [f"객체 {c.get('objects', 0)}", f"관계 {c.get('links', 0)}", f"결정 {c.get('decisions', 0)}",
+        parts = [f"Entity {c.get('objects', 0)}", f"관계 {c.get('links', 0)}", f"결정 {c.get('decisions', 0)}",
                  f"질의 {c.get('queries', 0)}", f"검증 질문 {c.get('questions', 0)}", f"통과 조건 {c.get('gates', 0)}",
                  f"구축 규칙 {c.get('draft_rules', 0)}", f"확장 {c.get('extends', 0)}"]
         made = " · ".join(x for x in parts if not x.endswith(" 0")) or "-"

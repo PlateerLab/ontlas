@@ -692,7 +692,7 @@ queries that need it. On the example commerce database it gives the bindings a p
 included.
 
 <p align="center">
-  <img src="assets/screens/draft.png" alt="Draft review: the steps across the top with what each still asks a person to settle, every source table scored against the standards with 표준에 연결 or 새 객체로 유지, an English API name for each, and the picked table's sample rows, key evidence and match evidence beside" width="920">
+  <img src="assets/screens/draft.png" alt="Draft review: the steps across the top with what each still asks a person to settle, every source table scored against the standards with 표준에 연결 or 새 Entity로 유지, an English API name for each, and the picked table's sample rows, key evidence and match evidence beside" width="920">
 </p>
 
 <p align="center"><b>A draft from the six files in <code>examples/files</code>, reviewed table by table.</b> Each source table is scored against the standards the draft compares with and bound to the standard object or kept as a new one, with an English name from the standards and the glossaries; the picked table shows its sample rows, why its key is a key and the match evidence. The later steps settle properties, relations, queries and rules the same way before the draft is applied.</p>

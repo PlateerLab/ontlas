@@ -518,7 +518,7 @@ class PagesMixin:
         if rq:  # a reviewed draft an editor filed for an approver to apply
             items.append({"kind": "draft", "id": "draft", "title": f"{rq['label']} 초안 적용", "by": rq["by"],
                           "mine": rq["by"] == self.who, "at": rq["at"],
-                          "detail": f"객체 {rq['objects']}개 · 관계 {rq['links']}개", "waits": "approver"})
+                          "detail": f"Entity {rq['objects']}개 · 관계 {rq['links']}개", "waits": "approver"})
         for c in st.onto.source_conflicts():
             if not c.open:
                 continue
@@ -732,7 +732,7 @@ class PagesMixin:
         drafting = ("적용 요청 대기" if self.draft_request else "초안 검토 중") if self.pending is not None else ""
         steps = [
             {"id": "model", "title": "온톨로지", "part": "Ontology manager", "done": bool(o.objects),
-             "detail": " · ".join(x for x in (f"객체 {len(o.objects)} · 관계 {len(o.links)}" if o.objects else "객체와 속성, 관계를 정의합니다",
+             "detail": " · ".join(x for x in (f"Entity {len(o.objects)} · 관계 {len(o.links)}" if o.objects else "Entity와 속성, 관계를 정의합니다",
                                               f"대기 중인 변경 {pending}" if pending else "", drafting) if x)},
             {"id": "mgrules", "title": "규칙", "part": "Semantic layer", "done": bool(o.decisions or o.actions),
              "detail": f"결정표 {len(o.decisions)} · 액션 {len(o.actions)} · 역할 {len(o.roles)}" if (o.decisions or o.actions or o.roles) else "결정표와 액션, 권한을 정합니다"},
@@ -795,8 +795,8 @@ class PagesMixin:
         return name
 
     FIELD_WORDS = {"label": "라벨", "type": "타입", "column": "컬럼", "values": "허용값", "required": "필수", "mask": "가림",
-                   "expr": "계산식", "unit": "단위", "description": "설명", "table": "테이블", "key": "키", "parent": "상위 객체",
-                   "source": "출발 객체", "target": "도착 객체", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
+                   "expr": "계산식", "unit": "단위", "description": "설명", "table": "테이블", "key": "키", "parent": "상위 Entity",
+                   "source": "출발 Entity", "target": "도착 Entity", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
                    "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
                    "area": "Object"}

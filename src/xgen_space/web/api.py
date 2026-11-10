@@ -139,9 +139,9 @@ EDIT_TEXT = [
     (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
     (r"^(object|property|link) name '(.*)' must be letters, digits and _ starting with a letter$",
      r"이름 '\2'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
-    (r"^object type '(.+)' already exists$", r"객체 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
-    (r"^give the key and the key property$", "키 속성을 정하지 않아 객체를 추가하지 못했습니다. 키와 키 속성을 입력해 주세요."),
-    (r"^object type '(.+)' is unknown$", r"객체 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^object type '(.+)' already exists$", r"Entity '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^give the key and the key property$", "키 속성을 정하지 않아 Entity를 추가하지 못했습니다. 키와 키 속성을 입력해 주세요."),
+    (r"^object type '(.+)' is unknown$", r"Entity '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^key '(.+)' is not a property of (.+)$", r"'\1'은 \2의 속성이 아니어서 키로 정하지 못했습니다."),
     (r"^the key of (.+) is set where it is defined; change it there$",
      r"\1의 키는 표준 모듈에서 정해져 있어 여기서 바꾸지 못했습니다. 해당 모듈에서 바꿔 주세요."),
@@ -150,19 +150,19 @@ EDIT_TEXT = [
     (r"^the type of (.+) comes from its standard; it cannot be changed here$",
      r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 속성을 추가해 주세요."),
     (r"^'(.+)' is the key of (.+); delete the object instead$",
-     r"'\1'은 \2의 키라서 지우지 못했습니다. 객체를 지워 주세요."),
+     r"'\1'은 \2의 키라서 지우지 못했습니다. Entity를 지워 주세요."),
     (r"^'(.+)' comes from (.+), which (.+) specialises; delete it on (.+)$",
-     r"'\1'은 상위 객체 \2에서 상속 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
+     r"'\1'은 상위 Entity \2에서 상속 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
     (r"^link '(.+)' already exists$", r"관계 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
     (r"^link '(.+)' is unknown$", r"관계 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^the endpoints of (.+) come from its standard; add a new link instead$",
-     r"\1의 양 끝 객체는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 관계를 추가해 주세요."),
+     r"\1의 양 끝 Entity는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 관계를 추가해 주세요."),
     (r"^question id '(.*)' is empty or already used$",
      r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^object type '(.+)' is the parent of (.+)$",
-     r"하위 객체 \2이(가) \1을(를) 상위 객체로 두고 있어 제외하지 못했습니다. 하위 객체의 상위 객체를 먼저 바꿔 주세요."),
-    (r"^(\S+): parent '(.+)' is unknown$", r"\1의 상위 객체 '\2'이(가) 정의에 없습니다. 상위 객체를 바꾸거나 비워 주세요."),
+     r"하위 Entity \2이(가) \1을(를) 상위 Entity로 두고 있어 제외하지 못했습니다. 하위 Entity의 상위 Entity를 먼저 바꿔 주세요."),
+    (r"^(\S+): parent '(.+)' is unknown$", r"\1의 상위 Entity '\2'이(가) 정의에 없습니다. 상위 Entity를 바꾸거나 비워 주세요."),
     (r"^area '(.+)' already exists$", r"Object '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
     (r"^area '(.+)' is unknown$", r"Object '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^area '(.+)' holds (.+)$",
@@ -193,9 +193,9 @@ DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives h
 
 ISSUE_TEXT = [
     # a definition not bound to a source: it has no text in a language that names tables
-    (r"^(\S+) has no source table and no bound subtype$", r"\1 객체가 원천 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
+    (r"^(\S+) has no source table and no bound subtype$", r"\1 Entity가 원천 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
     (r"^link (\S+) has no source binding \(on/via\)$", r"관계 \1에 원천 연결 기준이 없어 SQL로 변환하지 못했습니다. 관계의 연결 기준을 지정해 주세요."),
-    (r"^(\S+) has no bound subtype to stand for it in the graph$", r"\1 객체와 하위 객체가 원천 테이블에 연결되어 있지 않아 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
+    (r"^(\S+) has no bound subtype to stand for it in the graph$", r"\1 Entity와 하위 Entity가 원천 테이블에 연결되어 있지 않아 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
     (r"^no version of '(.+?)' satisfies .*$", r"의존 모듈 '\1'을 찾지 못했습니다. requires 항목의 모듈 이름을 확인해 주세요."),
     (r"^cannot read requirement '(.+?)'.*$", r"requires 값 '\1'을 읽지 못했습니다. name 또는 name>=1.0 형식으로 입력해 주세요."),
     (r"^(\S+) requires '(.+?)', which is not attached$", r"\1에 필요한 '\2' 모듈이 적용되어 있지 않습니다. '\2' 모듈을 먼저 적용해 주세요."),
@@ -204,8 +204,8 @@ ISSUE_TEXT = [
     (r"^module (\S*): kind must be one of .*$", r"모듈 \1의 kind 값이 올바르지 않습니다. core, domain, industry, customer, binding, quality, method 중에서 지정해 주세요."),
     (r"^(\w+)\.(\w+): type '(.+?)' is not one of .*$", r"\1.\2의 타입 '\3'은 사용할 수 없습니다. string, integer, decimal, boolean, date, datetime, enum 중에서 지정해 주세요."),
     (r"^(\w+)\.(\w+): expected .*$", r"\1.\2의 계산식을 해석하지 못했습니다. 식을 확인해 주세요."),
-    (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 객체 '\2'를 찾지 못했습니다. target 항목을 확인해 주세요."),
-    (r"^link (\S+): endpoints (\S+) -> (\S+) must be object types$", r"관계 \1의 객체 \2 또는 \3을 찾지 못했습니다. 출발 객체와 도착 객체를 확인해 주세요."),
+    (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 Entity '\2'를 찾지 못했습니다. target 항목을 확인해 주세요."),
+    (r"^link (\S+): endpoints (\S+) -> (\S+) must be object types$", r"관계 \1의 Entity \2 또는 \3을 찾지 못했습니다. 출발 Entity와 도착 Entity를 확인해 주세요."),
     (r"^(\S+) extends (?:object type|link|decision|role) '(.+?)', which no attached module defines$", r"확장 대상 '\2'를 정의한 모듈이 적용되어 있지 않습니다. 대상 이름과 requires 항목을 확인해 주세요."),
     (r"^(\S+) changes the type of (\S+) from (\S+) to (\S+)$", r"\2의 타입은 변경할 수 없습니다. \3에서 \4로 바꾸려면 새 속성을 추가해 주세요."),
     (r"^(\S+) binds (\S+), which is not a property of (\S+)$", r"\2는 \3의 속성이 아니어서 연결하지 못했습니다. 속성 이름을 확인해 주세요."),
@@ -213,8 +213,8 @@ ISSUE_TEXT = [
     (r"^(\S+) defines (\S+) '(.+?)', already defined by (\S+?);.*$", r"'\3'은 \4에 이미 정의되어 있습니다. 다른 이름을 사용하거나 확장으로 지정해 주세요."),
     (r"^module '(.+?)' is not attached$", r"'\1' 모듈이 적용되어 있지 않습니다."),
     # a query a person typed
-    (r"^unknown label '(.+?)'$", r"'\1' 객체를 찾지 못했습니다. 객체 이름을 확인해 주세요."),
-    (r"^give '(.+?)' a label on first use$", r"변수 \1에 객체 이름을 지정해 주세요. 예: (\1:Customer)"),
+    (r"^unknown label '(.+?)'$", r"'\1' Entity를 찾지 못했습니다. Entity 이름을 확인해 주세요."),
+    (r"^give '(.+?)' a label on first use$", r"변수 \1에 Entity 이름을 지정해 주세요. 예: (\1:Customer)"),
     (r"^(.+) is outside the ontology namespace (.+)$", r"\1은 온톨로지 네임스페이스 \2에 없는 주소입니다."),
     (r"^'return' lists at least one column$", "return 항목에 컬럼을 하나 이상 지정해 주세요."),
     (r"^a query is an object$", "질의는 JSON 객체로 입력해 주세요."),
@@ -572,7 +572,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         if not st.backends:
             return {"ok": False, "no_source": True, "error": NO_SOURCE}
         if not t.table:
-            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
+            return {"ok": False, "error": "개념 Entity라 연결된 데이터가 없습니다."}
         props = [p for p in all_props(st.onto, name) if not find_prop(st.onto, name, p).expr][:12]
         q = {"match": {"x": name}, "return": [f"x.{p}" for p in props], "limit": max(1, min(int(limit), 100))}
         res = st.run(q)
@@ -777,7 +777,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         if comp is None:
             return {"ok": False, "error": "모듈로 구성된 스페이스가 아니어서 규칙 초안을 모듈로 만들지 못했습니다."}
         if target and target not in self.studio.onto.objects:
-            raise ValueError(f"대상 객체 {target} 이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요.")
+            raise ValueError(f"대상 Entity {target} 이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요.")
         import yaml
 
         from xgen_space.policy import CALL_SECONDS, CALL_TOKENS, PolicyDrafter
@@ -1899,7 +1899,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.draft_request = {"by": self.who, "at": datetime.now().isoformat(timespec="seconds"), "label": d.label,
                               "objects": len(d.objects), "links": len(d.links), "standard": [str(x) for x in standard],
                               "edits": edits, "choices": choices}
-        self._note("draft", f"{d.label} 초안 적용을 요청했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
+        self._note("draft", f"{d.label} 초안 적용을 요청했습니다. Entity {len(d.objects)}개, 관계 {len(d.links)}개")
         return {"ok": True, "request": self._request_view()}
 
     def drop_draft_request(self) -> dict:
@@ -1967,7 +1967,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         between them and the tables bound to the standard, now on the standard's objects."""
         clash = sorted(o.name for o in kept if o.name in onto.objects)
         if clash:
-            raise ValueError(f"새 객체 {', '.join(clash)}의 이름이 표준 객체와 같아 적용하지 못했습니다. API 이름을 바꾸거나 "
+            raise ValueError(f"새 Entity {', '.join(clash)}의 이름이 표준 Entity와 같아 적용하지 못했습니다. API 이름을 바꾸거나 "
                              "표준에 연결해 주세요.")
         names = {o.name for o in kept}
         by_name = {o.name: o for o in d.objects}
@@ -2064,9 +2064,9 @@ class StudioSession(SpaceMixin, PagesMixin):
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
                                                               ("actions", "Action")) if m.remove.get(k)]
         news = len(extra[0].body.get("objects") or {}) if extra else 0
-        self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. 객체 "
+        self._note("draft", f"{d.label} 테이블을 표준 {', '.join(map(str, standard))} 에 연결했습니다. Entity "
                             f"{len(m.extend.get('objects') or {})}개, 관계 {len(m.extend.get('links') or {})}개, "
-                            + (f"새 객체 {news}개, " if news else "")
+                            + (f"새 Entity {news}개, " if news else "")
                             + f"테이블에 없는 속성 {removed}개 제외"
                             + (f"(이 속성을 사용하는 {', '.join(uses)} 제외)" if uses else "")
                             + (f", 예시 데이터 기준 표준 검증 질문 {renewed}개는 업로드 데이터의 답으로 다시 등록" if renewed else "")
@@ -2095,7 +2095,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         except ValueError as e:
             raise ValueError(f"편집 내용을 확인할 수 없어 적용하지 못했습니다. {e}") from None
         if not d.objects:
-            raise ValueError("선택된 객체가 없어 적용하지 못했습니다. 객체를 하나 이상 선택해 주세요.")
+            raise ValueError("선택된 Entity가 없어 적용하지 못했습니다. Entity를 하나 이상 선택해 주세요.")
         self._make_room(d.label)
         if d.origin.get("kind") == "files":  # a type the person chose is how the values are stored
             was = {(o.table, p.column): p.type for o in d0.objects for p in o.properties}
@@ -2123,7 +2123,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.origin = {**d.origin, "label": d.label}
         self.pending, self.draft_request, self.log = None, None, []
         self._new_pipeline(d.label)
-        self._note("draft", f"{d.label} 온톨로지를 적용했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
+        self._note("draft", f"{d.label} 온톨로지를 적용했습니다. Entity {len(d.objects)}개, 관계 {len(d.links)}개")
         return {"ok": True}
 
     # ---- module files: read, check, save into this visitor's library, plug in ---------------------------------
@@ -2564,7 +2564,7 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         o, _ = self._pending_onto()
         if source not in o.objects or target not in o.objects:
-            raise ValueError("객체를 찾지 못해 관계를 제안하지 못했습니다. 카드를 다시 선택해 주세요.")
+            raise ValueError("Entity를 찾지 못해 관계를 제안하지 못했습니다. 카드를 다시 선택해 주세요.")
         a, b = o.objects[source], o.objects[target]
         pa, pb = all_props(o, source), all_props(o, target)
         fields = {p: find_prop(o, source, p) for p in pa}, {p: find_prop(o, target, p) for p in pb}
@@ -2611,7 +2611,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             return {"ok": False, "no_source": True,
                     "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요."}
         if t is None or not t.table:
-            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
+            return {"ok": False, "error": "개념 Entity라 연결된 데이터가 없습니다."}
         have = src.columns(t.table) or {}
         props = [p for p in all_props(o, name) if not find_prop(o, name, p).expr
                  and len(columns_of(o, name, p)) == 1 and columns_of(o, name, p)[0].lower() in have][:14]
@@ -2634,7 +2634,7 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         ws = self._ws()
         if not ws.dirty:
-            raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
+            raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. Entity · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
         got = review(self.studio, ws.module, attach=ws.current is None)
         gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
                   "note": UNMEASURED.get(g.get("unmeasured") or "", "")} for g in got.get("gates") or []]
@@ -2674,7 +2674,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         except yaml.YAMLError as e:
             raise ValueError(f"YAML을 읽지 못했습니다. {e}") from None
         if kind != "object" or not isinstance(doc, dict) or list(doc) != [name] or not isinstance(doc[name], dict):
-            raise ValueError(f"'{name}:' 하나로 시작하는 객체 정의여야 합니다.")
+            raise ValueError(f"'{name}:' 하나로 시작하는 Entity 정의여야 합니다.")
         new = doc[name]
         old = yaml.safe_load(self.element_yaml(element)["yaml"])[name]
         ws = self._ws()
@@ -2793,7 +2793,7 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         ws = self._ws()
         if not ws.dirty:
-            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 요청해 주세요.")
+            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. Entity · 속성 · 관계를 수정한 뒤 다시 요청해 주세요.")
         text = yaml.safe_dump(ws.module.to_dict(), allow_unicode=True, sort_keys=False)
         res = self.propose_module(text, attach=ws.current is None)
         change = res["change"]

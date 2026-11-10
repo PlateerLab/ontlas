@@ -50,7 +50,7 @@
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
   const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['graph', '그래프 탐색'], ['model', '작업 공간'], ['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['explorer', '데이터 탐색기'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '통합 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
-    ['data', '초안 생성'], ['objects', '객체 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
+    ['data', '초안 생성'], ['objects', 'Entity 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
     ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
   // the sidebar: what a person comes to do (use), then the four parts a definition is built from, in the order they are
   // built (build: the ontology, its rules, the data it is bound to, what proves it, what is filed for approval), then
@@ -69,18 +69,18 @@
   // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
   const TAB_WORD = { mgrules: '결정표', actions: '액션', mgfuncs: '함수', changes: '변경 요청', model: '작업 공간', onto: '전체 보기', docs: '문서', graph: '그래프 탐색', records: '레코드 탐색', monitor: '관제', catalog: '카탈로그', convert: '변환 결과', library: '라이브러리', adapters: '어댑터', check: '검증 질문', flow: '흐름', bind: 'DB 대조', explorer: '자산 탐색기', map: '자산 그래프', search: '통합 검색' };
   // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere (these tables are the workspace's)
-  const TAB_SETS = [['정의 관리', [['states', '상태'], ['roles', '권한']], [['objects', '객체'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const TAB_SETS = [['정의 관리', [['states', '상태'], ['roles', '권한']], [['objects', 'Entity'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
   const TABLE_TABS = ['objects', 'props', 'links'];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
-  const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: '객체', property: '속성', link: '관계', query: '질의',
+  const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: 'Entity', property: '속성', link: '관계', query: '질의',
     decision: '결정', action: 'Action', role: '역할', agent: 'Agent', workflow: '워크플로우', vector_store: '벡터 저장소', graph_store: '그래프 저장소', reasoner: '추론기', embedder: '임베딩 모델' };
   const KIND_TAB = { database: 'db', table: 'sources', column: 'sources', folder: 'catalog', file: 'catalog', document: 'docs', collection: 'vectors', object: 'objects', property: 'props', link: 'links',
     query: 'query', decision: 'decide', action: 'decide', vector_store: 'vectors', graph_store: 'adapters', reasoner: 'adapters', embedder: 'vectors' };
-  const MAP_ORDER = ['객체', '속성', '관계', '질의', '결정', 'Action', '역할', 'Agent', '문서', '문서 컬렉션', '테이블', '컬럼', '파일', '저장소 어댑터'];
+  const MAP_ORDER = ['Entity', '속성', '관계', '질의', '결정', 'Action', '역할', 'Agent', '문서', '문서 컬렉션', '테이블', '컬럼', '파일', '저장소 어댑터'];
   const MAP_STORE = new Set(['vector_store', 'graph_store', 'reasoner', 'embedder']);
-  const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 객체'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
-  const ELEMENT = { area: 'Object', object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
+  const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 Entity'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
+  const ELEMENT = { area: 'Object', object: 'Entity', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
     question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값', function: '함수', metric: '지표', identity: '식별 통합', conflict: '출처 충돌' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
@@ -98,12 +98,12 @@
   const TEXT_LANG = [['sparql', 'SPARQL 1.1'], ['cypher', 'Cypher'], ['ir', '온톨로지 질의 IR (JSON)']];
   const STEP = {
     read: ['테이블 읽기', '파일별 테이블 생성과 컬럼 타입 판별'],
-    objects: ['객체와 키', '테이블별 객체와 키 컬럼 지정'],
+    objects: ['Entity와 키', '테이블별 Entity와 키 컬럼 지정'],
     properties: ['속성과 타입', '컬럼별 속성 타입과 허용값 지정'],
     links: ['관계', '키 컬럼 이름과 값 일치 기준 관계 추론'],
-    queries: ['등록 질의', '객체 목록, 관계별 집계, 허용값별 집계 질의 생성'],
+    queries: ['등록 질의', 'Entity 목록, 관계별 집계, 허용값별 집계 질의 생성'],
     rules: ['규칙 · 역할 · 검증', '상태 전이, 상태 변경 Action, 역할, 검증 질문, 지난 처리 결과로 만든 판정 표'],
-    bindings: ['Binding', '객체, 속성, 관계의 원천 테이블과 컬럼 연결'],
+    bindings: ['Binding', 'Entity, 속성, 관계의 원천 테이블과 컬럼 연결'],
   };
   const HIT_WORD = { first: '위 규칙부터 첫 적중 적용', collect: '적중한 규칙 모두 적용', priority: '우선순위가 높은 규칙 적용', unique: '하나만 적중해야 함' };
   const CARD = { many_to_one: 'N:1', one_to_many: '1:N', one_to_one: '1:1', many_to_many: 'N:M' };
@@ -125,7 +125,7 @@
       '변경 요청 행은 사본 시험 결과와 전보다 나빠진 통과 조건을 보여 주고, [검토]로 항목별 검토 화면을 엽니다.',
       '출처 충돌은 [고르기]로 출처를 고릅니다. 고른 것은 대기 중인 변경이 되어 변경 요청과 승인을 거칩니다.',
       '점검 경고는 [조치 보기]로 원인 · 영향 · 조치 패널을 엽니다.']],
-    ['records', '객체의 레코드를 번호나 이름으로 찾고, 한 건을 열어 속성, 연결, 판정, 문서, 이력을 한 페이지에서 봅니다.', [
+    ['records', 'Entity의 레코드를 번호나 이름으로 찾고, 한 건을 열어 속성, 연결, 판정, 문서, 이력을 한 페이지에서 봅니다.', [
       '타입을 고르고 번호나 이름의 일부를 넣어 찾습니다. 이름이 없는 레코드는 그것이 속한 레코드의 이름으로 읽습니다.',
       '레코드 페이지의 머리글은 핵심 값, 상태 전이의 지금 단계와 다음 단계, 할 수 있는 액션과 함수를 보여 줍니다. 역할을 고르면 그 역할이 요청할 수 있는 액션만 남습니다.',
       '연결 탭은 따라간 레코드를 들여쓰기로 보여 주고 누르면 그 레코드로 이동합니다. 가림 속성은 가린 채로 보입니다.',
@@ -172,10 +172,10 @@
       '검색은 이름과 경로, 온톨로지 정의, 문서 내용을 함께 찾고, 결과마다 찾은 곳(이름, 경로, 정의, 단어 일치, 의미 유사)을 표시합니다.',
       '레포지토리의 파일과 폴더는 새 폴더, 업로드, 이름 변경, 이동, 삭제를 할 수 있습니다. 삭제한 항목은 휴지통으로 이동하고 [휴지통]에서 복원하거나 영구 삭제합니다.',
       '[작업 기록]에서 업로드, 이동, 삭제, 복원, 초안 포함 변경, 임베딩 변경을 시각 순으로 확인합니다.']],
-    ['map', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계를 그래프로 확인합니다.', [
+    ['map', '파일, 테이블, 문서, 저장소, Entity, 질의의 연결 관계를 그래프로 확인합니다.', [
       'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
       '범례를 선택하면 해당 그룹을 숨기거나 다시 표시합니다.',
-      '미사용 자산은 객체, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
+      '미사용 자산은 Entity, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
     ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
       '문서 파일을 올리면 벡터 저장소에 임베딩되고 문서 온톨로지에 추가됩니다. 임베딩 열의 선택을 해제하면 검색에서 제외되고 문서 온톨로지에는 남습니다.',
       '임베딩 열은 파일별 상태를 임베딩됨, 임베딩 대기, 임베딩 실패, 꺼짐으로 표시합니다. 폴더에서 선택을 바꾸면 하위 파일 전체에 적용됩니다.',
@@ -194,38 +194,38 @@
       '파일별 변환 결과와 테이블, 코드, 용어, 메시지, 문서 수를 확인합니다.',
       '파일 형식과 관계없이 같은 구조의 JSON으로 변환합니다.',
       '[JSON 내려받기]로 전체 내용을 저장합니다.']],
-    ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 객체를 확인합니다.', [
+    ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 Entity를 확인합니다.', [
       '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
-      '연결 객체가 없는 테이블은 [객체로 추가]를 선택해 작업 공간에서 객체로 추가합니다.',
+      '연결 Entity가 없는 테이블은 [Entity로 추가]를 선택해 작업 공간에서 Entity로 추가합니다.',
       '파일 업로드는 [데이터 카탈로그], DB 연결은 [DB 연결]에서 합니다.']],
     ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 만들고, 제안을 단계별로 검토해 스페이스에 적용합니다.', [
       '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
       '[생성 설정]에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의, 비교할 표준 모듈을 지정합니다.',
-      '[초안 생성]을 선택하면 파일 선택, 객체 · 키, 속성 · 타입, 관계, 질의, 상태 · 규칙, 검토 · 적용 순서의 단계가 생기고, 단계마다 사람이 확인할 개수가 붙습니다.',
-      '객체 · 키 단계에서 테이블마다 표준 객체와 얼마나 맞는지 점수가 보이고, [표준에 연결]과 [새 객체로 유지] 중에 고릅니다. 영문 이름은 표준과 용어사전의 말로 제안하고, 모르는 말만 로마자로 남깁니다.',
+      '[초안 생성]을 선택하면 파일 선택, Entity · 키, 속성 · 타입, 관계, 질의, 상태 · 규칙, 검토 · 적용 순서의 단계가 생기고, 단계마다 사람이 확인할 개수가 붙습니다.',
+      'Entity · 키 단계에서 테이블마다 표준 Entity와 얼마나 맞는지 점수가 보이고, [표준에 연결]과 [새 Entity로 유지] 중에 고릅니다. 영문 이름은 표준과 용어사전의 말로 제안하고, 모르는 말만 로마자로 남깁니다.',
       '행을 고르면 오른쪽에 샘플 값, 키 근거, 일치 근거, 가림 권장 속성이 보입니다. [남은 제안 모두 채택]으로 남은 것을 한 번에 채택합니다.',
       '마지막 단계에서 적용합니다. 팀 스페이스에서는 편집자가 [적용 요청]으로 검토한 그대로 승인자에게 보내고, 승인자가 할 일이나 이 화면에서 [요청대로 적용] 또는 [반려]합니다.',
       'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOC, DOCX, PPT, PPTX, HWP, HWPX, PDF 문서와 XLS, XLSX 파일을 함께 사용할 수 있습니다.',
       '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 통합합니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
       '상태 · 규칙 단계에서 상태 전이와 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
-      '검토 · 적용 단계는 적용하면 만들어질 모듈 파일과 정의 검사 결과를 보여 줍니다. [스페이스에 적용]을 선택하면 표준에 연결한 테이블은 Binding으로, 새 객체는 표준 옆의 모듈로 들어가 새 파이프라인이 됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.',
+      '검토 · 적용 단계는 적용하면 만들어질 모듈 파일과 정의 검사 결과를 보여 줍니다. [스페이스에 적용]을 선택하면 표준에 연결한 테이블은 Binding으로, 새 Entity는 표준 옆의 모듈로 들어가 새 파이프라인이 됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.',
       '팀 스페이스에서는 적용이 공유 공간을 바꾸므로 승인자가 적용합니다. 편집자가 검토한 내용은 그대로 남습니다.']],
-    ['objects', '작업 공간의 표 보기입니다. 객체 · 속성 · 관계가 3열로 서고, 객체를 고르면 나머지 두 열이 따라옵니다.', [
-      '행을 누르면 그 아래에 수정 폼이 열립니다. [+ 객체]에서 원천 테이블을 고르면 키와 속성이 테이블 컬럼 기준으로 채워집니다.',
-      '표준 모듈의 객체를 바꾸면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 그대로입니다. 키는 정의한 모듈에서만 바꿉니다.',
-      '객체마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인 객체를 아직 읽는 질의 · 판정이 있으면 사용처에 표시됩니다.',
-      '[객체 제외]를 누르면 그 객체를 쓰는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다. 하위 객체가 있는 객체는 하위의 상위를 먼저 바꿔야 제외됩니다.',
-      '관계가 없는 객체는 왼쪽 트리와 카드에 표시됩니다. 캔버스나 [+ 관계]에서 관계를 추가하세요.',
+    ['objects', '작업 공간의 표 보기입니다. Entity · 속성 · 관계가 3열로 서고, Entity를 고르면 나머지 두 열이 따라옵니다.', [
+      '행을 누르면 그 아래에 수정 폼이 열립니다. [+ Entity]에서 원천 테이블을 고르면 키와 속성이 테이블 컬럼 기준으로 채워집니다.',
+      '표준 모듈의 Entity를 바꾸면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 그대로입니다. 키는 정의한 모듈에서만 바꿉니다.',
+      'Entity마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인 Entity를 아직 읽는 질의 · 판정이 있으면 사용처에 표시됩니다.',
+      '[Entity 제외]를 누르면 그 Entity를 쓰는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다. 하위 Entity가 있는 Entity는 하위의 상위를 먼저 바꿔야 제외됩니다.',
+      '관계가 없는 Entity는 왼쪽 트리와 카드에 표시됩니다. 캔버스나 [+ 관계]에서 관계를 추가하세요.',
       '저장한 변경은 작업 공간 위쪽의 [변경] 패널에 쌓입니다. [사본에서 시험] 뒤 [변경 요청 만들기]로 검토와 승인에 보냅니다.']],
     ['props', '작업 공간 표 보기의 속성 열입니다. 라벨, 자료형, 원천 컬럼, 변환식, 허용값, 단위, 필수, 가림, 상태를 고칩니다.', [
-      '객체를 고르거나 열 위의 검색 칸에 적어 속성을 거릅니다. 상위 객체의 속성은 상속으로 표시됩니다.',
+      'Entity를 고르거나 열 위의 검색 칸에 적어 속성을 거릅니다. 상위 Entity의 속성은 상속으로 표시됩니다.',
       '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가합니다.',
       '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장할 때가 아니라 적을 때 보입니다.',
-      '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 객체에서 제외합니다.']],
+      '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 Entity에서 제외합니다.']],
     ['links', '작업 공간 표 보기의 관계 열입니다. 연결 기준 컬럼, Cardinality, 역관계, 필수 여부, 상태를 고칩니다.', [
       '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 제안으로 표시됩니다. 캔버스에서는 카드 테두리의 +를 다른 카드에 끌어 놓아 만듭니다.',
-      '[+ 관계]에서 출발 객체와 속성, 도착 객체와 속성을 고르면 두 속성 값이 같은 행끼리 연결됩니다. 연결 기준 제안과 실제로 연결되는 행의 비율이 보입니다.',
+      '[+ 관계]에서 출발 Entity와 속성, 도착 Entity와 속성을 고르면 두 속성 값이 같은 행끼리 연결됩니다. 연결 기준 제안과 실제로 연결되는 행의 비율이 보입니다.',
       '표준 모듈의 관계는 라벨, Cardinality, 역관계, 필수 여부, 상태만 바꿀 수 있습니다.',
       '관계 전체 그림은 [온톨로지]에서, 레코드 사이의 실제 연결은 [그래프 탐색]에서 봅니다.']],
     ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, Binding, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
@@ -235,22 +235,22 @@
       '고객사 차이 모듈을 해제하면 판정 · 처리에 표준 모듈의 규칙이 적용됩니다.',
       '해제된 모듈을 다시 적용하면 필요한 모듈도 함께 적용됩니다.',
       '표의 종류 칸과 적용 구성의 종류를 누르면 그 종류만 보이고, 적용 구성 · 의존 모듈의 모듈과 다른 화면의 모듈 칩(정의 모듈, 확장 모듈, 규칙의 모듈)을 누르면 표의 그 모듈 행으로 옵니다.',
-      '[편집]을 선택하면 모듈 정의 파일에서 객체, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
+      '[편집]을 선택하면 모듈 정의 파일에서 Entity, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
-    ['onto', '객체와 관계 전체를 카드로 펼쳐 보고, 카드를 누르면 연결된 카드만 모아 봅니다.', [
+    ['onto', 'Entity와 관계 전체를 카드로 펼쳐 보고, 카드를 누르면 연결된 카드만 모아 봅니다.', [
       '모듈마다 영역으로 묶인 카드에 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 휠이나 − + 버튼으로 확대 · 축소하고, 빈 곳을 끌어 이동하고, 100% 버튼으로 화면에 맞춥니다.',
       '카드를 누르면 그 카드가 가리키는 것은 오른쪽, 그것을 가리키는 것은 왼쪽, 상위는 위, 하위는 아래에 모이고 나머지는 흐려집니다. 다른 카드를 누르면 초점이 옮겨 가고, 빈 곳이나 Esc, [전체 보기]로 돌아옵니다.',
-      '오른쪽 정의에는 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 객체를 언급한 문서가 표시됩니다. [작업 공간에서 열기]로 바로 고칩니다.',
-      '관계를 선택하면 연결된 객체로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
+      '오른쪽 정의에는 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 Entity를 언급한 문서가 표시됩니다. [작업 공간에서 열기]로 바로 고칩니다.',
+      '관계를 선택하면 연결된 Entity로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
       '레코드 단위의 지식그래프는 [그래프 탐색]에서, 파일 · 테이블 · 문서까지 아우르는 연결은 [자산 그래프]에서 봅니다.',
-      '식별 통합 객체를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.']],
-    ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 객체, 속성, 허용값, 용어와 연결됩니다.', [
+      '식별 통합 Entity를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.']],
+    ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 Entity, 속성, 허용값, 용어와 연결됩니다.', [
       '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
       '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
       '문서 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서만 그래프에 표시하고 [관계 추출]도 그 범위만 읽습니다. 추출은 서버에서 진행되며 [중지]로 멈춘 뒤 다시 선택하면 이어서 읽습니다.',
       '[다시 추출]은 선택한 범위의 추출 결과를 지우고 처음부터 다시 읽습니다. 추출한 관계는 문서 온톨로지 질의와 통합 검색의 연결 관계에 사용합니다.',
-      '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. 객체 개념을 선택하면 온톨로지 화면으로 이동합니다.',
+      '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. Entity 개념을 선택하면 온톨로지 화면으로 이동합니다.',
       '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
     ['vectors', '임베딩 모델과 벡터 저장소의 구성을 확인합니다.', [
       '글자 비교는 모델 없이 동작하는 기본 방식입니다. 의미 비교는 구성 파일의 space.embedder 항목에서 모델을 지정합니다.',
@@ -269,7 +269,7 @@
       '번호만 있으면 해당 값을 표시하고, 등록 질의 이름이면 질의를 실행합니다.',
       '그 밖의 질문은 규칙과 문서에서 찾은 근거로 답합니다. 언어 모델이 연결된 경우 찾은 근거로만 답변을 작성합니다.',
       '검색 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서에서만 근거를 찾습니다. 규칙과 정의는 범위와 관계없이 찾습니다.',
-      '관련 정의에서 객체를 선택하면 온톨로지로 이동합니다.']],
+      '관련 정의에서 Entity를 선택하면 온톨로지로 이동합니다.']],
     ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
       '등록 질의를 선택하면 바로 실행됩니다.',
       '언어 탭에서 PostgreSQL, MySQL, Oracle, SQL Server, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
@@ -294,8 +294,8 @@
       'Python과 외부 호출은 설치 환경에서 허용한 항목만 실행합니다.',
       '함수를 선택해 [실행]으로 대상 번호를 지정해 결과를 확인합니다. 초안 상태의 함수는 이 화면에서만 실행됩니다.',
       '역할에 함수를 허용하면 Agent와 외부 플랫폼이 /v1/function과 MCP run_function으로 실행합니다.']],
-    ['states', '객체의 상태 값과 허용되는 전이를 관리합니다.', [
-      '객체를 선택하면 상태 속성, 상태 값, 초기 상태, 전이를 수정합니다.',
+    ['states', 'Entity의 상태 값과 허용되는 전이를 관리합니다.', [
+      'Entity를 선택하면 상태 속성, 상태 값, 초기 상태, 전이를 수정합니다.',
       '상태 값에 새 값을 추가하면 해당 속성의 허용값에도 추가됩니다.']],
     ['actions', '처리 요청의 입력값, 판정 조건, 상태 전이, 승인 여부를 관리합니다.', [
       '판정 조건을 지정하면 조건을 충족한 요청만 접수됩니다.',
@@ -303,9 +303,9 @@
       '자동 승인 기준을 지정하면 변경 폭이 기준 안인 요청은 실행 권한이 있을 때 바로 실행하고, 기준을 넘으면 승인 대기로 접수합니다.',
       '외부 호출은 원천 반영 후 실행합니다. 호출이 실패하면 원천을 복원합니다.']],
     ['roles', '역할별 조회, 실행, 요청 범위와 가림 속성을 관리합니다.', [
-      '역할을 선택하면 조회 객체, 실행 질의와 결정, 요청 액션을 선택합니다.',
+      '역할을 선택하면 조회 Entity, 실행 질의와 결정, 요청 액션을 선택합니다.',
       '가림 속성은 일부 가림 또는 전체 가림으로 지정합니다.',
-      '행 범위는 객체별로 볼 수 있는 행을 지정합니다. 사용자 속성과 비교하거나 고정 값과 비교합니다.',
+      '행 범위는 Entity별로 볼 수 있는 행을 지정합니다. 사용자 속성과 비교하거나 고정 값과 비교합니다.',
       '조직 범위는 로그인한 조직의 행으로 조회와 요청을 함께 제한합니다.',
       '열람 문서에서 폴더 또는 문서를 선택하면 이 역할로 검색하고 답할 때 그 문서만 근거로 사용합니다.',
       'Agent와 외부 플랫폼은 지정한 역할의 범위 안에서만 조회하고 요청합니다.']],
@@ -340,15 +340,15 @@
     changes: '변경을 항목별로 검토하고 전후 숫자를 봐야 어디가 나빠졌는지 알 수 있습니다. 댓글은 항목에 남아 승인 뒤에도 이유가 남습니다.',
     flow: '여기서 지정한 통과 조건은 변경 요청을 검토할 때도 같은 기준으로 적용됩니다.',
     explorer: '파일만이 아니라 스페이스가 담은 모든 데이터를 같은 탐색기와 같은 검색으로 다뤄, 무엇이 어디에 있고 어떤 처리를 거쳤는지 한 화면에서 확인합니다.',
-    map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 객체, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
+    map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 Entity, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
     catalog: '초안과 검색은 레포지토리의 파일을 기준으로 만듭니다. 임베딩을 끈 파일은 검색에서 빠지고 문서 온톨로지의 개념과 관계에는 남습니다.',
     db: '데이터를 복사하지 않고 원본 DB를 읽으므로, 정의와 판정이 운영 데이터와 같은 값을 기준으로 합니다.',
     convert: '파일 형식이 달라도 같은 구조로 변환해, 이후 단계가 형식마다 다르게 처리하지 않습니다.',
-    sources: '객체에 연결되지 않은 테이블은 질의와 판정에서 사용할 수 없습니다.',
+    sources: 'Entity에 연결되지 않은 테이블은 질의와 판정에서 사용할 수 없습니다.',
     data: '초안은 데이터에서 찾은 구조이며 업무 정의를 대신하지 않습니다. 키, 타입, 관계를 단계마다 확인하고 수정한 뒤 적용합니다.',
     objects: '정의를 바꾸면 질의, 판정, 권한이 함께 바뀝니다. 변경은 사본 스페이스에서 통과 조건을 확인하고 다른 사람이 승인해야 반영됩니다.',
     props: '변환식과 가림은 읽을 때 적용하므로 원천 시스템을 고치지 않고 단위, 형식, 노출 범위를 맞춥니다.',
-    links: '관계가 없는 객체는 다른 객체를 거치는 질의와 판정에서 사용할 수 없습니다.',
+    links: '관계가 없는 Entity는 다른 Entity를 거치는 질의와 판정에서 사용할 수 없습니다.',
     states: '허용한 전이만 처리 요청으로 접수되므로, 업무 순서에 없는 상태 변경은 원천에 기록되지 않습니다.',
     mgrules: '여러 규칙이 같은 기준값을 참조하므로, 기준값 한 곳을 바꾸면 그 값을 쓰는 규칙이 같은 기준으로 바뀝니다.',
     mgfuncs: '계산과 판정을 함수로 등록하면 화면, Agent, 외부 플랫폼이 같은 입력과 버전으로 같은 결과를 받고, 어떤 버전으로 실행했는지 감사 기록에 남습니다.',
@@ -368,7 +368,7 @@
     bind: '정의와 원천이 어긋나면 질의가 빈 결과나 잘못된 값을 반환합니다. 모듈을 바꾼 뒤에는 원천과 대조합니다.',
   };
   // the order a space is built in, as the guide and the home show it: the same five steps the server reports on (build/steps)
-  const START = [['model', '온톨로지', '객체 · 속성 · 관계를 정의합니다. 직접 만들거나 표준 모듈, 문서, 데이터에서 시작합니다'],
+  const START = [['model', '온톨로지', 'Entity · 속성 · 관계를 정의합니다. 직접 만들거나 표준 모듈, 문서, 데이터에서 시작합니다'],
     ['mgrules', '규칙', '결정표를 편집하면서 시뮬레이션하고, 액션과 권한을 정합니다'],
     ['catalog', '데이터 연결', '파일이나 DB를 연결해 정의를 원천에 연결합니다. 연결하지 않아도 정의와 규칙, 판정은 동작합니다'],
     ['check', '검증', '검증 질문 · DB 대조 · 통과 조건으로 확인합니다'],
@@ -378,7 +378,7 @@
     ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
     ['도메인 교체', '도메인 지식을 모듈로 적용 · 해제합니다. 이커머스는 첫 도메인입니다.'],
     ['외부 연동', 'MCP와 REST로 외부 플랫폼과 연동합니다. 플랫폼의 DB 연결은 읽기 전용으로 사용합니다.'],
-    ['업무 정의 공유', '객체, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
+    ['업무 정의 공유', 'Entity, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
     ['저장소 간 같은 질의', '하나의 질의를 SQL, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin으로 변환해 실행하고 저장소별 결과를 비교합니다.'],
     ['규칙 판정과 근거', '결정표로 판정하고 적용 규칙, 출처 조항, 원천 컬럼, 모듈 버전을 함께 표시합니다.'],
     ['처리 통제', '역할별 조회 범위와 가림을 적용합니다. Agent는 처리를 요청만 하고, 승인한 처리만 원천 DB에 반영합니다.'],
@@ -392,13 +392,13 @@
     ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
     ['정책서, 화면설계서', '라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
-    ['객체, 속성, 관계 수정', '온톨로지 > 작업 공간', '관리 변경 모듈'],
+    ['Entity, 속성, 관계 수정', '온톨로지 > 작업 공간', '관리 변경 모듈'],
     ['모듈 정의 파일', '라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
   const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
   const FLOW = [
     ['source', '원천 데이터', '테이블과 행 수', 'catalog'],
-    ['define', '온톨로지 정의', '적용 모듈과 객체, 관계, 속성', 'library'],
+    ['define', '온톨로지 정의', '적용 모듈과 Entity, 관계, 속성', 'library'],
     ['bind', 'DB 대조', '정의와 원천 DB의 Schema, 데이터 대조', 'bind'],
     ['project', '그래프 저장소 반영', '원천 데이터의 Node, Edge 반영', 'onto'],
     ['index', '문서 · 벡터 색인', '문서를 나눠 벡터 저장소에 색인하고 검색 적중 확인', 'vectors'],
@@ -920,7 +920,7 @@
     const link = (href, title, sub) => `<a class="hrow" href="${href}"><b>${esc(title)}</b><span class="muted">${esc(sub)}</span></a>`;
     return `<div class="card"><div class="ch">구축</div><div class="cb" style="padding:6px 8px">
       ${link('#catalog', '데이터 연결', `레포지토리 파일 ${count(S.st.data.files)}개`)}${link('#data', '초안 생성', '파일과 DB에서 온톨로지 초안')}
-      ${link('#model', '작업 공간', ws ? ws.title : '객체 · 속성 · 관계')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
+      ${link('#model', '작업 공간', ws ? ws.title : 'Entity · 속성 · 관계')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
   }
 
   async function loadSteps() {  // where this space stands on each step of building an ontology, read from what is here
@@ -949,7 +949,7 @@
     const st = S.st, o = st.origin || {}, src = (S.fl && S.fl.steps ? S.fl.steps.find((x) => x.id === 'source') : null) || {};
     const kind = o.kind === 'files' ? '업로드 파일' : o.kind === 'database' ? '연결 DB' : BACKEND_KIND[(o.backends || {}).source] || '';
     const made = [kind ? `원천 ${kind}${src.tables ? ` · 테이블 ${count(src.tables.length)}` : ''}` : '원천 미연결', `모듈 ${count(st.modules_on)}`,
-      `${st.stats.areas ? `Object ${count(st.stats.areas)} · ` : ''}객체 ${count(st.stats.objects)} · 관계 ${count(st.stats.links)} · 속성 ${count(st.stats.properties)}`, `결정표 ${count(st.stats.decisions)}`].join('　');
+      `${st.stats.areas ? `Object ${count(st.stats.areas)} · ` : ''}Entity ${count(st.stats.objects)} · 관계 ${count(st.stats.links)} · 속성 ${count(st.stats.properties)}`, `결정표 ${count(st.stats.decisions)}`].join('　');
     return `<div class="card bsteps"><div class="ch">구성 단계<span class="chip sm${done === s.steps.length ? ' ok' : ''}">${done} / ${s.steps.length}</span><div class="right"><a class="btn sm ghost" href="#guide">사용 안내</a></div></div>
       <div class="cb"><div class="bstrip">${items}</div><div class="bnext">${said}</div>${s.start ? ways : `<a class="bmade" href="#flow" title="단계별 현황 열기"><b>구성</b>${esc(made)}</a>`}</div></div>`;
   }
@@ -1115,7 +1115,7 @@
     const parts = {
       decide: `${dec || vals ? `<div class="card"><div class="ch">지금 판정하면<div class="right muted" style="font-size:12px;font-weight:600">열 때 계산 · 기록하지 않음</div></div><div class="cb">${dec}${vals}</div></div>` : ''}
         ${fn ? `<div class="card"><div class="ch">함수</div><div class="cb">${fn}</div></div>` : ''}`,
-      docs: `<div class="card"><div class="ch">이 레코드를 다루는 문서</div><div class="cb">${docs || '<div class="empty">이 객체를 언급한 문서가 없습니다.</div>'}</div></div>`,
+      docs: `<div class="card"><div class="ch">이 레코드를 다루는 문서</div><div class="cb">${docs || '<div class="empty">이 Entity를 언급한 문서가 없습니다.</div>'}</div></div>`,
       history: `<div class="card"><div class="ch">이력</div><div class="cb" style="padding:6px 8px">${hist || '<div class="empty" style="padding:8px">요청이나 승인 이력이 없습니다.</div>'}</div></div>`,
     };
     return only ? parts[only] : parts.decide + parts.docs + parts.history;
@@ -1236,7 +1236,7 @@
   // ---- a change request, element by element ------------------------------------------------------------------------
 
   const CHANGE_WORD = { added: ['ok', '추가'], changed: ['b', '변경'], removed: ['bad', '제거'] };
-  const KIND_WORD = { area: 'Object', object: '객체', property: '속성', link: '관계', rule: '규칙', decision: '결정표', action: '액션', role: '역할', query: '질의', question: '검증 질문', function: '함수', identity: '식별 통합' };
+  const KIND_WORD = { area: 'Object', object: 'Entity', property: '속성', link: '관계', rule: '규칙', decision: '결정표', action: '액션', role: '역할', query: '질의', question: '검증 질문', function: '함수', identity: '식별 통합' };
   const MARK_WORD = { ok: ['ok', '승인'], fix: ['bad', '수정 요청'] };
 
   async function loadChange(id) {
@@ -1935,7 +1935,7 @@
       const links = m.links.filter((l) => has(l.name) || has(l.label)).slice(0, 20);
       const cols = m.sources.source.tables.flatMap((t) => t.columns.filter((c) => has(c.name)).map((c) => ({ t, c }))).slice(0, 30);
       const group = (word, rows) => (rows.length ? `<div class="mdgrp"><div class="mdgh">${word}<span class="muted">${rows.length}</span></div>${rows.join('')}</div>` : '');
-      return group('객체', obj.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span><span class="muted mono">${esc(o.table || '')}</span></button>`))
+      return group('Entity', obj.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span><span class="muted mono">${esc(o.table || '')}</span></button>`))
         + group('속성', props.map((p) => `<button class="mdnode" data-act="mdprop" data-name="${esc(`${p.object}.${p.name}`)}"><span>${esc(mgLabel(p.object))} · ${esc(p.label || p.name)}</span></button>`))
         + group('관계', links.map((l) => `<button class="mdnode" data-act="mdlink" data-name="${esc(l.name)}"><span>${esc(l.label || l.name)}</span><span class="muted">${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</span></button>`))
         + group('원천 컬럼', cols.map((x) => `<button class="mdnode" data-act="mdcol" data-col="${esc(`${x.t.table}|${x.c.name}|${x.c.type}`)}"><span class="mono">${esc(x.t.table)}.${esc(x.c.name)}</span></button>`))
@@ -1945,7 +1945,7 @@
     if (byArea()) (m.areas || []).forEach((a) => { groups[a.label || a.name] = []; });  // an Object with no Entity yet is still listed
     m.objects.forEach((o) => { const k = groupOfObj(o); (groups[k] = groups[k] || []).push(o); });
     const by = modelProblems().by;
-    const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.status && o.status !== 'active' ? STATUS_WORD[o.status] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
+    const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.status && o.status !== 'active' ? STATUS_WORD[o.status] : null, o.new ? ['ok', '새 Entity'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
       o.series ? ['', '시계열'] : null, (o.extended_by || []).length ? ['', `+ ${shortMod(o.extended_by[0])}`] : null, (m.comments || {})[`object:${o.name}`] ? ['', `댓글 ${m.comments[`object:${o.name}`]}`] : null]
       .filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
     const areaOf = (k) => (byArea() ? (m.areas || []).find((a) => (a.label || a.name) === k) : null);
@@ -1968,14 +1968,14 @@
       api(`element/readers?id=${encodeURIComponent(`object:${o.name}`)}`).then((x) => { S.md.uses = { id: `object:${o.name}`, list: x.readers }; paintSide(); }).catch(fail).finally(() => { S.md.usesFor = ''; });
       return '<div class="empty"><span class="spin"></span>사용처를 찾는 중입니다.</div>';
     }
-    return u.list.length ? `<div class="chips">${u.list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div><div class="hint xp" style="margin-top:10px">이 객체를 바꾸면 위 요소가 함께 영향을 받습니다. 지우면 정의 관리가 함께 제외되는 항목을 알려 줍니다.</div>` : '<div class="empty">이 객체를 읽는 질의, 결정, 액션이 없습니다.</div>';
+    return u.list.length ? `<div class="chips">${u.list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div><div class="hint xp" style="margin-top:10px">이 Entity를 바꾸면 위 요소가 함께 영향을 받습니다. 지우면 정의 관리가 함께 제외되는 항목을 알려 줍니다.</div>` : '<div class="empty">이 Entity를 읽는 질의, 결정, 액션이 없습니다.</div>';
   }
 
   function modelSide() {
     const m = S.mg.st, md = S.md, o = mgObj(md.sel), f = S.mg.form;
     const creating = f && f.mode === 'new' && ['object', 'prop', 'link'].includes(f.kind);
     if (creating) {
-      const word = { object: '새 객체', prop: '새 속성', link: '새 관계' }[f.kind];
+      const word = { object: '새 Entity', prop: '새 속성', link: '새 관계' }[f.kind];
       return `<div class="ihead"><div class="icrumb">${o ? `<button class="ilinkb" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button> › ` : ''}<b>${word}</b></div></div><div class="ibody">${f.kind === 'prop' ? propForm() : f.kind === 'link' ? linkForm() : objectForm()}</div>`;
     }
     if (f && f.kind === 'area') {  // an Object in the inspector: its name above its form
@@ -2259,7 +2259,7 @@
         return `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${cut ? `<title>${esc(r.text)}</title>` : ''}${esc(t)}</text>`;
       }).join('');
       const bad = (prob[o.name] || []).length;
-      const tag = bad ? `문제 ${bad}` : o.status === 'deprecated' ? '폐기 예정' : o.status === 'draft' ? '초안' : o.new ? '새 객체' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
+      const tag = bad ? `문제 ${bad}` : o.status === 'deprecated' ? '폐기 예정' : o.status === 'draft' ? '초안' : o.new ? '새 Entity' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
       const plus = live && !F ? `<g class="erplus" data-from="${esc(o.name)}"><circle cx="${b.x + b.w}" cy="${b.y + b.h / 2}" r="9"/><text x="${b.x + b.w}" y="${b.y + b.h / 2 + 4}" text-anchor="middle">+</text></g>` : '';
       return `<g class="ernode${on ? ' on' : ''}${o.new ? ' fresh' : o.pending ? ' pend' : ''}${bad ? ' problem' : ''}${quiet(o.name) ? ' erdim' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
         <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 12 + erTextW(o.label, 13, 800) + 6}" y="${b.y + 21}">${esc(o.name)}</text>
@@ -2278,7 +2278,7 @@
       body = `${regions}${faint}${near}`;
     } else body = `${regions}${relations(m.links, L.boxes, '')}${kinds(m.objects, L.boxes, '')}${Object.values(L.boxes).filter((b) => !b.folded).map((b) => card(b, '')).join('')}`;
     const z = md.zoom || 1;
-    return `<svg class="ersvg" width="${Math.round(W * z)}" height="${Math.round(H * z)}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 객체와 관계">
+    return `<svg class="ersvg" width="${Math.round(W * z)}" height="${Math.round(H * z)}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(L.home)} 모듈의 Entity와 관계">
       <defs><marker id="erarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
       <marker id="erhot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
       ${body}</svg>`;
@@ -2286,7 +2286,7 @@
 
   function erCard() {
     const md = S.md, fold = md.fold;
-    return `<div class="wstools"><button class="btn sm" data-act="mdobjnew">+ 객체</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button>
+    return `<div class="wstools"><button class="btn sm" data-act="mdobjnew">+ Entity</button><button class="btn sm" data-act="mdlinknew">+ 관계</button><button class="btn sm" data-act="erreset">정렬</button>
       <button class="btn sm" data-act="erfold" aria-pressed="${!!fold}">${fold ? '모듈 펼치기' : '모듈 접기'}</button>
       <button class="btn sm${md.focus ? ' primary' : ''}" data-act="mdfocus" aria-pressed="${!!md.focus}">연결만 보기</button><button class="btn sm${md.only ? ' primary' : ''}" data-act="mdonly" aria-pressed="${!!md.only}">문제만 보기</button>
       <span class="grow"></span><span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="erzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="erzoom" data-z="0" title="화면에 맞춤">${Math.round((md.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="erzoom" data-z="1" aria-label="확대">+</button></span></div>
@@ -2323,8 +2323,8 @@
         if (!c) return;
         ev.preventDefault();
         const [table, column, type] = c.split('|'), g = ev.target.closest('[data-er]'), o = g && mgObj(g.dataset.er);
-        if (!o) { toast('컬럼은 객체 카드 위에 놓아 주세요.', true); return; }
-        if (o.table !== table) { toast(`이 컬럼은 ${table} 테이블에 있습니다. ${table}을 읽는 객체 카드에 놓아 주세요.`, true); return; }
+        if (!o) { toast('컬럼은 Entity 카드 위에 놓아 주세요.', true); return; }
+        if (o.table !== table) { toast(`이 컬럼은 ${table} 테이블에 있습니다. ${table}을 읽는 Entity 카드에 놓아 주세요.`, true); return; }
         columnToProp(table, column, type, o.name);
       });
     }
@@ -2503,7 +2503,7 @@
     if (f.kind === 'prop') return propIssues(v, 'new').name || null;
     if (!v.name) return null;
     if (!IDENT.test(v.name)) return { text: '영문 이름은 영문자로 시작하고 영문자, 숫자, _만 씁니다.' };
-    return mgObj(v.name) ? { text: `객체 '${v.name}'이(가) 이미 있습니다. 다른 영문 이름을 입력해 주세요.` } : null;
+    return mgObj(v.name) ? { text: `Entity '${v.name}'이(가) 이미 있습니다. 다른 영문 이름을 입력해 주세요.` } : null;
   }
   function nameHint(f) {
     const v = f.v, s = f.sug;
@@ -2600,7 +2600,7 @@
   // the edits waiting, what they reach, and the way to try them, take the last one back or file them
   function wsChanges() {
     const m = S.mg.st, w = m.workspace, md = S.md, t = md.trial;
-    if (!w.dirty) return '<div class="empty" style="padding:18px 12px">바뀐 내용이 없습니다. 객체나 속성을 고치면 여기에 쌓입니다.</div>';
+    if (!w.dirty) return '<div class="empty" style="padding:18px 12px">바뀐 내용이 없습니다. Entity나 속성을 고치면 여기에 쌓입니다.</div>';
     const row = (e, i) => `<div class="wsrow"><div><b>${esc(OP_WORD[e.op] || e.op)}</b> <span class="mono muted cn">${esc(elementText(e.target))}</span>${e.took_out.length ? `<div class="muted" style="font-size:11.5px">함께 제외 ${e.took_out.length}개</div>` : ''}</div><button class="btn sm" data-act="mdrevert" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>되돌리기</button></div>`;
     const list = w.edits.length ? w.edits.map(row).join('') : [...w.diff.added.map((x) => ['추가', x]), ...w.diff.changed.map((x) => ['변경', x]), ...w.diff.removed.map((x) => ['제외', x])].map(([a, x]) => `<div class="wsrow"><div><b>${a}</b> <span class="mono muted cn">${esc(elementText(x))}</span></div></div>`).join('');
     const checked = !w.issues.length;
@@ -2656,7 +2656,7 @@
     const row = (t) => {
       const open = md.src[t.table], free = t.columns.filter((c) => !used(t, c.name)).length;
       const cols = open ? t.columns.map((c) => { const u = used(t, c.name); return `<button class="srcc" draggable="true" data-act="mdcol" data-col="${esc(`${t.table}|${c.name}|${c.type}`)}" title="카드에 끌어 놓거나 눌러서 속성으로 추가합니다"><span class="mono">${esc(c.name)}</span><span class="muted">${esc(c.type)}</span>${u ? `<span class="chip sm">${esc(u.label || u.name)}</span>` : '<span class="chip sm warn">미사용</span>'}</button>`; }).join('') : '';
-      return `<div class="srct"><button class="srch" data-act="mdsrc" data-t="${esc(t.table)}" aria-expanded="${!!open}"><span class="srca">${open ? '▾' : '▸'}</span><b class="mono">${esc(t.table)}</b><span class="grow"></span>${t.objects.length ? `<span class="muted">${esc(t.objects.map(mgLabel).join(', '))}</span>` : t.links.length ? '<span class="muted">연결 테이블</span>' : '<span class="chip sm warn">미사용</span>'}${free && t.objects.length ? `<span class="chip sm warn">${free}</span>` : ''}</button>${open ? `<div class="srcb">${cols}${t.objects.length ? '' : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}" style="margin:6px">객체로 추가</button>`}</div>` : ''}</div>`;
+      return `<div class="srct"><button class="srch" data-act="mdsrc" data-t="${esc(t.table)}" aria-expanded="${!!open}"><span class="srca">${open ? '▾' : '▸'}</span><b class="mono">${esc(t.table)}</b><span class="grow"></span>${t.objects.length ? `<span class="muted">${esc(t.objects.map(mgLabel).join(', '))}</span>` : t.links.length ? '<span class="muted">연결 테이블</span>' : '<span class="chip sm warn">미사용</span>'}${free && t.objects.length ? `<span class="chip sm warn">${free}</span>` : ''}</button>${open ? `<div class="srcb">${cols}${t.objects.length ? '' : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}" style="margin:6px">Entity로 추가</button>`}</div>` : ''}</div>`;
     };
     return s.tables.slice().sort((a, b) => (b.objects.length ? 1 : 0) - (a.objects.length ? 1 : 0) || a.table.localeCompare(b.table)).map(row).join('');
   }
@@ -2664,9 +2664,9 @@
   function wsLeft() {
     const md = S.md, m = S.mg.st, w = m.workspace, P = modelProblems();
     const n = P.list.filter((x) => !x.mended).length, c = w.edits.length || (w.dirty ? w.diff.added.length + w.diff.changed.length + w.diff.removed.length : 0);
-    const tabs = [['objects', '객체', 0], ['source', '원천', 0], ['issues', '문제', n], ['changes', '변경', c]].map(([k, l, x]) => `<button class="${md.left === k ? 'on' : ''}" data-act="mdleft" data-k="${k}">${l}${x ? ` <span class="wsn${k === 'issues' ? ' bad' : ''}">${x}</span>` : ''}</button>`).join('');
+    const tabs = [['objects', '정의', 0], ['source', '원천', 0], ['issues', '문제', n], ['changes', '변경', c]].map(([k, l, x]) => `<button class="${md.left === k ? 'on' : ''}" data-act="mdleft" data-k="${k}">${l}${x ? ` <span class="wsn${k === 'issues' ? ' bad' : ''}">${x}</span>` : ''}</button>`).join('');
     const body = md.left === 'source' ? wsSource() : md.left === 'issues' ? wsProblems() : md.left === 'changes' ? wsChanges()
-      : `<div style="padding:8px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="객체 · 속성 · 관계 · 컬럼 검색" aria-label="검색"></div><div class="mdtree" id="mdtree">${modelTree()}</div>`;
+      : `<div style="padding:8px"><input type="text" data-in="mdq" value="${esc(md.q)}" placeholder="Entity · 속성 · 관계 · 컬럼 검색" aria-label="검색"></div><div class="mdtree" id="mdtree">${modelTree()}</div>`;
     return `<div class="wstabs">${tabs}</div><div class="wsleftb">${body}</div>`;
   }
 
@@ -2719,12 +2719,12 @@
     m.objects.filter((o) => !q || `${o.name} ${o.label} ${o.table}`.toLowerCase().includes(q)).forEach((o) => { const k = o.module_label || o.module || '정의'; (groups[k] = groups[k] || []).push(o); });
     const row = (o) => {
       const on = md.sel === o.name, open = on && f && f.kind === 'object' && f.mode === 'edit', bad = (by[o.name] || []).length;
-      const tags = wsTags([bad ? ['bad', `문제 ${bad}`] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null, o.concept ? ['', '개념'] : null, o.series ? ['', '시계열'] : null]);
+      const tags = wsTags([bad ? ['bad', `문제 ${bad}`] : null, o.new ? ['ok', '새 Entity'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null, o.concept ? ['', '개념'] : null, o.series ? ['', '시계열'] : null]);
       const facts = [o.table, o.parent ? `상위 ${mgLabel(o.parent)}` : '', `속성 ${o.properties}`, `관계 ${o.links}`, o.concept ? '' : `${count(o.rows || 0)}행`].filter(Boolean).join(' · ');
       return `<div class="wsi${on ? ' on' : ''}"><button class="wsib" data-act="mdpick" data-name="${esc(o.name)}"><span class="wsit"><b>${esc(o.label)}</b><span class="mono muted cn">${esc(o.name)}</span>${tags}</span><span class="wsis">${esc(facts)}</span></button>${on ? `<button class="btn sm" data-act="mdobjedit">${open ? '접기' : '편집'}</button>` : ''}</div>${open ? wsForm() : ''}`;
     };
-    const list = Object.entries(groups).map(([k, rows]) => `<div class="mdgh">${esc(k)}<span class="muted">${rows.length}</span></div>${rows.map(row).join('')}`).join('') || '<div class="empty">찾은 객체가 없습니다.</div>';
-    return wsColumn('objects', '객체', m.objects.length, '<button class="btn sm" data-act="mdobjnew">새 객체</button>', '객체 · 테이블 검색',
+    const list = Object.entries(groups).map(([k, rows]) => `<div class="mdgh">${esc(k)}<span class="muted">${rows.length}</span></div>${rows.map(row).join('')}`).join('') || '<div class="empty">찾은 Entity가 없습니다.</div>';
+    return wsColumn('objects', 'Entity', m.objects.length, '<button class="btn sm" data-act="mdobjnew">새 Entity</button>', 'Entity · 테이블 검색',
       `${f && f.kind === 'object' && f.mode === 'new' ? wsForm() : ''}${list}${q ? '' : `<div class="wscolx">${identityCard()}${identityForm()}</div>`}`);
   }
 
@@ -2872,7 +2872,7 @@
   }
 
   function viewModel() {
-    const wait = mgWait('작업 공간', '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다');
+    const wait = mgWait('작업 공간', 'Entity를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다');
     if (wait) return wait;
     erPosLoad();
     const md = S.md, f = S.mg.form;
@@ -2928,7 +2928,7 @@
 
   // ---- library -------------------------------------------------------------------------------------------------
 
-  const counts = (c) => [['objects', '객체'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
+  const counts = (c) => [['objects', 'Entity'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
     .filter(([k]) => c[k]).map(([k, l]) => `${l} ${c[k]}`).join(' · ') || '-';
 
   function viewLibrary() {
@@ -3011,7 +3011,7 @@
         ${(p.sections || []).length ? `<label class="field" style="margin:0"><span>절</span><select data-in="psec"><option value="">전체</option>${p.sections.map((x) => `<option value="${esc(x)}"${x === p.section ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}</div>` : ''}
       <textarea class="code" data-in="ptext" spellcheck="false" style="min-height:180px" placeholder="제1조 (목적) ...">${esc(p.text)}</textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <label class="field" style="margin:0;min-width:220px"><span>대상 객체</span><select data-in="ptarget">${targets}</select></label>
+        <label class="field" style="margin:0;min-width:220px"><span>대상 Entity</span><select data-in="ptarget">${targets}</select></label>
         ${S.st.data.policy_sample ? '<button class="btn" data-act="psample">예시 정책서 불러오기</button>' : ''}
         <button class="btn primary" data-act="pdraft"${p.busy || !p.text.trim() ? ' disabled' : ''}>${p.busy ? '<span class="spin"></span>초안 생성 중 · 최대 5분' : '초안 생성'}</button></div>${body}</div></div>`;
   }
@@ -3191,10 +3191,10 @@
 
   function viewOnto() {
     const s = S.st.stats;
-    const stats = [...(s.areas ? [[s.areas, 'Object']] : []), [s.objects, '객체'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, 'Action'], [s.queries, '등록 질의']]
+    const stats = [...(s.areas ? [[s.areas, 'Object']] : []), [s.objects, 'Entity'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, 'Action'], [s.queries, '등록 질의']]
       .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
     return `
-<div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">Entity, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
   <div class="right"><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
 <div class="stats">${stats}</div>
 <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr)">
@@ -3238,7 +3238,7 @@
       <table class="tight"><tr><th>속성</th><th>타입</th><th>원천 컬럼</th></tr>${rows}</table>
       ${states}${series}${ident}${parent}${children}${aligned}
       ${links ? `<div class="sec">관계</div><div class="chips">${links}</div>` : ''}
-      ${(o.documents || []).length ? `<div class="sec">이 객체를 언급한 문서</div>${o.documents.map((d) => `<div class="hit" style="padding:6px 0"><div class="hit-top"><b>${esc(d.document)}</b><span class="muted">${esc(d.section)}</span></div><div class="muted" style="font-size:12px">${esc(d.text)}</div></div>`).join('')}` : ''}`;
+      ${(o.documents || []).length ? `<div class="sec">이 Entity를 언급한 문서</div>${o.documents.map((d) => `<div class="hit" style="padding:6px 0"><div class="hit-top"><b>${esc(d.document)}</b><span class="muted">${esc(d.section)}</span></div><div class="muted" style="font-size:12px">${esc(d.text)}</div></div>`).join('')}` : ''}`;
   }
 
   // ---- graph: graph.js draws it; positions stay in S.pos and S.dpos across renders ---------------------------------------
@@ -3248,7 +3248,7 @@
 
   // ---- the space: documents, vectors, ports, the map, the way in from outside ------------------------------------------------
 
-  const KIND_LABEL = { object: '객체', property: '속성', value: '허용값', decision: '결정', action: 'Action', term: '용어', keyword: '키워드' };
+  const KIND_LABEL = { object: 'Entity', property: '속성', value: '허용값', decision: '결정', action: 'Action', term: '용어', keyword: '키워드' };
 
   async function loadSpace() {
     S.sp = { busy: true };
@@ -3291,7 +3291,7 @@
 
   function recordAnswer(res) {
     const rec = res.record, [cls, word] = answerBadge(res);
-    return `<div class="card"><div class="ch">${esc(rec.label)} ${esc(rec.key)}<span class="chip sm ${cls}">${esc(word)}</span><div class="right"><button class="btn sm primary" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><button class="btn sm" data-act="srobj" data-obj="${esc(rec.type)}">객체 정의 보기</button></div></div>
+    return `<div class="card"><div class="ch">${esc(rec.label)} ${esc(rec.key)}<span class="chip sm ${cls}">${esc(word)}</span><div class="right"><button class="btn sm primary" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><button class="btn sm" data-act="srobj" data-obj="${esc(rec.type)}">Entity 정의 보기</button></div></div>
       <div class="cb scroll" style="padding:0"><table class="tight">${rec.values.map((v) => `<tr><td style="width:40%"><b>${esc(v.label)}</b></td><td>${typeof v.value === 'boolean' ? yesNo(v.value) : show(v.value)}</td></tr>`).join('')}</table></div></div>`;
   }
 
@@ -3765,12 +3765,12 @@
     const x = S.ex;
     const seg = `<div class="seg">${[['store', '보관함'], ['log', '작업 기록'], ['trash', `휴지통${x.tree && x.tree.summary.trash ? ` ${x.tree.summary.trash}` : ''}`]]
       .map(([k, l]) => `<button class="${x.tab === k ? 'on' : ''}" data-act="extab" data-k="${k}">${esc(l)}</button>`).join('')}</div>`;
-    const head = pageHead('자산 탐색기', '파일, 테이블, 문서, 객체처럼 스페이스를 이루는 자산을 한곳에서 찾고 관리합니다. 레코드 한 건은 레코드 탐색에서 봅니다', seg);
+    const head = pageHead('자산 탐색기', '파일, 테이블, 문서, Entity처럼 스페이스를 이루는 자산을 한곳에서 찾고 관리합니다. 레코드 한 건은 레코드 탐색에서 봅니다', seg);
     if (x.error && !x.tree) return `${head}<div class="banner no"><div class="why">${esc(x.error)}</div></div>`;
     if (!x.tree || !x.items) return `${head}<div class="empty"><span class="spin"></span>스페이스를 읽는 중입니다.</div>`;
     const s = x.tree.summary;
     const sum = `<div class="exsum">${[[s.files, '파일'], [s.folders, '폴더'], [s.tables, '테이블'], [s.columns, '컬럼'], [s.documents, '문서'], [s.chunks, '청크'],
-      [s.objects, '객체'], [s.properties, '속성'], [s.links, '관계'], [s.uses, '질의 · 결정 · Action · 역할']].map(([n, l]) => `<span><b>${count(n)}</b>${esc(l)}</span>`).join('')}</div>`;
+      [s.objects, 'Entity'], [s.properties, '속성'], [s.links, '관계'], [s.uses, '질의 · 결정 · Action · 역할']].map(([n, l]) => `<span><b>${count(n)}</b>${esc(l)}</span>`).join('')}</div>`;
     if (x.tab === 'log') {
       const rows = (x.log || []).map((e) => `<tr><td class="muted" style="white-space:nowrap">${esc(e.at.replace('T', ' '))}</td><td>${esc(EX_ACTION[e.action] || e.action)}</td>
         <td class="mono" style="font-size:12px">${esc(e.path)}</td><td class="muted" style="font-size:12.5px">${esc(e.detail || '')}</td></tr>`).join('');
@@ -3823,7 +3823,7 @@
 
   function viewMap() {
     const m = S.amap;
-    const head = pageHead('자산 그래프', '파일, 테이블, 문서, 저장소, 객체, 질의의 연결 관계와 영향 범위를 확인합니다');
+    const head = pageHead('자산 그래프', '파일, 테이블, 문서, 저장소, Entity, 질의의 연결 관계와 영향 범위를 확인합니다');
     if (!m) return `${head}<div class="empty"><span class="spin"></span>지도를 그리는 중입니다.</div>`;
     if (m.error) return `${head}<div class="banner no"><div class="why">${esc(m.error)}</div></div>`;
     return `${head}<div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)">
@@ -3865,13 +3865,13 @@
   }
 
   // what each REST tool does, in the page's words; the OpenAPI document keeps the English an agent framework reads
-  const TOOL_WORD = { describe_space: '공간에 있는 문서, 벡터 저장소, 임베딩 모델, 그래프 저장소, 추론기, 온톨로지 규모', describe_ontology: '이 토큰이 사용할 수 있는 객체, 속성, 관계, 등록 질의, 결정, 액션',
+  const TOOL_WORD = { describe_space: '공간에 있는 문서, 벡터 저장소, 임베딩 모델, 그래프 저장소, 추론기, 온톨로지 규모', describe_ontology: '이 토큰이 사용할 수 있는 Entity, 속성, 관계, 등록 질의, 결정, 액션',
     answer_question: '질문 하나에 결정, 데이터, 문서로 답하고 적용 규칙, 원천 값, 조항을 함께 반환', agent_context: '질문과 관련된 정의와 규칙을 Agent 프롬프트에 넣을 글로 반환',
-    find_definitions: '질문과 관련된 객체, 규칙, 질의, 액션', describe_object: '객체 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 절, 언급한 개념',
+    find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 절, 언급한 개념',
     search_documents: '문서를 의미로 검색하고 문서, 절, 관련 온톨로지 요소를 반환', run_query: '등록 질의 또는 질의 IR을 저장소에서 실행', translate_query: '질의를 저장소 언어의 쿼리문으로 변환',
-    run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: '객체 하나에 결정표를 실행해 결과, 적용 규칙, 근거를 반환',
-    list_functions: '이 토큰이 실행할 수 있는 함수와 입출력, 버전, 담당', run_function: '등록 함수를 객체 하나 또는 입력값으로 실행',
-    request_action: '액션을 요청합니다. 검사를 통과하면 승인 대기로 접수하고, 자동 승인 기준 안이면 바로 실행', list_proposals: '이 토큰이 요청한 처리와 상태', get_record: '객체 하나의 값을 행 범위와 가림 안에서 반환' };
+    run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: 'Entity 하나에 결정표를 실행해 결과, 적용 규칙, 근거를 반환',
+    list_functions: '이 토큰이 실행할 수 있는 함수와 입출력, 버전, 담당', run_function: '등록 함수를 Entity 하나 또는 입력값으로 실행',
+    request_action: '액션을 요청합니다. 검사를 통과하면 승인 대기로 접수하고, 자동 승인 기준 안이면 바로 실행', list_proposals: '이 토큰이 요청한 처리와 상태', get_record: 'Entity 하나의 값을 행 범위와 가림 안에서 반환' };
 
   function viewConnect() {
     const i = S.conn;
@@ -3927,7 +3927,7 @@
     const conflict = (c) => `<div class="hit" data-row="conflict:${esc(c.id)}"><div class="hit-top"><b>${esc(c.label || c.id)}</b><span class="chip sm ${c.status === 'open' ? 'warn' : 'ok'}">${c.status === 'open' ? '미결정' : `${esc(c.picked)} 선택`}</span></div>
       <table class="tight"><tr><th>출처</th><th>값</th><th></th></tr>${c.answers.map((x) => `<tr><td>${esc(x.source)}</td><td>${esc(x.says && typeof x.says === 'object' ? Object.values(x.says).map(show).join(', ') : show(x.says))}</td><td>${c.status === 'open' ? `<button class="btn sm" data-act="rpick" data-id="${esc(c.id)}" data-source="${esc(x.source)}">이 출처 선택</button>` : ''}</td></tr>`).join('')}</table></div>`;
     const conflicts = r.conflicts.length ? r.conflicts.map(conflict).join('') : empty('출처 충돌이 없습니다.');
-    const due = r.due.length ? `<table class="tight"><tr><th>객체</th><th>대상</th><th>전이</th></tr>${r.due.map((d) => `<tr><td>${esc(d.type)}</td><td class="mono">${esc(d.key)}</td><td>${esc(d.source)} → ${esc(d.target)}</td></tr>`).join('')}</table><button class="btn sm" data-act="radvance" style="margin-top:8px">기한 지난 전이 처리</button>` : empty('기한이 지난 전이가 없습니다.');
+    const due = r.due.length ? `<table class="tight"><tr><th>Entity</th><th>대상</th><th>전이</th></tr>${r.due.map((d) => `<tr><td>${esc(d.type)}</td><td class="mono">${esc(d.key)}</td><td>${esc(d.source)} → ${esc(d.target)}</td></tr>`).join('')}</table><button class="btn sm" data-act="radvance" style="margin-top:8px">기한 지난 전이 처리</button>` : empty('기한이 지난 전이가 없습니다.');
     return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr));align-items:start">
       <div class="card"><div class="ch">기준값</div><div class="cb">${params}</div></div>
       <div class="card"><div class="ch">지표</div><div class="cb">${metrics}</div></div>
@@ -4509,7 +4509,7 @@ ${controls}${body}`;
       lines = noSource() ? '<b>원천 미연결</b> · 정의와 규칙은 연결 없이 동작합니다' : `<b>${esc(BACKEND_KIND[(step.dialect || '').toLowerCase()] || (step.dialect || '').toUpperCase())}</b> · 테이블 ${show(step.tables.length)} · ${show(step.rows)}행`;
       if (noSource()) ok = null;
     } else if (id === 'define') {
-      lines = `모듈 ${step.modules.length} · 객체 ${step.objects} · 관계 ${step.links} · 속성 ${step.properties}${step.computed ? ` · 계산 속성 ${step.computed}` : ''}${step.identities ? ` · 식별 통합 ${step.identities}` : ''}
+      lines = `모듈 ${step.modules.length} · Entity ${step.objects} · 관계 ${step.links} · 속성 ${step.properties}${step.computed ? ` · 계산 속성 ${step.computed}` : ''}${step.identities ? ` · 식별 통합 ${step.identities}` : ''}
         <div class="chips" style="margin-top:6px">${step.modules.map((m) => `<button class="chip sm" data-act="libshow" data-mod="${esc(m.name)}" title="라이브러리에서 이 모듈로">${esc(m.label)}</button>`).join('')}</div>`;
     } else if (id === 'bind') {
       ok = step.ok !== false && !step.findings;
@@ -4646,14 +4646,14 @@ ${controls}${body}`;
   const NEW_EDITS = () => ({ drop: {}, labels: {}, keys: {}, types: {}, values: {}, card: {}, add: [] });
   const RULE_NUM = [['enum_max', '허용값 최대 종류 수'], ['enum_repeat', '최소 평균 반복 횟수'], ['text_max', '허용값 최대 길이']];
   const RULE_HINT = { enum_max: '값의 종류가 이 수 이하인 컬럼을 허용값(코드) 후보로 봅니다.', enum_repeat: '값 하나가 평균 이 횟수 이상 반복되는 컬럼을 허용값으로 봅니다.',
-    text_max: '이 길이보다 긴 값이 있는 컬럼은 허용값으로 보지 않습니다.', title_hints: '객체를 대표하는 이름으로 쓸 컬럼입니다.', parent_hints: '이 접두어로 시작하는 키는 상위 객체로 연결합니다.',
+    text_max: '이 길이보다 긴 값이 있는 컬럼은 허용값으로 보지 않습니다.', title_hints: 'Entity를 대표하는 이름으로 쓸 컬럼입니다.', parent_hints: '이 접두어로 시작하는 키는 상위 Entity로 연결합니다.',
     key_suffixes: '이 접미어로 끝나는 컬럼을 키 후보로 봅니다.', generic_keys: '여러 테이블에 같은 이름으로 있어 관계 추론에서 빼는 키입니다.', state_hints: '이 이름의 컬럼을 상태 전이로 만듭니다.',
-    person_hints: '이 이름의 테이블을 사람(회원, 고객)으로 보고, 본인 행만 조회하는 역할을 만듭니다.', table_prefixes: '테이블 이름에서 이 접두어를 빼고 객체 이름을 만듭니다.' };
+    person_hints: '이 이름의 테이블을 사람(회원, 고객)으로 보고, 본인 행만 조회하는 역할을 만듭니다.', table_prefixes: '테이블 이름에서 이 접두어를 빼고 Entity 이름을 만듭니다.' };
   const RULE_FLAG = [['infer_links', '이름과 값으로 관계 추론'], ['link_tables', '중간 테이블을 다대다 관계로 변환'], ['row_keys', '키 없는 테이블에 행 번호 추가'],
     ['states', '상태 컬럼을 상태 전이로'], ['roles', '역할 생성'], ['questions', '검증 질문 생성']];
-  const RULE_QUERY = [['list', '객체 목록'], ['count_by', '관계별 집계'], ['values', '허용값별 집계']];
+  const RULE_QUERY = [['list', 'Entity 목록'], ['count_by', '관계별 집계'], ['values', '허용값별 집계']];
   const RULE_LIST = [['title_hints', '표시 이름 컬럼'], ['parent_hints', '상위 관계 접두어'], ['key_suffixes', '키 컬럼 접미어'], ['generic_keys', '공용 키 이름'],
-    ['state_hints', '상태 컬럼 이름'], ['person_hints', '본인 조회 기준 테이블 이름'], ['table_prefixes', '객체 이름에서 뺄 테이블 접두어']];
+    ['state_hints', '상태 컬럼 이름'], ['person_hints', '본인 조회 기준 테이블 이름'], ['table_prefixes', 'Entity 이름에서 뺄 테이블 접두어']];
   const TYPES = ['string', 'integer', 'decimal', 'boolean', 'date', 'datetime', 'enum'];
 
   function refreshDraft() {
@@ -4722,7 +4722,7 @@ ${controls}${body}`;
   function stepCount(st) {
     const n = st.items.length;
     if (st.id === 'read') return `테이블 ${n} · ${show(st.items.reduce((a, x) => a + x.rows, 0))}행`;
-    if (st.id === 'objects') return `객체 ${n}${st.skipped.length ? ` · 제외 ${st.skipped.length}` : ''}`;
+    if (st.id === 'objects') return `Entity ${n}${st.skipped.length ? ` · 제외 ${st.skipped.length}` : ''}`;
     if (st.id === 'properties') return `속성 ${n} · 허용값 ${st.items.filter((x) => x.type === 'enum').length}`;
     if (st.id === 'links') return `관계 ${n}`;
     if (st.id === 'queries') return `질의 ${n}`;
@@ -4816,7 +4816,7 @@ ${controls}${body}`;
         <select data-in="dacard">${options(Object.entries(CARD).filter(([k]) => k !== 'many_to_many'), a.cardinality || 'many_to_one')}</select>
         <input type="text" data-in="dalabel" value="${esc(a.label)}" placeholder="관계 이름">
         <button class="btn sm" data-act="dadd"${src && prop && tgt ? '' : ' disabled'}>추가</button></div>
-        <div class="hint xp" style="margin-top:6px">선택한 속성 값을 대상 객체의 키와 연결합니다.</div>`;
+        <div class="hint xp" style="margin-top:6px">선택한 속성 값을 대상 Entity의 키와 연결합니다.</div>`;
       const table = rows || added ? `<table class="tight"><tr><th></th><th>관계</th><th>Cardinality</th><th>근거</th></tr>${rows}${added}</table>` : '<div class="empty">추론된 관계가 없습니다.</div>';
       return table + form;
     }
@@ -4865,7 +4865,7 @@ ${controls}${body}`;
       <div class="field"><label>결과 컬럼</label><select data-in="dindt"><option value="">선택</option>${outs.map((x) => `<option value="${esc(x.element)}"${x.element === t ? ' selected' : ''}>${esc(o.labelOf(x.object))} · ${esc(x.label)}</option>`).join('')}</select></div>
       ${inputs}<button class="btn sm" data-act="dinduce" style="margin-top:8px"${t && Object.values(S.ind.inputs).some(Boolean) ? '' : ' disabled'}>판정 표 만들기</button>
       <div class="hint xp" style="margin-top:6px">결과 컬럼은 실제 처리 결과(허용값 또는 참 · 거짓)입니다. 규칙마다 지난 몇 건 중 몇 건이 맞는지 표시하고, 교차 검증으로 처음 보는 건의 정확도를 측정합니다.</div>`;
-    return `<div class="sec">상태 전이</div>${sm ? `<table class="tight"><tr><th>객체</th><th>전이</th><th>근거</th></tr>${sm}</table>` : '<div class="muted" style="font-size:12.5px">상태 컬럼이 없습니다. 생성 설정의 상태 컬럼 이름을 확인하세요.</div>'}
+    return `<div class="sec">상태 전이</div>${sm ? `<table class="tight"><tr><th>Entity</th><th>전이</th><th>근거</th></tr>${sm}</table>` : '<div class="muted" style="font-size:12.5px">상태 컬럼이 없습니다. 생성 설정의 상태 컬럼 이름을 확인하세요.</div>'}
       ${acts ? `<div class="sec">상태 변경 Action</div><div class="chips">${acts}</div>` : ''}
       <div class="sec">역할</div>${roles ? `<table class="tight">${roles}</table>` : '<div class="muted" style="font-size:12.5px">역할을 만들지 않았습니다.</div>'}
       <div class="sec">검증 질문 · 지금 데이터 기준</div><div class="loglist">${qs || '<div class="muted">없음</div>'}</div>
@@ -4884,13 +4884,13 @@ ${controls}${body}`;
     if (!m.standards.length) return '';
     const picks = m.standards.map((x) => `<label class="tick"><input type="checkbox" data-in="mpick" data-v="${esc(x.name)}"${m.picked.includes(x.name) ? ' checked' : ''}>${esc(x.label)} <span class="muted" style="font-size:11.5px">${esc(x.kind_label)}</span></label>`).join('');
     return `<div class="card"><div class="ch">비교할 표준</div><div class="cb"><div class="chips">${picks}</div>
-      <div class="hint xp" style="margin-top:8px">초안의 테이블마다 이 표준의 객체와 이름, 컬럼, 타입, 허용값, 키를 비교합니다. 맞는 테이블은 새 객체 대신 표준 객체에 연결할 수 있습니다.</div></div></div>`;
+      <div class="hint xp" style="margin-top:8px">초안의 테이블마다 이 표준의 Entity와 이름, 컬럼, 타입, 허용값, 키를 비교합니다. 맞는 테이블은 새 Entity 대신 표준 Entity에 연결할 수 있습니다.</div></div></div>`;
   }
 
   // ---- the draft as a review: each table a proposal to adopt, bound to a standard or kept as a new object ------------
 
   const MATCH_SURE = 0.85;  // a standard match this close is adopted unless a person says otherwise
-  const REVIEW = [['read', '파일 선택'], ['objects', '객체 · 키'], ['properties', '속성 · 타입'], ['links', '관계'], ['queries', '질의'], ['rules', '상태 · 규칙'], ['review', '검토 · 적용']];
+  const REVIEW = [['read', '파일 선택'], ['objects', 'Entity · 키'], ['properties', '속성 · 타입'], ['links', '관계'], ['queries', '질의'], ['rules', '상태 · 규칙'], ['review', '검토 · 적용']];
   const reviewStep = () => (REVIEW.some((x) => x[0] === S.dr.view) ? S.dr.view : 'objects');
   const shortModule = (label) => String(label || '').replace(/\s*온톨로지$/, '').replace(/^이커머스\s+/, '');
 
@@ -4945,23 +4945,23 @@ ${controls}${body}`;
     const tr = rows.map((r) => {
       const { x, sm, id } = r;
       const src = read.find((y) => y.table === x.table) || {};
-      const std = sm ? `<span class="chip sm${r.choice === 'standard' ? ' b' : ''}" title="${esc(sm.why)}">${esc(shortModule(sm.module_label) || '표준')} · ${esc(sm.label)} ${Math.round(sm.score * 100)}%</span>${r.choice === 'new' ? '<div class="muted" style="font-size:11px">새 객체로 유지</div>' : ''}`
+      const std = sm ? `<span class="chip sm${r.choice === 'standard' ? ' b' : ''}" title="${esc(sm.why)}">${esc(shortModule(sm.module_label) || '표준')} · ${esc(sm.label)} ${Math.round(sm.score * 100)}%</span>${r.choice === 'new' ? '<div class="muted" style="font-size:11px">새 Entity로 유지</div>' : ''}`
         : (S.map.sug ? '<span class="muted" style="font-size:12px">일치 없음</span>' : '<span class="spin"></span>');
       const name = r.choice !== 'new' && sm ? `<span class="mono">${esc(r.api)}</span>`
         : `<input type="text" class="inline mono" data-in="dapi" data-obj="${esc(id)}" value="${esc(r.api)}" aria-label="${esc(x.label)} API 이름" style="width:150px">`;
-      const nameWhy = r.choice === 'standard' ? '표준 객체 이름' : !r.choice ? '표준에 연결하면 쓰는 이름' : r.typed ? '직접 입력' : r.sug.name ? r.sug.parts.map(([k, v]) => `${k}=${v}`).join(' + ') : '로마자 표기 · 이름 확인';
+      const nameWhy = r.choice === 'standard' ? '표준 Entity 이름' : !r.choice ? '표준에 연결하면 쓰는 이름' : r.typed ? '직접 입력' : r.sug.name ? r.sug.parts.map(([k, v]) => `${k}=${v}`).join(' + ') : '로마자 표기 · 이름 확인';
       const keyWhy = x.why === 'primary_key' ? '선언된 기본 키' : x.why === 'unique' ? `고유 ${show(x.rows)}/${show(x.rows)}` : why(o, 'object', x);
       const pick = `data-act="dpick" data-t="${esc(x.table)}"`;
       return `<tr class="${r.status === 'off' ? 'off' : ''}${S.dr.pick === x.table ? ' sel' : ''}">
         <td style="width:28px"><input type="checkbox" data-in="dkeep" data-el="${esc(x.element)}"${r.status === 'off' ? '' : ' checked'} aria-label="${esc(x.label)} 포함"></td>
         <td ${pick} class="rvpick">${esc(src.source || x.table)}<div class="muted mono">${show(x.rows)}행</div></td>
         <td>${labelInput(x.element, x.label)}${r.choice === 'standard' && sm && sm.label !== x.label ? `<div class="muted" style="font-size:11.5px">→ <b>${esc(sm.label)}</b></div>` : ''}</td>
-        <td>${name}<div class="muted" style="font-size:11px">${esc(nameWhy)}</div>${r.clash ? '<div class="rvbad">표준 객체 이름과 같습니다</div>' : ''}</td>
+        <td>${name}<div class="muted" style="font-size:11px">${esc(nameWhy)}</div>${r.clash ? '<div class="rvbad">표준 Entity 이름과 같습니다</div>' : ''}</td>
         <td><select class="inline" data-in="dkey" data-obj="${esc(id)}">${options(o.propsOf(id).map((n) => [n, colOf[`${id}.${n}`] || n]), o.keyOf(id))}</select><div class="muted" style="font-size:11px">${S.dr.ed.keys[id] && S.dr.ed.keys[id] !== x.key ? '직접 지정' : esc(keyWhy)}</div></td>
         <td ${pick} class="rvpick">${std}</td><td ${pick} class="rvpick">${word[r.status]}</td></tr>`;
     }).join('');
     const left = st.skipped.filter((x) => x.why === 'no_key');
-    return `<table class="tight rvtable"><tr><th></th><th>원천</th><th>객체 이름</th><th>API 이름</th><th>키</th><th>표준과 일치</th><th>상태</th></tr>${tr}</table>
+    return `<table class="tight rvtable"><tr><th></th><th>원천</th><th>Entity 이름</th><th>API 이름</th><th>키</th><th>표준과 일치</th><th>상태</th></tr>${tr}</table>
       ${left.length ? `<div class="hint" style="margin-top:10px">키 컬럼이 없어 제외된 테이블: ${left.map((x) => esc(x.table)).join(', ')}</div>` : ''}`;
   }
 
@@ -4983,7 +4983,7 @@ ${controls}${body}`;
     if (t === undefined) loadDraftTable(r.x.table);
     const sm = r.sm;
     const title = r.choice === 'standard' && sm ? `${esc(r.x.table)} → ${esc(sm.label)}(${esc(sm.object)})`
-      : !r.choice && sm ? `${esc(r.x.table)} → ${esc(sm.label)}에 연결할까요?` : `${esc(r.x.table)} → 새 객체 ${esc(r.api)}`;
+      : !r.choice && sm ? `${esc(r.x.table)} → ${esc(sm.label)}에 연결할까요?` : `${esc(r.x.table)} → 새 Entity ${esc(r.api)}`;
     let sample = '<div class="empty" style="padding:10px"><span class="spin"></span>행을 읽는 중입니다.</div>';
     let facts = '';
     if (t && t.error) sample = `<div class="hint warn">${esc(t.error)}</div>`;
@@ -5000,14 +5000,14 @@ ${controls}${body}`;
         const form = n ? sm.columns.reduce((a, c) => a + c.score, 0) / n : 0;
         facts += `<div><b>일치 근거</b> · ${esc(sm.why)}</div>${bar('이름 · 용어사전', sm.name_score, sm.name_score.toFixed(2))}${bar('속성 일치', all ? n / all : 0, `${n}/${all}`)}${bar('값 형태', form, form.toFixed(2))}`;
         if (sm.missing.length) facts += `<div class="muted" style="font-size:12px">테이블에 없는 표준 속성: ${esc(sm.missing.map((y) => y.label).join(', '))}</div>`;
-      } else facts += `<div class="muted">표준 모듈에 맞는 객체가 없어 새 객체로 만듭니다.${r.sug.name ? ` 이름은 ${esc(r.sug.parts.map(([a, b]) => `${a}=${b}`).join(' + '))}로 지었습니다.` : ''}</div>`;
+      } else facts += `<div class="muted">표준 모듈에 맞는 Entity가 없어 새 Entity로 만듭니다.${r.sug.name ? ` 이름은 ${esc(r.sug.parts.map(([a, b]) => `${a}=${b}`).join(' + '))}로 지었습니다.` : ''}</div>`;
       if (r.roman) facts += '<div class="hint warn" style="margin:0">이름에 모르는 단어가 있어 로마자로 표기했습니다. API 이름을 고치거나 이대로 채택해 주세요.</div>';
       facts += chips.length ? `<div class="chips">${chips.join('')}</div>` : '';
       facts += '</div>';
     }
     const t0 = esc(r.x.table);
-    const acts = sm ? `<button class="btn sm${r.choice === 'standard' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="standard">${esc(sm.label)}에 연결</button><button class="btn sm${r.choice === 'new' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="new">새 객체로 유지</button>`
-      : `<button class="btn sm${r.status === 'ok' ? '' : ' primary'}" data-act="dchoose" data-t="${t0}" data-c="new">${r.roman ? '이 이름으로 채택' : '새 객체로 채택'}</button>`;
+    const acts = sm ? `<button class="btn sm${r.choice === 'standard' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="standard">${esc(sm.label)}에 연결</button><button class="btn sm${r.choice === 'new' ? ' primary' : ''}" data-act="dchoose" data-t="${t0}" data-c="new">새 Entity로 유지</button>`
+      : `<button class="btn sm${r.status === 'ok' ? '' : ' primary'}" data-act="dchoose" data-t="${t0}" data-c="new">${r.roman ? '이 이름으로 채택' : '새 Entity로 채택'}</button>`;
     return `<div class="card"><div class="ch">${title}</div><div class="cb">${sample}</div><div class="cb rvline2">${facts}</div><div class="cb rvline2"><div class="chips">${acts}</div></div></div>`;
   }
 
@@ -5042,15 +5042,15 @@ ${controls}${body}`;
     const read = p.steps.find((x) => x.id === 'read').items;
     const to = (r) => (r.status === 'off' ? '<span class="muted">제외</span>'
       : r.choice === 'standard' && r.sm ? `<span class="chip sm b">표준에 연결</span> ${esc(r.sm.label)} <span class="mono muted cn">${esc(r.sm.object)}</span> <span class="muted">· ${esc(shortModule(r.sm.module_label))}</span>`
-        : !r.choice ? '<span class="rvwarn">정하지 않음</span>' : `<span class="chip sm">새 객체</span> ${esc(S.dr.ed.labels[r.x.element] || r.x.label)} <span class="mono muted cn">${esc(r.api)}</span>`);
+        : !r.choice ? '<span class="rvwarn">정하지 않음</span>' : `<span class="chip sm">새 Entity</span> ${esc(S.dr.ed.labels[r.x.element] || r.x.label)} <span class="mono muted cn">${esc(r.api)}</span>`);
     const table = `<table class="tight"><tr><th>원천</th><th>적용 결과</th><th>상태</th></tr>${rows.map((r) => `<tr class="${r.status === 'off' ? 'off' : ''}"><td>${esc((read.find((y) => y.table === r.x.table) || {}).source || r.x.table)}</td><td>${to(r)}</td><td>${{ ok: '<span class="rvok">채택</span>', check: '<span class="rvwarn">확인</span>', off: '' }[r.status]}</td></tr>`).join('')}</table>`;
     const issues = plan.issues || [];
     // tables nobody settled block the apply: what each one waits on, and the way to settle it without going back five steps
     const left = rows.filter((r) => r.status === 'check'), match = left.filter((r) => r.sm);
-    const waits = (r) => (r.sm ? `표준 객체 ${esc(r.sm.label)} <span class="mono">${esc(r.sm.object)}</span>와 ${Math.round(r.sm.score * 100)}% 일치${r.clash ? ' · API 이름이 표준 객체와 같음' : ''}` : r.clash ? 'API 이름이 표준 객체와 같음' : '로마자로 표기한 API 이름 · 확인 필요');
+    const waits = (r) => (r.sm ? `표준 Entity ${esc(r.sm.label)} <span class="mono">${esc(r.sm.object)}</span>와 ${Math.round(r.sm.score * 100)}% 일치${r.clash ? ' · API 이름이 표준 Entity와 같음' : ''}` : r.clash ? 'API 이름이 표준 Entity와 같음' : '로마자로 표기한 API 이름 · 확인 필요');
     const settle = left.length ? `<div class="banner no" style="margin:0"><span class="ic x" style="width:24px;height:24px">!</span><div><div class="big" style="font-size:14px">확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다</div>
         <div class="loglist">${left.map((r) => `<div><b>${esc((read.find((y) => y.table === r.x.table) || {}).source || r.x.table)}</b> · ${waits(r)}</div>`).join('')}</div>
-        <div class="chips" style="margin-top:10px">${match.length ? `<button class="btn sm primary" data-act="dsettle">표준 객체에 연결 ${match.length}개</button>` : ''}<button class="btn sm" data-act="dview" data-view="objects">객체 · 키 단계에서 정하기</button></div></div></div>` : '';
+        <div class="chips" style="margin-top:10px">${match.length ? `<button class="btn sm primary" data-act="dsettle">표준 Entity에 연결 ${match.length}개</button>` : ''}<button class="btn sm" data-act="dview" data-view="objects">Entity · 키 단계에서 정하기</button></div></div></div>` : '';
     const check = settle || (plan.busy ? '<span class="chip"><span class="spin"></span>정의 검사 중</span>'
       : issues.length ? `<div class="banner no" style="margin:0"><span class="ic x" style="width:24px;height:24px">!</span><div><div class="big" style="font-size:14px">정의 검사 오류 ${issues.length}건</div><div class="loglist">${issues.slice(0, 8).map((x) => `<div class="mono">${esc(x)}</div>`).join('')}</div></div></div>`
         : '<span class="chip ok">✓ 정의 검사 통과</span>');
@@ -5070,13 +5070,13 @@ ${controls}${body}`;
     if (cur === 'objects') {
       const rows = st.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
       const ok = rows.filter((r) => r.status === 'ok').length, std = rows.filter((r) => r.choice === 'standard').length;
-      say = `<b>${rows.length}개 중 ${ok}개 채택${rows.length - ok ? ` · ${rows.length - ok}개 확인 필요` : ''}</b><span class="muted">표준에 연결 ${std} · 새 객체 ${rows.length - std}</span>`;
+      say = `<b>${rows.length}개 중 ${ok}개 채택${rows.length - ok ? ` · ${rows.length - ok}개 확인 필요` : ''}</b><span class="muted">표준에 연결 ${std} · 새 Entity ${rows.length - std}</span>`;
     } else if (cur === 'review') {
       const os = p.steps.find((s) => s.id === 'objects');
       const n = os.items.filter((x) => objProposal(p, x).status === 'check').length;
       // the same counts the step chips show: what nobody looked at is applied as proposed, and the footer says so
       const rest = REVIEW.map(([id, word]) => { const s = p.steps.find((y) => y.id === id); return [word, s && id !== 'objects' ? stepChecks(p, s) : 0]; }).filter((x) => x[1]);
-      say = n ? `<b class="rvwarn">객체 · 키 단계에 확인할 테이블 ${n}개가 남았습니다</b>`
+      say = n ? `<b class="rvwarn">Entity · 키 단계에 확인할 테이블 ${n}개가 남았습니다</b>`
         : rest.length ? `<b>확인하지 않은 제안 ${rest.reduce((a, x) => a + x[1], 0)}개는 제안대로 적용됩니다</b><span class="muted">${esc(rest.map(([w, k]) => `${w} ${k}`).join(' · '))} · 적용하면 새 파이프라인으로 추가됩니다</span>`
           : '<b>모든 제안을 검토했습니다</b><span class="muted">적용하면 새 파이프라인으로 추가됩니다</span>';
     } else say = left ? `<b>확인 필요 ${left}</b><span class="muted">${esc(STEP[cur][1])}</span>` : `<b>${esc(STEP[cur][0])} · 확인할 제안 없음</b><span class="muted">${esc(STEP[cur][1])}</span>`;
@@ -5109,10 +5109,10 @@ ${controls}${body}`;
     const std = S.map.picked.map((n) => ((S.map.standards || []).find((x) => x.name === n) || { label: n }).label);
     const meta = `${esc(S.st.repository.label)} · 파일 ${files}개 · ${show(read.reduce((a, x) => a + x.rows, 0))}행${std.length ? ` · ${esc(std.join(', '))}와 비교함` : ''}`;
     const side = cur === 'objects' ? objectSide(p, p.steps.find((s) => s.id === 'objects'))
-      : `<div class="card"><div class="ch">초안 그래프<div class="right legend"><span><i class="fill"></i>객체</span><span>→ 관계</span></div></div><div class="cb" style="padding:0;position:relative"><div class="kg" id="dgraph" style="height:420px"></div><div class="kg-tip">Node를 선택하면 속성이 표시됩니다</div></div></div>`;
+      : `<div class="card"><div class="ch">초안 그래프<div class="right legend"><span><i class="fill"></i>Entity</span><span>→ 관계</span></div></div><div class="cb" style="padding:0;position:relative"><div class="kg" id="dgraph" style="height:420px"></div><div class="kg-tip">Node를 선택하면 속성이 표시됩니다</div></div></div>`;
     return `<div class="rvhead"><div><h2>${esc(p.label)} 초안</h2><div class="sub">${meta}</div></div><button class="btn sm" data-act="dsetup" aria-expanded="${!!S.dr.setup}">${S.dr.setup ? '설정 닫기' : '생성 설정'}</button></div>
       ${reviewSteps(p)}
-      <div class="grid rvgrid"><div class="card"><div class="ch">${cur === 'objects' ? '원천 테이블 → 객체' : esc(cur === 'review' ? '검토 · 적용' : STEP[cur][0])}<div class="right muted" style="font-weight:600;font-size:12px">${cur === 'objects' ? '행을 고르면 오른쪽에 샘플과 근거가 보입니다' : esc(cur === 'review' ? '적용할 내용, 정의 파일' : STEP[cur][1])}</div></div>
+      <div class="grid rvgrid"><div class="card"><div class="ch">${cur === 'objects' ? '원천 테이블 → Entity' : esc(cur === 'review' ? '검토 · 적용' : STEP[cur][0])}<div class="right muted" style="font-weight:600;font-size:12px">${cur === 'objects' ? '행을 고르면 오른쪽에 샘플과 근거가 보입니다' : esc(cur === 'review' ? '적용할 내용, 정의 파일' : STEP[cur][1])}</div></div>
         <div class="cb scroll" id="ddetail">${reviewMain(p, cur)}</div></div><div class="hcol">${side}</div></div>
       ${reviewFoot(p)}`;
   }
@@ -5124,7 +5124,7 @@ ${controls}${body}`;
     const queries = RULE_QUERY.map(([k, l]) => `<label class="tick"><input type="checkbox" data-in="drule" data-k="queries" data-v="${k}"${r.queries.includes(k) ? ' checked' : ''}>${l}</label>`).join('');
     const lists = RULE_LIST.map(([k, l]) => `<label class="field" title="${esc(RULE_HINT[k] || '')}"><span>${l}</span><input type="text" data-in="drule" data-k="${k}" value="${esc(r[k].join(', '))}"></label>`).join('');
     const by = (f.rules_by || []).length ? `<div class="hint" style="margin-bottom:8px">구축 규칙 모듈 ${esc(f.rules_by.join(', '))}의 값을 기본값으로 사용합니다.</div>` : '';
-    return `<div class="card"><div class="ch">생성 설정<div class="right"><button class="btn sm ghost" data-act="drules-reset">기본값</button></div></div><div class="cb drules">
+    return `<div class="card drcard${S.dr.rulesOpen ? '' : ' shut'}"><div class="ch">생성 설정${S.dr.rulesOpen ? '' : '<span class="muted" style="font-weight:500;font-size:12px;margin-left:8px">기본값 사용 · 바꿀 때만 엽니다</span>'}<div class="right">${S.dr.rulesOpen ? '<button class="btn sm ghost" data-act="drules-reset">기본값</button>' : ''}<button class="btn sm" data-act="drrules" aria-expanded="${!!S.dr.rulesOpen}">${S.dr.rulesOpen ? '접기' : '보기'}</button></div></div><div class="cb drules">
       ${by}<div class="sec">허용값</div><div class="rgrid">${num}</div>
       <div class="sec">관계 · 키 · 규칙</div>${flags}
       <div class="sec">생성 질의</div><div class="chips">${queries}</div>
@@ -5166,7 +5166,7 @@ ${controls}${body}`;
       const steps = `<nav class="rvsteps" aria-label="초안 검토 단계">${REVIEW.map(([id, word], i) => `${i ? '<i class="rvline" aria-hidden="true"></i>' : ''}<span class="rvstep${i ? ' wait' : ' on'}"${i ? '' : ' aria-current="step"'}>${word}</span>`).join('')}</nav>`;
       const ready = (f.files.length || f.definitions.some((x) => x.tables.length)) && !S.dr.busy;
       const foot = `<div class="rvfoot"><b>${f.files.length ? `파일 ${f.files.length}개 · 테이블 ${tables.length}개 선택` : '고른 파일이 없습니다'}</b><span class="muted">${defs.length ? `정의서 테이블 ${defs.length}개로 이름과 코드값을 채웁니다 · ` : ''}생성하면 표준과 비교한 제안을 단계마다 검토합니다</span>
-        <span style="flex:1"></span>${f.files.length ? '' : '<a class="btn" href="#catalog">데이터 카탈로그에서 올리기</a>'}<button class="btn primary" data-act="draft"${ready ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>초안을 만드는 중' : '초안 생성 · 다음: 객체 · 키'}</button></div>`;
+        <span style="flex:1"></span>${f.files.length ? '' : '<a class="btn" href="#catalog">데이터 카탈로그에서 올리기</a>'}<button class="btn primary" data-act="draft"${ready ? '' : ' disabled'}>${S.dr.busy ? '<span class="spin"></span>초안을 만드는 중' : '초안 생성 · 다음: Entity · 키'}</button></div>`;
       return `${head}<div class="rvwrap"><div class="rvhead"><div><h2>${esc(S.dr.label || '새')} 초안</h2><div class="sub">${esc(S.st.repository.label)} · 초안에 넣을 파일과 생성 설정을 고릅니다</div></div></div>${steps}${setup}${foot}</div>`;
     }
     return `${head}${S.dr.setup ? setup : ''}<div id="draft" class="rvwrap">${draftBody()}</div>`;
@@ -5600,7 +5600,7 @@ ${controls}${body}`;
   // once it is filed as a change request and approved.
 
   const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles'];
-  const OP_WORD = { add_object: '객체 추가', update_object: '객체 변경', delete_object: '객체 제외', add_property: '속성 추가',
+  const OP_WORD = { add_object: 'Entity 추가', update_object: 'Entity 변경', delete_object: 'Entity 제외', add_property: '속성 추가',
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
     add_decision: '결정표 추가', update_parameter: '기준값 변경', add_action: '액션 추가', update_action: '액션 변경', delete_action: '액션 제외',
@@ -5701,7 +5701,7 @@ ${controls}${body}`;
   // ---- data sources
 
   function viewSources() {
-    const title = '데이터 소스', sub = '연결된 원천 테이블과 테이블별 연결 객체를 확인합니다';
+    const title = '데이터 소스', sub = '연결된 원천 테이블과 테이블별 연결 Entity를 확인합니다';
     const wait = mgWait(title, sub);
     if (wait) return wait;
     const m = S.mg.st, s = m.sources.source;
@@ -5718,7 +5718,7 @@ ${controls}${body}`;
         <td class="mono" style="font-size:11.5px">${esc(t.key.join(', ')) || '<span class="muted">-</span>'}</td>
         <td style="font-size:12px">${t.fks.length ? t.fks.map((f) => `<span class="mono">${esc(f.column)}</span> → <span class="mono">${esc(f.table)}</span>`).join('<br>') : '<span class="muted">-</span>'}</td>
         <td>${t.objects.length || t.links.length ? `<div class="chips">${t.objects.map((o) => `<a class="chip sm b" href="#objects" data-act="mgobjgo" data-name="${esc(o)}">${esc(mgLabel(o))}</a>`).join('')}${t.links.map((l) => `<a class="chip sm" href="#links" data-act="mglinkgo" data-name="${esc(l)}">관계 · ${esc(linkLabel(l))}</a>`).join('')}</div>`
-          : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}">객체로 추가</button>`}</td></tr>`).join('');
+          : `<button class="btn sm" data-act="mgobjnew" data-t="${esc(t.table)}">Entity로 추가</button>`}</td></tr>`).join('');
     const sel = S.mg.table && mgTable(S.mg.table);
     let detail = '<div class="empty">테이블을 선택하면 컬럼과 연결 속성이 표시됩니다.</div>';
     if (sel) {
@@ -5733,7 +5733,7 @@ ${controls}${body}`;
     const graphs = m.sources.graphs.length ? `<div class="hint" style="margin-top:12px">그래프 저장소 ${esc(m.sources.graphs.map((g) => `${g.name} (${g.language.toUpperCase()})`).join(', '))}에는 원천 행이 Node와 Edge으로 반영됩니다. 관계 그래프는 [온톨로지]에서 확인합니다.</div>` : '';
     return `${head}${stats}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);align-items:start">
       <div class="card"><div class="ch">원천 테이블<div class="right muted" style="font-weight:600;font-size:12px">${esc(s.name)}</div></div><div class="cb scroll" style="padding:0;max-height:620px">
-        <table class="tight"><tr><th>테이블</th><th>행</th><th>컬럼</th><th>키</th><th>참조</th><th>연결 객체</th></tr>${list}</table></div></div>
+        <table class="tight"><tr><th>테이블</th><th>행</th><th>컬럼</th><th>키</th><th>참조</th><th>연결 Entity</th></tr>${list}</table></div></div>
       <div class="card"><div class="ch">${sel ? `<span class="mono">${esc(sel.table)}</span> 컬럼` : '컬럼'}</div><div class="cb scroll" style="max-height:620px${sel ? ';padding:0' : ''}">${detail}</div></div></div>${graphs}`;
   }
 
@@ -5744,7 +5744,7 @@ ${controls}${body}`;
   function identityCard() {
     const m = S.mg.st;
     const rows = m.identities.map((x) => `<tr class="${S.mg.sel === `identity:${x.name}` ? 'sel' : ''}" data-act="mgident" data-name="${esc(x.name)}" style="cursor:pointer"><td><b>${esc(x.label)}</b><div class="muted mono cn">${esc(x.name)}</div></td><td>${esc(Object.keys(x.members).map(mgLabel).join(', '))}</td><td>${x.rules.length}</td><td><div class="chips">${ownerChip(x)}</div></td></tr>`).join('');
-    return `<div class="card"><div class="ch">식별 통합 <span class="chip sm">${m.identities.length}</span><div class="right"><button class="btn sm" data-act="mgidentnew">새 식별 통합</button></div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>이름</th><th>구성 객체</th><th>규칙</th><th>정의</th></tr>${rows}</table>` : '<div class="empty">시스템마다 다른 번호를 하나로 묶는 규칙이 없습니다.</div>'}</div></div>`;
+    return `<div class="card"><div class="ch">식별 통합 <span class="chip sm">${m.identities.length}</span><div class="right"><button class="btn sm" data-act="mgidentnew">새 식별 통합</button></div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>이름</th><th>구성 Entity</th><th>규칙</th><th>정의</th></tr>${rows}</table>` : '<div class="empty">시스템마다 다른 번호를 하나로 묶는 규칙이 없습니다.</div>'}</div></div>`;
   }
 
   function identityForm() {
@@ -5755,7 +5755,7 @@ ${controls}${body}`;
     const propsOf = (t) => [['', '속성 선택'], ...mgProps(t).map((p) => [p.name, p.label || p.name])];
     return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 식별 통합' : `식별 통합 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
       ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: Person"')) : ''}${mgField('라벨', mgInput('label', v.label))}
-      <div class="sec">구성 객체와 비교 항목</div>${mgRows('imembers', (r, i) => `${rowSelect('imembers', i, 'type', objects, r.type)}${rowInput('imembers', i, 'field', r.field, '비교 항목 이름')}${rowSelect('imembers', i, 'prop', propsOf(r.type), r.prop)}`, v.imembers)}
+      <div class="sec">구성 Entity와 비교 항목</div>${mgRows('imembers', (r, i) => `${rowSelect('imembers', i, 'type', objects, r.type)}${rowInput('imembers', i, 'field', r.field, '비교 항목 이름')}${rowSelect('imembers', i, 'prop', propsOf(r.type), r.prop)}`, v.imembers)}
       <div class="sec">통합 규칙</div>${mgRows('irules', (r, i) => `${rowInput('irules', i, 'id', r.id, '규칙 번호')}${rowInput('irules', i, 'match', r.match, '비교 항목, 쉼표로 구분')}${rowSelect('irules', i, 'normalize', [['none', '그대로'], ['digits', '숫자만'], ['lower', '소문자'], ['trim', '공백 제거']], r.normalize)}`, v.irules)}
       <div class="hint xp" style="margin-top:10px">승인 후 온톨로지 화면의 식별 통합에서 교차표를 저장합니다.</div>${mgButtons(f, '식별 통합 제외')}</div></div>`;
   }
@@ -5763,7 +5763,7 @@ ${controls}${body}`;
   function objectForm() {
     const f = S.mg.form && S.mg.form.kind === 'object' ? S.mg.form : null;
     const m = S.mg.st;
-    if (!f) return '<div class="card"><div class="ch">객체 정보</div><div class="cb"><div class="empty">객체를 선택하면 라벨, 원천 테이블, 키, 상위 객체를 수정할 수 있습니다. [새 객체]로 객체를 추가합니다.</div></div></div>';
+    if (!f) return '<div class="card"><div class="ch">Entity 정보</div><div class="cb"><div class="empty">Entity를 선택하면 라벨, 원천 테이블, 키, 상위 Entity를 수정할 수 있습니다. [새 Entity]로 Entity를 추가합니다.</div></div></div>';
     const v = f.v, o = f.mode === 'edit' ? mgObj(v.name) : null;
     const tables = m.sources.source.tables;
     const tableSel = `<select data-in="mgf" data-f="table" data-re="1"><option value="">개념 · 테이블 없음</option>${tables.map((t) => opt(t.table, `${t.table}${t.objects.length && t.table !== (o || {}).table ? ` · ${t.objects.map(mgLabel).join(', ')}` : ''}`, v.table)).join('')}</select>`;
@@ -5774,17 +5774,17 @@ ${controls}${body}`;
       const t = v.table ? mgTable(v.table) : null;
       const keySel = t ? `<select data-in="mgf" data-f="key">${t.columns.map((c) => opt(c.name, `${c.name} · ${c.type}`, v.key)).join('')}</select>`
         : `<input type="text" data-in="mgf" data-f="key" data-auto="1" value="${esc(v.key)}" placeholder="${esc(autoKey(v) || 'coupon_id')}" class="mono"><span class="muted" style="font-size:11.5px" data-hint="key">${esc(keyHint(v))}</span>`;
-      return `<div class="card"><div class="ch">새 객체<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
+      return `<div class="card"><div class="ch">새 Entity<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
         ${field(`표시 이름${REQUIRED}`, `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 쿠폰" aria-required="true">`)}
         ${nameField(f, '예: Coupon')}
         ${field('원천 테이블', tableSel, '테이블을 선택하면 키와 속성이 컬럼 기준으로 입력됩니다.')}
         ${t && t.key.length > 1 ? field('키', `<input type="text" value="${esc(t.key.join(', '))}" class="mono" disabled>`, '복합 키는 여러 컬럼을 하나의 값으로 읽습니다.') : field(t ? '키 컬럼' : '키 속성', keySel)}
         ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 선택하세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류가 발생합니다.</div>` : ''}
-        ${t && t.links.length ? `<div class="hint" style="margin:-4px 0 12px">관계 ${esc(t.links.map(linkLabel).join(', '))}의 연결 테이블입니다. 객체로 만들 필요가 없으면 [닫기]를 선택하세요.</div>` : ''}
+        ${t && t.links.length ? `<div class="hint" style="margin:-4px 0 12px">관계 ${esc(t.links.map(linkLabel).join(', '))}의 연결 테이블입니다. Entity로 만들 필요가 없으면 [닫기]를 선택하세요.</div>` : ''}
         ${t ? `<label class="tick"><input type="checkbox" data-in="mgf" data-f="cols"${v.cols ? ' checked' : ''}>테이블 컬럼 ${t.columns.length}개를 속성으로 추가</label>` : ''}
-        ${areaSel}${field('상위 객체', parents, '상위 객체의 속성과 관계를 상속합니다.')}
+        ${areaSel}${field('상위 Entity', parents, '상위 Entity의 속성과 관계를 상속합니다.')}
         ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
-        <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>객체 추가</button></div></div>`;
+        <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>Entity 추가</button></div></div>`;
     }
     const keys = mgProps(v.name).filter((p) => !p.inherited);
     const keyField = own(o) ? `<select data-in="mgf" data-f="key">${keys.map((p) => opt(p.name, `${p.label || p.name} (${p.name})`, v.key)).join('')}</select>`
@@ -5795,11 +5795,11 @@ ${controls}${body}`;
       ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
       ${areaSel}${field('원천 테이블', tableSel)}
       ${field('키', keyField, own(o) ? '' : '키는 정의한 모듈에서만 바꿀 수 있습니다.')}
-      <div class="rgrid two">${field('상위 객체', parents)}${field('상태', statusSelect(v.status), '폐기 예정으로 두면 읽는 곳이 남아 있는지 사용처에 표시됩니다.')}</div>
-      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
+      <div class="rgrid two">${field('상위 Entity', parents)}${field('상태', statusSelect(v.status), '폐기 예정으로 두면 읽는 곳이 남아 있는지 사용처에 표시됩니다.')}</div>
+      ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 Entity입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>저장</button><button class="btn ghost wsonly" data-act="mgcancel">접기</button>
 
-        <div class="grow" style="flex:1"></div><button class="btn danger" data-act="mgdel"${S.mg.busy ? ' disabled' : ''}>객체 제외</button></div></div></div>`;
+        <div class="grow" style="flex:1"></div><button class="btn danger" data-act="mgdel"${S.mg.busy ? ' disabled' : ''}>Entity 제외</button></div></div></div>`;
   }
 
   // ---- properties
@@ -5852,7 +5852,7 @@ ${controls}${body}`;
         ${common}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>속성 추가</button></div></div>`;
     }
-    const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 객체 ${mgLabel(p.inherited)}에서 상속한 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
+    const why = p.key ? `'${p.name}'은 ${mgLabel(p.object)}의 키라서 제외할 수 없습니다.` : (p.inherited ? `상위 Entity ${mgLabel(p.inherited)}에서 상속한 속성입니다. ${mgLabel(p.inherited)}에서 제외하세요.` : '');
     return `<div class="card"><div class="ch">${esc(mgLabel(p.object))} · ${esc(p.label || p.name)} <span class="muted mono" style="font-weight:600">${esc(p.name)}</span><div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
       <div class="chips" style="margin-bottom:12px">${ownerChip(p)}${stateChips(p)}${p.key ? '<span class="chip sm b">키</span>' : ''}</div>${common}
       ${own(p) || p.new ? '' : `<div class="hint" style="margin-bottom:12px">${esc(p.module_label)} 모듈의 속성입니다. 바꾼 내용은 '관리 변경'에 확장으로 기록됩니다.</div>`}
@@ -5892,7 +5892,7 @@ ${controls}${body}`;
   function linkForm() {
     const f = S.mg.form && S.mg.form.kind === 'link' ? S.mg.form : null;
     const m = S.mg.st;
-    if (!f) return '<div class="card"><div class="ch">관계 정보</div><div class="cb"><div class="empty">관계를 선택하면 라벨, Cardinality, 역관계를 수정할 수 있습니다. [새 관계]로 두 객체를 연결합니다.</div></div></div>';
+    if (!f) return '<div class="card"><div class="ch">관계 정보</div><div class="cb"><div class="empty">관계를 선택하면 라벨, Cardinality, 역관계를 수정할 수 있습니다. [새 관계]로 두 Entity를 연결합니다.</div></div></div>';
     const v = f.v;
     const l = f.mode === 'edit' ? m.links.find((x) => x.name === v.name) : null;
     const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
@@ -5902,9 +5902,9 @@ ${controls}${body}`;
     const cards = `<select data-in="mgf" data-f="cardinality">${Object.entries(CARD).map(([k, x]) => opt(k, `${x} (${k})`, v.cardinality)).join('')}</select>`;
     const body = `${f.mode === 'new' ? field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: usedCoupon">`) : ''}
       ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 사용 쿠폰">`)}
-      <div class="rgrid two">${field('출발 객체', objSel('source'))}${field('출발 속성', propSel('sp', v.source))}</div>
-      <div class="rgrid two">${field('도착 객체', objSel('target'))}${field('도착 속성', propSel('tp', v.target))}</div>
-      ${ends ? '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">출발 속성 값과 도착 속성 값이 같은 행끼리 연결합니다.</div>' : '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">양 끝 객체와 연결 기준은 정의한 모듈에서만 바꿀 수 있습니다.</div>'}
+      <div class="rgrid two">${field('출발 Entity', objSel('source'))}${field('출발 속성', propSel('sp', v.source))}</div>
+      <div class="rgrid two">${field('도착 Entity', objSel('target'))}${field('도착 속성', propSel('tp', v.target))}</div>
+      ${ends ? '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">출발 속성 값과 도착 속성 값이 같은 행끼리 연결합니다.</div>' : '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">양 끝 Entity와 연결 기준은 정의한 모듈에서만 바꿀 수 있습니다.</div>'}
       <div class="rgrid two">${field('Cardinality', cards)}${field('역관계 이름', `<input type="text" data-in="mgf" data-f="inverse" value="${esc(v.inverse)}" placeholder="예: couponUsedBy">`)}</div>
       ${f.mode === 'new' ? '' : field('상태', statusSelect(v.status))}
       <label class="tick" style="margin-bottom:12px"><input type="checkbox" data-in="mgf" data-f="required"${v.required ? ' checked' : ''}>필수 관계</label>`;
@@ -6065,8 +6065,8 @@ ${controls}${body}`;
     const v = f.v, m = S.mg.st;
     const props = [['', '대상 자체'], ...mgProps(v.object).map((p) => [p.name, p.label || p.name])];
     const conds = (list) => mgRows(list, (r, i) => `${rowSelect(list, i, 'property', props.slice(1), r.property)}${rowSelect(list, i, 'op', WHERE_OPS, r.op)}${rowInput(list, i, 'value', r.value, '값')}`, v[list]);
-    const fixed = f.raw ? '<div class="hint">식이 여러 객체를 잇고 있어 대상과 조건은 라이브러리의 모듈 편집에서 수정합니다.</div>' : `
-      ${mgField('대상 객체', `<select data-in="mgf" data-f="object" data-re="1">${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.object)).join('')}</select>`)}
+    const fixed = f.raw ? '<div class="hint">식이 여러 Entity를 잇고 있어 대상과 조건은 라이브러리의 모듈 편집에서 수정합니다.</div>' : `
+      ${mgField('대상 Entity', `<select data-in="mgf" data-f="object" data-re="1">${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.object)).join('')}</select>`)}
       <div class="rgrid two">${mgField('집계', `<select data-in="mgf" data-f="fn">${AGG_WORD.map(([k, l]) => opt(k, l, v.fn)).join('')}</select>`)}${mgField('집계 속성', `<select data-in="mgf" data-f="prop">${props.map(([k, l]) => opt(k, l, v.prop)).join('')}</select>`)}</div>
       <div class="sec">조건</div>${conds('where')}
       <label class="tick" style="margin-top:10px"><input type="checkbox" data-in="mgf" data-f="ratio" data-re="1"${v.ratio ? ' checked' : ''}>분모로 나누어 비율로 표시</label>
@@ -6097,7 +6097,7 @@ ${controls}${body}`;
     const options = [['', '선택'], ...props.map((p) => [p.name, p.label || p.name]), ...hops.map((p) => [`${p.via.name}.${p.name}`, `${mgLabel(p.object)} · ${p.label || p.name}`])];
     return `<div class="card"><div class="ch">새 결정표<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
       ${mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: exchangeEligibility"'))}${mgField('라벨', mgInput('label', v.label, 'placeholder="예: 교환 가능 여부"'))}
-      ${mgField('대상 객체', `<select data-in="mgf" data-f="target" data-re="1">${m.objects.map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}
+      ${mgField('대상 Entity', `<select data-in="mgf" data-f="target" data-re="1">${m.objects.map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}
       <div class="sec">입력값</div>${mgRows('inputs', (r, i) => rowSelect('inputs', i, 'property', options, r.property), v.inputs)}
       ${mgField('규칙에 맞지 않는 경우 사유', mgInput('otherwise', v.otherwise))}${mgButtons(f, '')}</div></div>`;
   }
@@ -6151,7 +6151,7 @@ ${controls}${body}`;
     extra.forEach((r) => { by[r.module] = (by[r.module] || 0) + 1; });
     const policy = `<label class="chip n chipsel" title="규칙을 적용하는 방식">적용 방식 · <select data-in="mgpolicy" aria-label="적용 방식">${Object.entries(POLICY_WORD).map(([k, w]) => opt(k, w, d.hit_policy)).join('')}</select></label>`;
     return `<div class="rhead2"><div><div class="rtitle2"><h2>${esc(d.label)}</h2><span class="mono muted cn">${esc(d.name)}</span></div>
-      <div class="chips" style="margin-top:7px">${policy}${d.target ? `<button class="chip" data-act="select" data-obj="${esc(d.target)}" title="이 객체의 정의로">대상 · ${esc(d.target_label || d.target)}</button>` : ''}<button class="chip b" data-act="libshow" data-mod="${esc(d.module)}" title="라이브러리에서 이 모듈로">${esc(shortMod(modWord(d.module)))}</button>
+      <div class="chips" style="margin-top:7px">${policy}${d.target ? `<button class="chip" data-act="select" data-obj="${esc(d.target)}" title="이 Entity의 정의로">대상 · ${esc(d.target_label || d.target)}</button>` : ''}<button class="chip b" data-act="libshow" data-mod="${esc(d.module)}" title="라이브러리에서 이 모듈로">${esc(shortMod(modWord(d.module)))}</button>
         ${Object.entries(by).map(([mname, k]) => `<button class="chip warn" data-act="libshow" data-mod="${esc(mname)}" title="라이브러리에서 이 모듈로">+ ${esc(shortMod(modWord(mname)))} 규칙 ${k}</button>`).join('')}${stateChips(d)}</div></div>
       <div class="right"><a class="btn sm" href="/api/export/jdm?decision=${encodeURIComponent(d.name)}" download>ZEN 내보내기</a><button class="btn sm" data-act="mgrulenew">규칙 추가</button><button class="btn sm primary" data-act="mgpropose"${S.mg.st.workspace.dirty && !S.mg.busy ? '' : ' disabled'}>${fileWord()}</button></div></div>`;
   }
@@ -6248,7 +6248,7 @@ ${controls}${body}`;
     if (!f) return mgEmpty('함수 정보', '함수를 선택하면 입출력, 버전, 담당을 수정하고 실행 결과를 확인할 수 있습니다.');
     const v = f.v, m = S.mg.st;
     const by = {
-      expr: mgField('계산식', mgInput('expr', v.expr, 'class="mono" placeholder="예: line_total * @rate"'), '대상 객체의 속성을 이름으로, 입력값을 @이름으로 참조합니다.'),
+      expr: mgField('계산식', mgInput('expr', v.expr, 'class="mono" placeholder="예: line_total * @rate"'), '대상 Entity의 속성을 이름으로, 입력값을 @이름으로 참조합니다.'),
       decision: mgField('결정표', `<select data-in="mgf" data-f="decision"><option value="">선택</option>${m.decisions.map((d) => opt(d.name, d.label, v.decision)).join('')}</select>`),
       query: mgField('등록 질의', `<select data-in="mgf" data-f="query"><option value="">선택</option>${m.queries.map((q) => opt(q.name, q.label, v.query)).join('')}</select>`),
       python: mgField('등록 이름', mgInput('entry', v.entry), '설치 환경의 studio 파일 functions.python에 등록한 이름입니다.'),
@@ -6259,7 +6259,7 @@ ${controls}${body}`;
       ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: refundEstimate"')) : ''}
       ${mgField('라벨', mgInput('label', v.label))}
       <div class="rgrid two">${mgField('실행 방식', `<select data-in="mgf" data-f="runtime" data-re="1">${RUNTIME.map(([k, l]) => opt(k, l, v.runtime)).join('')}</select>`)}
-        ${mgField('대상 객체', `<select data-in="mgf" data-f="target"><option value="">없음</option>${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}</div>
+        ${mgField('대상 Entity', `<select data-in="mgf" data-f="target"><option value="">없음</option>${m.objects.filter((o) => !o.concept).map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}</div>
       ${by}
       <div class="sec">입력값</div>${mgRows('fin', (r, i) => `${rowInput('fin', i, 'name', r.name, '영문 이름')}${rowInput('fin', i, 'label', r.label, '라벨')}${rowSelect('fin', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.fin)}
       <div class="sec">출력값</div>${mgRows('fout', (r, i) => `${rowInput('fout', i, 'name', r.name, '영문 이름')}${rowSelect('fout', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.fout)}
@@ -6296,13 +6296,13 @@ ${controls}${body}`;
 
   function stateForm() {
     const f = S.mg.form && S.mg.form.kind === 'states' ? S.mg.form : null;
-    if (!f) return mgEmpty('상태 전이 정보', '객체를 선택하면 상태 값과 전이를 수정할 수 있습니다. [새 상태 전이]로 객체에 상태를 정의합니다.');
+    if (!f) return mgEmpty('상태 전이 정보', 'Entity를 선택하면 상태 값과 전이를 수정할 수 있습니다. [새 상태 전이]로 Entity에 상태를 정의합니다.');
     const v = f.v, m = S.mg.st;
     const props = m.properties.filter((p) => p.object === v.object);
     const states = String(v.states || '').split(',').map((x) => x.trim()).filter(Boolean);
     const choices = states.map((s) => [s, s]);
     return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 상태 전이' : `${esc(mgLabel(v.object))} 상태 전이`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
-      ${f.mode === 'new' ? mgField('객체', `<select data-in="mgf" data-f="object" data-re="1">${m.objects.filter((o) => !o.states).map((o) => opt(o.name, o.label, v.object)).join('')}</select>`) : ''}
+      ${f.mode === 'new' ? mgField('Entity', `<select data-in="mgf" data-f="object" data-re="1">${m.objects.filter((o) => !o.states).map((o) => opt(o.name, o.label, v.object)).join('')}</select>`) : ''}
       ${mgField('상태 속성', `<select data-in="mgf" data-f="property">${props.map((p) => opt(p.name, p.label || p.name, v.property)).join('')}</select>`)}
       ${mgField('상태 값', mgInput('states', v.states, 'data-re="1" placeholder="쉼표로 구분"'))}
       ${mgField('초기 상태', `<select data-in="mgf" data-f="initial"><option value="">없음</option>${states.map((s) => opt(s, s, v.initial)).join('')}</select>`)}
@@ -6311,7 +6311,7 @@ ${controls}${body}`;
   }
 
   function viewStates() {
-    const title = '상태 전이', sub = '객체의 상태 값과 허용되는 전이를 관리합니다';
+    const title = '상태 전이', sub = 'Entity의 상태 값과 허용되는 전이를 관리합니다';
     const wait = mgWait(title, sub);
     if (wait) return wait;
     const m = S.mg.st;
@@ -6319,7 +6319,7 @@ ${controls}${body}`;
     const rows = m.states.map((s) => `<tr class="${S.mg.sel === s.object ? 'sel' : ''}" data-act="mgstate" data-name="${esc(s.object)}" style="cursor:pointer"><td><b>${esc(s.label)}</b><div class="muted mono cn">${esc(s.object)}.${esc(s.property)}</div></td>
       <td><div class="chips">${s.states.map((x) => `<span class="chip sm${x === s.initial ? ' b' : ''}">${esc(x)}</span>`).join('')}</div></td><td>${s.transitions.length}</td><td><div class="chips">${ownerChip(s)}${stateChips(s)}</div></td></tr>`).join('');
     return `${head}${pendingBar()}<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr);align-items:start">
-      <div class="card"><div class="ch">상태 전이 <span class="chip sm">${m.states.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>객체</th><th>상태</th><th>전이</th><th>정의</th></tr>${rows}</table></div></div>${stateForm()}</div>`;
+      <div class="card"><div class="ch">상태 전이 <span class="chip sm">${m.states.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>Entity</th><th>상태</th><th>전이</th><th>정의</th></tr>${rows}</table></div></div>${stateForm()}</div>`;
   }
 
   const LIMIT_KIND = [['percent', '변화율 이내 (%)'], ['delta', '변화폭 이내'], ['max', '최댓값 이하'], ['min', '최솟값 이상']];
@@ -6338,11 +6338,11 @@ ${controls}${body}`;
       return o && o.type === 'boolean' ? rowSelect('criteria', i, 'value', [['true', '가능'], ['false', '불가']], r.value) : rowInput('criteria', i, 'value', r.value, '기대값');
     };
     return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 액션' : `액션 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
-      ${f.mode === 'new' ? `${mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: requestExchange"'))}${mgField('대상 객체', `<select data-in="mgf" data-f="target" data-re="1">${m.objects.map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}` : ''}
+      ${f.mode === 'new' ? `${mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: requestExchange"'))}${mgField('대상 Entity', `<select data-in="mgf" data-f="target" data-re="1">${m.objects.map((o) => opt(o.name, o.label, v.target)).join('')}</select>`)}` : ''}
       ${mgField('라벨', mgInput('label', v.label))}
       <div class="sec">입력값</div>${mgRows('params', (r, i) => `${rowInput('params', i, 'name', r.name, '영문 이름')}${rowInput('params', i, 'label', r.label, '라벨')}${rowSelect('params', i, 'type', TYPES.filter((t) => t !== 'enum').map((t) => [t, TYPE_WORD[t]]), r.type)}`, v.params)}
       <div class="sec">판정 조건</div>${mgRows('criteria', (r, i) => `${rowSelect('criteria', i, 'decision', decisions, r.decision)}${rowSelect('criteria', i, 'field', [['', '결과 선택'], ...outs(r).map((o) => [o.name, outWord(m.decisions.find((x) => x.name === r.decision), o.name)])], r.field)}${expect(r, i)}`, v.criteria)}
-      ${mgField('처리 후 상태', machine ? `<select data-in="mgf" data-f="transition_to"><option value="">변경 없음</option>${machine.states.map((s) => opt(s, s, v.transition_to)).join('')}</select>` : '<span class="muted" style="font-size:12.5px">대상 객체에 상태 전이가 없습니다.</span>')}
+      ${mgField('처리 후 상태', machine ? `<select data-in="mgf" data-f="transition_to"><option value="">변경 없음</option>${machine.states.map((s) => opt(s, s, v.transition_to)).join('')}</select>` : '<span class="muted" style="font-size:12.5px">대상 Entity에 상태 전이가 없습니다.</span>')}
       <div class="sec">변경 값</div>${mgRows('set', (r, i) => `${rowSelect('set', i, 'prop', [['', '속성 선택'], ...props.map((p) => [p.name, p.label || p.name])], r.prop)}${rowInput('set', i, 'value', r.value, '값 또는 $입력값')}`, v.set)}
       <label class="tick"><input type="checkbox" data-in="mgf" data-f="approval"${v.approval ? ' checked' : ''}>사람의 승인 필요</label>
       <div class="sec">자동 승인 기준</div>${mgRows('limits', (r, i) => `${rowSelect('limits', i, 'subject', subjects, r.subject)}${rowSelect('limits', i, 'kind', LIMIT_KIND, r.kind)}${rowInput('limits', i, 'value', r.value, '값 또는 @기준값')}`, v.limits)}
@@ -6414,13 +6414,13 @@ ${controls}${body}`;
     const propsOf = m.properties.map((p) => [`${p.object}.${p.name}`, `${mgLabel(p.object)} · ${p.label || p.name}`]);
     return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 역할' : `역할 ${esc(v.label)}`}<div class="right"><button class="btn sm ghost" data-act="mgclose">닫기</button></div></div><div class="cb">
       ${f.mode === 'new' ? mgField('영문 이름', mgInput('name', v.name, 'placeholder="예: cs_manager"')) : ''}${mgField('라벨', mgInput('label', v.label))}
-      <div class="sec">조회 객체</div><div class="mgticks">${ticks('read', m.objects.map((o) => [o.name, o.label]))}</div>
+      <div class="sec">조회 Entity</div><div class="mgticks">${ticks('read', m.objects.map((o) => [o.name, o.label]))}</div>
       <div class="sec">실행 질의 · 결정 · 함수</div><div class="mgticks">${ticks('run', [...m.decisions.map((d) => [d.name, d.label]), ...m.functions.map((x) => [x.name, x.label]), ...m.queries.map((q) => [q.name, q.label])])}</div>
       <div class="sec">요청 액션</div><div class="mgticks">${ticks('request', m.actions.map((a) => [a.name, a.label]))}</div>
       ${m.documents.length ? `<div class="sec">열람 문서</div><div class="mgticks">${ticks('docs', [...(m.folders || []).map((f) => [`${f}/*`, `${f} 폴더`]), ...m.documents.map((d) => [d, d])])}</div><div class="hint xp">Agent가 이 역할로 검색하고 답할 때 선택한 폴더와 문서만 근거로 사용합니다. 폴더를 선택하면 하위 폴더의 문서도 포함합니다.</div>` : ''}
       <div class="sec">가림 속성</div>${mgRows('mask', (r, i) => `${rowSelect('mask', i, 'prop', [['', '선택'], ...propsOf], r.prop)}${rowSelect('mask', i, 'style', [['partial', '일부 가림'], ['full', '전체 가림']], r.style)}`, v.mask)}
       <div class="sec">행 범위</div>${mgRows('rows', rowRule, v.rows)}
-      <div class="sec">조직 범위</div>${mgField('사용자 속성', mgInput('scope_attr', v.scope_attr, 'placeholder="예: seller_id"'), '지정하면 아래 객체의 조회와 요청을 로그인한 조직의 행으로 제한합니다.')}
+      <div class="sec">조직 범위</div>${mgField('사용자 속성', mgInput('scope_attr', v.scope_attr, 'placeholder="예: seller_id"'), '지정하면 아래 Entity의 조회와 요청을 로그인한 조직의 행으로 제한합니다.')}
       ${mgRows('scopes', scopeRule, v.scopes)}
       ${mgButtons(f, '역할 제외')}</div></div>`;
   }
@@ -6627,7 +6627,7 @@ ${controls}${body}`;
     const v = f.v;
     const list = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
     if (naming(f)) {  // the display name is the one thing a person must write; the English name follows it unless typed
-      const what = f.kind === 'prop' ? '속성을' : '객체를';
+      const what = f.kind === 'prop' ? '속성을' : 'Entity를';
       if (!String(v.label || '').trim()) { formStop('label', `표시 이름이 비어 있어 ${what} 추가하지 못했습니다. 표시 이름을 입력해 주세요.`); return; }
       if (!v.name) await nameNow(f);
       if (S.mg.form !== f) return;
@@ -6640,11 +6640,11 @@ ${controls}${body}`;
       const wide = t && t.key.length > 1;
       const key = wide ? `${propName(v.name)}_key` : (t ? propName(v.key || t.key[0] || t.columns[0].name) : (v.key ? propName(v.key) : autoKey(v)));
       if (wide) props[key] = { type: 'string', label: `${v.label || v.name} 키`, columns: t.key };
-      if (!key) { toast('키를 정하지 않아 객체를 추가하지 못했습니다. 키를 입력해 주세요.', true); return; }
+      if (!key) { toast('키를 정하지 않아 Entity를 추가하지 못했습니다. 키를 입력해 주세요.', true); return; }
       if (!props[key]) { const c = t && t.columns.find((x) => propName(x.name) === key); props[key] = { type: c ? sqlType(c.type) : 'string', label: c ? c.name : `${v.label || v.name} 키`, column: c ? c.name : key }; }
       props[key].required = true;
       S.mg.sel = v.name;
-      mgEdit('add_object', { name: v.name, label: v.label, table: v.table, key, properties: props, parent: v.parent, description: v.description, ...(v.area ? { area: v.area } : {}) }, `객체 ${v.label || v.name}을 추가했습니다.`);
+      mgEdit('add_object', { name: v.name, label: v.label, table: v.table, key, properties: props, parent: v.parent, description: v.description, ...(v.area ? { area: v.area } : {}) }, `Entity ${v.label || v.name}을 추가했습니다.`);
       return;
     }
     if (f.kind === 'object') {
@@ -6653,7 +6653,7 @@ ${controls}${body}`;
       if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
       if (own(mgObj(v.name)) && v.key !== o.key) args.key = v.key;
       if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return; }
-      mgEdit('update_object', args, `객체 ${v.label || v.name}을 바꿨습니다.`);
+      mgEdit('update_object', args, `Entity ${v.label || v.name}을 바꿨습니다.`);
       return;
     }
     if (f.kind === 'prop') {
@@ -6675,7 +6675,7 @@ ${controls}${body}`;
     if (f.kind === 'link') {
       if (f.mode === 'new') {
         if (!IDENT.test(v.name || '')) { formStop('name', '영문 이름 칸에 쓸 수 없는 글자가 있어 관계를 추가하지 못했습니다. 영문자로 시작하고 영문자 · 숫자 · _ 만 써 주세요.'); return; }
-        if (!v.source || !v.target || !v.sp || !v.tp) { toast('출발 · 도착 객체와 연결할 속성을 모두 선택해 주세요.', true); return; }
+        if (!v.source || !v.target || !v.sp || !v.tp) { toast('출발 · 도착 Entity와 연결할 속성을 모두 선택해 주세요.', true); return; }
         S.mg.sel = v.name;
         mgEdit('add_link', { name: v.name, label: v.label, source: v.source, target: v.target, on: [v.sp, v.tp], cardinality: v.cardinality, inverse: v.inverse, required: !!v.required }, `관계 ${v.label || v.name}을 추가했습니다.`);
         return;
@@ -6713,7 +6713,7 @@ ${controls}${body}`;
     const f = S.mg.form;
     if (mgDeleteMore(f)) return;
     const v = f.v;
-    const say = { object: `객체 ${v.label || v.name}`, prop: `속성 ${v.label || v.name}`, link: `관계 ${v.label || v.name}` }[f.kind];
+    const say = { object: `Entity ${v.label || v.name}`, prop: `속성 ${v.label || v.name}`, link: `관계 ${v.label || v.name}` }[f.kind];
     if (!window.confirm(`${say}을 제외합니다. 이 항목을 사용하는 질의, 결정, 검증 질문도 함께 제외되며, 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return;
     S.mg.sel = '';
     if (f.kind === 'object') mgEdit('delete_object', { name: v.name }, `${say}을 제외했습니다.`);
@@ -7698,7 +7698,7 @@ ${controls}${body}`;
         }
         edited();
         const left = st.items.filter((x) => objProposal(p, x).status === 'check').length;
-        if (left) toast(`이름이 표준 객체와 같은 테이블 ${left}개는 API 이름을 바꾸거나 표준에 연결해 주세요.`, true);
+        if (left) toast(`이름이 표준 Entity와 같은 테이블 ${left}개는 API 이름을 바꾸거나 표준에 연결해 주세요.`, true);
         return;
       }
       for (const x of st.items) S.dr.ok[x.element] = true;
@@ -7715,6 +7715,7 @@ ${controls}${body}`;
     dsetup: () => { S.dr.setup = !S.dr.setup; render(); },
     drv: (t) => { S.dr.rv = t.dataset.k; refreshDraft(); },
     dsel: () => { S.dr.sel = null; refreshDraft(); },
+    drrules: () => { S.dr.rulesOpen = !S.dr.rulesOpen; render(); },
     'drules-reset': () => { S.dr.rules = JSON.parse(JSON.stringify(S.files.defaults)); render(); },
     dadd: () => {
       const box = $('#ddetail');
@@ -7967,7 +7968,7 @@ ${controls}${body}`;
     const p = S.files.pending, os = p.steps.find((x) => x.id === 'objects');
     const rows = os.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
     const left = rows.filter((r) => r.status === 'check');
-    if (left.length) { S.dr.view = 'objects'; S.dr.pick = left[0].x.table; render(); toast(`확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다. 표준에 연결할지 새 객체로 둘지 정해 주세요.`, true); return null; }
+    if (left.length) { S.dr.view = 'objects'; S.dr.pick = left[0].x.table; render(); toast(`확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다. 표준에 연결할지 새 Entity로 둘지 정해 주세요.`, true); return null; }
     return Object.fromEntries(rows.map((r) => [r.x.table, r.choice]));
   }
 

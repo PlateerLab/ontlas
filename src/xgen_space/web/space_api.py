@@ -814,14 +814,14 @@ class SpaceMixin:
             mark({"text": "업로드 파일" if upload else "예시 문서", "tone": "b" if upload else ""})
             seen = into("mentions")
             if seen:
-                say(f"언급한 객체 {len(seen)}개")
+                say(f"언급한 Entity {len(seen)}개")
             mark({"text": "문서 색인" if n else "색인 전", "tone": "ok" if n else "warn"})
         elif a.kind in ("database", "table"):
             inner = "table" if a.kind == "database" else "column"
             say(f"{KIND_LABEL[inner]} {len(_children(cat, a.id, inner))}개")
             if a.kind == "table":
                 users = came("mapsTo")
-                mark({"text": f"객체 · {', '.join(users[:3])}", "tone": "ok"} if users else {"text": "사용하지 않는 테이블", "tone": "warn"})
+                mark({"text": f"Entity · {', '.join(users[:3])}", "tone": "ok"} if users else {"text": "사용하지 않는 테이블", "tone": "warn"})
         elif a.kind == "column":
             props = came("mapsTo")
             if props:
