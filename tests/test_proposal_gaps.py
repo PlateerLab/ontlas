@@ -191,7 +191,7 @@ def test_an_editor_files_the_draft_and_an_approver_applies_what_was_filed(drafte
     item = next(x for x in s.inbox()["items"] if x["kind"] == "draft")
     assert item["id"] == "draft" and item["title"] == "가상 쇼핑몰 초안 적용" and item["by"] == "방문자" and item["mine"]
     assert item["waits"] == "approver" and item["detail"] == f"객체 {len(kept)}개 · 관계 {out['request']['links']}개"
-    assert next(x for x in s.build_steps()["steps"] if x["id"] == "data")["detail"] == "적용 요청 대기"
+    assert "적용 요청 대기" in next(x for x in s.build_steps()["steps"] if x["id"] == "model")["detail"]  # a draft under way is said on the ontology step
     assert s.apply_draft_request()["ok"]
     onto = s.studio.onto
     assert set(kept) <= set(onto.objects) and gone not in onto.objects and s.state()["title"] == "가상 쇼핑몰"
@@ -207,7 +207,7 @@ def test_an_apply_request_is_dropped_or_goes_with_a_new_draft(drafted):
     assert s.files_state()["request"]["objects"] == len(s.pending[0].objects)
     assert s.drop_draft_request()["ok"] and s.files_state()["request"] is None
     assert not [x for x in s.inbox()["items"] if x["kind"] == "draft"]
-    assert next(x for x in s.build_steps()["steps"] if x["id"] == "data")["detail"] == "초안 검토 중"
+    assert "초안 검토 중" in next(x for x in s.build_steps()["steps"] if x["id"] == "model")["detail"]  # a draft under way is said on the ontology step
     with pytest.raises(ValueError):
         s.drop_draft_request()
     s.request_draft([], None, None)
