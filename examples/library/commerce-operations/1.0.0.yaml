@@ -70,10 +70,29 @@ conflicts:
       - {source: 교환 정책서 2조, says: {days: 30}}
       - {source: 고객센터 안내문, says: {days: 14}}
 
+areas:
+  Payment:
+    label: 결제
+    description: 주문의 결제와 환불
+  Shipment:
+    label: 배송
+    description: 주문의 배송과 배송을 맡는 택배사
+  Seller:
+    label: 판매자
+    description: 상품을 판매하는 입점 판매자
+  Promotion:
+    label: 프로모션
+    description: 주문에 적용하는 쿠폰
+  Review:
+    label: 리뷰
+    description: 구매한 상품에 남긴 상품평
+    aligned: [https://schema.org/Review]
+
 objects:
   CheckoutRecord:
     label: 결제 화면 기록
     description: 결제 화면이 고객에게 보여 준 값입니다
+    area: Order
     key: record_id
     properties:
       record_id: {type: string, label: 기록 번호, required: true}
@@ -85,6 +104,7 @@ objects:
 
   Seller:
     label: 판매자
+    area: Seller
     parent: Party
     key: seller_id
     aligned: [https://schema.org/Organization]
@@ -94,6 +114,7 @@ objects:
 
   Payment:
     label: 결제
+    area: Payment
     key: payment_id
     aligned: [https://schema.org/Invoice]
     properties:
@@ -112,6 +133,7 @@ objects:
 
   Refund:
     label: 환불
+    area: Payment
     key: refund_id
     properties:
       refund_id: {type: string, label: 환불 번호, required: true}
@@ -126,6 +148,7 @@ objects:
 
   Carrier:
     label: 택배사
+    area: Shipment
     key: carrier_id
     title: name
     implements: [Named]
@@ -135,6 +158,7 @@ objects:
 
   Shipment:
     label: 배송
+    area: Shipment
     key: shipment_id
     aligned: [https://schema.org/ParcelDelivery]
     properties:
@@ -151,6 +175,7 @@ objects:
 
   Coupon:
     label: 쿠폰
+    area: Promotion
     key: coupon_id
     title: name
     implements: [Named]
@@ -165,6 +190,7 @@ objects:
 
   Review:
     label: 상품평
+    area: Review
     key: review_id
     aligned: [https://schema.org/Review]
     properties:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from xgen_space.check import columns_of
+from xgen_space.check import _find_prop, all_props, columns_of
 from xgen_space.compile.sql import qi
 from xgen_space.model import KEY_SEP, Ontology
 
@@ -38,6 +38,36 @@ class BindingReport:
 
     def to_dict(self) -> dict:
         return {"ok": self.ok, "checked": self.checked, "findings": [asdict(f) for f in self.findings]}
+
+
+def entity_level(onto: Ontology, name: str, *, columns: set[str] | None = None, found: set[str] | None = None) -> int:
+    """How far an object type has come, 0 to 3.
+
+    0  a definition only: a label or a description, no property past its key and no relation.
+    1  logical: a property past its key, or a relation it takes part in.
+    2  bound: a source table, and a column for every stored property (a computed one has none).
+    3  bound, and the last database check found nothing against it.
+
+    `columns` is what the source holds for the type's table, in lower case, where that was read: every stored
+    property's column has to be among them. Where it was not (None), a stored property reads the column it names, or
+    the one called as it is, so the table is enough. `found` is the elements the last database check found something
+    against: on the type, on one of its properties, or on a relation from it. None says nothing was measured for the
+    type as it is now, which leaves a bound type at 2; this never measures."""
+    t = onto.objects[name]
+    keys, seen, at = set(), set(), t
+    while at is not None and at.name not in seen:  # an ancestor's key is the type's own key
+        seen.add(at.name)
+        keys.add(at.key)
+        at = onto.objects.get(at.parent)
+    props = [_find_prop(onto, name, p) for p in all_props(onto, name)]
+    stored = [p for p in props if not p.expr and (p.name == t.key or p.name not in keys)]
+    if not t.table or (columns is not None and any(c.lower() not in columns for p in stored for c in p.cols)):
+        related = any(name in (lk.source, lk.target) for lk in onto.links.values())
+        return 1 if related or any(p.name not in keys and not p.internal for p in props) else 0
+    if found is None:
+        return 2
+    mine = {f"object:{name}", *(f"link:{lk.name}" for lk in onto.links.values() if lk.source == name)}
+    return 2 if any(e in mine or e.startswith(f"property:{name}.") for e in found) else 3
 
 
 def _fits(prop_type: str, sql_type: str) -> bool:

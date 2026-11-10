@@ -12,6 +12,12 @@ def validate_ontology(o: Ontology) -> list[str]:
     if not o.namespace or not o.namespace.endswith(("#", "/")):
         add("namespace must end with '#' or '/'")
 
+    for a in o.areas.values():
+        if not valid_name(a.name):
+            add(f"area name '{a.name}' is not an identifier")
+        if a.status not in STATUSES:
+            add(f"area {a.name}: status '{a.status}' is not one of {STATUSES}")
+
     prop_types: dict[str, tuple[str, str]] = {}
     for t in o.objects.values():
         if not valid_name(t.name):
@@ -22,6 +28,8 @@ def validate_ontology(o: Ontology) -> list[str]:
             add(f"{t.name}: title '{t.title}' is not a property")
         if t.parent and t.parent not in o.objects:
             add(f"{t.name}: parent '{t.parent}' is unknown")
+        if t.area and t.area not in o.areas:
+            add(f"{t.name}: area '{t.area}' is unknown")
         if t.status not in STATUSES:
             add(f"{t.name}: status '{t.status}' is not one of {STATUSES}")
         for i in t.implements:

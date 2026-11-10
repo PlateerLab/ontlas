@@ -33,6 +33,13 @@ def module_iri(name: str) -> str:
     return f"urn:xgen-space:module:{name}"
 
 
+AREA_PREFIX = "area-"  # an identifier holds no hyphen: an area named like a class still has an IRI of its own
+
+
+def area_iri(ns: str, name: str) -> str:
+    return f"{ns}{AREA_PREFIX}{name}"
+
+
 def _meta(el, origin: dict[str, str] | None, eid: str) -> list[tuple[str, str]]:
     out = [(SKOS + "exactMatch", a) for a in getattr(el, "aligned", [])]
     if getattr(el, "cite", ""):
@@ -65,6 +72,13 @@ def to_owl(onto: Ontology, *, origin: dict[str, str] | None = None) -> tuple[str
             rep.unsupported.append(f"state machine of {o.name} (kept in the studio definition)")
         if o.table:
             rep.adjusted.append(f"binding of {o.name} to table {o.table} -> export R2RML instead")
+    for a in onto.areas.values():  # a grouping of classes, which OWL has no word for
+        pairs = [(RDF_TYPE, SKOS + "Collection"), *_labels(a.label)]
+        if a.description:
+            pairs.append((SKOS + "definition", literal(a.description, "string", "ko")))
+        pairs += [(SKOS + "member", ns + o.name) for o in onto.objects.values() if o.area == a.name]
+        tt.add(area_iri(ns, a.name), pairs + _meta(a, origin, f"area:{a.name}"))
+        rep.preserved.append(f"area {a.name}")
 
     domains: dict[str, list[str]] = {}
     props = {}
