@@ -176,6 +176,19 @@ EDIT_TEXT = [
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
             (r"^no answer$", "답 없음")]
+DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives here as its label
+    (r"^(.+) not found$", r"\1 레코드가 없어 판정하지 못했습니다. 레코드를 다시 골라 주세요."),
+    (r"^unknown decision '(.+)'$", "결정표를 찾지 못해 판정하지 못했습니다. 결정표를 다시 골라 주세요."),
+    (r"^unknown link '(.+)'$", "입력이 읽는 관계가 정의에 없어 판정하지 못했습니다. 결정표의 입력을 확인해 주세요."),
+    (r"^link (.+) has no source binding \(on/via\)$",
+     r"입력이 읽는 관계 '\1'이(가) 원천 테이블과 연결되지 않아 판정하지 못했습니다. 모델링에서 관계의 연결 기준을 지정해 주세요."),
+    (r"^(\S+): the path reaches (\d+) objects; use count$",
+     r"입력 하나가 레코드 \2건에 닿아 값을 정하지 못했습니다. 결정표의 입력을 건수로 바꿔 주세요."),
+    (r"^(\S+): rules \[(.+)\] all match under hit policy 'unique'$",
+     r"규칙 \2이(가) 함께 적중해 판정하지 못했습니다. 조건이 겹치지 않게 고쳐 주세요."),
+    (r"^(\S+): rules \[(.+)\] match at priority (\S+) and answer differently$",
+     r"우선순위가 같은 규칙 \2의 결과가 달라 판정하지 못했습니다. 우선순위를 다르게 정해 주세요."),
+]
 
 
 ISSUE_TEXT = [
@@ -384,6 +397,22 @@ class StudioSession(SpaceMixin, PagesMixin):
         """What an answer that would read rows carries when no backend is connected, for the page to tell an empty
         answer from one that was never read; nothing when rows can be read."""
         return {} if self.studio.backends else {"no_source": True, "note": note}
+
+    def _decide_text(self, e: Exception | str) -> str:
+        """The engine's refusal to decide on a record, as the page says it: which record of which type (by its label),
+        then what to do. One not listed in DECIDE_TEXT keeps its own words."""
+        msg = str(e.args[0]) if isinstance(e, KeyError) and e.args else str(e)
+        o = self.studio.onto
+        head, _, rest = msg.partition(" ")
+        if head in o.objects:
+            msg = f"{self._obj_label(head)} {rest}"
+        lk = re.match(r"^link (\S+) (.*)$", msg)
+        if lk and lk.group(1) in o.links:  # a relation by its label too
+            msg = f"link {o.links[lk.group(1)].label or lk.group(1)} {lk.group(2)}"
+        for pattern, text in DECIDE_TEXT:
+            if re.match(pattern, msg):
+                return re.sub(pattern, text, msg)
+        return msg
 
     # ---- the whole page ------------------------------------------------------------------------------------
 
@@ -794,11 +823,15 @@ class StudioSession(SpaceMixin, PagesMixin):
         return [by_code[v] for v in outs.values() if isinstance(v, str) and v in by_code]
 
     def decide(self, name: str, key: str) -> dict:
+        from xgen_space.decide.table import DecisionError
         from xgen_space.decide.words import cell_words, input_label, labels_of, unit_of, verdict
 
         st = self.studio
+        try:
+            res = st.decide(name, key)
+        except (KeyError, DecisionError, CompileError) as e:  # no such table or record, rules that tie, an unbound link
+            raise ValueError(self._decide_text(e)) from None
         table = st.onto.decisions[name]
-        res = st.decide(name, key)
         outs = res.outputs if isinstance(res.outputs, dict) else {"result": res.outputs}
         collected = table.hit_policy == "collect"  # every rule that applies: the list is the answer
         picked = res.outputs if isinstance(res.outputs, list) else []
@@ -1656,6 +1689,23 @@ class StudioSession(SpaceMixin, PagesMixin):
     def _draft_view(self) -> dict:
         d = self.pending[0]
         return {"label": d.label, "origin": d.origin, "steps": d.steps(), "names": self._english(d), **self._revised(d)}
+
+    def name_for(self, label: str, kind: str = "object") -> dict:
+        """The English name for an element a person names by its display name, as drafts name their tables: from the
+        library's words and the glossaries; Hangul spelled in Latin letters only when a part of it is no known word.
+        An object gets a PascalCase name, a property a snake_case one."""
+        from xgen_space.draft import _pascal, _snake
+        from xgen_space.naming import english, vocabulary
+
+        label = " ".join(str(label or "").split())[:60]
+        o = self.studio.onto
+        if getattr(self, "_vocab", None) is None or self._vocab[0] is not o:  # the same words record search reads
+            self._vocab = (o, vocabulary([o], self._terms() or []))
+        got = english(label, self._vocab[1])
+        name, parts = got if got else (_pascal(label, ""), [])
+        if kind == "property":
+            name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower() if got else _snake(label, "")
+        return {"label": label, "name": name, "parts": parts, "roman": not got and bool(re.search(r"[가-힣]", label))}
 
     def _english(self, d) -> dict:
         """An English name for each object the draft named by romanizing it: from the library's words and the

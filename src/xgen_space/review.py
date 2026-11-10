@@ -374,6 +374,14 @@ def element_diff(before, after) -> dict[str, list[str]]:
             "changed": sorted(k for k in a.keys() & b.keys() if a[k] != b[k])}
 
 
+def element_sides(before, after) -> dict[str, list[dict | None]]:
+    """Each element that differs, as it reads on either side ([before, after], None where it is not there). A review
+    keeps these: once the change is applied the studio has moved on and can no longer say what it was."""
+    a, b = _elements(before), _elements(after)
+    return {k: [json.loads(x[k]) if k in x else None for x in (a, b)]
+            for k in sorted(a.keys() | b.keys()) if a.get(k) != b.get(k)}
+
+
 def trial(studio, modules: list[Module], settings: FlowSettings):
     """A copy of the studio over other modules: the same source, read only, and a fresh in-memory graph."""
     from xgen_space.studio import Studio
@@ -432,7 +440,8 @@ def review(studio, module: Module, settings: FlowSettings | None = None, *, atta
     settings = given or copy.flow  # the bar the studio would have after the change (a quality module may move it)
     measured = measure(copy, settings)
     results = gates(measured, settings)
-    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto), "measured": measured,
+    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto),
+                "elements": element_sides(studio.onto, copy.onto), "measured": measured,
                 "gates": [asdict(g) for g in results], "passed": all(g.passed for g in results)})
     return out
 
