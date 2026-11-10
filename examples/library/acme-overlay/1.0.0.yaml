@@ -9,6 +9,7 @@ objects:
   ReturnCase:
     label: 반품 처리 기록
     description: 상담원이 실제로 처리한 반품 건과 그때의 값. 결정표 판정과 비교해 판정 일치율을 측정합니다.
+    area: Claim
     source: {table: return_cases}
     key: case_id
     properties:

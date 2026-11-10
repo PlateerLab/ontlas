@@ -92,6 +92,7 @@ RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", 
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
+LEVEL_LABEL = ("L0 개념", "L1 논리", "L2 연결", "L3 검증")  # what bindings.entity_level gives, as the page says it
 SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
 IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "questions", "액션": "actions", "역할": "roles",
                 "함수": "functions", "계산 속성": "computed"}  # what _readers says each reader is
@@ -109,7 +110,7 @@ EDIT_TEXT = [
     (r"^decision (\S+) needs at least one rule$", r"결정표에 규칙이 하나는 있어야 하므로 제외하지 못했습니다."),
     (r"^decision (\S+) has no (?:input|output) '(.+)'$", r"결정표에 '\2' 항목이 없어 저장하지 못했습니다."),
     (r"^decision '(.+)' (?:is unknown|already exists)$", r"결정표 '\1'을 처리하지 못했습니다. 이름을 확인해 주세요."),
-    (r"^(?:decision|action|role) name '(.*)' must be letters, digits and _ starting with a letter$", r"이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^(?:decision|action|role|area) name '(.*)' must be letters, digits and _ starting with a letter$", r"이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
     (r"^give at least one input$", r"입력값이 없어 결정표를 만들지 못했습니다. 입력값을 선택해 주세요."),
     (r"^(\S+): '(.+)' is not a literal; quote text as .*$", r"\1 조건의 값 '\2'을 읽지 못했습니다. 값을 확인해 주세요."),
     (r"^(\S+) takes a (\S+)$", r"기준값 \1의 값 형식이 맞지 않아 저장하지 못했습니다."),
@@ -144,6 +145,15 @@ EDIT_TEXT = [
     (r"^object type '(.+)' is the parent of (.+)$",
      r"하위 객체 \2이(가) \1을(를) 상위 객체로 두고 있어 제외하지 못했습니다. 하위 객체의 상위 객체를 먼저 바꿔 주세요."),
     (r"^(\S+): parent '(.+)' is unknown$", r"\1의 상위 객체 '\2'이(가) 정의에 없습니다. 상위 객체를 바꾸거나 비워 주세요."),
+    (r"^area '(.+)' already exists$", r"Object '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^area '(.+)' is unknown$", r"Object '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^area '(.+)' holds (.+)$",
+     r"Entity \2이(가) Object '\1'에 속해 있어 제외하지 못했습니다. 해당 Entity의 Object를 먼저 바꿔 주세요."),
+    (r"^(\S+): area '(.+)' is unknown$", r"\1의 Object '\2'이(가) 정의에 없습니다. Object를 바꾸거나 비워 주세요."),
+    (r"^area (\S+): status '(.+)' is not one of .*$",
+     r"Object \1의 상태 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 초안, 사용 중, 폐기 예정 중에서 골라 주세요."),
+    (r"^area name '(.*)' is not an identifier$",
+     r"Object 이름 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
@@ -278,6 +288,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.lock = threading.RLock()
         self.log: list[dict] = []
         self._measured: dict = {}  # what the last look at the flow found, item by item
+        self._measured_of = None  # the definition that look was taken on: it says nothing of a later one
         self._issue_open: dict | None = None  # issue id -> when it opened and what it was called
         self.used = time.time()
         if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
@@ -382,7 +393,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             "library": rows,
             "layers": layers,
             "graph": self.graph(),
-            "stats": {"objects": len(o.objects), "links": len(o.links),
+            "stats": {"objects": len(o.objects), "links": len(o.links), "areas": len(o.areas),
                       "properties": sum(len(t.properties) for t in o.objects.values()),
                       "decisions": len(o.decisions), "actions": len(o.actions), "queries": len(o.queries),
                       "questions": len(o.questions)},
@@ -422,7 +433,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             owner = comp.owner(f"object:{t.name}") if comp else o.name
             clusters.setdefault(owner, self._label(owner))
             nodes.append({"id": t.name, "label": t.label or t.name, "table": t.table, "abstract": t.abstract,
-                          "key": t.key, "module": owner})
+                          "key": t.key, "module": owner, "area": t.area})
         edges = [{"id": lk.name, "source": lk.source, "target": lk.target, "label": lk.label or lk.name,
                   "subtype": False} for lk in o.links.values()]
         edges += [{"source": t.name, "target": t.parent, "label": "하위 유형", "subtype": True}
@@ -2253,11 +2264,23 @@ class StudioSession(SpaceMixin, PagesMixin):
                 bound.setdefault(t.table, []).append(t.name)
         linked = {lk.source for lk in o.links.values()} | {lk.target for lk in o.links.values()}
         kinds = {m.name: m.kind for m in comp.modules}
+        from xgen_space.bindings import entity_level
+
+        held = {t: {c.lower() for c, _ in cols} for t, cols, _, _ in catalog}
+        # the last check of the definition as it is applied now; none is taken here, and it does not speak for a type
+        # the unsent edits add or change
+        bind = self._measured.get("bind") if self._measured_of is base else None
+        found = None if bind is None else {str(f.get("element", "")) for f in bind.get("findings") or []}
+        edited = {e.split(":", 1)[1].split(".")[0] for k in ("added", "removed", "changed") for e in diff[k]
+                  if e.startswith(("object:", "property:"))}
         objects = []
         for t in o.objects.values():
             props = all_props(o, t.name)
+            level = entity_level(o, t.name, columns=held.get(t.table), found=None if t.name in edited else found)
             objects.append({
                 "name": t.name, "label": t.label or t.name, "description": t.description, "table": t.table,
+                "area": t.area, "area_label": (o.areas[t.area].label or t.area) if t.area in o.areas else "",
+                "level": level, "level_label": LEVEL_LABEL[level],
                 "key": t.key, "parent": t.parent, "concept": not t.table, "properties": len(props),
                 "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
@@ -2266,6 +2289,11 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"object:{t.name}", [])
                                 if x != comp.owner(f"object:{t.name}") and kinds.get(x) != "binding"],  # a binding only places it
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
+        areas = [{"name": a.name, "label": a.label or a.name, "description": a.description, "cite": a.cite,
+                  "aligned": a.aligned, "status": a.status,
+                  "objects": [t.name for t in o.objects.values() if t.area == a.name],
+                  "pending": f"area:{a.name}" in touched, "new": a.name not in base.areas, **owner(f"area:{a.name}")}
+                 for a in o.areas.values()]
         from xgen_space.model import RAW_SUFFIX
 
         properties = []
@@ -2365,7 +2393,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                   for t in o.objects.values() if t.states]
 
         return plain({
-            "objects": objects, "properties": properties, "links": links, "questions": questions,
+            "areas": areas, "objects": objects, "properties": properties, "links": links, "questions": questions,
             "decisions": decisions, "parameters": parameters, "actions": actions, "roles": roles, "states": states,
             "metrics": metrics, "identities": identities, "functions": functions,
             "queries": [{"name": n, "label": q.label or n} for n, q in o.queries.items()],
@@ -2797,6 +2825,7 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         settings = st.flow
         measured = self._measured = measure(st, settings)
+        self._measured_of = o
         by = st.raised_gates()
         results = [{**g.__dict__, "label": GATE_LABEL.get((g.stage, g.condition), g.condition),
                     "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else ""}

@@ -320,7 +320,7 @@ def _elements(onto) -> dict[str, str]:
         for p, v in props.items():
             out[f"property:{name}.{p}"] = json.dumps(v, sort_keys=True, ensure_ascii=False)
     for section, kind in (("links", "link"), ("actions", "action"), ("roles", "role"), ("queries", "query"),
-                          ("identities", "identity"), ("functions", "function")):
+                          ("identities", "identity"), ("functions", "function"), ("areas", "area")):
         for k, v in (d.get(section) or {}).items():
             out[f"{kind}:{k}"] = json.dumps(v, sort_keys=True, ensure_ascii=False)
     for name, dt in (d.get("decisions") or {}).items():

@@ -13,9 +13,9 @@ from xgen_space.model import Ontology
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
 # data (the draft rules). Both plug in and out like the rest.
 KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
-SECTIONS = ("interfaces", "objects", "links", "decisions", "actions", "roles", "queries", "identities", "parameters",
-            "metrics", "conflicts", "functions")
-SINGULAR = {"interfaces": "interface", "objects": "object", "links": "link", "decisions": "decision",
+SECTIONS = ("interfaces", "areas", "objects", "links", "decisions", "actions", "roles", "queries", "identities",
+            "parameters", "metrics", "conflicts", "functions")
+SINGULAR = {"interfaces": "interface", "areas": "area", "objects": "object", "links": "link", "decisions": "decision",
             "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
             "parameters": "parameter", "metrics": "metric", "conflicts": "conflict", "functions": "function"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
@@ -241,7 +241,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view", "status"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view", "status", "area"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
@@ -421,7 +421,8 @@ def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict
 
 
 def _extend_entry(acc: dict, m: Module, section: str, name: str, patch: dict, touched: dict) -> None:
-    """A metric, a conflict or a function takes what the patch gives; a customer redefines one or picks in one."""
+    """A metric, a conflict, a function or an area takes what the patch gives; a customer redefines one or picks in
+    one."""
     kind = SINGULAR[section]
     if name not in acc[section]:
         raise ModuleError(f"{m.key} extends {kind} '{name}', which no attached module defines")
@@ -470,11 +471,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_action(acc, m, k, patch or {}, touched)
                 elif s == "parameters":
                     _extend_parameter(acc, m, k, patch, touched)
-                elif s in ("metrics", "conflicts", "functions", "identities"):
+                elif s in ("metrics", "conflicts", "functions", "identities", "areas"):
                     _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
                     raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, actions, roles, "
-                                      "parameters, metrics, conflicts, functions or identities")
+                                      "parameters, metrics, conflicts, functions, identities or areas")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():
@@ -514,6 +515,9 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                         for grant in ("request", "execute"):
                             if k in (r.get(grant) or []):
                                 r[grant] = [x for x in r[grant] if x != k]
+    for obj in acc["objects"].values():  # an area that is not attached (or was removed) leaves its types unclassified
+        if obj.get("area") and obj["area"] not in acc["areas"]:
+            del obj["area"]
     namespace = namespace or next((m.namespace for m in reversed(ordered) if m.namespace), "")
     if not namespace:
         raise ModuleError("no namespace: give one, or set it on a module")
@@ -694,7 +698,9 @@ def removal_impact(modules: list[Module], module: str, *, cascade: bool = False,
     if reduced is None:
         return Impact(name, deps, sorted(full.origin), [], [])
     removed = sorted(set(full.origin) - set(reduced.origin))
-    changed = sorted(e for e, ms in full.touched.items() if gone & set(ms) and e not in removed)
+    unfiled = {f"object:{n}" for n, t in reduced.ontology.objects.items()  # types whose area goes with the module
+               if n in full.ontology.objects and full.ontology.objects[n].area != t.area}
+    changed = sorted({e for e, ms in full.touched.items() if gone & set(ms) and e not in removed} | unfiled)
     before = set(full.issues)
     broken = [i for i in reduced.issues if i not in before]
     if deps and not cascade:

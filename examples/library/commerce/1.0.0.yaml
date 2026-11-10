@@ -5,9 +5,29 @@ label: 이커머스 표준 온톨로지
 description: 고객, 주문, 주문상품, 단품, 상품, 카테고리, 클레임과 반품 판정을 정의합니다. 원천 테이블 연결은 Binding 모듈에서 관리합니다.
 requires: [core]
 
+areas:
+  Customer:
+    label: 고객
+    description: 상품을 주문하는 회원과 회원 등급
+  Product:
+    label: 상품
+    description: 판매하는 상품과 단품, 판매가 변경 이력
+    aligned: [https://schema.org/Product]
+  Category:
+    label: 카테고리
+    description: 상품을 묶는 분류 체계
+  Order:
+    label: 주문
+    description: 주문과 주문에 담긴 주문상품
+    aligned: [https://schema.org/Order]
+  Claim:
+    label: 클레임
+    description: 주문 뒤에 접수되는 반품 · 교환 · 취소
+
 objects:
   Customer:
     label: 고객
+    area: Customer
     parent: Party
     key: customer_id
     aligned: [https://schema.org/Person]
@@ -20,6 +40,7 @@ objects:
 
   Category:
     label: 카테고리
+    area: Category
     key: category_id
     title: name
     implements: [Named]
@@ -31,6 +52,7 @@ objects:
 
   Product:
     label: 상품
+    area: Product
     key: product_id
     title: name
     implements: [Named]
@@ -43,6 +65,7 @@ objects:
 
   Sku:
     label: 단품
+    area: Product
     key: sku_id
     properties:
       sku_id: {type: string, label: 단품 번호, required: true}
@@ -56,6 +79,7 @@ objects:
 
   PriceChange:
     label: 판매가 변경 이력
+    area: Product
     key: change_id
     series: {time: changed_at, of: priceOf}
     properties:
@@ -66,6 +90,7 @@ objects:
 
   Order:
     label: 주문
+    area: Order
     parent: Agreement
     key: order_id
     aligned: [https://schema.org/Order]
@@ -91,6 +116,7 @@ objects:
 
   OrderItem:
     label: 주문상품
+    area: Order
     key: item_id
     aligned: [https://schema.org/OrderItem]
     properties:
@@ -113,6 +139,7 @@ objects:
 
   Claim:
     label: 클레임
+    area: Claim
     key: claim_id
     properties:
       claim_id: {type: string, label: 클레임 번호, required: true}
