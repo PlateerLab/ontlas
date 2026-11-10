@@ -632,6 +632,8 @@ i.dot.ok { background:#22a06b; } i.dot.bad { background:#d92d20; } i.dot.warn { 
 .ibmain .muted { font-size:12px; overflow-wrap:anywhere; }
 .ibact { display:flex; gap:6px; flex:none; }
 .ibmore { padding:10px 16px; font-size:12.5px; border-top:1px solid var(--line); }
+/* the list of what waits could not be read: its place in the sidebar says so instead of looking empty */
+#app.ibfail [data-tabs~="inbox"]::after { content:'!'; margin-left:auto; min-width:18px; height:18px; border-radius:9px; background:#a15c00; color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
 tr.click { cursor:pointer; } tr.click:hover td { background:#f5f8ff; }
 .rcrumb { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); margin-bottom:10px; }
 .rcrumb i { font-style:normal; color:#c4ccd6; } .rcrumb b { color:var(--ink); }
@@ -826,6 +828,9 @@ tr.hitrow.warnrow td { background:#ecf8f1; }
 .erk.expr { color:#1557b0; } .erk.ext { color:#a15c00; }
 .ferr { margin:-6px 0 12px; padding:8px 10px; border:1px solid #f5c6c2; background:#fdecea; border-radius:8px; color:#a3261e; font-size:12px; line-height:1.5; }
 .ferr .btn { margin-left:4px; }
+.mgmore { margin:0 0 12px; }
+.mgmore > summary { cursor:pointer; padding:6px 0; font-size:12px; font-weight:700; color:var(--muted); }
+.mgmore[open] > summary { margin-bottom:8px; }
 .mdstat { margin-bottom:10px; }
 .mdstatwrap { margin-bottom:-4px; }
 .mdyaml { width:100%; min-height:300px; box-sizing:border-box; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; line-height:1.55; resize:vertical; }
