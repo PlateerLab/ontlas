@@ -22,6 +22,8 @@ button.tab { background:none; }
 button.chip { cursor:pointer; font-family:inherit; }
 button.chip:hover, a.chip:hover { border-color:var(--blue-line); color:#15509f; }
 a.chip { text-decoration:none; color:inherit; }
+button.kind, button.lbl { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; text-align:left; }  /* a kind or layer name leads to the library's rows of that kind */
+button.kind:hover, button.lbl:hover { color:#15509f; text-decoration:underline; text-underline-offset:3px; }
 td.mono, .mono { font-family:"JetBrains Mono","IBM Plex Mono",Consolas,Pretendard,"Malgun Gothic",monospace; }
 .chip.bad { background:#fdecea; border-color:#f5c6c2; color:#a3261e; }
 .chip.sm { font-size:11px; padding:1px 8px; }

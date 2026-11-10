@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.1
+
+- A chip that names a module, a module kind or a rule leads to it. In the library the 종류 cell and the 적용 구성 layer
+  names filter the table to that kind, and the 적용 구성 and 의존 모듈 chips land on that module's row; the same for the
+  guide's kind chips, the flow's and the check's module chips, the ontology definition's 정의 모듈 · 확장 모듈, the
+  workspace inspector's 정의 · 확장 chips and the decision table's module chips. A rule named in an answer (검색, 판정)
+  opens that rule in its decision table; a table named in the flow opens 데이터 소스.
+- A press that changes nothing visible now says so: 새로고침 and 다시 대조 confirm with a toast, and a validation
+  question already answered on the page says it is that answer.
+
 ## 0.15.0
 
 - The modelling canvas and the whole-ontology view lay their cards out for the canvas they are in: as many columns as the
