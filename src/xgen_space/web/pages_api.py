@@ -739,6 +739,8 @@ class PagesMixin:
                 continue
             if kind == "object" and name in o.objects:
                 return o.objects[name].label or name
+            if kind == "area" and name in o.areas:
+                return f"Object {o.areas[name].label or name}"
             if kind == "property" and "." in name:
                 t, p = name.split(".", 1)
                 if t in o.objects and p in o.objects[t].properties:
@@ -759,7 +761,8 @@ class PagesMixin:
                    "expr": "계산식", "unit": "단위", "description": "설명", "table": "테이블", "key": "키", "parent": "상위 객체",
                    "source": "출발 객체", "target": "도착 객체", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
-                   "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이"}
+                   "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
+                   "area": "Object"}
 
     def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
         """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""
