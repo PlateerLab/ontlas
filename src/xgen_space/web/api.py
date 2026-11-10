@@ -829,6 +829,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         st = self.studio
         try:
             res = st.decide(name, key)
+        except NoSource:  # no rows to read: the page says so with its own answer
+            raise
         except (KeyError, DecisionError, CompileError) as e:  # no such table or record, rules that tie, an unbound link
             raise ValueError(self._decide_text(e)) from None
         table = st.onto.decisions[name]

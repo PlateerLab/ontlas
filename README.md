@@ -69,7 +69,7 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 | Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xspace decide examples/library/studio.yaml returnEligibility I1001` |
 | Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xspace agreement examples/library/studio.yaml` |
 | Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xspace review examples/library/studio.yaml acme-1.1.0.yaml` |
-| Edits that say what they take | Removing a property or a relation in the modelling workspace takes out the queries, decisions and questions that need it, and lists them before anything is filed; an element carries a status (초안 · 사용 중 · 폐기 예정) | The page's 모델링 › 작업 공간 |
+| Edits that say what they take | Removing a property or a relation in the modelling workspace takes out the queries, decisions and questions that need it, and lists them before anything is filed; an element carries a status (초안 · 사용 중 · 폐기 예정) | The page's 구축 › 온톨로지 › 작업 공간 |
 | Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
 | Nothing to run first | The core has no required dependencies. SQLite and an in-process RDF graph are enough to try everything, and values stay in the source unless you ask for a projection | `python examples/commerce/demo.py` |
 
@@ -555,7 +555,7 @@ failure is only gathered under another when what failed reads what is broken. Ch
 a bar saying which problem this is and what is next, and when the change goes in the board measures again and the issue closes.
 When each opened and closed is written to the journal.
 
-파이프라인 관제, under 운영, draws the pipeline as a building: raw data at the bottom, then conversion,
+관제, under 운영, draws the pipeline as a building: raw data at the bottom, then conversion,
 the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
 
 <p align="center">
@@ -916,8 +916,8 @@ module files a change request and shows its review; `xspace review studio.yaml m
 
 ## Manage objects, properties and relations
 
-The modelling workspace (구축 › 모델링 › 작업 공간) is where the definition is changed: the objects of every module as
-cards on a canvas with their keys, properties and named relations; a tree by module with what is wrong; and the picked
+The modelling workspace (구축 › 온톨로지 › 작업 공간) is where the definition is changed: the Entities as cards on a canvas
+with their keys, properties and named relations, grouped by Object; a tree by Object (or by module) with what is wrong; and the picked
 element's form, data, uses, YAML and comments, each a view of the same element. One switch away the same objects,
 properties and relations stand in three columns with a form under the picked row. Every element carries a status
 (초안 · 사용 중 · 폐기 예정), and a deprecated element that something still reads says so where its uses are listed. The
@@ -951,7 +951,7 @@ filter or mask it. What the module defines itself is left for a person to fix, s
 is refused. On the page the edits are filed as one change request; a request the trial stops comes back with its
 review (the conditions it failed and what the database check found), and the edits stay to be fixed.
 
-Rules, named values, states, actions and roles go the same way, on forms: 규칙 · 액션 › 규칙 edits a rule's conditions and outcome input by
+Rules, named values, states, actions and roles go the same way, on forms: 규칙 › 결정표 edits a rule's conditions and outcome input by
 input, and a rule from a standard is replaced over it (`rules_replace`, `rules_remove`) without touching the standard. Every edit lands in
 the workspace module, is tried on a copy and is approved like any other change. A library keeps its versions: open an earlier one in the
 module editor and file it, and it comes back as a new version. With `--library-write`, what is switched on stays on across a restart; if a
