@@ -704,7 +704,7 @@ class PagesMixin:
             {"id": "check", "title": "검증", "part": "QA", "done": bool(gates) and all(g.get("passed") for g in gates),
              "detail": (f"통과 조건 {sum(1 for g in gates if g.get('passed'))} / {len(gates)}" if gates else "아직 재지 않음")
              + (f" · 검증 질문 {check.get('right', check.get('passed', ''))} / {check.get('questions', len(o.questions))}" if check.get("questions") else (f" · 검증 질문 {len(o.questions)}개" if o.questions else ""))},
-            {"id": "changes", "title": "변경 승인", "part": "", "done": not pending and not waiting,
+            {"id": "changes", "title": "변경 요청", "part": "", "done": not pending and not waiting,
              "detail": " · ".join(x for x in (f"요청 전 변경 {pending}" if pending else "", f"승인 대기 {waiting}" if waiting else "", f"결정 {decided}" if decided else "") if x)
              or "기다리는 변경이 없습니다"},
         ]

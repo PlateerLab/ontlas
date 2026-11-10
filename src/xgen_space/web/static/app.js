@@ -366,7 +366,7 @@
     ['mgrules', '규칙', '결정표를 편집하면서 시뮬레이션하고, 액션과 권한을 정합니다'],
     ['catalog', '데이터 연결', '파일이나 DB를 연결해 정의를 원천에 연결합니다. 연결하지 않아도 정의와 규칙, 판정은 동작합니다'],
     ['check', '검증', '검증 질문 · DB 대조 · 통과 조건으로 확인합니다'],
-    ['changes', '변경 승인', '바뀐 항목을 전후 결과와 함께 검토하고 승인합니다']];
+    ['changes', '변경 요청', '바뀐 항목을 전후 결과와 함께 검토하고 승인합니다']];
   const GUIDE_USE = [
     ['통합 관리', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 한 공간에서 관리합니다.'],
     ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
@@ -656,7 +656,9 @@
       const waiting = wait && keys.includes('model');
       const badge = keys[0] === 'inbox' && waits ? `<span class="nbadge">${waits}</span>`
         : keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
-      return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
+      // the build group is an order: its items carry their step number where the others carry an icon
+      const no = NAV_GROUP[i][0] === 'build' ? NAV_GROUP.filter((g) => g[0] === 'build').indexOf(NAV_GROUP[i]) + 1 : 0;
+      return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}>${no ? `<span class="step" aria-hidden="true">${no}</span>` : `<svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg>`}<span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
     };
     // the screens a role comes for stand first in its group; a role not listed keeps the group's own order
     const USE_ORDER = { ops: ['home', 'inbox', 'decide', 'search', 'records'], domain: ['home', 'search', 'records', 'inbox', 'decide'],
@@ -666,7 +668,7 @@
     const section = ([id, word]) => {
       const items = NAV_GROUP.map((g, i) => [g, i]).filter(([g]) => g[0] === id).sort((a, b) => rank(a[0]) - rank(b[0])).map(([, i]) => place(i)).join('');
       if (!FOLDED.has(id)) return `<div class="nsec"><div class="nhead">${word}</div>${items}</div>`;
-      const open = S.nopen[id] || here === id;  // the section a person is in stays open
+      const open = S.slim || S.nopen[id] || here === id || window.matchMedia('(max-width: 1100px)').matches;  // the section a person is in stays open; a narrow sidebar or a top strip has no heads to press
       return `<div class="nsec${open ? '' : ' shut'}"><button class="nhead nfold" data-act="nfold" data-k="${id}" aria-expanded="${open}">${word}${ui('chevron')}</button>${open ? items : ''}</div>`;
     };
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
@@ -1870,6 +1872,13 @@
 
   // ---- one workspace for the definition: modules and objects, the schema graph, and the object's form or file --------
 
+  // the top level of a definition is its Objects (areas), each holding Entities; a definition without them groups by module
+  const AREA_NONE = 'Object 미지정';
+  const areasOn = () => !!(S.mg.st && (S.mg.st.areas || []).length);
+  const byArea = () => areasOn() && S.md.group !== 'module';
+  const groupOfObj = (o) => (byArea() ? (o.area_label || o.area || AREA_NONE) : (o.module_label || o.module || '정의'));
+  const mgArea = (name) => ((S.mg.st && S.mg.st.areas) || []).find((a) => a.name === name);
+
   function modelTree() {
     const m = S.mg.st, md = S.md;
     const q = md.q.trim().toLowerCase();
@@ -1887,12 +1896,22 @@
         || '<div class="empty">찾은 항목이 없습니다.</div>';
     }
     const groups = {};
-    m.objects.forEach((o) => { const k = o.module_label || o.module || '정의'; (groups[k] = groups[k] || []).push(o); });
+    if (byArea()) (m.areas || []).forEach((a) => { groups[a.label || a.name] = []; });  // an Object with no Entity yet is still listed
+    m.objects.forEach((o) => { const k = groupOfObj(o); (groups[k] = groups[k] || []).push(o); });
     const by = modelProblems().by;
     const marks = (o) => [(by[o.name] || []).length ? ['bad', `문제 ${by[o.name].length}`] : null, o.status && o.status !== 'active' ? STATUS_WORD[o.status] : null, o.new ? ['ok', '새 객체'] : o.pending ? ['warn', '변경'] : null, m.unlinked.includes(o.name) ? ['warn', '관계 없음'] : null,
       o.series ? ['', '시계열'] : null, (o.extended_by || []).length ? ['', `+ ${shortMod(o.extended_by[0])}`] : null, (m.comments || {})[`object:${o.name}`] ? ['', `댓글 ${m.comments[`object:${o.name}`]}`] : null]
       .filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
-    return Object.entries(groups).map(([k, list]) => `<div class="mdgrp"><div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">객체가 없습니다.</div>';
+    const areaOf = (k) => (byArea() ? (m.areas || []).find((a) => (a.label || a.name) === k) : null);
+    const head = (k, list) => {
+      const a = areaOf(k);
+      if (!a) return `<div class="mdgh">${esc(k)}<span class="muted">${list.length}</span></div>`;
+      const on = S.mg.form && S.mg.form.kind === 'area' && S.mg.form.v.name === a.name;
+      return `<button class="mdgh mdarea${on ? ' on' : ''}" data-act="mdarea" data-name="${esc(a.name)}" title="Object ${esc(a.label || a.name)} 열기"><span>${esc(a.label || a.name)}</span><span class="muted mono">${esc(a.name)}</span>${a.new ? '<span class="chip sm ok">새</span>' : a.pending ? '<span class="chip sm warn">변경</span>' : ''}<span class="muted">${list.length}</span></button>`;
+    };
+    const seg = areasOn() ? `<div class="mdgroupby"><div class="seg" role="group" aria-label="묶는 기준"><button class="${byArea() ? 'on' : ''}" data-act="mdgroup" data-k="area">Object별</button><button class="${byArea() ? '' : 'on'}" data-act="mdgroup" data-k="module">모듈별</button></div>${byArea() ? '<button class="btn sm" data-act="mdareanew">+ Object</button>' : ''}</div>`
+      : '<div class="mdgroupby"><span class="muted">모듈별</span><button class="btn sm" data-act="mdareanew">+ Object</button></div>';
+    return seg + (Object.entries(groups).map(([k, list]) => `<div class="mdgrp">${head(k, list)}${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">Entity가 없습니다.</div>');
   }
 
   function modelUses(o) {
@@ -1913,7 +1932,8 @@
       const word = { object: '새 객체', prop: '새 속성', link: '새 관계' }[f.kind];
       return `<div class="ihead"><div class="icrumb">${o ? `<button class="ilinkb" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button> › ` : ''}<b>${word}</b></div></div><div class="ibody">${f.kind === 'prop' ? propForm() : f.kind === 'link' ? linkForm() : objectForm()}</div>`;
     }
-    if (!o) return '<div class="empty" style="padding:24px 12px">트리나 그래프에서 객체를 고르세요.</div>';
+    if (f && f.kind === 'area') return `<div class="ibody">${wsForm()}</div>`;
+    if (!o) return '<div class="empty" style="padding:24px 12px">트리나 그래프에서 Entity를 고르세요.</div>';
     const uses = md.uses && md.uses.id === `object:${o.name}` ? md.uses.list.length : null;
     if (uses === null && md.tab !== 'uses') modelUses(o);  // whether anything reads it is said on every tab
     const notes = (m.comments || {})[`object:${o.name}`] || 0;
@@ -2001,7 +2021,7 @@
   function erLayout(v = 'model') {
     const m = S.mg.st, md = ER_VIEW[v].state(), sel = mgObj(md.sel);
     if (!sel && !ER_VIEW[v].all) return null;
-    const modOf = (x) => x.module_label || x.module || '정의';
+    const modOf = (x) => groupOfObj(x);
     const deg = (n) => m.links.filter((l) => l.source === n || l.target === n).length;
     const ordered = (list) => {  // neighbours sit next to each other: breadth first from the most connected object
       const order = [];
@@ -2224,6 +2244,7 @@
   }
 
   function mountEr(v = 'model') {
+    declutter();  // a card drawn again on its own gets its info button back
     const box = $(`#${ER_VIEW[v].box}`), md = ER_VIEW[v].state();
     if (!box || box.dataset.on) return;
     box.dataset.on = '1';
@@ -2553,7 +2574,24 @@
   const wsTags = (list) => list.filter(Boolean).map(([c, w]) => `<span class="chip sm ${c}">${esc(w)}</span>`).join('');
   function wsForm() {
     const f = S.mg.form;
-    return `<div class="wsform${f.mode === 'new' ? ' new' : ''}">${{ object: objectForm, prop: propForm, link: linkForm }[f.kind]()}</div>`;
+    return `<div class="wsform${f.mode === 'new' ? ' new' : ''}">${{ object: objectForm, prop: propForm, link: linkForm, area: areaForm }[f.kind]()}</div>`;
+  }
+
+  // an Object: the top-level classification its Entities belong to, with a definition of its own
+  function areaForm() {
+    const f = S.mg.form, v = f.v, a = f.mode === 'edit' ? mgArea(v.name) : null;
+    const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
+    const ents = a ? S.mg.st.objects.filter((o) => o.area === a.name) : [];
+    return `<div class="card"><div class="ch">${a ? `Object ${esc(a.label || a.name)} <span class="muted mono" style="font-weight:600">${esc(a.name)}</span>` : '새 Object'}<div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
+      ${a ? `<div class="chips" style="margin-bottom:12px">${a.module_label ? `<button class="chip sm b" data-act="libshow" data-mod="${esc(a.module)}">정의 · ${esc(shortMod(a.module_label))}</button>` : ''}<span class="chip sm">Entity ${ents.length}</span></div>` : ''}
+      ${field('이름', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}" placeholder="예: 주문">`)}
+      ${a ? '' : field('영문 이름', `<input type="text" data-in="mgf" data-f="name" value="${esc(v.name)}" placeholder="예: Order">`, 'schema.org에 같은 개념이 있으면 그 이름을 씁니다.')}
+      ${field('정의', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}" placeholder="예: 고객이 상품이나 서비스의 구매를 요청하는 것">`)}
+      ${field('출처', `<input type="text" data-in="mgf" data-f="cite" value="${esc(v.cite)}" placeholder="예: 주문결제 정책서 · 주문 개요">`)}
+      ${a ? field('상태', statusSelect(v.status)) : ''}
+      ${a ? `<div class="sec">Entity</div><div class="chips" style="margin-bottom:12px">${ents.map((o) => `<button class="chip" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button>`).join('') || '<span class="muted" style="font-size:12px">아직 없습니다.</span>'}<button class="chip b" data-act="mdobjnewin" data-area="${esc(a.name)}">+ Entity</button></div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>${a ? '저장' : 'Object 추가'}</button>
+        <div class="grow" style="flex:1"></div>${a ? `<button class="btn danger" data-act="mgdel"${S.mg.busy || ents.length ? ' disabled' : ''} title="${ents.length ? 'Entity를 다른 Object로 옮긴 뒤 제외할 수 있습니다' : ''}">Object 제외</button>` : ''}</div></div></div>`;
   }
 
   function colObjects() {
@@ -5586,6 +5624,7 @@ ${controls}${body}`;
     const tables = m.sources.source.tables;
     const tableSel = `<select data-in="mgf" data-f="table" data-re="1"><option value="">개념 · 테이블 없음</option>${tables.map((t) => opt(t.table, `${t.table}${t.objects.length && t.table !== (o || {}).table ? ` · ${t.objects.map(mgLabel).join(', ')}` : ''}`, v.table)).join('')}</select>`;
     const parents = `<select data-in="mgf" data-f="parent"><option value="">없음</option>${m.objects.filter((x) => x.name !== v.name).map((x) => opt(x.name, `${x.label} (${x.name})`, v.parent)).join('')}</select>`;
+    const areaSel = (m.areas || []).length ? `<div class="field"><label>Object</label><select data-in="mgf" data-f="area"><option value="">${AREA_NONE}</option>${m.areas.map((a) => opt(a.name, `${a.label || a.name} · ${a.name}`, v.area)).join('')}</select></div>` : '';
     const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
     if (f.mode === 'new') {
       const t = v.table ? mgTable(v.table) : null;
@@ -5599,7 +5638,7 @@ ${controls}${body}`;
         ${t && !t.key.length ? `<div class="hint" style="margin:-4px 0 12px">기본 키가 없는 테이블입니다. 값이 겹치지 않는 컬럼을 키로 선택하세요. 값이 겹치면 변경 요청 검토의 DB 대조에서 키 중복 오류가 발생합니다.</div>` : ''}
         ${t && t.links.length ? `<div class="hint" style="margin:-4px 0 12px">관계 ${esc(t.links.map(linkLabel).join(', '))}의 연결 테이블입니다. 객체로 만들 필요가 없으면 [닫기]를 선택하세요.</div>` : ''}
         ${t ? `<label class="tick"><input type="checkbox" data-in="mgf" data-f="cols"${v.cols ? ' checked' : ''}>테이블 컬럼 ${t.columns.length}개를 속성으로 추가</label>` : ''}
-        ${field('상위 객체', parents, '상위 객체의 속성과 관계를 상속합니다.')}
+        ${areaSel}${field('상위 객체', parents, '상위 객체의 속성과 관계를 상속합니다.')}
         ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
         <button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>객체 추가</button></div></div>`;
     }
@@ -5607,10 +5646,10 @@ ${controls}${body}`;
     const keyField = own(o) ? `<select data-in="mgf" data-f="key">${keys.map((p) => opt(p.name, `${p.label || p.name} (${p.name})`, v.key)).join('')}</select>`
       : `<input type="text" value="${esc(v.key)}" disabled>`;
     return `<div class="card"><div class="ch">${esc(o.label)} <span class="muted mono" style="font-weight:600">${esc(o.name)}</span><div class="right"><button class="btn sm ghost" data-act="mgcancel">닫기</button></div></div><div class="cb">
-      <div class="chips" style="margin-bottom:12px">${ownerChip(o)}${stateChips(o)}<span class="chip sm">속성 ${o.properties}</span><span class="chip sm">관계 ${o.links}</span>${o.states ? '<span class="chip sm">상태 전이</span>' : ''}</div>
+      <div class="chips" style="margin-bottom:12px">${o.area ? `<button class="chip sm b" data-act="mdarea" data-name="${esc(o.area)}">Object · ${esc(o.area_label || o.area)}</button>` : ''}${o.level_label ? `<span class="chip sm" title="L0 개념 · L1 논리 · L2 연결 · L3 검증">${esc(o.level_label)}</span>` : ''}${ownerChip(o)}${stateChips(o)}<span class="chip sm">속성 ${o.properties}</span><span class="chip sm">관계 ${o.links}</span>${o.states ? '<span class="chip sm">상태 전이</span>' : ''}</div>
       ${field('라벨', `<input type="text" data-in="mgf" data-f="label" value="${esc(v.label)}">`)}
       ${field('설명', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}">`)}
-      ${field('원천 테이블', tableSel)}
+      ${areaSel}${field('원천 테이블', tableSel)}
       ${field('키', keyField, own(o) ? '' : '키는 정의한 모듈에서만 바꿀 수 있습니다.')}
       <div class="rgrid two">${field('상위 객체', parents)}${field('상태', statusSelect(v.status), '폐기 예정으로 두면 읽는 곳이 남아 있는지 사용처에 표시됩니다.')}</div>
       ${own(o) ? '' : `<div class="hint" style="margin-bottom:12px">${esc(o.module_label)} 모듈의 객체입니다. 변경 내용은 표준 모듈을 변경하지 않고 '관리 변경'에 확장으로 기록됩니다.</div>`}
@@ -6038,7 +6077,7 @@ ${controls}${body}`;
     const head = mgHead(title, sub, `${pick}<button class="btn sm" data-act="mgparamnew">기준값 추가</button><button class="btn sm" data-act="mgdecnew">새 결정표</button>`);
     const params = m.parameters.length ? `<div class="card" data-mgparams="1"><div class="ch">기준값 <span class="chip sm">${m.parameters.length}</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>이름</th><th>값</th><th>범위</th><th>정의</th></tr>${m.parameters.map((p) => `<tr class="${S.mg.sel === `param:${p.name}` ? 'sel' : ''}" data-act="mgparam" data-name="${esc(p.name)}" style="cursor:pointer"><td><b>${esc(p.label)}</b><div class="muted mono cn">@${esc(p.name)}</div></td><td>${show(p.value)}${p.unit ? ` ${esc(p.unit)}` : ''}</td><td>${p.min === null && p.max === null ? '-' : `${p.min ?? ''} ~ ${p.max ?? ''}`}</td><td><div class="chips">${ownerChip(p)}${stateChips(p)}</div></td></tr>`).join('')}</table></div></div>` : '';
     if (!d) return `${head}${pendingBar()}${params}${metricCard()}${paramForm()}${metricForm()}${decisionForm() || mgEmpty('결정표', '결정표가 없습니다. [새 결정표]로 만듭니다.')}`;
-    return `${head}${pendingBar()}${rulesHead(d)}${findingsBar(d)}<div class="grid" style="grid-template-columns:minmax(0,1.65fr) minmax(330px,1fr);align-items:start;margin-top:12px"><div class="hcol">${rulesTable(d)}${params}${metricCard()}</div>
+    return `${head}${pendingBar()}${rulesHead(d)}${findingsBar(d)}<div class="grid" style="grid-template-columns:minmax(0,1.65fr) minmax(330px,1fr);align-items:start"><div class="hcol">${rulesTable(d)}${params}${metricCard()}</div>
       <div class="hcol">${decisionForm()}${paramForm()}${metricForm()}${S.mg.form && ['param', 'metric', 'decision'].includes(S.mg.form.kind) ? '' : (S.mg.form && S.mg.form.kind === 'rule' ? ruleForm(d) : '')}${simCard(d)}${testCard(d)}</div></div>`;
   }
 
@@ -6297,6 +6336,21 @@ ${controls}${body}`;
 
   function mgSaveMore(f) {
     const v = f.v;
+    if (f.kind === 'area') {
+      if (f.mode === 'new') {
+        if (!IDENT.test(v.name || '')) { toast('영문 이름이 영문자로 시작하지 않아 Object를 추가하지 못했습니다. 영문자 · 숫자 · _ 로 입력해 주세요.', true); return true; }
+        mgEdit('add_area', { name: v.name, label: v.label || '', description: v.description || '', cite: v.cite || '' }, `Object ${v.label || v.name}을 추가했습니다.`);
+        S.md.areaPick = v.name;
+        return true;
+      }
+      const o = f.orig, args = { name: v.name };
+      for (const k of ['label', 'description', 'cite']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
+      if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return true; }
+      mgEdit('update_area', args, `Object ${v.label || v.name}을 바꿨습니다.`);
+      S.md.areaPick = v.name;
+      return true;
+    }
     const typed = (x) => (x === 'true' ? true : x === 'false' ? false : (x !== '' && !Number.isNaN(Number(x)) ? Number(x) : x));
     if (f.kind === 'rule') {
       const args = { decision: S.mg.dec, id: v.id, when: v.when, then: v.then, cite: v.cite || '' };
@@ -6388,6 +6442,12 @@ ${controls}${body}`;
 
   function mgDeleteMore(f) {
     const v = f.v;
+    if (f.kind === 'area') {
+      if (!window.confirm(`Object ${v.label || v.name}을 제외합니다. 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return true;
+      S.mg.sel = '';
+      mgEdit('delete_area', { name: v.name }, 'Object 제외를 저장했습니다.');
+      return true;
+    }
     const say = { rule: '규칙', action: '액션', role: '역할', param: '기준값', metric: '지표', identity: '식별 통합', function: '함수' }[f.kind];
     if (!say) return false;
     if (!window.confirm(`이 ${say}을 제외합니다. 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return true;
@@ -6419,12 +6479,12 @@ ${controls}${body}`;
       if (!props[key]) { const c = t && t.columns.find((x) => propName(x.name) === key); props[key] = { type: c ? sqlType(c.type) : 'string', label: c ? c.name : key, column: c ? c.name : key }; }
       props[key].required = true;
       S.mg.sel = v.name;
-      mgEdit('add_object', { name: v.name, label: v.label, table: v.table, key, properties: props, parent: v.parent, description: v.description }, `객체 ${v.label || v.name}을 추가했습니다.`);
+      mgEdit('add_object', { name: v.name, label: v.label, table: v.table, key, properties: props, parent: v.parent, description: v.description, ...(v.area ? { area: v.area } : {}) }, `객체 ${v.label || v.name}을 추가했습니다.`);
       return;
     }
     if (f.kind === 'object') {
       const o = f.orig, args = { name: v.name };
-      for (const k of ['label', 'description', 'table', 'parent']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      for (const k of ['label', 'description', 'table', 'parent', 'area']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
       if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
       if (own(mgObj(v.name)) && v.key !== o.key) args.key = v.key;
       if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return; }
@@ -6502,7 +6562,11 @@ ${controls}${body}`;
     S.mg.sel = key;
     if (kind === 'object') {
       const o = mgObj(key);
-      S.mg.form = { kind, mode: 'edit', orig: o, v: { name: o.name, label: o.label, description: o.description, table: o.table, key: o.key, parent: o.parent, status: o.status || 'active' } };
+      S.mg.form = { kind, mode: 'edit', orig: o, v: { name: o.name, label: o.label, description: o.description, table: o.table, key: o.key, parent: o.parent, area: o.area || '', status: o.status || 'active' } };
+    }
+    if (kind === 'area') {
+      const a = mgArea(key);
+      S.mg.form = { kind, mode: 'edit', orig: a, v: { name: a.name, label: a.label || '', description: a.description || '', cite: a.cite || '', status: a.status || 'active' } };
     }
     if (kind === 'prop') {
       const [obj, name] = key.split('.');
@@ -6893,6 +6957,10 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast('정답 변경을 대기 중인 변경에 기록했습니다. 작업 공간에서 변경 요청을 만들어 주세요.'); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    mdarea: (t) => { Object.assign(S.md, { rightOff: false, view: 'diagram', tab: 'form' }); mgOpen('area', t.dataset.name, true); if (S.tab !== 'model') location.hash = '#model'; else render(); },
+    mdareanew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.md.group = 'area'; S.mg.form = { kind: 'area', mode: 'new', v: { name: '', label: '', description: '', cite: '' } }; render(); },
+    mdobjnewin: (t) => { ACT.mdobjnew(); S.mg.form.v.area = t.dataset.area; render(); },
+    mdgroup: (t) => { S.md.group = t.dataset.k; S.md.pos = {}; render(); },
     mdobjnew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.mg.form = { kind: 'object', mode: 'new', v: { table: '', name: '', label: '', key: '', parent: '', description: '', cols: true } }; render(); },
     mdlinknew: () => { S.mg.obj = S.md.sel; S.md.tab = 'form'; ACT.mglinknew(); },
     erreset: () => { S.md.pos = {}; erPosSave(); const c = $('#ercanvas'); if (c) c.innerHTML = erSvg(); },
