@@ -80,7 +80,7 @@
   const MAP_ORDER = ['객체', '속성', '관계', '질의', '결정', 'Action', '역할', 'Agent', '문서', '문서 컬렉션', '테이블', '컬럼', '파일', '저장소 어댑터'];
   const MAP_STORE = new Set(['vector_store', 'graph_store', 'reasoner', 'embedder']);
   const MAP_PARTS = [['원천 데이터', '파일, 폴더, DB, 테이블'], ['문서', '정책서, 안내문, 문서 컬렉션'], ['온톨로지', '업무 객체'], ['저장소 어댑터', '벡터 · 그래프 저장소, 임베딩 모델, 추론기'], ['활용', '질의, 결정, Action, 역할']];
-  const ELEMENT = { object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
+  const ELEMENT = { area: 'Object', object: '객체', property: '속성', link: '관계', decision: '결정', action: 'Action', query: '질의',
     question: '검증 질문', role: '역할', interface: 'Interface', rule: '규칙', states: '상태 전이', parameter: '기준값', function: '함수', metric: '지표', identity: '식별 통합', conflict: '출처 충돌' };
   const FINDING = { table: '테이블 없음', column: '컬럼 없음', type: '타입 불일치', key: '키 중복', required: '필수 값 누락',
     enum: '정의에 없는 값', orphan: '끊긴 관계' };
@@ -110,8 +110,11 @@
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
   // the manual: one section per screen, in the order a first visit goes through them
   const GUIDE = [
-    ['home', '처리할 일, 운영 상태, 최근에 본 레코드와 저장한 질문을 한 화면에서 시작합니다.', [
+    ['home', '질문, 구성 단계, 처리할 일, 운영 상태를 한 화면에서 시작합니다.', [
       '맨 위 검색 상자에 레코드 번호, 정의, 문서 내용, 질문을 넣습니다. 예: 주문상품 I1001 반품 되나요?',
+      '구성 단계는 온톨로지(Ontology manager), 규칙(Semantic layer), 데이터 연결(Data binder), 검증(QA), 변경 요청 다섯 단계와 지금 어디까지 되어 있는지를 보여 줍니다. 데이터 연결은 선택이며, 연결하지 않아도 정의와 규칙, 판정은 동작합니다.',
+      '정의가 아직 없으면 시작할 방법을 고릅니다. 직접 정의는 데이터 없이 Object와 Entity부터 만들고, 표준에서 시작은 표준 모듈을 적용하고, 문서 · 데이터에서 초안은 정의서, 정책서, 테이블로 초안을 만듭니다.',
+      '[구성] 줄은 이 스페이스가 읽는 원천, 적용한 모듈 수, Object · Entity · 관계 · 속성 · 결정표 수입니다. 누르면 단계별 현황(흐름)이 열립니다.',
       '[보는 역할]에서 운영 담당, 도메인 전문가, 모델러를 고르면 홈의 카드 구성과 왼쪽 메뉴 순서가 그 역할에 맞게 바뀝니다.',
       '할 일 카드는 액션 승인, 변경 요청, 출처 충돌, DB 대조 경고, 아직 요청하지 않은 정의 변경을 한 목록으로 보여 줍니다.',
       '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [관제]로 이어집니다.',
@@ -134,8 +137,11 @@
       '경로 찾기에서 시작과 도착 레코드를 적으면 둘을 잇는 가장 짧은 관계 사슬을 찾아 주황색으로 강조합니다. 경로는 온톨로지 질의로 실행되므로 SQL 원천에서도 됩니다.',
       '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 관점에 역할을 정해 두면 홈에서 그 역할을 고를 때 그 관점으로 바뀝니다.',
       '탐색 기록에서 지나온 단계로 돌아가고, [링크 복사]로 지금 시작 레코드를 다른 사람에게 보냅니다.']],
-    ['model', '객체 · 속성 · 관계를 캔버스, 표, 폼, YAML 어느 쪽에서 고쳐도 같은 요소에 반영되는 모델링 작업 공간입니다.', [
-      '왼쪽은 모듈별 객체 트리(객체 · 원천 · 문제 · 변경), 가운데는 캔버스, 오른쪽은 고른 객체의 폼 · 데이터 · 사용처 · YAML · 댓글입니다. [표]로 바꾸면 객체 · 속성 · 관계가 3열로 섭니다.',
+    ['model', 'Object > Entity > 속성 세 단계의 정의를 캔버스, 표, 폼, YAML 어느 쪽에서 고쳐도 같은 요소에 반영되는 작업 공간입니다.', [
+      'Object는 최상위 분류(주문, 상품, 결제 같은 업무 영역)이고, Entity는 그 아래 개념(주문, 주문상품)이며, 속성은 Entity의 값입니다. 왼쪽 트리는 Object별로 Entity를 묶고, [모듈별]로 바꾸면 정의한 모듈별로 묶습니다.',
+      '[+ Object]로 Object를 만들고, Object를 누르면 이름, 정의, 출처, 상태를 고치고 그 아래 Entity를 추가합니다. Entity의 폼에서 속할 Object를 고릅니다. 데이터 없이도 만들 수 있습니다.',
+      'Entity마다 성숙도가 보입니다. L0 개념은 정의만, L1 논리는 속성이나 관계가 있음, L2 연결은 원천 테이블과 컬럼에 연결됨, L3 검증은 DB 대조에서 문제가 없음입니다.',
+      '왼쪽은 트리(정의 · 원천 · 문제 · 변경), 가운데는 캔버스, 오른쪽은 고른 요소의 폼 · 데이터 · 사용처 · YAML · 댓글입니다. [표]로 바꾸면 Entity · 속성 · 관계가 3열로 섭니다.',
       '캔버스의 카드에는 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 카드는 가장 긴 줄에 맞춰 넓어지고, 줄인 글은 마우스를 올리면 전부 보입니다. 카드 테두리의 +를 다른 카드에 끌어 놓으면 연결 기준을 제안받아 관계를 만들고, 원천의 컬럼을 카드에 끌어 놓으면 속성이 됩니다.',
       '휠로 확대 · 축소하고 빈 곳을 끌어 이동합니다. 캔버스보다 작은 그림은 가운데에 놓이고, [%]를 누르면 캔버스 너비에 맞춰 카드 열 수와 배율을 다시 잡습니다.',
       '요소마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인데 읽는 곳이 남아 있으면 사용처에 표시됩니다.',
@@ -937,7 +943,7 @@
     const st = S.st, o = st.origin || {}, src = (S.fl && S.fl.steps ? S.fl.steps.find((x) => x.id === 'source') : null) || {};
     const kind = o.kind === 'files' ? '업로드 파일' : o.kind === 'database' ? '연결 DB' : BACKEND_KIND[(o.backends || {}).source] || '';
     const made = [kind ? `원천 ${kind}${src.tables ? ` · 테이블 ${count(src.tables.length)}` : ''}` : '원천 미연결', `모듈 ${count(st.modules_on)}`,
-      `객체 ${count(st.stats.objects)} · 관계 ${count(st.stats.links)} · 속성 ${count(st.stats.properties)}`, `결정표 ${count(st.stats.decisions)}`].join('　');
+      `${st.stats.areas ? `Object ${count(st.stats.areas)} · ` : ''}객체 ${count(st.stats.objects)} · 관계 ${count(st.stats.links)} · 속성 ${count(st.stats.properties)}`, `결정표 ${count(st.stats.decisions)}`].join('　');
     return `<div class="card bsteps"><div class="ch">구성 단계<span class="chip sm${done === s.steps.length ? ' ok' : ''}">${done} / ${s.steps.length}</span><div class="right"><a class="btn sm ghost" href="#guide">사용 안내</a></div></div>
       <div class="cb"><div class="bstrip">${items}</div><div class="bnext">${said}</div>${s.start ? ways : `<a class="bmade" href="#flow" title="단계별 현황 열기"><b>구성</b>${esc(made)}</a>`}</div></div>`;
   }
@@ -1222,7 +1228,7 @@
   // ---- a change request, element by element ------------------------------------------------------------------------
 
   const CHANGE_WORD = { added: ['ok', '추가'], changed: ['b', '변경'], removed: ['bad', '제거'] };
-  const KIND_WORD = { object: '객체', property: '속성', link: '관계', rule: '규칙', decision: '결정표', action: '액션', role: '역할', query: '질의', question: '검증 질문', function: '함수', identity: '식별 통합' };
+  const KIND_WORD = { area: 'Object', object: '객체', property: '속성', link: '관계', rule: '규칙', decision: '결정표', action: '액션', role: '역할', query: '질의', question: '검증 질문', function: '함수', identity: '식별 통합' };
   const MARK_WORD = { ok: ['ok', '승인'], fix: ['bad', '수정 요청'] };
 
   async function loadChange(id) {
@@ -1911,7 +1917,7 @@
     };
     const seg = areasOn() ? `<div class="mdgroupby"><div class="seg" role="group" aria-label="묶는 기준"><button class="${byArea() ? 'on' : ''}" data-act="mdgroup" data-k="area">Object별</button><button class="${byArea() ? '' : 'on'}" data-act="mdgroup" data-k="module">모듈별</button></div>${byArea() ? '<button class="btn sm" data-act="mdareanew">+ Object</button>' : ''}</div>`
       : '<div class="mdgroupby"><span class="muted">모듈별</span><button class="btn sm" data-act="mdareanew">+ Object</button></div>';
-    return seg + (Object.entries(groups).map(([k, list]) => `<div class="mdgrp">${head(k, list)}${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">Entity가 없습니다.</div>');
+    return seg + (Object.entries(groups).sort((a, b) => (a[0] === AREA_NONE) - (b[0] === AREA_NONE)).map(([k, list]) => `<div class="mdgrp">${head(k, list)}${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">Entity가 없습니다.</div>');
   }
 
   function modelUses(o) {
@@ -1932,7 +1938,10 @@
       const word = { object: '새 객체', prop: '새 속성', link: '새 관계' }[f.kind];
       return `<div class="ihead"><div class="icrumb">${o ? `<button class="ilinkb" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button> › ` : ''}<b>${word}</b></div></div><div class="ibody">${f.kind === 'prop' ? propForm() : f.kind === 'link' ? linkForm() : objectForm()}</div>`;
     }
-    if (f && f.kind === 'area') return `<div class="ibody">${wsForm()}</div>`;
+    if (f && f.kind === 'area') {  // an Object in the inspector: its name above its form
+      const a = f.mode === 'edit' ? mgArea(f.v.name) : null;
+      return `<div class="ihead"><div class="icrumb"><b>${a ? `Object · ${esc(a.label || a.name)}` : '새 Object'}</b>${a ? ` <span class="muted mono">${esc(a.name)}</span>` : ''}</div></div><div class="ibody">${wsForm()}</div>`;
+    }
     if (!o) return '<div class="empty" style="padding:24px 12px">트리나 그래프에서 Entity를 고르세요.</div>';
     const uses = md.uses && md.uses.id === `object:${o.name}` ? md.uses.list.length : null;
     if (uses === null && md.tab !== 'uses') modelUses(o);  // whether anything reads it is said on every tab
@@ -2077,7 +2086,7 @@
       return r;
     };
     if (ER_VIEW[v].all) {  // every module a region of its own, two to a row
-      const mods = [...new Set(m.objects.map(modOf))];
+      const mods = [...new Set(m.objects.map(modOf))].sort((a, b) => (a === AREA_NONE) - (b === AREA_NONE));  // what has no Object goes last
       let x = ER.pad, y = ER.pad, rowH = 0;
       const perRow = md.perRow || 2;
       mods.forEach((label, i) => {
@@ -3073,7 +3082,7 @@
 
   function viewOnto() {
     const s = S.st.stats;
-    const stats = [[s.objects, '객체'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, 'Action'], [s.queries, '등록 질의']]
+    const stats = [...(s.areas ? [[s.areas, 'Object']] : []), [s.objects, '객체'], [s.links, '관계'], [s.properties, '속성'], [s.decisions, '결정'], [s.actions, 'Action'], [s.queries, '등록 질의']]
       .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
     return `
 <div class="head"><div><h1>온톨로지</h1><div class="sub">객체, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
