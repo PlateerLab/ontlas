@@ -17,6 +17,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from xgen_space.actions import Actor
+from xgen_space.backends.base import NoSource
 from xgen_space.check import all_props, column_of, find_prop
 from xgen_space.compile.base import CompileError, compiler_for
 from xgen_space.conformance import normalize_rows
@@ -40,6 +41,8 @@ _NO_TABLE = re.compile(r"no such table: (\S+)|relation \W?([\w.]+)\W? does not e
 def said(e: Exception | str) -> str:
     """An engine's or a database's error as the page says it: what is missing, then where to look. The original stays at
     the end, for whoever fixes the source."""
+    if isinstance(e, NoSource):
+        return NO_SOURCE
     text = str(e) if isinstance(e, str) else f"{type(e).__name__}: {e}"
     m = _NO_COLUMN.search(text)
     if m:
@@ -66,6 +69,21 @@ GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_w
 STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
+# a studio with no backend holds its definition only: what would read rows says so in these words
+NO_SOURCE = "원천 데이터가 연결되어 있지 않아 값을 읽지 못했습니다. 원천을 연결한 뒤 다시 시도해 주세요."
+NO_SOURCE_SAID = {  # by route, where a person asked for something that reads rows (answered 409)
+    "decide": "원천 데이터가 연결되어 있지 않아 레코드 값으로 판정하지 못했습니다. 입력값을 직접 넣어 판정하거나 원천을 연결해 주세요.",
+    "decide/simulate": "원천 데이터가 연결되어 있지 않아 레코드 값을 불러오지 못했습니다. 입력값을 직접 넣어 판정하거나 원천을 연결해 주세요.",
+    "request": "원천 데이터가 연결되어 있지 않아 처리 요청을 접수하지 못했습니다. 원천을 연결한 뒤 다시 요청해 주세요.",
+    "transitions/advance": "원천 데이터가 연결되어 있지 않아 상태 전이를 실행하지 못했습니다. 원천을 연결한 뒤 다시 실행해 주세요.",
+    "sync": "원천 데이터가 연결되어 있지 않아 다시 읽지 못했습니다. 원천을 연결한 뒤 다시 시도해 주세요.",
+    "record": "원천 데이터가 연결되어 있지 않아 레코드를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요.",
+    "record/links": "원천 데이터가 연결되어 있지 않아 레코드를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요.",
+    "record/path": "원천 데이터가 연결되어 있지 않아 레코드 사이의 경로를 찾지 못했습니다. 원천을 연결한 뒤 다시 찾아 주세요.",
+    "metric": "원천 데이터가 연결되어 있지 않아 지표를 계산하지 못했습니다. 원천을 연결한 뒤 다시 계산해 주세요.",
+}
+NO_SOURCE_NOTE = "원천 데이터가 연결되어 있지 않아 값을 읽지 않았습니다. 값을 보려면 원천을 연결해 주세요."  # beside an empty answer
+UNMEASURED = {"no_source": "측정 대상 아님 (원천 미연결)"}  # a pass condition or a question that reads rows, with none to read
 READ_ERROR = {
     "encoding": "파일 인코딩을 확인할 수 없어 읽지 못했습니다. UTF-8 또는 CP949로 저장해 다시 업로드해 주세요.",
     "empty": "데이터 행이 없어 테이블을 만들지 못했습니다. 첫 행에 컬럼 이름이 있는지 확인해 주세요.",
@@ -151,6 +169,10 @@ GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) ha
 
 
 ISSUE_TEXT = [
+    # a definition not bound to a source: it has no text in a language that names tables
+    (r"^(\S+) has no source table and no bound subtype$", r"\1 객체가 원천 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
+    (r"^link (\S+) has no source binding \(on/via\)$", r"관계 \1에 원천 연결 기준이 없어 SQL로 변환하지 못했습니다. 관계의 연결 기준을 지정해 주세요."),
+    (r"^(\S+) has no bound subtype to stand for it in the graph$", r"\1 객체와 하위 객체가 원천 테이블에 연결되어 있지 않아 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
     (r"^no version of '(.+?)' satisfies .*$", r"의존 모듈 '\1'을 찾지 못했습니다. requires 항목의 모듈 이름을 확인해 주세요."),
     (r"^cannot read requirement '(.+?)'.*$", r"requires 값 '\1'을 읽지 못했습니다. name 또는 name>=1.0 형식으로 입력해 주세요."),
     (r"^(\S+) requires '(.+?)', which is not attached$", r"\1에 필요한 '\2' 모듈이 적용되어 있지 않습니다. '\2' 모듈을 먼저 적용해 주세요."),
@@ -347,6 +369,11 @@ class StudioSession(SpaceMixin, PagesMixin):
         o = self.studio.onto
         return o.objects[name].label or name if name in o.objects else name
 
+    def no_source(self, note: str = NO_SOURCE_NOTE) -> dict:
+        """What an answer that would read rows carries when no backend is connected, for the page to tell an empty
+        answer from one that was never read; nothing when rows can be read."""
+        return {} if self.studio.backends else {"no_source": True, "note": note}
+
     # ---- the whole page ------------------------------------------------------------------------------------
 
     def state(self) -> dict:
@@ -377,7 +404,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         domains = [m.label or m.name for m in comp.modules if m.kind == "domain"] if comp else [o.label or o.name]
         registered = st.registered()
         return plain({
-            "title": " · ".join(domains),
+            "title": " · ".join(domains) or o.label or o.name,  # a studio with no domain module yet goes by its own name
+            "source": st.source_info(),
             "modules_on": len(on),
             "library": rows,
             "layers": layers,
@@ -501,6 +529,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         """The data under a definition: rows as the source holds them, in the object's own words."""
         st = self.studio
         t = st.onto.obj(name)
+        if not st.backends:
+            return {"ok": False, "no_source": True, "error": NO_SOURCE}
         if not t.table:
             return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
         props = [p for p in all_props(st.onto, name) if not find_prop(st.onto, name, p).expr][:12]
@@ -552,7 +582,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                 translations.append({"target": target, "label": label, "ok": True, "text": text,
                                      "html": _highlight(text, target), "params": c.params})
             except CompileError as e:
-                translations.append({"target": target, "label": label, "ok": False, "error": str(e)})
+                translations.append({"target": target, "label": label, "ok": False, "error": _issue_text(str(e))})
         results, first, agree = [], None, True
         for bname, b in st.backends.items():
             try:
@@ -580,7 +610,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 pass
         return plain({"ok": True, "name": name, "label": st.onto.queries[name].label if name else "",
                       "ir": _ir_text(shown.to_dict()), "params": bound, "translations": translations,
-                      "results": results, "agree": agree and len(results) > 1, "source": source})
+                      "results": results, "agree": agree and len(results) > 1, "source": source,
+                      **self.no_source("원천 데이터가 연결되어 있지 않아 질의를 실행하지 않고 변환 결과만 만들었습니다. "
+                                       "결과를 보려면 원천을 연결해 주세요.")})
 
     def run_text(self, language: str, text: str, *, role: str = "", principal: dict | None = None) -> dict:
         if len(text) > 8000:
@@ -733,6 +765,8 @@ class StudioSession(SpaceMixin, PagesMixin):
     def keys(self, type_name: str) -> list[dict]:
         o = self.studio.onto
         t = o.obj(type_name)
+        if not self.studio.backends:  # no rows to list; the route says so beside the empty list
+            return []
         names = all_props(o, type_name)
         show = [t.key] + [p for p in [t.title, t.states.property if t.states else ""] if p and p != t.key]
         show += [p for p in names if find_prop(o, type_name, p).type in ("datetime", "date") and p not in show][:1]
@@ -911,10 +945,14 @@ class StudioSession(SpaceMixin, PagesMixin):
         """Try a function on one object. A draft runs here and nowhere else. An input left empty takes its default."""
         params = {k: v for k, v in (params or {}).items() if v not in (None, "")}
         f = self.studio.onto.functions.get(name)
+        if f is not None and f.target and not self.studio.backends:  # it runs on a row, and there are none to read
+            return {"ok": False, "no_source": True, "error": NO_SOURCE}
         if f is not None and f.target and key and self.studio.fetch(f.target, key) is None:
             return {"ok": False, "error": f"{self._obj_label(f.target)} {key}을(를) 찾을 수 없어 실행하지 못했습니다. 번호를 확인해 주세요."}
         try:
             return {"ok": True, **plain(self.studio.function(name, key or None, params, by=self.who, trial=True))}
+        except NoSource:
+            return {"ok": False, "no_source": True, "error": NO_SOURCE}
         except (ValueError, KeyError, PermissionError, OSError) as e:  # the page says it where the result would be
             return {"ok": False, "error": said(e)}
 
@@ -926,6 +964,9 @@ class StudioSession(SpaceMixin, PagesMixin):
         specs = self.studio.flow.values
         if not specs:
             return {"ok": True, "configured": False, "items": []}
+        if not self.studio.backends:
+            return {"ok": False, "configured": True, "no_source": True, "items": [],
+                    "error": "원천 데이터가 연결되어 있지 않아 거래 값을 대조하지 못했습니다. 원천을 연결한 뒤 다시 대조해 주세요."}
         try:
             out = self.studio.value_accuracy(specs)
         except Exception as e:  # a query that no longer runs or a service that does not answer: what the page should say
@@ -1156,6 +1197,7 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     def _watched(self) -> tuple[dict, bool]:
         """The last measurement, taken again when something changed or a while has passed; whether it is new."""
+        from xgen_space.review import tally
         from xgen_space.web.monitor import failed
 
         sig, now = self._monitor_sig(), time.time()
@@ -1169,8 +1211,9 @@ class StudioSession(SpaceMixin, PagesMixin):
             took = round((time.perf_counter() - started) * 1000)
             w = self._watch = {"sig": sig, "at": now, "flow": flow, "findings": findings, "took": took, "measured": self._measured,
                                "stamp": datetime.now().isoformat(timespec="seconds")}
-            gates = [g for s in flow["steps"] for g in s["gates"]]
-            self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {sum(g['passed'] for g in gates)} / {len(gates)} 충족")
+            met = tally([g for s in flow["steps"] for g in s["gates"]])
+            self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {met['met']} / {met['all']} 충족"
+                       + (f" · 측정 대상 아님 {met['unmeasured']}" if met.get("unmeasured") else ""))
         return w, fresh
 
     def _issues(self, w: dict, *, changes: int, actions: int, dirty: bool) -> list[dict]:
@@ -1211,17 +1254,19 @@ class StudioSession(SpaceMixin, PagesMixin):
 
     def issues(self) -> dict:
         """What is wrong right now and how to fix it, for every page that says so."""
+        from xgen_space.review import tally
+
         st = self.studio
         w, _ = self._watched()
         gates = [g for s in w["flow"]["steps"] for g in s["gates"]]
         return plain({"issues": self._issues(w, changes=sum(c.status == "pending" for c in st.changes.requests.values()),
                                              actions=sum(p.status == "pending" for p in st.actions.proposals.values()),
                                              dirty=bool(self.workspace and self.workspace.dirty)),
-                      "measured_at": w["stamp"], "gates": {"met": sum(g["passed"] for g in gates), "all": len(gates)}})
+                      "measured_at": w["stamp"], "gates": tally(gates)})
 
     def module_preview(self, name: str) -> dict:
         """What taking a module off would do, tried on a copy before it is done."""
-        from xgen_space.review import gates, measure, trial
+        from xgen_space.review import gates, measure, tally, trial
 
         st = self.studio
         imp = st.detach_impact(name)
@@ -1230,7 +1275,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             try:
                 copy = trial(st, [m for m in st.composition.modules if m.name != name], st.flow)
                 results = gates(measure(copy, copy.flow), copy.flow)
-                out["gates"] = {"met": sum(g.passed for g in results), "all": len(results), "failed": [g.condition for g in results if not g.passed]}
+                out["gates"] = {**tally(results), "failed": [g.condition for g in results if not g.passed]}
             except Exception as e:  # a copy that cannot be measured: the page says what would be removed and no more
                 out["error"] = str(e)
         return plain(out)
@@ -2129,7 +2174,8 @@ class StudioSession(SpaceMixin, PagesMixin):
     def _change(self, cr) -> dict:
         rv = cr.review
         gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
-                  "stage_label": STAGE_LABEL.get(g["stage"], g["stage"])} for g in rv.get("gates") or []]
+                  "stage_label": STAGE_LABEL.get(g["stage"], g["stage"]),
+                  "note": UNMEASURED.get(g.get("unmeasured") or "", "")} for g in rv.get("gates") or []]
         m = rv.get("measured") or {}
         return plain({
             "id": cr.id, "module": cr.module, "module_label": self._change_label(cr), "version": cr.version,
@@ -2482,11 +2528,12 @@ class StudioSession(SpaceMixin, PagesMixin):
 
         o, _ = self._pending_onto()
         t = o.objects.get(name)
-        if t is None or not t.table:
-            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
         src = self.studio.backends.get(self.studio.source) if self.studio.source else None
         if src is None:
-            return {"ok": False, "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다."}
+            return {"ok": False, "no_source": True,
+                    "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요."}
+        if t is None or not t.table:
+            return {"ok": False, "error": "개념 객체라 연결된 데이터가 없습니다."}
         have = src.columns(t.table) or {}
         props = [p for p in all_props(o, name) if not find_prop(o, name, p).expr
                  and len(columns_of(o, name, p)) == 1 and columns_of(o, name, p)[0].lower() in have][:14]
@@ -2511,7 +2558,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         if not ws.dirty:
             raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. 객체 · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
         got = review(self.studio, ws.module, attach=ws.current is None)
-        gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"])} for g in got.get("gates") or []]
+        gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
+                  "note": UNMEASURED.get(g.get("unmeasured") or "", "")} for g in got.get("gates") or []]
         return plain({"ok": True, "passed": got.get("passed"), "issues": got.get("issues") or [], "gates": gates,
                       "before": self._standing_gates(), "measured": got.get("measured") or {}, "diff": got.get("diff") or {}})
 
@@ -2724,6 +2772,9 @@ class StudioSession(SpaceMixin, PagesMixin):
         if not st.flow.agreement:
             return {"ok": False, "error": "판정 일치율 설정이 없어 측정하지 못했습니다. 흐름 설정에서 비교할 결정표와 "
                                           "처리 기록 질의를 지정해 주세요."}
+        if not st.backends:
+            return {"ok": False, "no_source": True, "error": "원천 데이터가 연결되어 있지 않아 처리 기록을 다시 판정하지 못했습니다. "
+                                                            "원천을 연결한 뒤 다시 측정해 주세요."}
         edited = pending and self.workspace is not None and self.workspace.dirty and st.composition is not None
         try:
             if edited:
@@ -2738,11 +2789,16 @@ class StudioSession(SpaceMixin, PagesMixin):
         return plain({"ok": True, "label": d.label or d.name, "pending": bool(edited), **a})
 
     def identities(self) -> dict:
+        from xgen_space.identity import IdentityReport
+
         st = self.studio
         out = []
         for name, ident in st.onto.identities.items():
+            unread = {}
             try:
                 rep = st.resolve_identity(name, write=False)
+            except NoSource:  # the definition is shown; there are no records to join
+                rep, unread = IdentityReport(name, 0, []), {"unmeasured": "no_source", "note": UNMEASURED["no_source"]}
             except Exception as e:
                 out.append({"name": name, "label": ident.label or name, "error": f"{type(e).__name__}: {e}"})
                 continue
@@ -2750,13 +2806,14 @@ class StudioSession(SpaceMixin, PagesMixin):
                         "members": [{"type": m.type, "label": self._obj_label(m.type), "fields": m.fields}
                                     for m in ident.members.values()],
                         "rules": [{"id": r.id, "match": r.match, "normalize": r.normalize} for r in ident.rules],
-                        **rep.to_dict()})
-        return plain({"identities": out})
+                        **rep.to_dict(), **unread})
+        return plain({"identities": out, **self.no_source()})
 
     def resolve_identity(self, name: str) -> dict:
         src = self.studio.backends.get(self.studio.source)
         if src is None or not getattr(src, "capabilities", None) or not src.capabilities.write:
-            return {"ok": False, "error": "원천 DB에 쓸 수 없어 교차표를 만들지 못했습니다. 쓰기 가능한 원천을 연결해 주세요."}
+            return {"ok": False, "error": "원천 DB에 쓸 수 없어 교차표를 만들지 못했습니다. 쓰기 가능한 원천을 연결해 주세요.",
+                    **({} if self.studio.backends else {"no_source": True})}
         if self.origin.get("kind") == "connect":
             return {"ok": False, "error": "연결한 DB에는 교차표를 쓰지 않습니다. 사내 설치에서 xspace 명령으로 실행해 주세요."}
         rep = self.studio.resolve_identity(name)
@@ -2765,6 +2822,8 @@ class StudioSession(SpaceMixin, PagesMixin):
         return plain({"ok": True, **rep.to_dict()})
 
     def sync(self) -> dict:
+        if not self.studio.backends:
+            raise NoSource()
         res = self.studio.sync()
         if res.get("error"):
             return {"ok": False, "error": f"원천을 다시 읽지 못했습니다. {res['error']}"}
@@ -2785,27 +2844,30 @@ class StudioSession(SpaceMixin, PagesMixin):
                         {lk.via.table for lk in o.links.values() if lk.via})
         rows = []
         for t in tables:
-            try:
-                rows.append({"table": t, "rows": src.fetch(f"SELECT COUNT(*) FROM {qi(t)}")[0][0]})
+            try:  # with no source the tables the definition names are listed, not counted
+                rows.append({"table": t, "rows": src.fetch(f"SELECT COUNT(*) FROM {qi(t)}")[0][0] if src is not None else None})
             except Exception:  # a table the definition names but the database lacks; DB 대조 shows it
                 rows.append({"table": t, "rows": None})
         comp = st.composition
         modules = [{"name": m.name, "label": m.label or m.name, "kind": m.kind,
                     "kind_label": MODULE_KIND.get(m.kind, m.kind)} for m in (comp.modules if comp else [])]
         from xgen_space.review import gates as pass_gates
-        from xgen_space.review import measure
+        from xgen_space.review import measure, tally
 
         settings = st.flow
         measured = self._measured = measure(st, settings)
         by = st.raised_gates()
         results = [{**g.__dict__, "label": GATE_LABEL.get((g.stage, g.condition), g.condition),
-                    "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else ""}
+                    "by": self._label(by[f"{g.stage}.{g.condition}"]) if f"{g.stage}.{g.condition}" in by else "",
+                    "note": UNMEASURED.get(g.unmeasured, "")}
                    for g in pass_gates(measured, settings)]
         bind, conf, qa, agree = (measured.get(k) for k in ("bind", "query", "check", "decide"))
+        skipped = measured.get("unmeasured") or {}  # what reads rows, when there is no source to read them from
+        info = st.source_info()
         proj = st.projection
         steps = [
             {"id": "source", "backend": st.source, "dialect": src.capabilities.dialect if src else "",
-             "tables": rows, "rows": sum(r["rows"] or 0 for r in rows)},
+             "tables": rows, "rows": sum(r["rows"] or 0 for r in rows), "connected": info["connected"], "kind": info["kind"]},
             {"id": "define", "modules": modules, "objects": len(o.objects), "links": len(o.links),
              "properties": sum(len(t.properties) for t in o.objects.values()),
              "computed": sum(1 for t in o.objects.values() for p in t.properties.values() if p.expr),
@@ -2826,12 +2888,19 @@ class StudioSession(SpaceMixin, PagesMixin):
              "agreement": {k: agree.get(k) for k in ("cases", "agree", "rate", "error") if k in agree}
              if agree else None},
             {"id": "check", "questions": len(o.questions), "accuracy": (qa or {}).get("accuracy"),
-             "grounded": (qa or {}).get("grounded"), "value_errors": (qa or {}).get("value_errors")},
+             "grounded": (qa or {}).get("grounded"), "value_errors": (qa or {}).get("value_errors"),
+             "unasked": len(o.questions) if "check.min_accuracy" in skipped else len((qa or {}).get("unasked") or [])},
         ]
         for s in steps:
             s["on"] = settings.on(s["id"])
             s["gates"] = [g for g in results if g["stage"] == s["id"]]
-        return plain({"origin": self.origin, "passed": all(g["passed"] for g in results), "steps": steps})
+            # a stage with nothing measured because it reads rows: not measured, which is not the same as failed
+            why = next((v for k, v in skipped.items() if k.split(".")[0] == s["id"] and s["id"] not in measured),
+                       "no_source" if s["id"] == "project" and not info["connected"] else "")
+            if why:
+                s["unmeasured"], s["note"] = why, UNMEASURED[why]
+        return plain({"origin": self.origin, "source": info, "passed": all(g["passed"] for g in results),
+                      "gates": tally(results), "steps": steps})
 
     # ---- checks ----------------------------------------------------------------------------------------------
 
@@ -2851,15 +2920,22 @@ class StudioSession(SpaceMixin, PagesMixin):
                                     for r in c.queries]}
             except Exception as e:
                 conf = {"passed": False, "error": f"{type(e).__name__}: {e}"}
-        return plain({"accuracy": rep.accuracy, "grounded": rep.grounded,
-                      "results": [{**r.__dict__, "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps]}
-                                  for r in rep.results],
-                      "conformance": conf})
+        asked = rep.measured  # without a source, a question that reads rows is not asked: neither right nor wrong
+        none = bool(rep.results) and not asked
+        return plain({"accuracy": None if none else rep.accuracy, "grounded": None if none else rep.grounded,
+                      "measured": len(asked), "unmeasured": len(rep.results) - len(asked),
+                      "results": [{**r.__dict__, "passed": None if r.unmeasured else r.passed,
+                                   "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps],
+                                   "note": UNMEASURED.get(r.unmeasured, "")} for r in rep.results],
+                      "conformance": conf,
+                      **self.no_source("원천 데이터가 연결되어 있지 않아 레코드를 읽는 검증 질문은 측정하지 않았습니다. "
+                                       "측정하려면 원천을 연결해 주세요.")})
 
     def bindings(self) -> dict:
         source = self.studio.source
         if not source:
-            return {"ok": False, "error": "원천 DB가 연결되어 있지 않아 대조하지 못했습니다."}
+            return {"ok": False, "no_source": True,
+                    "error": "원천 DB가 연결되어 있지 않아 대조하지 못했습니다. 원천을 연결한 뒤 다시 대조해 주세요."}
         rep = self.studio.check_bindings()
         return plain({"ok": rep.ok, "checked": rep.checked, "backend": source,
                       "findings": [f.__dict__ for f in rep.findings]})

@@ -39,6 +39,17 @@ class Result:
         return [dict(zip(self.columns, r)) for r in self.rows]
 
 
+class NoSource(KeyError):
+    """No backend to read rows from: the studio holds its definition only. What needs rows raises this, so a page, a
+    tool or a review answers "no source" in its own shape instead of failing."""
+
+    def __init__(self, message: str = "no source is connected: this studio holds its definition only"):
+        super().__init__(message)
+
+    def __str__(self) -> str:  # a KeyError shows its message quoted
+        return str(self.args[0])
+
+
 class Backend:
     name = ""
     kind = ""  # what the configuration calls it (sqlite, rdflib, neo4j, ...), for a page to name
