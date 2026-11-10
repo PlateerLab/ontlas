@@ -5684,7 +5684,7 @@ ${controls}${body}`;
     const body = S.mg.open ? `<div class="cb" style="border-top:1px solid var(--line)">
         ${edits ? `<div class="loglist">${edits}</div>` : '<div class="muted" style="font-size:12.5px">이전 세션에서 이어진 변경입니다. 정의 파일에서 확인하세요.</div>'}${issues}
         ${tr && tr.busy ? '<div class="muted" style="margin-top:10px"><span class="spin"></span> 사본에서 시험하는 중입니다</div>' : tr && tr.gates ? trialPanel(tr) : tr && tr.error ? `<div class="hint warn">${esc(tr.error)}</div>` : ''}
-        <div class="sec" style="margin-top:12px">정의 파일 · ${esc(w.label)}</div><pre class="code" style="max-height:260px;overflow:auto">${esc(w.yaml)}</pre></div>` : '';
+        <details class="wsyaml" style="margin-top:12px"><summary>정의 파일 보기 · ${esc(w.label)}</summary><pre class="code" style="max-height:260px;overflow:auto">${esc(w.yaml)}</pre></details></div>` : '';
     const review = S.mg.review ? `<div class="cb" style="border-top:1px solid var(--line)"><div class="banner no" style="margin:0 0 4px"><span class="ic x" style="width:24px;height:24px">!</span><div class="why">사본 스페이스에서 흐름 통과 조건을 충족하지 못해 적용하지 않았습니다. 아래 항목을 수정한 뒤 다시 [${fileWord()}]을 선택하세요.</div></div>${changeReview(S.mg.review)}</div>` : '';
     return `<div class="card mgpend"><div class="ch"><span class="chip warn">대기 중인 변경 ${w.edits.length || ''}</span>
       <span class="muted" style="font-weight:600;font-size:12.5px">추가 ${d.added.length} · 변경 ${d.changed.length} · 제외 ${d.removed.length}</span>
