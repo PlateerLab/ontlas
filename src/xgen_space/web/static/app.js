@@ -224,6 +224,7 @@
       '구축 규칙 모듈을 적용하면 초안 생성의 생성 설정 기본값이 모듈의 규칙으로 바뀝니다.',
       '고객사 차이 모듈을 해제하면 판정 · 처리에 표준 모듈의 규칙이 적용됩니다.',
       '해제된 모듈을 다시 적용하면 필요한 모듈도 함께 적용됩니다.',
+      '표의 종류 칸과 적용 구성의 종류를 누르면 그 종류만 보이고, 적용 구성 · 의존 모듈의 모듈과 다른 화면의 모듈 칩(정의 모듈, 확장 모듈, 규칙의 모듈)을 누르면 표의 그 모듈 행으로 옵니다.',
       '[편집]을 선택하면 모듈 정의 파일에서 객체, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
       '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
       '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
@@ -400,7 +401,7 @@
   ];
 
   const S = {
-    st: null, tab: 'library', kind: 'all', impact: null, pos: {}, sel: null, gsel: null, obj: null,
+    st: null, tab: 'library', kind: 'all', libFocus: '', libScroll: false, ontoPick: '', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     ru: null, met: {}, sp: null, sr: { text: '', folder: '', res: null, busy: false, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: '' }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {}, dfolder: '', drel: null, djob: null, dreader: '',
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
     ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
@@ -693,6 +694,8 @@
     if (S.tab === 'decide' && !S.agree) loadAgreement();
     if (S.tab === 'decide' && !S.pa) loadPending();
     if (S.tab === 'data') { if (!S.files) loadFiles(); else { mountDraftGraph(); if (S.me && S.me.team) refreshFiles(); } }
+    if (S.tab === 'library' && S.libScroll) { S.libScroll = false; const row = $('#main tr.sel'); if (row) row.scrollIntoView({ block: 'center' }); }
+    if (S.tab === 'onto' && S.ontoPick && $('#ontocanvas svg')) { const n = S.ontoPick; S.ontoPick = ''; ER_VIEW.onto.pick(n); }  // arrived here from an object named elsewhere
     if (S.tab === 'library' && !S.files) loadFiles();  // the documents a policy draft can start from
     if (S.tab === 'catalog') {
       if (!S.cat.st && !S.cat.busy) loadCatalog();
@@ -2354,7 +2357,7 @@
 
   function objectStatus(o) {  // where an object comes from, who adds to it, whether anything reads it, whether it is being changed
     const u = S.md.uses && S.md.uses.id === `object:${o.name}` ? S.md.uses.list : null;
-    return `<div class="chips mdstat"><span class="chip sm b">정의 · ${esc(shortMod(o.module_label || o.module))}</span>${(o.extended_by || []).map((x) => `<span class="chip sm warn">확장 · ${esc(shortMod(x))}</span>`).join('')}
+    return `<div class="chips mdstat"><button class="chip sm b" data-act="libshow" data-mod="${esc(o.module)}" title="라이브러리에서 이 모듈로">정의 · ${esc(shortMod(o.module_label || o.module))}</button>${(o.extended_by || []).map((x) => `<button class="chip sm warn" data-act="libshow" data-mod="${esc(x)}" title="라이브러리에서 이 모듈로">확장 · ${esc(shortMod(x))}</button>`).join('')}
       ${statusChip(o)}${o.new ? '<span class="chip sm warn">새로 추가</span>' : o.pending ? '<span class="chip sm warn">변경 대기</span>' : ''}${u ? (u.length ? `<span class="chip sm${o.status === 'deprecated' ? ' bad' : ''}" title="${o.status === 'deprecated' ? '폐기 예정인데 아직 읽는 곳이 있습니다' : ''}">읽는 곳 ${u.length}</span>` : '<span class="chip sm">사용처 없음</span>') : ''}
       ${S.mg.st.unlinked.includes(o.name) ? '<span class="chip sm warn">관계 없음</span>' : ''}</div>`;
   }
@@ -2719,22 +2722,23 @@
     const all = (S.changes && S.changes.changes) || [];
     if (!S.changes) loadChanges();
     const rows = st.library.filter((r) => S.kind === 'all' || r.kind === S.kind).map((r) => {
-      const req = r.requires.length ? r.requires.map((x) => `<span class="chip sm mono">${esc(x)}</span>`).join(' ') : '<span class="muted">-</span>';
+      const req = r.requires.length ? r.requires.map((x) => `<button class="chip sm mono" data-act="libshow" data-mod="${esc(x)}" title="이 모듈로">${esc(x)}</button>`).join(' ') : '<span class="muted">-</span>';
       const waiting = all.filter((c) => c.module === r.name && c.status === 'pending');
       const first = (S.st.graph.nodes.find((n) => n.module === r.name) || {}).id;
-      return `<tr class="${S.impact && S.impact.module === r.name ? 'sel' : ''}">
+      const picked = (S.impact && S.impact.module === r.name) || S.libFocus === r.name || S.libFocus === r.label;  // reached from a chip elsewhere
+      return `<tr class="${picked ? 'sel' : ''}">
         <td><b>${esc(r.label || r.name)}</b><div class="muted mono">${esc(r.name)}</div>
           ${r.description ? `<div class="muted" style="font-size:12px;margin-top:3px;line-height:1.45">${esc(r.description)}</div>` : ''}
           ${waiting.map((c) => `<button class="chip sm warn" data-act="cshow" data-id="${esc(c.id)}" style="margin-top:6px">${esc(c.id)} 검토 중 → ${esc(c.version)}</button>`).join(' ')}
           <div class="chips" style="margin-top:6px">${first ? `<button class="chip sm b" data-act="libmodel" data-name="${esc(first)}">작업 공간에서 고치기</button>` : ''}<button class="chip sm" data-act="medit" data-mod="${esc(r.name)}">파일 편집</button></div></td>
-        <td><span class="kind"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</span></td>
+        <td><button class="kind" data-act="kind" data-kind="${esc(r.kind)}" title="이 종류만 보기"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</button></td>
         <td class="mono" style="white-space:nowrap">${esc(r.version)}</td><td>${req}</td>
         <td class="muted" style="font-size:12.5px">${esc(counts(r.counts))}</td>
         <td style="text-align:center"><button class="switch${r.on ? ' on' : ''}" role="switch" aria-checked="${r.on}"
           aria-label="${esc(r.label || r.name)}" data-act="toggle" data-mod="${esc(r.name)}"></button></td></tr>`;
     }).join('');
-    const layers = st.layers.map((l) => `<div class="layer"><div class="lbl"><i style="background:${esc(l.color)}"></i>${esc(l.kind_label)}</div>
-      <div class="chips">${l.modules.map((m) => `<span class="chip">${esc(m.label)} <span class="muted mono">${esc(m.version)}</span></span>`).join('')}</div></div>`).join('');
+    const layers = st.layers.map((l) => `<div class="layer"><button class="lbl" data-act="kind" data-kind="${esc(l.kind)}" title="이 종류만 보기"><i style="background:${esc(l.color)}"></i>${esc(l.kind_label)}</button>
+      <div class="chips">${l.modules.map((m) => `<button class="chip" data-act="libshow" data-mod="${esc(m.name)}" title="표에서 이 모듈로">${esc(m.label)} <span class="muted mono">${esc(m.version)}</span></button>`).join('')}</div></div>`).join('');
     const decided = ((S.changes && S.changes.changes) || []).filter((c) => c.status !== 'pending').slice(0, 6)
       .map((c) => `<button class="hrow" data-act="cshow" data-id="${esc(c.id)}"><span class="chip sm ${CHANGE_STATUS[c.status] || ''}">${esc(c.status_label)}</span><b>${esc(c.module_label)} ${esc(c.version)}</b><span class="muted" style="font-size:12px">${esc(c.requested_by)} 작성${c.decided_by ? ` · ${esc(c.decided_by)} 결정` : ''}</span></button>`).join('');
     const log = decided || st.log.length ? `${decided}${st.log.slice(0, 6).map((x) => `<div class="muted" style="font-size:12.5px">${esc(x.text)}</div>`).join('')}`
@@ -3003,8 +3007,8 @@
     const parent = o.parent ? `<div class="sec">상위 개념</div><button class="chip n" data-act="select" data-obj="${esc(o.parent)}">${esc(o.parent_label)} · ${esc(o.parent)}</button>` : '';
     const children = o.children.length ? `<div class="sec">하위 유형</div><div class="chips">${o.children.map((c) => `<button class="chip" data-act="select" data-obj="${esc(c.name)}">${esc(c.label)}</button>`).join('')}</div>` : '';
     const aligned = o.aligned.length ? `<div class="sec">표준 개념 Mapping</div><div class="chips">${o.aligned.map((a) => `<span class="chip sm mono">${esc(a.split('//').pop())}</span>`).join('')}</div>` : '';
-    const mod = o.module ? `<span class="chip">정의 모듈 ${esc(o.module_label)}</span>` : '';
-    const touched = o.touched.length ? `<span class="chip">확장 모듈 ${esc(o.touched.join(', '))}</span>` : '';
+    const mod = o.module ? `<button class="chip" data-act="libshow" data-mod="${esc(o.module)}" title="라이브러리에서 이 모듈로">정의 모듈 ${esc(o.module_label)}</button>` : '';
+    const touched = o.touched.map((x) => `<button class="chip" data-act="libshow" data-mod="${esc(x)}" title="라이브러리에서 이 모듈로">확장 모듈 ${esc(x)}</button>`).join('');
     return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:16px">${esc(o.label)}</b>
       <span class="muted mono">${esc(o.name)}</span><span style="flex:1"></span>
       ${o.abstract ? '<span class="chip n">상위 개념</span>' : `<span class="chip b">키 ${esc(o.key)}</span><span class="chip mono">${esc(o.table)}</span>`}</div>
@@ -3049,9 +3053,9 @@
   function answerCard(res, d, more) {
     const [cls, word] = answerBadge(res, more);
     const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-    const badges = [`<span class="chip ${cls}">${esc(word)}</span>`, ...d.rules.map((x) => `<span class="chip">규칙 ${esc(x.id)}</span>`),
+    const badges = [`<span class="chip ${cls}">${esc(word)}</span>`, ...d.rules.map((x) => `<button class="chip" data-act="rulego" data-dec="${esc(d.name)}" data-rule="${esc(x.id)}" title="규칙 관리에서 이 규칙으로">규칙 ${esc(x.id)}</button>`),
       ...uniq(d.rules.map((x) => x.cite)).map((c) => `<span class="chip">근거 ${esc(c)}</span>`),
-      ...uniq(d.rules.map((x) => (x.module ? `${x.module_label} ${x.version}` : ''))).map((m) => `<span class="chip" title="이 규칙을 정의한 모듈과 버전">모듈 ${esc(m)}</span>`)];
+      ...uniq(d.rules.map((x) => x.module)).map((m) => { const x = d.rules.find((y) => y.module === m); return `<button class="chip" data-act="libshow" data-mod="${esc(m)}" title="이 규칙을 정의한 모듈과 버전 · 라이브러리로">모듈 ${esc(x.module_label)} ${esc(x.version)}</button>`; })];
     const acts = d.actions.map((a) => `<button class="btn${a.ready ? ' primary' : ''}" data-act="sract" data-type="${esc(d.target)}" data-key="${esc(d.key)}" data-name="${esc(a.name)}"${a.ready ? '' : ' disabled'}>${esc(a.label)}하기</button>`).join('');
     const held = d.actions.filter((a) => !a.ready).map((a) => `${a.label}: ${a.met ? '지금 상태에서는 할 수 없습니다' : '판정 결과가 조건에 맞지 않습니다'}`);
     return `<div class="card acard ${d.good ? 'ok' : 'no'}"><div class="cb"><span class="aic ${d.good ? 'y' : 'x'}" aria-hidden="true">${d.good ? '✓' : '!'}</span>
@@ -3433,7 +3437,7 @@
     const reas = card('추론기', '', `<table class="tight"><tr><th>이름</th><th>논리</th><th>최근 실행</th><th></th></tr>${reasRows}</table>`, 'adreas');
     // the modules this pipeline is built from, read from the same state as the library
     const modRows = applied.map((r) => `<tr><td><b>${esc(r.label || r.name)}</b><div class="muted mono" style="font-size:11.5px">${esc(r.name)}</div></td>
-        <td style="white-space:nowrap"><span class="kind"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</span></td>
+        <td style="white-space:nowrap"><button class="kind" data-act="kind" data-kind="${esc(r.kind)}" title="라이브러리에서 이 종류 보기"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</button></td>
         <td class="mono" style="white-space:nowrap">${esc(r.version)}</td><td class="muted" style="font-size:12.5px">${esc(counts(r.counts))}</td></tr>`).join('');
     const idle = lib.length - applied.length;
     const mods = card('적용한 모듈', `${idle ? `적용하지 않은 모듈 ${idle}개 · ` : ''}<a href="#library">라이브러리</a>`,
@@ -3964,7 +3968,7 @@ ${controls}${body}`;
     return `
 <div class="banner ${r.yes ? 'ok' : 'no'}"><span class="ic ${r.yes ? 'y' : 'x'}" style="width:30px;height:30px;font-size:16px">${r.yes ? '✓' : '!'}</span>
   <div><div class="big">${esc(r.label)} · ${esc(r.verdict)}</div><div class="why">${esc(r.reason)}</div>${(r.messages || []).map((m) => `<div class="cite">${esc(m.code)} · ${esc(m.text)}</div>`).join('')}${cite.length ? `<div class="cite">근거 규정 · ${esc(cite.join(', '))}</div>` : ''}</div>
-  <div style="margin-left:auto" class="chips">${engines.join('')}${matched.length ? `<span class="chip b">규칙 ${esc(matched.map((x) => x.id).join(', '))}</span>` : ''}</div></div>
+  <div style="margin-left:auto" class="chips">${engines.join('')}${matched.map((x) => `<button class="chip b" data-act="rulego" data-dec="${esc(S.d.name || '')}" data-rule="${esc(x.id)}" title="규칙 관리에서 이 규칙으로">규칙 ${esc(x.id)}</button>`).join('')}</div></div>
 <div class="grid" style="grid-template-columns:minmax(0,1.45fr) minmax(360px,1fr);align-items:start">
   <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
     <div class="card"><div class="ch">결정표<span class="chip" title="${esc(r.hit_policy)}">${esc(HIT_WORD[r.hit_policy] || r.hit_policy)}</span>${touched}</div>
@@ -4181,6 +4185,7 @@ ${controls}${body}`;
     if (S.tab === 'bind') render();
     try { S.bind = await api('bindings', {}); } catch (e) { S.bind = { error: e.message }; }
     if (S.tab === 'bind') render();
+    if (!S.bind.error) toast(`다시 대조했습니다.${Array.isArray(S.bind.findings) ? ` 지적 ${S.bind.findings.length}건` : ''}`);  // the same result as before is still an answer
   }
 
   function viewBind() {
@@ -4227,7 +4232,7 @@ ${controls}${body}`;
       <div class="card gsec"><div class="cb"><div class="fhead"><b>Domain Adapter</b></div>
         <div class="gwhat">표준 모듈은 그대로 두고 달라지는 내용만 모듈로 추가합니다. 모든 경로의 결과는 같은 모듈 파일이며, 같은 방식으로 검토 · 승인 · 적용 · 해제합니다.</div>
         <table class="tight"><tr><th>보유 자료</th><th>경로</th><th>결과</th></tr>${ways.map(([a, b, c]) => `<tr><td>${esc(a)}</td><td style="font-size:12.5px">${esc(b)}</td><td style="font-size:12.5px">${esc(c)}</td></tr>`).join('')}</table>
-        <div class="chips">${['공통 개념', '도메인', '업종 확장', '고객사 차이', 'Binding', '검증 기준', '구축 규칙'].map((x) => `<span class="chip sm">${x}</span>`).join('')}</div></div></div>`;
+        <div class="chips">${[...new Map((S.st.library || []).map((r) => [r.kind, r.kind_label]))].map(([k, w]) => `<button class="chip sm" data-act="kind" data-kind="${esc(k)}" title="라이브러리에서 이 종류 보기">${esc(w)}</button>`).join('')}</div></div></div>`;
     if (!g.video) return `${head}<div class="guide-only">${intro}${sections}</div>`;
     const chapters = g.chapters.map((c, i) => `<button class="gch" data-act="seek" data-t="${c.t}" data-i="${i}"><span class="mono">${clock(c.t)}</span><span><b>${esc(c.chapter)} · ${esc(c.title)}</b><span class="muted">${esc((c.captions || [])[0] || '')}</span></span></button>`).join('');
     return `${head}<div class="guide">
@@ -4275,10 +4280,10 @@ ${controls}${body}`;
     let ok = true, lines = '';
     if (id === 'source') {
       lines = `<b>${esc((step.dialect || '').toUpperCase())}</b> · 테이블 ${show(step.tables.length)} · ${show(step.rows)}행
-        <div class="chips" style="margin-top:6px">${step.tables.slice(0, 8).map((t) => `<span class="chip sm">${esc(t.table)}</span>`).join('')}${step.tables.length > 8 ? `<span class="chip sm">외 ${step.tables.length - 8}개</span>` : ''}</div>`;
+        <div class="chips" style="margin-top:6px">${step.tables.slice(0, 8).map((t) => `<a class="chip sm" href="#sources" title="데이터 소스에서 이 테이블 보기">${esc(t.table)}</a>`).join('')}${step.tables.length > 8 ? `<a class="chip sm" href="#sources">외 ${step.tables.length - 8}개</a>` : ''}</div>`;
     } else if (id === 'define') {
       lines = `모듈 ${step.modules.length} · 객체 ${step.objects} · 관계 ${step.links} · 속성 ${step.properties}${step.computed ? ` · 계산 속성 ${step.computed}` : ''}${step.identities ? ` · 식별 통합 ${step.identities}` : ''}
-        <div class="chips" style="margin-top:6px">${step.modules.map((m) => `<span class="chip sm">${esc(m.label)}</span>`).join('')}</div>`;
+        <div class="chips" style="margin-top:6px">${step.modules.map((m) => `<button class="chip sm" data-act="libshow" data-mod="${esc(m.name)}" title="라이브러리에서 이 모듈로">${esc(m.label)}</button>`).join('')}</div>`;
     } else if (id === 'bind') {
       ok = step.ok !== false && !step.findings;
       const c = step.checked || {};
@@ -5887,8 +5892,8 @@ ${controls}${body}`;
     extra.forEach((r) => { by[r.module] = (by[r.module] || 0) + 1; });
     const policy = `<label class="chip n chipsel" title="규칙을 적용하는 방식">적용 방식 · <select data-in="mgpolicy" aria-label="적용 방식">${Object.entries(POLICY_WORD).map(([k, w]) => opt(k, w, d.hit_policy)).join('')}</select></label>`;
     return `<div class="rhead2"><div><div class="rtitle2"><h2>${esc(d.label)}</h2><span class="mono muted">${esc(d.name)}</span></div>
-      <div class="chips" style="margin-top:7px">${policy}${d.target ? `<span class="chip">대상 · ${esc(d.target_label || d.target)}</span>` : ''}<span class="chip b">${esc(shortMod(modWord(d.module)))}</span>
-        ${Object.entries(by).map(([mname, k]) => `<span class="chip warn">+ ${esc(shortMod(modWord(mname)))} 규칙 ${k}</span>`).join('')}${stateChips(d)}</div></div>
+      <div class="chips" style="margin-top:7px">${policy}${d.target ? `<button class="chip" data-act="select" data-obj="${esc(d.target)}" title="이 객체의 정의로">대상 · ${esc(d.target_label || d.target)}</button>` : ''}<button class="chip b" data-act="libshow" data-mod="${esc(d.module)}" title="라이브러리에서 이 모듈로">${esc(shortMod(modWord(d.module)))}</button>
+        ${Object.entries(by).map(([mname, k]) => `<button class="chip warn" data-act="libshow" data-mod="${esc(mname)}" title="라이브러리에서 이 모듈로">+ ${esc(shortMod(modWord(mname)))} 규칙 ${k}</button>`).join('')}${stateChips(d)}</div></div>
       <div class="right"><a class="btn sm" href="/api/export/jdm?decision=${encodeURIComponent(d.name)}" download>ZEN 내보내기</a><button class="btn sm" data-act="mgrulenew">규칙 추가</button><button class="btn sm primary" data-act="mgpropose"${S.mg.st.workspace.dirty && !S.mg.busy ? '' : ' disabled'}>변경 요청</button></div></div>`;
   }
 
@@ -7050,11 +7055,19 @@ ${controls}${body}`;
         toast('초기화했습니다.');
       } catch (e) { fail(e); }
     },
-    kind: (t) => { S.kind = t.dataset.kind; render(); },
+    kind: (t) => { S.kind = t.dataset.kind; S.libFocus = ''; if (S.tab !== 'library') location.hash = '#library'; else render(); },
+    // a module named anywhere (a layer, a dependency, a definition's source, a rule's origin) leads to its row in the library
+    libshow: (t) => { S.kind = 'all'; S.libFocus = t.dataset.mod; S.libScroll = true; if (S.tab !== 'library') location.hash = '#library'; else render(); },
+    // a rule named in an answer leads to that rule in its decision table
+    rulego: (t) => { S.mg.dec = t.dataset.dec; S.mg.sel = t.dataset.rule; S.mg.form = null; S.mg.cell = null; if (S.tab !== 'mgrules') location.hash = '#mgrules'; else render(); },
     toggle: (t) => toggleModule(t.dataset.mod),
     detach: (t) => detach(t.dataset.mod, t.dataset.cascade === '1'),
     'cancel-impact': () => { S.impact = null; render(); },
-    select: (t) => selectObject(t.dataset.obj),
+    select: (t) => {  // on the ontology page the definition opens beside the cards; from elsewhere the page opens on that card
+      if (S.tab === 'onto') { selectObject(t.dataset.obj); return; }
+      S.ontoPick = t.dataset.obj;
+      location.hash = '#onto';
+    },
     qcode: () => { S.q.code = !S.q.code; render(); },
     qbadd: () => { S.q.b.conds.push({ prop: '', op: 'eq', value: '' }); render(); },
     qbdel: (t) => { S.q.b.conds.splice(Number(t.dataset.i), 1); render(); },
@@ -7072,7 +7085,15 @@ ${controls}${body}`;
     run: () => runQuery(),
     example: (t) => { S.q.question = t.dataset.text; runQuery(); },
     target: (t) => { S.q.target = t.dataset.target; render(); },
-    'ask-decision': async (t) => { S.d.name = t.dataset.name; S.d.key = t.dataset.key; S.d.proposal = null; S.d.res = null; render(); await startDecide(); },
+    'ask-decision': async (t) => {
+      if (S.d.name === t.dataset.name && String(S.d.key) === String(t.dataset.key) && S.d.res) {  // the answer on the page is this question's
+        toast('이미 이 질문으로 판정한 결과입니다.');
+        const b = $('#main .banner');
+        if (b) b.scrollIntoView({ block: 'center' });
+        return;
+      }
+      S.d.name = t.dataset.name; S.d.key = t.dataset.key; S.d.proposal = null; S.d.res = null; render(); await startDecide();
+    },
     request: (t) => requestAction(t.dataset.action),
     approve: (t) => approve(t.dataset.id, true),
     reject: (t) => approve(t.dataset.id, false),
@@ -7285,7 +7306,7 @@ ${controls}${body}`;
     },
     copen: (t) => { closeFloats(); Object.assign(S.cat, { folder: t.dataset.path, sel: {}, ext: '', edit: null, file: null }); loadCatalog(); },
     cup: () => { const c = S.cat; Object.assign(c, { folder: c.folder.includes('/') ? c.folder.slice(0, c.folder.lastIndexOf('/')) : '', sel: {}, ext: '' }); loadCatalog(); },
-    creload: () => loadCatalog(),
+    creload: async () => { await loadCatalog(); toast('카탈로그를 다시 읽었습니다.'); },
     cnew: () => { S.cat.edit = { path: '', value: '' }; render(); },
     crename: (t) => { closeFloats(); S.cat.edit = { path: t.dataset.path, value: baseName(t.dataset.path) }; render(); },
     csort: (t) => { const c = S.cat; const k = t.dataset.k; c.dir = c.sort === k ? -c.dir : 1; c.sort = k; render(); },
