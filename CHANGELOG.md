@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.16.0
+
+The page is rebuilt around how a space is built and used, with less to read on it, and a definition no longer needs data.
+
+- **Objects above Entities.** A definition has three levels: an Object (`areas:`), a top-level classification with a
+  definition of its own; the Entities filed under it (the object types, `area:` on each); and their properties. A module
+  defines, extends and removes Objects like any element; the workspace adds, changes and removes them (`add_area`,
+  `update_area`, `delete_area`, refused while an Entity is filed under it), and an Entity's form picks its Object. The
+  workspace tree, the canvas and the whole-ontology view group by Object (or by module, one switch away). Each Entity
+  shows how far it has come: L0 개념, L1 논리, L2 연결, L3 검증 (`level` in `manage`). OWL export writes Objects as
+  `skos:Collection`s and import reads them back. The page says Entity for the concepts under an Object.
+- **No data source needed.** A studio with no backend loads and serves: definitions, rules, decisions on typed values,
+  questions that need no rows, document search, change requests and versions all work. What needs rows answers in its
+  own shape with `no_source` (lists empty, presses 409 with the reason), pass conditions that need data are not
+  measured and do not hold a definition-only change back, and `state` says `source: {connected, name, kind}`.
+  `xspace new <dir>` writes an empty studio; `xspace decide … --input name=value` decides on typed values. The page
+  says 원천 미연결 at the top, decides on typed values, and marks questions it could not ask.
+- **Five build steps.** The sidebar's 구축 section is the five steps a space is built in, numbered: 온톨로지 (Ontology
+  manager), 규칙 (Semantic layer), 데이터 연결 (Data binder, optional), 검증 (QA), 변경 요청. The home shows them with
+  where the space stands, the next step in words, what the space is made of in one line, and three ways to start when
+  nothing is defined (by hand, from a standard module, from documents or data). `build/steps` reports the five.
+- **Less to read.** The sidebar shows ten items; 운영 and the connection card fold to one line. A card's nice-to-know
+  notes fold behind an (i) on its title (the help drawer can show them all). Passing validation questions are one line
+  and agreeing backends a count, library rows one line each, flow cards and the draft's settings folded, code names
+  left off the screens people use the ontology on. Menu names, tab names and page titles agree. `Ctrl K` reaches an
+  Entity's definition, a decision table or a query by name.
+- **Fixed from a first-time-user test.** Typing in the new-property, relation and state forms is no longer lost when
+  moving between fields; Enter saves a rule cell and Escape cancels; a simulation or decision the engine refuses is said
+  in Korean with the record and what to do; the record search keeps its words across types and offers the types that
+  hold them; a node opens its relations on a double press and a small first hop opens by itself; a change filed from
+  the workspace is compared field by field, also after it is applied; a lone visitor's 변경 요청 says 검토 후 적용; the
+  draft's last step settles the tables it waits on where it stands; applying a draft says which pipeline it switched
+  to; a failed 할 일 load says so with a retry; the new-Entity and property forms ask for a display name first and
+  suggest the English name; a citation chip opens the rule that cites it.
+
 ## 0.15.1
 
 - A chip that names a module, a module kind or a rule leads to it. In the library the 종류 cell and the 적용 구성 layer
