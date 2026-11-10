@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.15.0
+
+- The modelling canvas and the whole-ontology view lay their cards out for the canvas they are in: as many columns as the
+  width takes at reading size, a drawing smaller than the canvas sits in its middle, the wheel zooms around the pointer, and
+  [%] refits columns and zoom. A card is as wide as its longest line (up to a limit); a line still shortened shows whole on
+  hover, and a title no longer runs past its card.
+- A decision-table cell takes a condition the way people say it: "14일 이하", "NORMAL 아님", "A, B 중", "값 없음", "조건 없음"
+  set the comparison and the value together, in the table and in the rule form.
+- A graph perspective can name the role it is for (`role` on `POST graph/view`); choosing that role on the home switches the
+  graph to it. Record nodes have a shape per type as well as a colour, and the perspective's type list shows both.
+- In a team, the last draft step files an apply request (`POST draft/request`, `draft/request/drop`,
+  `draft/request/apply`; `request` in `GET files`): the editor sends the reviewed draft as it stands, it appears in 할 일,
+  and an approver applies or returns it there or on the draft page. Nothing changes until then.
+- A "모름" answer says why in the question's own terms: a metric the question asks to split by something it is not split by,
+  or, when nothing was recognised, how to ask again.
+- The home's frequently opened records are ordered by how often they were opened in this browser, with the count; the
+  sidebar's 업무 group puts each role's screens first (운영 담당, 도메인 전문가, 모델러).
+- Fixed: the draft's 생성 설정 fields ran past their card and the window; the guide's first-steps cards ran past theirs
+  and repeated their number; a long flow condition chip ran past its card; tree chips were cut at 90px.
+
 ## 0.14.0
 
 - An object, property or relation carries a status: 초안, 사용 중 or 폐기 예정 (`status` in the definition, `STATUSES`). It is set on

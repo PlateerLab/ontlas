@@ -672,6 +672,12 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.review_preview(a.get("standard") or [], a.get("edits"), a.get("choices"))
             if route == "draft/review/apply":
                 return s.apply_review(a.get("standard") or [], a.get("edits"), a.get("choices"), a.get("mapping"))
+            if route == "draft/request":
+                return s.request_draft(a.get("standard") or [], a.get("edits"), a.get("choices"))
+            if route == "draft/request/drop":
+                return s.drop_draft_request()
+            if route == "draft/request/apply":
+                return s.apply_draft_request()
             if route == "connect/gateway":
                 return s.connect_gateway(a.get("url", ""), a.get("connection", ""), a.get("token", ""), a.get("dialect", "postgres"),
                                          str(a.get("label", "")), a.get("rules"))
@@ -702,7 +708,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "element/comment":
                 return s.element_comment(str(a.get("id", "")), str(a.get("text", "")))
             if route == "graph/view":
-                return s.graph_view_save(str(a.get("name", "")), a.get("hide") or [], a.get("color"), a.get("label"))
+                return s.graph_view_save(str(a.get("name", "")), a.get("hide") or [], a.get("color"), a.get("label"),
+                                         str(a.get("role", "") or ""))
             if route == "graph/view/forget":
                 return s.graph_view_forget(str(a.get("name", "")))
             if route == "workspace/layout":

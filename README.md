@@ -103,7 +103,8 @@ that way; the draft and the search follow.
 the standards you compare with, and for each you choose 표준에 연결 or 새 객체로 유지; English names come from the
 standards and the glossaries, and a sample, the key evidence and the columns to hide sit beside the picked table.
 상태 · 규칙 draws a decision table from a column of past outcomes. 검토 · 적용 shows the module files that applying would
-write and the definition check, and applying adds a pipeline (in a team, an approver applies). From the command line:
+write and the definition check, and applying adds a pipeline. In a team the editor's last step is 적용 요청: the reviewed
+draft goes to 할 일 as it stands, and an approver applies or returns it there. From the command line:
 
 ```bash
 xspace draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
@@ -121,10 +122,12 @@ and the relations' names and cardinality; the tree on the left lists them by mod
 inspector on the right holds the picked object's form, data, uses, YAML and comments, all of the same element. Draw a
 relation from a card's + to another card, drop a source column on a card to make a property, give an element a status
 (초안 · 사용 중 · 폐기 예정), take back any one edit, and try the pending edits on a copy of the space before filing them as a
-change request. Card positions are kept for everyone who opens the pipeline.
+change request. The canvas lays the cards out for its width, zooms with the wheel around the pointer and refits on [%];
+a card is as wide as its longest line. Card positions are kept for everyone who opens the pipeline.
 
-**5. Rules and actions (구축 › 규칙 · 액션).** A decision table is edited where it stands: cells in place, rows by dragging,
-the hit policy and the modules in the header, overlaps and gaps above the table. The simulator decides a record or typed
+**5. Rules and actions (구축 › 규칙 · 액션).** A decision table is edited where it stands: cells in place and in plain words
+("14일 이하", "NORMAL 아님", "A, B 중", "값 없음" set the comparison and the value together), rows by dragging, the hit policy
+and the modules in the header, overlaps and gaps above the table. The simulator decides a record or typed
 values on the table as edited and says which single change would turn the answer; the tests recompute past cases,
 generate boundary values and run the validation questions on the edited table. 액션 and 함수 are forms beside it.
 
@@ -149,7 +152,8 @@ xspace gates my-studio/studio.yaml          # the flow's pass conditions, measur
 
 **8. Use it and plug it in (업무, 운영 › 저장소 · 연동).** The people who use the ontology start on 홈 with what waits on them;
 ask in one box and get the answer with how the question was read, where the answer came from and what to do next; open
-a record's page; grow the graph from one record and keep a perspective for the team. `xspace serve --users` gives a team
+a record's page; grow the graph from one record (each type its own colour and shape) and keep a perspective for the team,
+bound to a role so that choosing the role on 홈 switches to it. `xspace serve --users` gives a team
 one studio with roles (see [A team studio](#a-team-studio)), and `xspace mcp` and the token REST API give agents and
 platforms the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
 

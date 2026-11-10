@@ -425,7 +425,7 @@ class SpaceMixin:
                       origin={"kind": "database", "detail": where})
         except GatewayError as e:
             raise ValueError(f"{where}에 연결하지 못했습니다. {e}") from None
-        self.pending = (d, b, [], r)
+        self.pending, self.draft_request = (d, b, [], r), None
         return self.files_state()
 
     # ---- pipelines kept: what was applied is there after a restart, where repositories are ---------------------------------

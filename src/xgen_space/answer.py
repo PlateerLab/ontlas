@@ -220,6 +220,9 @@ def _metrics_named(onto, text: str) -> list:
     return [m for m in onto.metrics.values() if (m.label and m.label in text) or m.name in text]
 
 
+_GROUPED_BY = re.compile(r"(\S+?)별(?=로|\b)")  # 등급별, 월별로: the word a question wants a number split by
+
+
 def _unknown(tools, text: str, found: list[dict]) -> tuple[str, list[dict]]:
     """Why nothing answers, in terms of what the question did name, and whom to ask for what is missing."""
     onto = tools.studio.onto
@@ -228,8 +231,12 @@ def _unknown(tools, text: str, found: list[dict]) -> tuple[str, list[dict]]:
     named += [f"지표 {m.label or m.name}" for m in metrics]
     if named:
         reason = f"질문에서 알아들은 것은 {', '.join(named)}입니다. 이 조합에 답하는 등록 질의, 결정표, 문서가 없습니다."
+        by = _GROUPED_BY.search(text)
+        for m in metrics:  # a metric asked by a dimension it is not defined over: the split is what is missing
+            if by and by.group(1) not in (m.label, m.name):
+                reason += f" 지표 {m.label or m.name}은(는) {by.group(1)}별로 나누어 계산하도록 정의되어 있지 않습니다."
     else:
-        reason = "질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다."
+        reason = "질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다. 레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요."
     ask = [{"who": m.owner, "about": f"지표 {m.label or m.name}"} for m in metrics if m.owner]
     return reason, ask
 

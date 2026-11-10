@@ -2,11 +2,13 @@
 under its children, a request's size in the list of what waits, an answer that says why it is unknown and whom to ask,
 perspectives and card positions kept for everyone, a file read as a person says it is, past cases decided by the
 edited tables, and a draft that an approver applies in a team."""
+from pathlib import Path
+
 import pytest
 
 from .conftest import LIB
 
-ROOT = LIB.parent.parent if (LIB.parent.parent / "examples").exists() else LIB.parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 CFG = LIB / "studio.yaml"
 
 
@@ -18,6 +20,17 @@ def session():
     from xgen_space.web.api import StudioSession
 
     return StudioSession(load_studio(CFG))
+
+
+@pytest.fixture
+def drafted(session):
+    """The session with the example shop's files drafted and waiting to be applied."""
+    from xgen_space.web.api import DataOptions
+
+    session.data = DataOptions(samples=ROOT / "examples" / "files")
+    session.use_samples()
+    session.make_draft("가상 쇼핑몰")
+    return session
 
 
 def test_an_element_has_a_status_that_survives_the_file_and_the_modules():
@@ -78,11 +91,33 @@ def test_an_unknown_answer_says_what_it_understood_and_whom_to_ask(session):
     assert any(d["element"] == "metric:returnRate" for d in out["definitions"])
 
 
+def test_an_unknown_answer_says_how_a_metric_is_not_split_and_how_to_ask_again(session):
+    from xgen_space.answer import _unknown
+    from xgen_space.tools import StudioTools
+
+    if "returnRate" not in session.studio.onto.metrics:
+        session.attach("commerce-operations")
+    tools = StudioTools(session.studio)
+    reason, ask = _unknown(tools, "고객 등급별 반품률은?", [])
+    assert reason.startswith("질문에서 알아들은 것은 지표 반품률입니다.")
+    assert "지표 반품률은(는) 등급별로 나누어 계산하도록 정의되어 있지 않습니다." in reason
+    assert ask == [{"who": "고객경험팀", "about": "지표 반품률"}]
+    reason, _ = _unknown(tools, "월별로 반품률은 어땠나", [])
+    assert "월별로 나누어 계산하도록" in reason
+    reason, _ = _unknown(tools, "지난달 반품률은?", [])  # nothing to split by: the first sentence alone
+    assert "나누어" not in reason
+    reason, ask = _unknown(tools, "그거 어떻게 돼?", [])
+    assert reason.startswith("질문에서 정의된 객체, 지표, 판정, 문서를 찾지 못했습니다.") and ask == []
+    assert "레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요." in reason
+
+
 def test_graph_perspectives_and_card_positions_are_kept_for_everyone(session):
     v = session.graph_view_save("고객 상담", ["Order", "Nowhere"], {"Customer": "#1a73e8", "Nowhere": "#000000", "Order": "red"},
-                                {"Customer": "name", "Order": "nope"})
+                                {"Customer": "name", "Order": "nope"}, "ops")
     view = v["views"]["고객 상담"]
     assert view["hide"] == ["Order"] and view["color"] == {"Customer": "#1a73e8"} and view["label"] == {"Customer": "name"}
+    assert session.graph_views()["views"]["고객 상담"]["role"] == "ops"
+    assert session.graph_view_save("전체", [], {}, {}, "boss")["views"]["전체"]["role"] == ""  # an unknown role is everyone's
     labels = session.record_labels("Customer", ["C001", "C002", "C999"], "name")["labels"]
     assert labels["C001"] and "C999" not in labels
     with pytest.raises(LookupError):
@@ -133,6 +168,57 @@ def test_in_a_team_an_approver_applies_a_draft_and_a_viewer_moves_nothing():
     assert NEEDS["draft/review/preview"] == NEEDS["draft/table"] == "editor"
     assert NEEDS["catalog/move"] == NEEDS["catalog/trash"] == NEEDS["catalog/use"] == "editor"
     assert NEEDS["graph/view"] == NEEDS["graph/view/forget"] == NEEDS["workspace/layout"] == "editor"
+
+
+def test_in_a_team_an_editor_files_an_apply_request_and_only_an_approver_applies_it():
+    from xgen_space.web.team import NEEDS
+
+    assert NEEDS["draft/request"] == NEEDS["draft/request/drop"] == "editor"
+    assert NEEDS["draft/request/apply"] == "approver"
+
+
+def test_an_editor_files_the_draft_and_an_approver_applies_what_was_filed(drafted):
+    s = drafted
+    objs = [o.name for o in s.pending[0].objects]
+    gone, kept = objs[-1], objs[:-1]
+    with pytest.raises(ValueError, match="적용을 요청하지 못했습니다"):
+        s.request_draft([], {"names": {objs[0]: "payment"}}, None)  # an edit the draft refuses is refused here, not at the approver
+    out = s.request_draft([], {"drop": [f"object:{gone}"]}, None)
+    assert out["ok"] and out["request"]["by"] == "방문자" and out["request"]["label"] == "가상 쇼핑몰"
+    assert out["request"]["objects"] == len(kept) and out["request"]["at"] and "edits" not in out["request"]
+    st = s.files_state()
+    assert st["pending"] and st["request"] == out["request"]
+    item = next(x for x in s.inbox()["items"] if x["kind"] == "draft")
+    assert item["id"] == "draft" and item["title"] == "가상 쇼핑몰 초안 적용" and item["by"] == "방문자" and item["mine"]
+    assert item["waits"] == "approver" and item["detail"] == f"객체 {len(kept)}개 · 관계 {out['request']['links']}개"
+    assert next(x for x in s.build_steps()["steps"] if x["id"] == "data")["detail"] == "적용 요청 대기"
+    assert s.apply_draft_request()["ok"]
+    onto = s.studio.onto
+    assert set(kept) <= set(onto.objects) and gone not in onto.objects and s.state()["title"] == "가상 쇼핑몰"
+    assert s.pending is None and s.draft_request is None and s.files_state()["request"] is None
+    assert not [x for x in s.inbox()["items"] if x["kind"] == "draft"]
+    with pytest.raises(ValueError):
+        s.apply_draft_request()
+
+
+def test_an_apply_request_is_dropped_or_goes_with_a_new_draft(drafted):
+    s = drafted
+    s.request_draft([], None, None)
+    assert s.files_state()["request"]["objects"] == len(s.pending[0].objects)
+    assert s.drop_draft_request()["ok"] and s.files_state()["request"] is None
+    assert not [x for x in s.inbox()["items"] if x["kind"] == "draft"]
+    assert next(x for x in s.build_steps()["steps"] if x["id"] == "data")["detail"] == "초안 검토 중"
+    with pytest.raises(ValueError):
+        s.drop_draft_request()
+    s.request_draft([], None, None)
+    s.make_draft("다시")  # a new draft is not what was filed: the request goes with the old one
+    assert s.pending and s.files_state()["request"] is None
+
+
+def test_an_apply_request_needs_a_draft(session):
+    with pytest.raises(ValueError, match="초안을 먼저 생성해 주세요"):
+        session.request_draft([], None, None)
+    assert session.files_state()["request"] is None
 
 
 def test_the_build_steps_say_where_the_space_stands(session):
