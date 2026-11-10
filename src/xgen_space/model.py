@@ -106,6 +106,7 @@ class ObjectType:
     period: dict[str, Any] = field(default_factory=dict)  # rows valid for a time: {start, end, of: link, end_exclusive}
     view: dict[str, Any] = field(default_factory=dict)  # defined by a query, not a table: {name, query} (decide.views)
     status: str = "active"  # draft | active | deprecated (STATUSES)
+    area: str = ""  # the area this type is filed under (Ontology.areas); none while it is unclassified
 
     @property
     def abstract(self) -> bool:
@@ -161,6 +162,18 @@ class Interface:
     name: str
     properties: list[str]
     label: str = ""
+
+
+@dataclass
+class Area:
+    """The level above the object types: what a business sorts its concepts under (order, product, payment)."""
+
+    name: str
+    label: str = ""
+    description: str = ""
+    cite: str = ""
+    aligned: list[str] = field(default_factory=list)
+    status: str = "active"  # draft | active | deprecated (STATUSES)
 
 
 @dataclass
@@ -414,6 +427,7 @@ class Ontology:
     metrics: dict[str, Metric] = field(default_factory=dict)
     conflicts: dict[str, SourceConflict] = field(default_factory=dict)  # what is recorded; rules can show more
     functions: dict[str, Function] = field(default_factory=dict)
+    areas: dict[str, Area] = field(default_factory=dict)  # names of their own: an area may be called as a type is
     clock: Any = field(default=None, repr=False, compare=False)  # what today() and now() ask; the system clock if unset
 
     def obj(self, name: str) -> ObjectType:
@@ -571,7 +585,7 @@ def _object(name: str, d: dict) -> ObjectType:
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
                       series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}),
-                      status=str(d.get("status") or "active"))
+                      status=str(d.get("status") or "active"), area=str(d.get("area") or ""))
     if t.view and not t.table:  # bound to the view it makes, as to a table
         t.table = t.view_name
     return t
@@ -614,6 +628,12 @@ def _parameter(name: str, d: Any) -> Parameter:
     found = {bool: "boolean", int: "integer", float: "decimal", str: "string"}.get(type(value), "integer")
     return Parameter(name, value, d.get("type", found), d.get("label", ""), d.get("unit", ""), d.get("description", ""),
                      d.get("cite", ""), d.get("min"), d.get("max"))
+
+
+def _area(name: str, d: dict | None) -> Area:
+    d = d or {}  # a name alone is an area: Order:
+    return Area(name, d.get("label", ""), d.get("description", ""), d.get("cite", ""), list(d.get("aligned", [])),
+                str(d.get("status") or "active"))
 
 
 def _conflict(name: str, d: dict) -> SourceConflict:
@@ -817,6 +837,7 @@ def _from_dict(d: dict) -> Ontology:
         metrics={k: _metric(k, v) for k, v in (d.get("metrics") or {}).items()},
         conflicts={k: _conflict(k, v) for k, v in (d.get("conflicts") or {}).items()},
         functions={k: _function(k, v) for k, v in (d.get("functions") or {}).items()},
+        areas={k: _area(k, v) for k, v in (d.get("areas") or {}).items()},
     )
     _period_values(onto)
     _role_scopes(onto)
@@ -849,7 +870,7 @@ def _to_dict(o: Ontology) -> dict:
                                                  "guard": x.guard, "set": x.set, "call": x.call, "after": x.after})
                                          for x in t.states.transitions]})
         bound = t.table and not (t.view and t.table == t.view_name)
-        objects[t.name] = _clean({"label": t.label, "description": t.description,
+        objects[t.name] = _clean({"label": t.label, "description": t.description, "area": t.area,
                                   "source": {"table": t.table} if bound else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
                                   "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
@@ -909,9 +930,11 @@ def _to_dict(o: Ontology) -> dict:
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
                          "params": q.params}) | {"expect": q.expect} for q in o.questions]
+    areas = {a.name: _clean({"label": a.label, "description": a.description, "cite": a.cite, "aligned": a.aligned,
+                             "status": None if a.status == "active" else a.status}) for a in o.areas.values()}
     return _clean({
         "ontology": o.name, "namespace": o.namespace, "version": o.version, "label": o.label,
-        "parameters": parameters, "objects": objects, "links": links,
+        "parameters": parameters, "areas": areas, "objects": objects, "links": links,
         "interfaces": {i.name: _clean({"label": i.label, "properties": i.properties}) for i in o.interfaces.values()},
         "decisions": decisions, "actions": actions, "roles": roles, "queries": queries, "metrics": metrics,
         "functions": functions,

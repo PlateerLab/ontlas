@@ -22,7 +22,8 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
                "cite", "transform", "source_type", "status")
-OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status")
+OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status", "area")
+AREA_FIELDS = ("label", "description", "cite", "aligned", "status")
 LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite", "status")
 PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
 METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
@@ -171,14 +172,16 @@ class Workspace:
         name = str(a.get("name") or "")
         if not _IDENT.match(name):
             raise EditError(f"object name '{name}' must be letters, digits and _ starting with a letter")
-        if name in self.composed().ontology.objects:
+        onto = self.composed().ontology
+        if name in onto.objects:
             raise EditError(f"object type '{name}' already exists")
+        _known_area(a, onto)
         key = str(a.get("key") or "")
         props = {str(k): _prop_spec(v) for k, v in (a.get("properties") or {}).items()}
         if not key or key not in props:
             raise EditError("give the key and the key property")
         spec: dict[str, Any] = {"key": key, "properties": props}
-        for k in ("label", "description", "parent", "title"):
+        for k in ("label", "description", "parent", "title", "area"):
             if a.get(k):
                 spec[k] = a[k]
         if a.get("table"):
@@ -188,8 +191,10 @@ class Workspace:
 
     def _update_object(self, a: dict) -> str:
         name = str(a.get("name") or "")
-        if name not in self.composed().ontology.objects:
+        onto = self.composed().ontology
+        if name not in onto.objects:
             raise EditError(f"object type '{name}' is unknown")
+        _known_area(a, onto)
         fields = {k: a[k] for k in OBJECT_FIELDS if k in a}
         if self._owns_object(name):
             spec = self._section("body", "objects")[name]
@@ -662,6 +667,21 @@ class Workspace:
             self._removed(section).append(name)
         return f"{kind}:{name}"
 
+    def _add_area(self, a: dict) -> str:
+        return self._new_entry("areas", "area", a, AREA_FIELDS, self.composed().ontology.areas)
+
+    def _update_area(self, a: dict) -> str:
+        if str(a.get("name") or "") not in self.composed().ontology.areas:
+            raise EditError(f"area '{a.get('name')}' is unknown")
+        return self._entry("areas", "area", a, AREA_FIELDS)
+
+    def _delete_area(self, a: dict) -> str:
+        name, onto = str(a.get("name") or ""), self.composed().ontology
+        held = sorted(t.name for t in onto.objects.values() if t.area == name)
+        if held:  # the types would be left unclassified: they move first
+            raise EditError(f"area '{name}' holds {', '.join(held)}")
+        return self._gone_entry("areas", "area", a, onto.areas)
+
     def _add_metric(self, a: dict) -> str:
         return self._new_entry("metrics", "metric", a, METRIC_FIELDS, self.composed().ontology.metrics)
 
@@ -896,7 +916,7 @@ class Workspace:
         for lk in self.module.extend.get("links") or {}:
             owners.add(comp.owner(f"link:{lk}"))
         for section, kind in (("decisions", "decision"), ("actions", "action"), ("roles", "role"), ("parameters", "parameter"),
-                              ("metrics", "metric"), ("identities", "identity"), ("functions", "function")):
+                              ("metrics", "metric"), ("identities", "identity"), ("functions", "function"), ("areas", "area")):
             owners |= {comp.owner(f"{kind}:{k}") for k in self.module.extend.get(section) or {}}
         for section in ("decisions", "actions", "functions"):
             owners |= {comp.owner(f"object:{spec.get('target')}") for spec in (self.module.body.get(section) or {}).values()}
@@ -914,7 +934,7 @@ class Workspace:
             else:
                 kind = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision",
                         "actions": "action", "identities": "identity", "parameters": "parameter", "metrics": "metric",
-                        "functions": "function", "roles": "role"}.get(s, s)
+                        "functions": "function", "roles": "role", "areas": "area"}.get(s, s)
                 owners |= {comp.owner(f"{kind}:{k}") for k in items}
         for spec in (self.module.body.get("objects") or {}).values():
             if spec.get("parent"):
@@ -955,7 +975,8 @@ def _removals(d: dict) -> set[str]:
     out: set[str] = set()
     kinds = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision", "actions": "action",
              "identities": "identity", "questions": "question", "states": "states", "roles": "role",
-             "interfaces": "interface", "parameters": "parameter", "metrics": "metric", "functions": "function"}
+             "interfaces": "interface", "parameters": "parameter", "metrics": "metric", "functions": "function",
+             "areas": "area"}
     for s, items in (d.get("remove") or {}).items():
         if s == "properties":
             out |= {f"property:{t}.{p}" for t, ps in (items or {}).items() for p in ps}
@@ -967,6 +988,12 @@ def _removals(d: dict) -> set[str]:
 def _known_type(a: dict) -> None:
     if a.get("type") and a["type"] not in TYPES:
         raise EditError(f"type '{a['type']}' is not one of {', '.join(TYPES)}")
+
+
+def _known_area(a: dict, onto) -> None:
+    """A type is filed under an area that is there: composing would leave it unclassified without a word."""
+    if a.get("area") and a["area"] not in onto.areas:
+        raise EditError(f"area '{a['area']}' is unknown")
 
 
 def _prop_spec(a: dict) -> dict:

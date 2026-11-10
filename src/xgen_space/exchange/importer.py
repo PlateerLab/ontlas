@@ -4,14 +4,15 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from xgen_space.exchange.owl import ExchangeReport
-from xgen_space.model import Interface, LinkType, ObjectType, Ontology, Property
+from xgen_space.exchange.owl import AREA_PREFIX, SKOS, ExchangeReport
+from xgen_space.model import Area, Interface, LinkType, ObjectType, Ontology, Property
 from xgen_space.rdf import OWL, RDFS, TYPE_OF_XSD, XSD
 
 SKOS_MATCH = "http://www.w3.org/2004/02/skos/core#exactMatch"
 DCT_SOURCE = "http://purl.org/dc/terms/source"
 _CONSUMED = {SKOS_MATCH, DCT_SOURCE, RDFS + "isDefinedBy", RDFS + "label", RDFS + "comment", RDFS + "subClassOf", RDFS + "domain", RDFS + "range",
              OWL + "inverseOf", OWL + "versionInfo", OWL + "hasKey", OWL + "unionOf", OWL + "oneOf",
+             SKOS + "member", SKOS + "definition",
              "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "http://www.w3.org/1999/02/22-rdf-syntax-ns#first",
              "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"}
 
@@ -156,12 +157,22 @@ def from_owl(text: str, *, namespace: str = "", fmt: str = "turtle", name: str =
             for pn, pp in objects[o.parent].properties.items():
                 o.properties.setdefault(pn, pp)
 
+    areas: dict[str, Area] = {}
+    for c in sorted(set(g.subjects(RDF_T, R.URIRef(SKOS + "Collection"))), key=str):
+        n = _ident(_split(str(c))[1].removeprefix(AREA_PREFIX))
+        areas[n] = Area(n, label(c), str(g.value(c, R.URIRef(SKOS + "definition")) or ""), cite(c),
+                        [str(x) for x in g.objects(c, R.URIRef(SKOS_MATCH))])
+        for m in g.objects(c, R.URIRef(SKOS + "member")):
+            if m in names:
+                objects[names[m]].area = n
+        rep.preserved.append(f"area {n}")
+
     ifaces: dict[str, Interface] = {}
     head = None
     for s in g.subjects(RDF_T, OWL_N.Ontology):
         head = s
     onto = Ontology(name=name or (label(head) if head is not None else "") or "imported", namespace=namespace,
-                    objects=objects, links=links, interfaces=ifaces,
+                    objects=objects, links=links, interfaces=ifaces, areas=areas,
                     version=str(g.value(head, OWL_N.versionInfo) or "0.1.0") if head is not None else "0.1.0",
                     label=label(head) if head is not None else "")
     used = set()
