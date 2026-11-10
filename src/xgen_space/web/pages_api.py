@@ -22,6 +22,7 @@ PATH_HOPS = 5  # how far apart two records may be for a path between them to be 
 PATH_TRIES = 12  # chains of relations tried, shortest first
 LINK_COUNT = 50  # past this a relation says "50+" instead of counting on
 LIST_ROWS = 100  # records a list returns at a time
+ELSEWHERE_ROWS = 20  # records counted in each other type when a list finds none; past it the type says "20+"
 KEY_MENTIONS = 4  # passages that name a record's own key
 
 
@@ -319,18 +320,13 @@ class PagesMixin:
 
     # ---- lists of records -------------------------------------------------------------------------------------------
 
-    def record_list(self, type_name: str, q: str = "", limit: int = 50) -> dict:
-        """Records of one type to open one from: the key, the title, the state and the first date, filtered by words."""
-        st, o = self.studio, self.studio.onto
+    def _list_shape(self, type_name: str, q: str) -> tuple[list[str], Any]:
+        """What a list of one type shows (the key, the title, the state, the first date) and the filter its words make."""
+        o = self.studio.onto
         t = o.obj(type_name)
-        names = all_props(o, type_name)
         show = [t.key] + [p for p in [_title(o, type_name), t.states.property if t.states else ""] if p and p != t.key]
-        show += [p for p in names if find_prop(o, type_name, p).type in ("datetime", "date") and p not in show][:1]
-        q = " ".join(str(q or "").split())[:60]
-        if not st.backends:  # the list in its own shape, empty: there are no rows to read
-            return plain({"type": type_name, "label": t.label or type_name, "key": t.key, "title": _title(o, type_name),
-                          "columns": show, "labels": {p: find_prop(o, type_name, p).label or p for p in show}, "total": 0,
-                          "q": q, "rows": [], **self.no_source()})
+        show += [p for p in all_props(o, type_name)
+                 if find_prop(o, type_name, p).type in ("datetime", "date") and p not in show][:1]
         where = None
         if q:
             text = [p for p in show if find_prop(o, type_name, p).type in ("string", "enum")]
@@ -338,6 +334,19 @@ class PagesMixin:
             where = Or(parts) if len(parts) > 1 else (parts[0] if parts else None)
             if where is None:
                 where = Cmp(Ref("x", t.key), "eq", q)
+        return show, where
+
+    def record_list(self, type_name: str, q: str = "", limit: int = 50) -> dict:
+        """Records of one type to open one from: the key, the title, the state and the first date, filtered by words.
+        Words that find nothing in this type come back with the other types that hold them, to switch to."""
+        st, o = self.studio, self.studio.onto
+        t = o.obj(type_name)
+        q = " ".join(str(q or "").split())[:60]
+        show, where = self._list_shape(type_name, q)
+        if not st.backends:  # the list in its own shape, empty: there are no rows to read
+            return plain({"type": type_name, "label": t.label or type_name, "key": t.key, "title": _title(o, type_name),
+                          "columns": show, "labels": {p: find_prop(o, type_name, p).label or p for p in show}, "total": 0,
+                          "q": q, "rows": [], "elsewhere": [], **self.no_source()})
         limit = max(1, min(int(limit or 50), LIST_ROWS))
         rows = st.run(Query(nodes={"x": type_name}, where=where, columns=[Column(Ref("x", p), p) for p in show],
                             order=[Order(t.key)], limit=limit)).rows
@@ -345,7 +354,25 @@ class PagesMixin:
         labels = {p: find_prop(o, type_name, p).label or p for p in show}
         return plain({"type": type_name, "label": t.label or type_name, "key": t.key, "title": _title(o, type_name), "columns": show,
                       "labels": labels, "total": total[0][0] if total else len(rows), "q": q,
-                      "rows": [{"key": str(r[0]), "fields": dict(zip(show[1:], r[1:]))} for r in rows]})
+                      "rows": [{"key": str(r[0]), "fields": dict(zip(show[1:], r[1:]))} for r in rows],
+                      "elsewhere": self._elsewhere(type_name, q) if q and not rows else []})
+
+    def _elsewhere(self, type_name: str, q: str) -> list[dict]:
+        """The other types whose list the same words would fill, with how many records up to ELSEWHERE_ROWS each."""
+        o = self.studio.onto
+        out = []
+        for name, t in o.objects.items():
+            if name == type_name or not t.table:
+                continue
+            try:
+                rows = self.studio.run(Query(nodes={"x": name}, where=self._list_shape(name, q)[1],
+                                             columns=[Column(Ref("x", t.key), "k")], limit=ELSEWHERE_ROWS + 1)).rows
+            except Exception:  # a type the source cannot search is passed over
+                continue
+            if rows:
+                out.append({"type": name, "label": t.label or name, "count": min(len(rows), ELSEWHERE_ROWS),
+                            "more": len(rows) > ELSEWHERE_ROWS})
+        return out
 
     def record_find(self, q: str, limit: int = 10, type_name: str = "", offset: int = 0) -> dict:
         """Records found by what a person would say of them: a key or part of one, a name, or a definition, that is a
@@ -527,8 +554,10 @@ class PagesMixin:
         cr = st.changes._get(change_id)
         out = self._change(cr)
         diff = (cr.review or {}).get("diff") or {}
-        before: dict[str, str] = {}
-        after: dict[str, str] = {}
+        # a decided change is read as its review saw it: the studio has taken it in (or moved on) since
+        kept = (cr.review or {}).get("elements") or {}
+        before: dict[str, str] = {el: json.dumps(a) for el, (a, _) in kept.items() if a is not None}
+        after: dict[str, str] = {el: json.dumps(b) for el, (_, b) in kept.items() if b is not None}
         after_onto = None
         if cr.status == "pending" and st.composition is not None:
             module = st.changes._module(cr)
@@ -569,11 +598,10 @@ class PagesMixin:
 
         lib = self.studio.changes.store or self.studio.library
         before = ""
-        if lib is not None and cr.module in lib.names():
+        base = (cr.review or {}).get("base_version") or ""  # the version this one was written over, not the newest
+        if lib is not None and base and base != cr.version:
             try:
-                versions = [v for v in lib.versions(cr.module) if v != cr.version]
-                if versions:
-                    before = yaml.safe_dump(lib.get(cr.module, versions[-1]).to_dict(), allow_unicode=True, sort_keys=False)
+                before = yaml.safe_dump(lib.get(cr.module, base).to_dict(), allow_unicode=True, sort_keys=False)
             except Exception:  # a version that no longer reads is compared as nothing
                 before = ""
         out = []
@@ -775,7 +803,7 @@ class PagesMixin:
 
     def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
         """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""
-        from xgen_space.decide.words import input_label
+        from xgen_space.decide.words import cell_words, input_label, labels_of, unit_of
 
         def flat(d: Any, pre: str = "") -> dict[str, Any]:
             out: dict[str, Any] = {}
@@ -805,8 +833,15 @@ class PagesMixin:
                 return self.FIELD_WORDS.get(f, f)
             return f"{self.FIELD_WORDS.get(head, head)} · {'사유' if rest == 'reason' else rest}"
 
+        def said(f: str, cell: Any) -> Any:  # a condition as a person reads it: "<= 7" is 7일 이하
+            rest = f.partition(".")[2]
+            if cell is None or table is None or not f.startswith("when.") or rest not in table.inputs:
+                return None
+            return cell_words(cell, table.named, unit=unit_of(onto, table, rest), labels=labels_of(onto, table, rest))
+
         keys = sorted(set(fa) | set(fb), key=lambda k: (not k.startswith("when."), not k.startswith("then."), k))
-        return [{"field": k, "label": word(k), "before": fa.get(k), "after": fb.get(k)}
+        return [{"field": k, "label": word(k), "before": fa.get(k), "after": fb.get(k),
+                 "said": [said(k, fa.get(k)), said(k, fb.get(k))]}
                 for k in keys if fa.get(k) != fb.get(k) and k not in ("id",)][:16]
 
     def _readers(self, el: str) -> list[str]:
@@ -860,6 +895,7 @@ class PagesMixin:
         would give another answer, and what the table answers at each threshold its rules name. The table is the one
         being edited: the pending edits are in it before they are filed. The validation questions on the table are
         answered by it too."""
+        from xgen_space.compile.base import CompileError
         from xgen_space.decide.table import DecisionError, evaluate_table
         from xgen_space.decide.words import input_label, verdict
         from xgen_space.values import coerce
@@ -867,20 +903,31 @@ class PagesMixin:
 
         st = self.studio
         onto, pending = self._pending_onto()
-        table = onto.decisions[name]
+        table = onto.decisions.get(name)
+        if table is None:
+            raise ValueError(self._decide_text(f"unknown decision '{name}'"))
         base: dict[str, Any] = {}
+        if key and name not in st.onto.decisions:  # a table still among the pending edits reads no record yet
+            raise ValueError("아직 적용하지 않은 결정표라 레코드 값을 불러오지 못했습니다. 값을 직접 입력해 주세요.")
         if key:
-            base = dict(st.decide(name, key).inputs)
+            try:
+                base = dict(st.decide(name, key).inputs)
+            except (KeyError, DecisionError, CompileError) as e:
+                raise ValueError(self._decide_text(e)) from None
         for k, v in (inputs or {}).items():
             if k in table.inputs:
-                base[k] = None if v in ("", None) else coerce(v, table.inputs[k].type)
+                try:
+                    base[k] = None if v in ("", None) else coerce(v, table.inputs[k].type)
+                except ValueError:
+                    raise ValueError(f"{input_label(onto, table, k)} 값 '{v}'이(가) 자료형에 맞지 않아 판정하지 못했습니다. "
+                                     "값을 다시 입력해 주세요.") from None
         values = {i: base.get(i) for i in table.inputs}
 
         def run(vals: dict) -> dict:
             try:
                 outs, matched, _ = evaluate_table(table, vals)
             except DecisionError as e:
-                return {"outputs": {}, "matched": [], "verdict": "판정 불가", "yes": False, "error": str(e)}
+                return {"outputs": {}, "matched": [], "verdict": "판정 불가", "yes": False, "error": self._decide_text(e)}
             word, good = verdict(table, outs)
             return {"outputs": outs, "matched": list(matched), "verdict": word, "yes": good}
 
@@ -895,7 +942,7 @@ class PagesMixin:
                                   "unmeasured": "no_source", "note": UNMEASURED["no_source"]})
                 continue
             except Exception as e:  # a question on a record the source no longer has
-                questions.append({"id": q.id, "text": q.text, "key": q.key, "passed": False, "error": str(e)})
+                questions.append({"id": q.id, "text": q.text, "key": q.key, "passed": False, "error": self._decide_text(e)})
                 continue
             passed = isinstance(got, dict) and all(got.get(k) == v for k, v in q.expect.items())
             questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "got": got, "passed": passed})
