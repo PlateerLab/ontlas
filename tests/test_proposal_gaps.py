@@ -224,14 +224,16 @@ def test_an_apply_request_needs_a_draft(session):
 def test_the_build_steps_say_where_the_space_stands(session):
     got = session.build_steps()
     ids = [s["id"] for s in got["steps"]]
-    assert ids == ["catalog", "data", "model", "mgrules", "changes", "check", "search", "connect"]
+    assert ids == ["model", "mgrules", "catalog", "check", "changes"]  # the definition, its rules, its data, the proof, the approval
     by = {s["id"]: s for s in got["steps"]}
-    assert by["model"]["done"] and "객체" in by["model"]["detail"]  # the example library is a built ontology
-    assert by["mgrules"]["done"] and not by["changes"]["done"] and not by["search"]["done"]
-    assert by["catalog"]["done"] and "원천 테이블" in by["catalog"]["detail"]  # bound tables count as data brought in
-    assert got["next"] == "changes"  # nothing has been reviewed and approved yet
+    assert [by[i]["part"] for i in ids] == ["Ontology manager", "Semantic layer", "Data binder", "QA", ""]
+    assert by["model"]["done"] and "객체" in by["model"]["detail"] and not got["start"]  # the example library is a built ontology
+    assert by["mgrules"]["done"] and by["changes"]["done"]  # nothing waits, so the approval step is not owed
+    assert by["catalog"]["done"] and by["catalog"]["optional"] and "원천 테이블" in by["catalog"]["detail"]
+    assert got["next"] == "check"  # nothing has been measured yet
     session.catalog_upload("쿠폰.csv", "쿠폰번호,할인율\nCP1,10\nCP2,20\n".encode("utf-8"))
     session.manage_edit("update_object", {"name": "Order", "label": "주문서"})
     got = session.build_steps()
     by = {s["id"]: s for s in got["steps"]}
-    assert by["catalog"]["done"] and "파일" in by["catalog"]["detail"] and "대기 중인 변경 1" in by["model"]["detail"]
+    assert "파일" in by["catalog"]["detail"] and "대기 중인 변경 1" in by["model"]["detail"]
+    assert not by["changes"]["done"] and "요청 전 변경 1" in by["changes"]["detail"]  # an edit not filed yet is owed
