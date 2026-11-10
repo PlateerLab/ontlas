@@ -90,21 +90,34 @@ refunds, shipping, coupons, reviews), a fashion extension and one customer's dif
 xspace serve examples/library/studio.yaml --samples examples/files --policies examples/policies
 ```
 
-Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written. The page's
-사용 안내 lists the same eight steps as below, in order, and the home's first steps lead through them.
+Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written. The home
+shows the five steps a space is built in and where this one stands on each; the sidebar's 구축 section is the same
+five steps, numbered.
 
-**2. Bring data in (구축 › 데이터 가져오기 › 카탈로그).** Drop files or whole folders, or connect a database on DB 연결. Each
-file says what it became (table data, a definition sheet, a document, raw material) and where it goes, and the folder
-says what to do next. If a file was read as something it is not, set its 용도 from the row's menu and it is read again
-that way; the draft and the search follow.
+**2. Define the ontology (구축 › 1 온톨로지).** A definition has three levels: an **Object** is a top-level classification
+(주문, 상품, 결제: an area of the business with a definition of its own), an **Entity** is a concept under it (주문, 주문상품)
+and a **property** is a value an Entity carries. None of it needs data. Start by hand in the workspace (+ Object, then
++ Entity under it), from a standard module in the library, or from documents and data (step 4's draft). The workspace
+holds the canvas in the middle, the tree on the left (by Object, or by module) and the picked element's form, data,
+uses, YAML and comments on the right, all of the same element. Each Entity shows how far it has come: L0 개념
+(defined), L1 논리 (properties or relations), L2 연결 (bound to a table and its columns), L3 검증 (the database check finds
+nothing against it). Draw a relation from a card's + to another card, drop a source column on a card to make a
+property, give an element a status (초안 · 사용 중 · 폐기 예정), take back any one edit, and try the pending edits on a
+copy of the space before filing them. The canvas lays the cards out for its width and zooms with the wheel.
 
-**3. Review the draft (초안 생성).** The draft is a set of proposals, reviewed step by step: 파일 선택, 객체 · 키, 속성 · 타입,
-관계, 질의, 상태 · 규칙, 검토 · 적용, each step counting what is still to settle. On 객체 · 키 every table is scored against
-the standards you compare with, and for each you choose 표준에 연결 or 새 객체로 유지; English names come from the
-standards and the glossaries, and a sample, the key evidence and the columns to hide sit beside the picked table.
-상태 · 규칙 draws a decision table from a column of past outcomes. 검토 · 적용 shows the module files that applying would
-write and the definition check, and applying adds a pipeline. In a team the editor's last step is 적용 요청: the reviewed
-draft goes to 할 일 as it stands, and an approver applies or returns it there. From the command line:
+**3. Rules (구축 › 2 규칙).** A decision table is edited where it stands: cells in place and in plain words ("14일 이하",
+"NORMAL 아님", "A, B 중", "값 없음" set the comparison and the value together), rows by dragging, the hit policy and the
+modules in the header, overlaps and gaps above the table. The simulator decides a record or typed values on the table
+as edited and says which single change would turn the answer; the tests recompute past cases, generate boundary
+values and run the validation questions on the edited table. 액션 and 함수 are forms beside it.
+
+**4. Connect data (구축 › 3 데이터 연결), when you want live values.** Definitions, rules and decisions on typed values
+work without it. Drop files or whole folders in the catalog, or connect a database on DB 연결; each file says what it
+became (table data, a definition sheet, a document, raw material), and a file read as something else is read again
+as what you say it is. 초안 생성 turns the files into proposals reviewed step by step: every table scored against the
+standards and bound to one or kept as a new Entity, English names from the standards and glossaries, a decision table
+drawn from a column of past outcomes, and the module files applying would write. In a team the editor's last step
+is 적용 요청 and an approver applies it. DB 대조 checks the definition against the database. From the command line:
 
 ```bash
 xspace draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
@@ -117,31 +130,9 @@ xspace serve my-studio/studio.yaml
 A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
-**4. Model (구축 › 모델링 › 작업 공간).** The objects of every module stand as cards on a canvas, with keys, computed properties
-and the relations' names and cardinality; the tree on the left lists them by module with what is wrong, and the
-inspector on the right holds the picked object's form, data, uses, YAML and comments, all of the same element. Draw a
-relation from a card's + to another card, drop a source column on a card to make a property, give an element a status
-(초안 · 사용 중 · 폐기 예정), take back any one edit, and try the pending edits on a copy of the space before filing them as a
-change request. The canvas lays the cards out for its width, zooms with the wheel around the pointer and refits on [%];
-a card is as wide as its longest line. Card positions are kept for everyone who opens the pipeline.
-
-**5. Rules and actions (구축 › 규칙 · 액션).** A decision table is edited where it stands: cells in place and in plain words
-("14일 이하", "NORMAL 아님", "A, B 중", "값 없음" set the comparison and the value together), rows by dragging, the hit policy
-and the modules in the header, overlaps and gaps above the table. The simulator decides a record or typed
-values on the table as edited and says which single change would turn the answer; the tests recompute past cases,
-generate boundary values and run the validation questions on the edited table. 액션 and 함수 are forms beside it.
-
-**6. Review and approve (구축 › 변경 요청).** A change request is reviewed element by element: each element's fields before
-and after (or the module file), what reads it, the pass conditions as the studio meets them now beside the trial copy,
-and comments that stay on the element. Every element is marked before the request can be approved, and the author cannot
-approve their own. The same review from the command line:
-
-```bash
-xspace review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
-```
-
-**7. Check it (운영 › 검증).** Validation questions with known answers, the definition against the database, and the flow's
-pass conditions, measured; the board (파이프라인 관제) shows where the flow stops and leads from each alert to its fix.
+**5. Check it (구축 › 4 검증).** Validation questions with known answers (a passing one is one line; the ones that fail
+show the expected and the given answer), the backends compared query by query, and the flow's pass conditions,
+measured; 흐름 shows every stage from the source to the questions and sets the conditions.
 
 ```bash
 xspace bindings my-studio/studio.yaml       # the definition against the database
@@ -150,12 +141,22 @@ xspace conformance my-studio/studio.yaml    # every registered query on every ba
 xspace gates my-studio/studio.yaml          # the flow's pass conditions, measured
 ```
 
-**8. Use it and plug it in (업무, 운영 › 저장소 · 연동).** The people who use the ontology start on 홈 with what waits on them;
+**6. Review and approve (구축 › 5 변경 요청).** A change request is reviewed element by element: each element's fields
+before and after (or the module file), what reads it, the pass conditions as the studio meets them now beside the
+trial copy, and comments that stay on the element. Every element is marked before the request can be approved, and
+the author cannot approve their own. 라이브러리 applies and removes modules; a module, a kind or a rule named anywhere
+on the page leads to it. The same review from the command line:
+
+```bash
+xspace review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
+```
+
+**7. Use it and plug it in (업무, 운영 › 저장소 · 연동).** The people who use the ontology start on 홈 with what waits on them;
 ask in one box and get the answer with how the question was read, where the answer came from and what to do next; open
-a record's page; grow the graph from one record (each type its own colour and shape) and keep a perspective for the team,
-bound to a role so that choosing the role on 홈 switches to it. `xspace serve --users` gives a team
-one studio with roles (see [A team studio](#a-team-studio)), and `xspace mcp` and the token REST API give agents and
-platforms the same studio inside a role (see [Agents over MCP](#agents-over-mcp)).
+a record's page; grow the graph from one record (each type its own colour and shape) and keep a perspective for the
+team, bound to a role. `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)),
+and `xspace mcp` and the token REST API give agents and platforms the same studio inside a role (see
+[Agents over MCP](#agents-over-mcp)).
 
 ```bash
 xspace run examples/library/studio.yaml revenueByCategory
@@ -163,43 +164,31 @@ xspace translate examples/commerce/ontology.yaml revenueByCategory --to cypher
 xspace decide examples/library/studio.yaml returnEligibility I1001
 ```
 
-The sidebar has three sections: what a person comes to do (업무), what builds the definition (구축) and what keeps it
-running (운영). The page opens on 홈. A group's screens are tabs on its page, and `Ctrl K` jumps to any screen:
+The sidebar has three sections: what a person comes to do (업무), the five steps that build the definition (구축) and what
+keeps it running (운영, folded until opened). A group's screens are tabs on its page; a card's notes fold behind its (i)
+and the help drawer can show them all; `Ctrl K` jumps to any screen, Object definition, decision table or query:
 
 | Section | Group | Screen | Use it to |
 |---|---|---|---|
-| 업무 | 홈 | 홈 | Search or ask from one box, see the eight steps an ontology is built in with where this space stands on each, what waits on you, the pass conditions in brief, the records you opened last and the registered queries; what it leads with follows the role picked on it |
-| | 할 일 | 할 일 | Settle what waits for a person in one list: action requests (approve or reject), change requests, source conflicts to pick, check warnings and edits not filed yet, each saying who asked, what changes and by how much against its automatic-approval limit |
-| | 검색 · 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be (to correct and ask again) and where the answer came from, leads to the actions the decision gates, explains it in steps, values and the SQL that reads them, and keeps an answer judged right as a validation question; when nothing answers it says what it did understand and whom to ask |
+| 업무 | 홈 | 홈 | Search or ask from one box, see the five build steps with where this space stands and what the space is made of (source, modules, Objects, Entities, relations, properties, decision tables), choose how to start when nothing is defined, and see what waits on you, the pass conditions in brief, the records opened most and the registered queries |
+| | 할 일 | 할 일 | Settle what waits for a person in one list: action requests, change requests, draft apply requests, source conflicts to pick, check warnings and edits not filed yet, each saying who asked and what changes |
+| | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back; 규칙 · 지표 beside it shows named values, metrics, sources that disagree and what a table leaves open |
+| | 질문 | 통합 검색 | One question over decisions, data and documents, answered with the rule, the source values and the clause; it says what it took the question to be, leads to the actions the decision gates, and keeps an answer judged right as a validation question |
 | | | 질의 | Run a query, see it in each language, and ask in plain language when a model is connected |
-| | 온톨로지 | 도메인 | See objects and relations as a graph, and what is connected to a card gathered around it |
-| | | 문서 | See documents as documents, sections and concepts, and read the relations a model finds between concepts, each with its sentence, for a folder or for everything |
-| | 객체 탐색 | 레코드 탐색 | Find records of a type by key or name and open one: its values and columns, its state and where it can go, linked records either way round, what each decision says of it now, the actions it can take (pick a role to see only what that role may request), its functions, the documents that name it and its history |
-| | 그래프 탐색 | 그래프 탐색 | Start from one record, grow the graph relation by relation, find the records that join two records, and keep a perspective (the types shown, each type's colour, the property that names its records) for everyone on the studio |
-| | 판정 · 처리 | 판정 · 처리 | Decide a case with its grounds, request an action, approve it, roll it back; it and 규칙 · 지표 share one tab, 판정 · 규칙, with a switch |
-| | | 규칙 · 지표 | See named values, metrics with their formula, sources that disagree and what a table leaves open |
-| 구축 | 데이터 가져오기 | 카탈로그 | Upload files and folders into repositories, see each file's kind, size and where it goes, say what a file is when it was read as something else, and turn a file's or a folder's embedding on and off |
-| | | DB 연결 | Connect a database and draft from it, or borrow a connection a platform manages |
-| | | 결과 | See what each file came to, and the one JSON they roll up into |
-| | | 데이터 소스 | See the source's tables, keys and references, and what reads each |
-| | | 초안 생성 | Draft from the files in the catalog and review the proposals step by step: each table scored against the standards and bound to one or kept as a new object, English names from the standards and glossaries, a sample and the evidence beside the picked table; in a team an approver applies |
-| | 모델링 | 작업 공간 | The canvas in the middle, with the objects, the source, what is wrong and what is pending to the left and the picked object and what is in it to the right: draw a relation from card to card, drop a column on a card, see a card's connections or only what has a problem, take back any one edit, try the edits on a copy and file them; each element carries a status (초안 · 사용 중 · 폐기 예정) and card positions are kept for everyone on the pipeline. One switch away, objects, properties and relations stand in three columns: pick an object and the other two follow it, and a row opens for editing where it stands |
-| | | 정의 관리 | Change states and roles on forms, and go from here to the workspace's object, property and relation tables |
-| | 규칙 · 액션 | 규칙 | Head a decision table with its hit policy, change a cell where it stands and move rules by dragging; the form says how the table applies its rules and what the table check finds, tries the table as edited on a record's or typed values, and decides past cases again by the edited table |
-| | | 액션 | Change actions on forms: their inputs, the decision and the state move they need, and whether a person approves them |
-| | | 함수 | Register calculations, decisions and outside models as functions with inputs, outputs, a version and an owner |
-| | 변경 요청 | 변경 요청 | Review a change element by element against the pass conditions now and after, approve each element or send it back, and comment on it |
-| | | 라이브러리 | Apply and remove modules and edit a module's file |
-| 운영 | 파이프라인 관제 | 현황 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
-| | | 흐름 | See every stage from the source to the questions, and set the pass conditions |
-| | 검증 | 검증 질문 | Run the questions with known answers, and add, remove or import them |
-| | | DB 대조 | Check the definition against the database |
-| | 저장소 · 연동 | 구성 | See every swappable part as measured on opening |
-| | | 벡터 · 임베딩 | See the embedding model, the vector stores, each document's embedding and whether questions find their documents; see what a change of model embeds again, and change it |
-| | | 외부 연동 | See how MCP, REST and a platform's connection plug the space in |
-| | 데이터 지도 | 자산 탐색기 | Browse everything the space holds as folders, search names, paths, definitions and document text at once, and move, rename and delete files with a trash and a work record |
-| | | 자산 그래프 | See how files, tables, documents, stores, objects and queries connect, and what a change reaches |
-| | 사용 안내 | 사용 안내 | Read what each screen is for and how to use it, beside the demo video when one is given |
+| | 레코드 | 레코드 탐색 | Find records of a type and open one: values, state, linked records, decisions, actions, functions, documents and history |
+| | | 그래프 탐색 | Start from one record, grow the graph relation by relation, find the records that join two records, and keep a perspective |
+| 구축 | 1 온톨로지 | 작업 공간 | Define Objects, their Entities and properties on the canvas, the tree and the forms (see step 2 above) |
+| | | 전체 보기 | See the whole definition as cards grouped by Object, and an Entity's definition beside it |
+| | | 문서 | See documents as sections and concepts, and the relations a model finds between concepts |
+| | | 정의 관리 | Change states and roles on forms |
+| | 2 규칙 | 결정표 · 액션 · 함수 | Edit and try decision tables, actions and functions (see step 3) |
+| | 3 데이터 연결 | 카탈로그 · DB 연결 · 데이터 소스 · 초안 생성 · 변환 결과 · DB 대조 | Bring files and databases in, draft from them, and check the definition against the source (see step 4) |
+| | 4 검증 | 검증 질문 · 흐름 | Run the questions with known answers and the pass conditions (see step 5) |
+| | 5 변경 요청 | 변경 요청 · 라이브러리 | Review changes element by element, and apply or remove modules (see step 6) |
+| 운영 | 관제 | 관제 | See the whole pipeline as six floors, live, and where it stops when a stage fails |
+| | 저장소 · 연동 | 어댑터 · 벡터 · 임베딩 · 외부 연동 | See every swappable part as measured, the embedding model and vector stores, and how MCP, REST and a platform's connection plug the space in |
+| | 데이터 지도 | 자산 탐색기 · 자산 그래프 | Browse everything the space holds, and see how files, tables, documents, stores, Entities and queries connect |
+| | 사용 안내 | 사용 안내 | Read what each screen is for and how to use it, beside the demo video |
 
 ## What it looks like
 
@@ -279,9 +268,12 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 ## Define once
 
 ```yaml
-objects:
+areas:                      # the top level (shown as Object): an area of the business with a definition of its own
+  Order: {label: 주문, description: 주문과 주문에 담긴 주문상품, aligned: [https://schema.org/Order]}
+objects:                    # the concepts under it (shown as Entity)
   OrderItem:
     label: 주문상품
+    area: Order
     source: {table: order_items}
     key: item_id
     properties:
@@ -311,6 +303,8 @@ roles:
 The full example is [`examples/commerce/ontology.yaml`](examples/commerce/ontology.yaml): eight object types
 (one of them a price history), nine links, eight computed properties, a decision, an action, three roles, twelve
 registered queries and seven validation questions.
+An object type with no `source` is a definition only: its decisions take typed values, and it binds to a table later
+without being written again. `areas` and `area` are optional; a definition without them is grouped by module.
 Decision cells are a small FEEL subset: `-`, `null`, `not null`, `<= 7`, `[1..7]`, `"VIP"`, `!= "NORMAL"`,
 `in ["A", "B"]`, `true`.
 
