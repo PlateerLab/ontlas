@@ -444,8 +444,8 @@ class PagesMixin:
     # ---- what waits on a person ------------------------------------------------------------------------------------
 
     def inbox(self) -> dict:
-        """Every request, change, disagreement and unfiled edit that waits for a person, in one list. `mine` marks what
-        the person on this page asked for, which someone else settles."""
+        """Every request, change, draft to apply, disagreement and unfiled edit that waits for a person, in one list.
+        `mine` marks what the person on this page asked for, which someone else settles."""
         st = self.studio
         items: list[dict[str, Any]] = []
         for p in st.actions.proposals.values():
@@ -480,6 +480,11 @@ class PagesMixin:
                           "module": c.module, "by": c.requested_by, "mine": c.requested_by == self.who, "at": c.at,
                           "passed": rv.get("passed"), "gates": [sum(bool(g.get("passed")) for g in gates), len(gates)],
                           "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}, "worse": worse})
+        rq = self.draft_request
+        if rq:  # a reviewed draft an editor filed for an approver to apply
+            items.append({"kind": "draft", "id": "draft", "title": f"{rq['label']} 초안 적용", "by": rq["by"],
+                          "mine": rq["by"] == self.who, "at": rq["at"],
+                          "detail": f"객체 {rq['objects']}개 · 관계 {rq['links']}개", "waits": "approver"})
         for c in st.onto.source_conflicts():
             if not c.open:
                 continue
@@ -620,7 +625,9 @@ class PagesMixin:
         names its records. Shared by everyone on this studio, and kept across a restart when there is a journal."""
         return plain({"views": self._prefs("view", "_graph_views")})
 
-    def graph_view_save(self, name: str, hide: list, color: dict | None, label: dict | None) -> dict:
+    VIEW_ROLES = ("", "ops", "domain", "model")  # whom a perspective is meant for; "" is everyone
+
+    def graph_view_save(self, name: str, hide: list, color: dict | None, label: dict | None, role: str = "") -> dict:
         name = " ".join(str(name or "").split())[:40]
         if not name:
             raise ValueError("관점 이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.")
@@ -628,7 +635,8 @@ class PagesMixin:
         hide = [str(t) for t in (hide or []) if str(t) in o.objects]
         color = {str(t): str(c) for t, c in (color or {}).items() if str(t) in o.objects and re.fullmatch(r"#[0-9a-fA-F]{6}", str(c))}
         label = {str(t): str(p) for t, p in (label or {}).items() if str(t) in o.objects and str(p) in all_props(o, str(t))}
-        self._pref_set("view", "_graph_views", name, {"hide": hide, "color": color, "label": label, "by": self.who})
+        role = str(role or "") if str(role or "") in self.VIEW_ROLES else ""
+        self._pref_set("view", "_graph_views", name, {"hide": hide, "color": color, "label": label, "by": self.who, "role": role})
         return self.graph_views()
 
     def graph_view_forget(self, name: str) -> dict:
@@ -688,7 +696,7 @@ class PagesMixin:
             {"id": "catalog", "title": "데이터 가져오기", "done": bool(kept or tables),
              "detail": " · ".join(x for x in (f"파일 {len(kept)}개" if kept else "", f"원천 테이블 {len(tables)}개" if tables else "") if x) or "파일을 올리거나 DB를 연결합니다"},
             {"id": "data", "title": "초안 검토", "done": bool(o.objects) or self.pending is not None,
-             "detail": "초안 검토 중" if self.pending is not None else (f"파이프라인 {len(self.pipelines)}개 · 객체 {len(o.objects)}개" if o.objects else "초안을 만들어 제안을 검토합니다")},
+             "detail": ("적용 요청 대기" if self.draft_request else "초안 검토 중") if self.pending is not None else (f"파이프라인 {len(self.pipelines)}개 · 객체 {len(o.objects)}개" if o.objects else "초안을 만들어 제안을 검토합니다")},
             {"id": "model", "title": "모델링", "done": bool(o.objects and o.links),
              "detail": f"객체 {len(o.objects)} · 관계 {len(o.links)}" + (f" · 대기 중인 변경 {pending}" if pending else "")},
             {"id": "mgrules", "title": "규칙 · 액션", "done": bool(o.decisions or o.actions),

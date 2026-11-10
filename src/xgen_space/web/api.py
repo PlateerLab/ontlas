@@ -292,6 +292,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self.events: deque = deque(maxlen=30)  # what happened here, newest first, for the control board
         self._watch: dict | None = None  # the last measurement of the pipeline
         self.pending = None  # (draft, the database it was drawn from, the tables loaded into it, the rules)
+        self.draft_request: dict | None = None  # an editor's request that an approver apply the pending draft
         self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
         self.self_approve = True  # one visitor is both sides of a change; a team studio turns this off
         self.store = None  # a library folder approved changes are written to (xspace serve --library-write)
@@ -969,7 +970,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         rules = self.pending[3] if self.pending else base
         comp = self.studio.composition
         return plain({"files": files, "definitions": defs, "pending": self._draft_view() if self.pending else None,
-                      "rules": rules.to_dict(), "defaults": base.to_dict(),
+                      "request": self._request_view(), "rules": rules.to_dict(), "defaults": base.to_dict(),
                       "rules_by": [self._label(m) for m in (comp.rules_by if comp else [])],
                       "limits": {"file_bytes": lim.file_bytes, "total_bytes": lim.total_bytes, "files": lim.files,
                                  "rows": lim.rows, "columns": lim.columns},
@@ -1043,7 +1044,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self._release(path)
         if f["included"] and not error:
             self._take(path, f, tables, defs)
-        self.pending = None
+        self.pending = self.draft_request = None
 
     def _take(self, path: str, f: dict, tables: list, defs: Any) -> None:
         if tables:
@@ -1076,7 +1077,7 @@ class StudioSession(SpaceMixin, PagesMixin):
                 continue
             self._take(p, f, tables, defs)
         if stale or fresh:
-            self.pending = None
+            self.pending = self.draft_request = None
 
     def upload(self, source: str, data: bytes) -> dict:
         """A file into the top of the repository, which must be readable; the page brings files by catalog_upload."""
@@ -1130,7 +1131,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self._stash()
         self._adopt(target["studio"])
         self.origin, self._library_rows, self.log = target["origin"], target["rows"], target["log"]
-        self.pipeline, self.pending, self.workspace, self._ws_sig = pid, None, None, ()
+        self.pipeline, self.pending, self.draft_request, self.workspace, self._ws_sig = pid, None, None, None, ()
         self.event("pipeline", f"{target['label']}(으)로 전환")
         return {"ok": True}
 
@@ -1318,7 +1319,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         gone = self.repositories.remove(self.repo, [clean_path(p) for p in paths])
         for p in gone:
             if p in self._held:
-                self.pending = None
+                self.pending = self.draft_request = None
             self._release(p)
         return {"ok": True, "removed": len(gone)}
 
@@ -1352,7 +1353,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         if use == "raw" or (not use and Path(name).suffix.lower() in RAW_FILES):
             self.repositories.put(self.repo, path, data, facts={"kind": "raw"}, error="")
             self._release(path)
-            self.pending = None
+            self.pending = self.draft_request = None
         else:
             try:
                 tables, defs = self._read(name, data, use)
@@ -1539,7 +1540,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             d = draft(b, name="my-schema", label=(label or "정의서 초안")[:40], lang="ko", rules=r, definitions=defs,
                       origin={"kind": "definitions", "files": list(self.definitions),
                               "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개(행 없음)"})
-            self.pending = (d, b, [], r)
+            self.pending, self.draft_request = (d, b, [], r), None
             return self.files_state()
         if not all_tables and defs is not None:
             raise ValueError("테이블 정의가 없어 초안을 생성하지 못했습니다. 테이블 정의서 또는 데이터 파일을 업로드해 주세요.")
@@ -1553,7 +1554,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         loaded = load_sqlite(chosen, b, row_keys=r.row_keys)
         d = draft(b, name="my-data", label=(label or "업로드 데이터")[:40], loaded=loaded, lang="ko", rules=r,
                   definitions=defs, origin={"kind": "files", "files": list(self.uploads), "detail": f"업로드 파일 {len(self.uploads)}개"})
-        self.pending = (d, b, chosen, r)
+        self.pending, self.draft_request = (d, b, chosen, r), None
         return self.files_state()
 
     def connect(self, dsn: str, label: str = "", rules: dict | None = None) -> dict:
@@ -1593,7 +1594,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         r = self._rules(rules)
         d = draft(b, name="my-db", label=(label or "연결 데이터베이스")[:40], lang="ko", rules=r,
                   definitions=self._defs(), origin={"kind": "database", "detail": where})
-        self.pending = (d, b, [], r)
+        self.pending, self.draft_request = (d, b, [], r), None
         return self.files_state()
 
     def _draft_view(self) -> dict:
@@ -1780,6 +1781,43 @@ class StudioSession(SpaceMixin, PagesMixin):
         objects, extra = self._review_plan(standard, edits, choices)
         return self.apply_mapping(standard, edits, {**(mapping or {}), "objects": objects}, extra=extra)
 
+    def request_draft(self, standard: list, edits: dict | None = None, choices: dict | None = None) -> dict:
+        """In a team an editor files the reviewed draft for an approver to apply as it stands: the review's choices and
+        edits go with the request, so the approver applies what the editor saw. A new draft takes the request with it."""
+        if not self.pending:
+            raise ValueError("생성된 초안이 없어 적용을 요청하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        try:
+            d = self._edit(self.pending[0], edits)
+        except ValueError as e:
+            raise ValueError(f"편집 내용을 확인할 수 없어 적용을 요청하지 못했습니다. {e}") from None
+        self.draft_request = {"by": self.who, "at": datetime.now().isoformat(timespec="seconds"), "label": d.label,
+                              "objects": len(d.objects), "links": len(d.links), "standard": [str(x) for x in standard],
+                              "edits": edits, "choices": choices}
+        self._note("draft", f"{d.label} 초안 적용을 요청했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
+        return {"ok": True, "request": self._request_view()}
+
+    def drop_draft_request(self) -> dict:
+        if not self.draft_request:
+            raise ValueError("대기 중인 적용 요청이 없어 취소하지 못했습니다.")
+        label = self.draft_request["label"]
+        self.draft_request = None
+        self._note("draft", f"{label} 초안 적용 요청을 취소했습니다.")
+        return {"ok": True}
+
+    def apply_draft_request(self) -> dict:
+        """An approver applies the draft the way the request asked; the request is done with it."""
+        rq = self.draft_request
+        if not rq:
+            raise ValueError("대기 중인 적용 요청이 없어 적용하지 못했습니다. 편집자가 적용을 요청한 뒤 다시 시도해 주세요.")
+        out = self.apply_review(rq["standard"], rq["edits"], rq["choices"])
+        self.draft_request = None
+        return out
+
+    def _request_view(self) -> dict | None:
+        """The apply request as the page shows it: who asked, when, and for what, without the edits it carries."""
+        rq = self.draft_request
+        return {k: rq[k] for k in ("by", "at", "label", "objects", "links")} if rq else None
+
     def _review_plan(self, standard: list, edits: dict | None, choices: dict | None) -> tuple[dict, list[Module]]:
         """Which standard object each bound table binds, and the modules of the tables kept as new objects."""
         from xgen_space.mapping import suggest
@@ -1914,7 +1952,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         self._adopt(st)
         self._library_rows = st.library.list()
         self.origin = {**d.origin, "label": d.label, "standard": [str(x) for x in standard]}
-        self.pending, self.log = None, []
+        self.pending, self.draft_request, self.log = None, None, []
         self._new_pipeline(d.label)
         removed = sum(len(v) for v in (m.remove.get("properties") or {}).values())
         uses = [f"{word} {len(m.remove[k])}개" for k, word in (("states", "상태 전이"), ("decisions", "결정"),
@@ -1977,7 +2015,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             raise ValueError(f"정의 검사에서 오류가 발견되어 적용하지 못했습니다. {e}") from None
         self._library_rows = self.studio.library.list()
         self.origin = {**d.origin, "label": d.label}
-        self.pending, self.log = None, []
+        self.pending, self.draft_request, self.log = None, None, []
         self._new_pipeline(d.label)
         self._note("draft", f"{d.label} 온톨로지를 적용했습니다. 객체 {len(d.objects)}개, 관계 {len(d.links)}개")
         return {"ok": True}

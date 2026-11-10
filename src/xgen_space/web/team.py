@@ -32,6 +32,7 @@ NEEDS = {
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "draft/table": "editor", "draft/review/apply": "approver", "draft/review/preview": "editor",  # a reviewed draft replaces the shared space: an approver applies it
+    "draft/request": "editor", "draft/request/drop": "editor", "draft/request/apply": "approver",  # an editor files the draft for an approver to apply
     "manage/undo": "editor", "manage/trial": "editor", "manage/yaml": "editor", "element/comment": "editor",
     "graph/view": "editor", "graph/view/forget": "editor", "workspace/layout": "editor",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",

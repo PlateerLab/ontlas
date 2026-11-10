@@ -111,7 +111,7 @@
       '[보는 역할]에서 운영 담당, 도메인 전문가, 모델러를 고르면 홈의 카드 구성과 왼쪽 메뉴 순서가 그 역할에 맞게 바뀝니다.',
       '할 일 카드는 액션 승인, 변경 요청, 출처 충돌, DB 대조 경고, 아직 요청하지 않은 정의 변경을 한 목록으로 보여 줍니다.',
       '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [파이프라인 관제 열기]로 이어집니다.',
-      '자주 보는 레코드와 저장된 질의에서 바로 돌아갑니다. 등록 질의에는 검증됨, 지표에는 지표 표시가 붙습니다.']],
+      '자주 보는 레코드(이 브라우저에서 연 횟수 순)와 저장된 질의에서 바로 돌아갑니다. 등록 질의에는 검증됨, 지표에는 지표 표시가 붙습니다.']],
     ['inbox', '승인할 액션, 검토할 변경 요청, 고를 출처 충돌, 점검 경고를 한 목록에서 처리합니다.', [
       '나에게 할당, 내가 요청, 전체 탭으로 나눠 봅니다. 팀 스페이스에서는 다른 사람이 요청한 것이 나에게 할당에 옵니다.',
       '액션 승인 행은 누가 요청했고 무엇이 얼마나 바뀌는지(예: 변화율 +16.9% · 자동 승인 한도 10% 초과)를 한 줄로 보여 주고, [승인] · [반려]로 바로 처리합니다.',
@@ -126,13 +126,14 @@
       '문서 탭은 이 레코드나 타입을 언급한 문서의 절을 모읍니다. 이력 탭은 원천의 날짜, 사람과 Agent의 요청, 승인을 한 시간순으로 보여 줍니다.']],
     ['graph', '레코드 하나에서 출발해 관계 종류별 개수를 보고 펼치는 지식그래프 탐색입니다.', [
       '검색 상자에 레코드를 적고 Enter로 시작합니다. 관계마다 연결된 레코드 수가 보이고, 고른 관계만 펼칩니다. 한 번에 25개까지 펼치고 넘으면 묶음으로 둡니다.',
-      '노드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색이 다릅니다.',
+      '노드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색과 모양이 다릅니다.',
       '경로 찾기에서 시작과 도착 레코드를 적으면 둘을 잇는 가장 짧은 관계 사슬을 찾아 주황색으로 강조합니다. 경로는 온톨로지 질의로 실행되므로 SQL 원천에서도 됩니다.',
-      '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있어 역할마다 다른 관점을 둡니다.',
+      '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 관점에 역할을 정해 두면 홈에서 그 역할을 고를 때 그 관점으로 바뀝니다.',
       '탐색 기록에서 지나온 단계로 돌아가고, [링크 복사]로 지금 시작 레코드를 다른 사람에게 보냅니다.']],
     ['model', '객체 · 속성 · 관계를 캔버스, 표, 폼, YAML 어느 쪽에서 고쳐도 같은 요소에 반영되는 모델링 작업 공간입니다.', [
       '왼쪽은 모듈별 객체 트리(객체 · 원천 · 문제 · 변경), 가운데는 캔버스, 오른쪽은 고른 객체의 폼 · 데이터 · 사용처 · YAML · 댓글입니다. [표]로 바꾸면 객체 · 속성 · 관계가 3열로 섭니다.',
-      '캔버스의 카드에는 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 카드 테두리의 +를 다른 카드에 끌어 놓으면 연결 기준을 제안받아 관계를 만들고, 원천의 컬럼을 카드에 끌어 놓으면 속성이 됩니다.',
+      '캔버스의 카드에는 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 카드는 가장 긴 줄에 맞춰 넓어지고, 줄인 글은 마우스를 올리면 전부 보입니다. 카드 테두리의 +를 다른 카드에 끌어 놓으면 연결 기준을 제안받아 관계를 만들고, 원천의 컬럼을 카드에 끌어 놓으면 속성이 됩니다.',
+      '휠로 확대 · 축소하고 빈 곳을 끌어 이동합니다. 캔버스보다 작은 그림은 가운데에 놓이고, [%]를 누르면 캔버스 너비에 맞춰 카드 열 수와 배율을 다시 잡습니다.',
       '요소마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인데 읽는 곳이 남아 있으면 사용처에 표시됩니다.',
       '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장한 변경은 대기 중인 변경에 쌓이고 하나씩 되돌리거나 다시 실행할 수 있습니다.',
       '[사본에서 시험]은 대기 중인 변경을 사본 스페이스에 적용해 통과 조건을 전후로 비교합니다. [변경 요청 만들기]로 검토와 승인으로 보냅니다.',
@@ -193,6 +194,7 @@
       '[초안 생성]을 선택하면 파일 선택, 객체 · 키, 속성 · 타입, 관계, 질의, 상태 · 규칙, 검토 · 적용 순서의 단계가 생기고, 단계마다 사람이 확인할 개수가 붙습니다.',
       '객체 · 키 단계에서 테이블마다 표준 객체와 얼마나 맞는지 점수가 보이고, [표준에 연결]과 [새 객체로 유지] 중에 고릅니다. 영문 이름은 표준과 용어사전의 말로 제안하고, 모르는 말만 로마자로 남깁니다.',
       '행을 고르면 오른쪽에 샘플 값, 키 근거, 일치 근거, 가림 권장 속성이 보입니다. [남은 제안 모두 채택]으로 남은 것을 한 번에 채택합니다.',
+      '마지막 단계에서 적용합니다. 팀 스페이스에서는 편집자가 [적용 요청]으로 검토한 그대로 승인자에게 보내고, 승인자가 할 일이나 이 화면에서 [요청대로 적용] 또는 [반려]합니다.',
       'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOC, DOCX, PPT, PPTX, HWP, HWPX, PDF 문서와 XLS, XLSX 파일을 함께 사용할 수 있습니다.',
       '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 통합합니다.',
       '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
@@ -270,7 +272,7 @@
       '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
     ['mgrules', '결정표를 편집하면서 바로 검사하고 시뮬레이션하고 시험합니다.', [
       '머리글의 칩에 적용 방식(위에서 첫 규칙, 우선순위 등)과 규칙을 가져온 모듈이 보입니다. 적용 방식은 칩에서 바꿉니다.',
-      '표의 칸을 누르면 그 자리에서 고칩니다. 조건은 비교 방식과 값으로 적고 표에는 사람 말(예: 14일 이하)로 보입니다. 행은 끌어서 순서를 바꾸고, 규칙마다 출처 조항이 칩으로 붙습니다.',
+      '표의 칸을 누르면 그 자리에서 고칩니다. 조건은 값 칸에 "14일 이하", "NORMAL 아님", "A, B 중", "값 없음"처럼 사람 말로 적어도 되고 비교 방식이 따라 바뀝니다. 표에도 사람 말로 보입니다. 행은 끌어서 순서를 바꾸고, 규칙마다 출처 조항이 칩으로 붙습니다.',
       '표 위의 검사는 겹침, 도달 불가, 빈 구간을 세고 해당 행을 같은 색으로 표시합니다.',
       '시뮬레이션에서 레코드를 불러오거나 입력값을 바꿔 보면 어느 규칙이 답하는지와, 어떤 입력 하나를 바꾸면 다른 결과가 나오는지 알려 줍니다. 편집 중인 표 기준입니다.',
       '테스트는 과거 판정 다시 계산(편집 중인 표로), 경계값 자동 생성, 이 결정표를 쓰는 검증 질문을 편집 중에 바로 돌립니다.',
@@ -355,14 +357,14 @@
     bind: '정의와 원천이 어긋나면 질의가 빈 결과나 잘못된 값을 반환합니다. 모듈을 바꾼 뒤에는 원천과 대조합니다.',
   };
   // the order a person builds an ontology in, as the guide and the home's first steps show it
-  const START = [['catalog', '1 데이터 가져오기', '파일, 폴더, 문서를 올리거나 DB를 연결합니다. 파일마다 무엇이 될지 확인합니다'],
-    ['data', '2 초안 검토', '테이블마다 표준에 연결할지 새 객체로 둘지 고르고, 영문 이름 · 키 · 속성 · 관계 제안을 채택합니다'],
-    ['model', '3 모델링', '작업 공간의 캔버스에서 객체 · 속성 · 관계를 다듬고, 사본에서 시험합니다'],
-    ['mgrules', '4 규칙 · 액션', '결정표를 편집하면서 시뮬레이션하고, 액션과 권한을 정합니다'],
-    ['changes', '5 변경 요청', '항목별로 검토하고 전후 결과를 보며 승인합니다'],
-    ['check', '6 검증', '검증 질문 · DB 대조 · 흐름 통과 조건으로 지키는지 확인합니다'],
-    ['search', '7 사용', '홈에서 묻고, 레코드와 그래프로 찾고, 판정 · 처리합니다'],
-    ['connect', '8 연동', 'MCP와 REST로 Agent와 외부 플랫폼이 같은 공간을 씁니다']];
+  const START = [['catalog', '데이터 가져오기', '파일, 폴더, 문서를 올리거나 DB를 연결합니다. 파일마다 무엇이 될지 확인합니다'],
+    ['data', '초안 검토', '테이블마다 표준에 연결할지 새 객체로 둘지 고르고, 영문 이름 · 키 · 속성 · 관계 제안을 채택합니다'],
+    ['model', '모델링', '작업 공간의 캔버스에서 객체 · 속성 · 관계를 다듬고, 사본에서 시험합니다'],
+    ['mgrules', '규칙 · 액션', '결정표를 편집하면서 시뮬레이션하고, 액션과 권한을 정합니다'],
+    ['changes', '변경 요청', '항목별로 검토하고 전후 결과를 보며 승인합니다'],
+    ['check', '검증', '검증 질문 · DB 대조 · 흐름 통과 조건으로 지키는지 확인합니다'],
+    ['search', '사용', '홈에서 묻고, 레코드와 그래프로 찾고, 판정 · 처리합니다'],
+    ['connect', '연동', 'MCP와 REST로 Agent와 외부 플랫폼이 같은 공간을 씁니다']];
   const GUIDE_USE = [
     ['통합 관리', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 한 공간에서 관리합니다.'],
     ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
@@ -423,7 +425,7 @@
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
-      q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [], views: null, color: {}, labelBy: {} },
+      q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', viewRole: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [], views: null, color: {}, labelBy: {} },
     ov: { sel: '', pos: {} },
     md: { sel: '', q: '', tab: 'form', file: null, fileBusy: false, uses: null, pos: {}, fold: false, yaml: null, yamlBusy: false, notes: null, note: '', trial: null, trialOpen: false,
       view: 'diagram', arrive: '', cq: { objects: '', props: '', links: '' }, left: 'objects', leftOff: false, rightOff: false, list: 'props', hot: null, draft: null, only: false, src: {}, data: null, wide: true, posFor: '' },
@@ -614,7 +616,11 @@
         : keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
       return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
     };
-    const section = ([id, word]) => `<div class="nsec"><div class="nhead">${word}</div>${NAV_GROUP.map((g, i) => (g[0] === id ? place(i) : '')).join('')}</div>`;
+    // the screens a role comes for stand first in its group; a role not listed keeps the group's own order
+    const USE_ORDER = { ops: ['home', 'inbox', 'decide', 'search', 'records', 'graph', 'onto'], domain: ['home', 'search', 'onto', 'records', 'graph', 'inbox', 'decide'],
+      model: ['home', 'onto', 'search', 'records', 'graph', 'inbox', 'decide'] };
+    const rank = (g) => { const o = USE_ORDER[S.home.role] || [], i = o.indexOf(g[2][0]); return i < 0 ? 99 : i; };
+    const section = ([id, word]) => `<div class="nsec"><div class="nhead">${word}</div>${NAV_GROUP.map((g, i) => [g, i]).filter(([g]) => g[0] === id).sort((a, b) => rank(a[0]) - rank(b[0])).map(([, i]) => place(i)).join('')}</div>`;
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
@@ -686,7 +692,7 @@
     if (S.tab === 'library' && !S.changes) loadChanges();
     if (S.tab === 'decide' && !S.agree) loadAgreement();
     if (S.tab === 'decide' && !S.pa) loadPending();
-    if (S.tab === 'data') { if (!S.files) loadFiles(); else mountDraftGraph(); }
+    if (S.tab === 'data') { if (!S.files) loadFiles(); else { mountDraftGraph(); if (S.me && S.me.team) refreshFiles(); } }
     if (S.tab === 'library' && !S.files) loadFiles();  // the documents a policy draft can start from
     if (S.tab === 'catalog') {
       if (!S.cat.st && !S.cat.busy) loadCatalog();
@@ -718,16 +724,18 @@
   // ---- the pages for people who use the ontology: a home, what waits on them, records one by one -------------------
 
   const HOME_ROLE = [['ops', '운영 담당'], ['domain', '도메인 전문가'], ['model', '모델러']];
-  const INBOX_KIND = { action: ['warn', '액션 승인'], change: ['b', '변경 요청'], conflict: ['bad', '충돌 선택'], check: ['', '점검'], workspace: ['', '변경 대기'] };
+  const INBOX_KIND = { action: ['warn', '액션 승인'], change: ['b', '변경 요청'], conflict: ['bad', '충돌 선택'], check: ['', '점검'], workspace: ['', '변경 대기'], draft: ['b', '초안 적용'] };
   const INBOX_TAB = [['assigned', '나에게 할당'], ['mine', '내가 요청'], ['all', '전체']];
   let RECENT = [];
   try { RECENT = JSON.parse(localStorage.getItem('xspace-recent') || '[]'); } catch (e) { RECENT = []; }
   try { S.home.role = localStorage.getItem('xspace-role') || 'ops'; } catch (e) { S.home.role = 'ops'; }
 
-  function remember(x) {  // the records a person opened, newest first, for the home and the record list
-    RECENT = [x, ...RECENT.filter((y) => !(y.type === x.type && y.key === x.key))].slice(0, 8);
+  function remember(x, opened = true) {  // the records a person opened, newest first with how often, for the home and the record list
+    const was = RECENT.find((y) => y.type === x.type && y.key === x.key);
+    RECENT = [{ ...x, n: was ? (was.n || 1) + (opened ? 1 : 0) : 1, at: Date.now() }, ...RECENT.filter((y) => y !== was)].slice(0, 12);
     try { localStorage.setItem('xspace-recent', JSON.stringify(RECENT)); } catch (e) { /* kept for this visit only */ }
   }
+  const often = () => [...RECENT].sort((a, b) => (b.n || 1) - (a.n || 1) || (b.at || 0) - (a.at || 0));  // most opened first, latest among equals
 
   // the questions asked on this browser, newest first, so a person can ask one again
   const askedBefore = () => { try { return JSON.parse(localStorage.getItem('xspace-asked') || '[]'); } catch (e) { return []; } };
@@ -776,6 +784,10 @@
     } else if (x.kind === 'conflict') {
       meta = `${x.detail} · 고를 때까지 기존 규칙으로 판정합니다`;
       buttons = `<button class="btn sm" data-act="issopen" data-key="conflict:${esc(x.id)}">고르기</button>`;
+    } else if (x.kind === 'draft') {  // a reviewed draft filed for applying: the approver applies it as it stands
+      meta = `${x.by} 요청 · ${x.detail} · 검토한 그대로 적용됩니다`;
+      buttons = `<a class="btn sm" href="#data">초안 보기</a>${canApplyDraft() ? `<button class="btn sm primary" data-act="drequestapply">적용</button><button class="btn sm" data-act="drequestdrop">반려</button>`
+        : x.mine ? '<button class="btn sm" data-act="drequestdrop">요청 거두기</button>' : ''}`;
     } else {
       meta = `${x.detail} · 변경 요청을 만들어야 반영됩니다`;
       buttons = '<a class="btn sm" href="#model?left=changes">변경 목록 열기</a>';
@@ -810,7 +822,7 @@
   }
 
   function recentCard() {
-    let list = RECENT.slice(0, 5);
+    let list = often().slice(0, 5);
     if (!list.length) {  // nothing opened yet: the records the decisions are about
       if (!S.home.sug) {
         const t = (S.st.decisions[0] || {}).target;
@@ -819,7 +831,7 @@
       }
       list = S.home.sug.rows;
     }
-    const rows = list.map((x) => `<button class="hrow" data-act="rec" data-type="${esc(x.type)}" data-key="${esc(x.key)}"><span class="rtag">${esc(x.label || x.type)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span></button>`).join('');
+    const rows = list.map((x) => `<button class="hrow" data-act="rec" data-type="${esc(x.type)}" data-key="${esc(x.key)}"><span class="rtag">${esc(x.label || x.type)}</span><b>${esc(x.key)}</b><span class="muted">${esc(x.title || '')}</span>${x.n > 1 ? `<span class="chip sm" title="이 브라우저에서 연 횟수">${x.n}회</span>` : ''}</button>`).join('');
     return `<div class="card"><div class="ch">${RECENT.length ? '자주 보는 레코드' : '이 레코드부터 열어 보세요'}<div class="right"><a class="btn sm ghost" href="#records">레코드 탐색</a></div></div><div class="cb" style="padding:6px 8px">${rows || '<div class="empty" style="padding:8px">아직 연 레코드가 없습니다. 검색 결과나 레코드 탐색에서 레코드를 열면 여기에 남습니다.</div>'}</div></div>`;
   }
 
@@ -937,7 +949,7 @@
     try {
       r.res = await api(`record?type=${encodeURIComponent(r.type)}&key=${encodeURIComponent(r.key)}`);
       r.err = '';
-      remember({ type: r.type, key: r.key, label: r.res.label, title: r.res.title || '' });
+      remember({ type: r.type, key: r.key, label: r.res.label, title: r.res.title || '' }, false);  // the same opening, now with its name
     } catch (e) { r.res = null; r.err = e.message; }
     r.busy = false;
     if (S.tab === 'record') render();
@@ -1403,11 +1415,17 @@
   async function gxLoadViews() {
     if (S.gx.views) return;
     try { S.gx.views = (await api('graph/views')).views || {}; } catch (e) { S.gx.views = {}; }
+    if (!S.gx.view) gxApplyRole();
     if (S.tab === 'graph') render();
+  }
+  function gxApplyRole() {  // the perspective kept for the role the person views as, when one is
+    const bound = Object.entries(gxViews()).find(([, v]) => v.role && v.role === S.home.role);
+    if (bound && S.gx.view !== bound[0]) gxApplyView(bound[0]);
   }
   function gxApplyView(name) {
     const v = gxViews()[name];
     S.gx.view = v ? name : '';
+    S.gx.viewRole = v ? (v.role || '') : '';
     S.gx.hide = v ? [...(v.hide || [])] : [];
     S.gx.color = v ? { ...(v.color || {}) } : {};
     S.gx.labelBy = v ? { ...(v.label || {}) } : {};
@@ -1433,15 +1451,16 @@
     const rows = types.map((t) => {
       const [ink] = gxColor(t), node = S.st.graph.nodes.find((x) => x.id === t) || {};
       const props = propsOf(t);
-      return `<div class="gxvrow"><label class="tick" style="margin:0"><input type="checkbox" data-in="gxshow" data-t="${esc(t)}"${g.hide.includes(t) ? '' : ' checked'}>${esc(node.label || t)}</label>
+      return `<div class="gxvrow"><label class="tick" style="margin:0"><input type="checkbox" data-in="gxshow" data-t="${esc(t)}"${g.hide.includes(t) ? '' : ' checked'}>${gxGlyph(t)}${esc(node.label || t)}</label>
         <input type="color" data-in="gxcolor" data-t="${esc(t)}" value="${esc(ink)}" aria-label="${esc(node.label || t)} 색" title="색">
         ${props.length ? `<select data-in="gxlabel" data-t="${esc(t)}" aria-label="${esc(node.label || t)} 라벨 속성" title="레코드를 부를 속성"><option value="">기본 이름</option>${props.map(([n, l]) => `<option value="${esc(n)}"${(g.labelBy || {})[t] === n ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` : ''}</div>`;
     }).join('');
     if (!S.mg.st && types.length && !S.mg.busy) { S.mg.busy = true; api('manage').then((x) => { S.mg.st = x; }).catch(() => {}).finally(() => { S.mg.busy = false; if (S.tab === 'graph') render(); }); }
     return `<div class="card"><div class="ch">관점${g.view ? `<span class="chip sm b" style="margin-left:6px">${esc(g.view)}</span>` : ''}</div><div class="cb">
-      ${Object.keys(views).length ? `<select data-in="gxview" aria-label="저장한 관점" style="width:100%;margin-bottom:8px"><option value="">저장한 관점 고르기</option>${Object.keys(views).map((k) => `<option value="${esc(k)}"${g.view === k ? ' selected' : ''}>${esc(k)}${views[k].by ? ` · ${esc(views[k].by)}` : ''}</option>`).join('')}</select>` : ''}
+      ${Object.keys(views).length ? `<select data-in="gxview" aria-label="저장한 관점" style="width:100%;margin-bottom:8px"><option value="">저장한 관점 고르기</option>${Object.keys(views).map((k) => `<option value="${esc(k)}"${g.view === k ? ' selected' : ''}>${esc(k)}${views[k].role ? ` · ${esc(roleWord(views[k].role))}` : ''}${views[k].by ? ` · ${esc(views[k].by)}` : ''}</option>`).join('')}</select>` : ''}
       ${rows ? `<div class="gxticks">${rows}</div>` : '<div class="muted" style="font-size:12px">레코드를 펼치면 보여 줄 타입, 색, 레코드를 부를 속성을 고를 수 있습니다.</div>'}
-      <div class="muted" style="font-size:11.5px;margin-top:6px">보여 줄 타입, 색, 레코드를 부를 속성을 관점으로 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 역할마다 다른 관점을 둘 수 있습니다.</div>
+      ${rows ? `<label class="field" style="margin:8px 0 0"><span>이 관점을 기본으로 쓰는 역할</span><select data-in="gxviewrole" aria-label="관점을 쓰는 역할">${[['', '정하지 않음'], ...HOME_ROLE].map(([k, w]) => opt(k, w, g.viewRole || '')).join('')}</select></label>` : ''}
+      <div class="muted" style="font-size:11.5px;margin-top:6px">보여 줄 타입, 색, 모양, 레코드를 부를 속성을 관점으로 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 역할을 정해 두면 홈에서 그 역할을 고를 때 이 관점으로 바뀝니다.</div>
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn sm" data-act="gxviewsave"${rows ? '' : ' disabled'}>관점 저장</button>${g.view ? '<button class="btn sm ghost danger" data-act="gxviewforget">이 관점 지우기</button>' : ''}<button class="btn sm" data-act="gxlink"${g.seed.key ? '' : ' disabled'}>링크 복사</button></div></div></div>`;
   }
 
@@ -1469,6 +1488,24 @@
     const i = S.st.graph.nodes.findIndex((n) => n.id === type);
     return GX_COLOR[(i < 0 ? 0 : i) % GX_COLOR.length];
   }
+  // each type an outline of its own as well as a colour, so types tell apart when colours are alike or printed grey
+  const GX_SHAPE = ['pill', 'box', 'hex', 'slant', 'round', 'tag'];  // six shapes against eight colours: no two of the first 24 types share both
+  function gxShape(type) {
+    if (type === 'bundle') return 'pill';
+    const i = S.st.graph.nodes.findIndex((n) => n.id === type);
+    return GX_SHAPE[(i < 0 ? 0 : i) % GX_SHAPE.length];
+  }
+  function gxShapeSvg(type, b, fill, ink) {
+    const k = gxShape(type), st = `style="fill:${fill};stroke:${ink}"`, { x, y, w, h } = b;
+    if (k === 'box') return `<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="4" ${st}/>`;
+    if (k === 'round') return `<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="9" ${st}/>`;
+    if (k === 'hex') { const d = Math.min(10, h / 2); return `<path class="shape" d="M${x + d},${y} H${x + w - d} L${x + w},${y + h / 2} L${x + w - d},${y + h} H${x + d} L${x},${y + h / 2} Z" ${st}/>`; }
+    if (k === 'slant') { const d = Math.min(8, h / 2); return `<path class="shape" d="M${x + d},${y} H${x + w} L${x + w - d},${y + h} H${x} Z" ${st}/>`; }
+    if (k === 'tag') { const d = Math.min(9, h / 2); return `<path class="shape" d="M${x},${y} H${x + w - d} L${x + w},${y + h / 2} L${x + w - d},${y + h} H${x} Z" ${st}/>`; }
+    return `<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="${h / 2}" ${st}/>`;
+  }
+  const gxGlyph = (type) => { const [ink, fill] = gxColor(type); return `<svg class="gxglyph" viewBox="0 0 28 16" aria-hidden="true">${gxShapeSvg(type, { x: 1, y: 1, w: 26, h: 14 }, fill, ink)}</svg>`; };
+  const roleWord = (k) => (HOME_ROLE.find((r) => r[0] === k) || [k, k])[1];
 
   const gxName = (n) => (n.alt !== undefined && n.alt !== '' ? n.alt : n.title);  // a perspective may name records by another property
   const gxWord = (n) => (n.type === 'bundle' ? `${n.label} ${n.key} · 펼치기` : `${n.label} ${n.key}${gxName(n) ? ` ${String(gxName(n)).length > 9 ? `${String(gxName(n)).slice(0, 8)}…` : gxName(n)}` : ''}`);
@@ -1492,7 +1529,7 @@
       lv.forEach((id, i) => { at[id] = i; });
     });
     const boxes = {};
-    const size = (id) => ({ w: Math.max(70, textW(gxWord(g.nodes[id])) + GX.padX * 2), h: GX.h });
+    const size = (id) => ({ w: Math.max(70, textW(gxWord(g.nodes[id])) + GX.padX * 2 + (['hex', 'slant', 'tag'].includes(gxShape(g.nodes[id].type)) ? 16 : 0)), h: GX.h });  // a pointed outline needs room at its ends
     if (g.layout === 'radial') {
       levels.forEach((lv, d) => {
         if (!lv) return;
@@ -1542,7 +1579,7 @@
     const nodes = Object.entries(L.boxes).map(([id, b]) => {
       const n = g.nodes[id], [ink, fill] = gxColor(n.type);
       const cls = `${id === g.sel ? ' on' : ''}${onWay.has(id) ? ' way' : ''}${n.type === 'bundle' ? ' bundle' : ''}${id === gxId(g.seed.type, g.seed.key) ? ' seed' : ''}`;
-      return `<g class="gxn${cls}" data-gx="${esc(id)}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${b.h / 2}" style="fill:${fill};stroke:${ink}"/>
+      return `<g class="gxn${cls}" data-gx="${esc(id)}">${gxShapeSvg(n.type, b, fill, ink)}
         <text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 4.5}" text-anchor="middle" style="fill:${ink}">${esc(gxWord(n))}</text></g>`;
     }).join('');
     return `<svg class="gxsvg" width="${Math.round(L.W * z)}" height="${Math.round(L.H * z)}" viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="레코드 그래프">
@@ -1849,7 +1886,24 @@
   // ---- the schema as an entity diagram: each object with its key, its main and computed properties, each relation
   //      with its name and cardinality; the picked object's module as a region, the modules it reaches beside it ------
 
-  const ER = { w: 190, row: 17, head: 34, gapX: 70, gapY: 46, cols: 2, pad: 16, regionPad: 18, title: 26 };
+  const ER = { w: 190, row: 17, head: 34, gapX: 70, gapY: 46, cols: 2, pad: 16, regionPad: 18, title: 26, wMax: 330 };
+  let erCtx = null;
+  function erTextW(text, size, weight = 400) {  // the drawn width of a line on a card, measured with the page's font
+    if (!erCtx) erCtx = document.createElement('canvas').getContext('2d');
+    erCtx.font = `${weight} ${size}px ${getComputedStyle(document.body).fontFamily}`;
+    return erCtx.measureText(String(text)).width;
+  }
+  function erFit(text, size, max) {  // the text that fits the width, shortened with an ellipsis when it does not
+    if (erTextW(text, size) <= max) return [String(text), false];
+    let s = String(text);
+    while (s.length > 1 && erTextW(`${s}…`, size) > max) s = s.slice(0, -1);
+    return [`${s}…`, true];
+  }
+  function erWidth(o) {  // a card is as wide as its title line or its longest row, up to a limit
+    const title = 12 + erTextW(o.label, 13, 800) + 6 + erTextW(o.name, 11) + 10 + 48;
+    const rows = Math.max(0, ...erRows(o).map((r) => erTextW(r.text, 11) + 24));
+    return Math.round(Math.min(ER.wMax, Math.max(ER.w, title, rows)));
+  }
   const CARD_WORD = { many_to_one: 'N : 1', one_to_many: '1 : N', one_to_one: '1 : 1', many_to_many: 'N : M' };
   const shortMod = (x) => String(x || '').replace(/\s*온톨로지$/, '').replace(/^이커머스\s+/, '').replace(/^고객사 차이 · /, '');
 
@@ -1917,12 +1971,15 @@
         return r;
       }
       let rowH = [], y = y0 + ER.title + ER.regionPad, maxW = 0;
+      const widths = list.map(erWidth), colW = [];  // a column is as wide as its widest card
+      list.forEach((x, i) => { const c = i % cols; colW[c] = Math.max(colW[c] || 0, widths[i]); });
+      const colX = colW.map((_, c) => colW.slice(0, c).reduce((a, w) => a + w + ER.gapX, 0));
       list.forEach((x, i) => {
         const c = i % cols, r = Math.floor(i / cols);
         if (!rowH[r]) rowH[r] = 0;
         const h = ER.head + erRows(x).length * ER.row + 10;
         rowH[r] = Math.max(rowH[r], h);
-        boxes[x.name] = { x: x0 + ER.regionPad + c * (ER.w + ER.gapX), y: 0, w: ER.w, h, o: x, r };
+        boxes[x.name] = { x: x0 + ER.regionPad + colX[c], y: 0, w: widths[i], h, o: x, r };
       });
       const tops = rowH.map((_, r) => y + rowH.slice(0, r).reduce((a, h) => a + h + ER.gapY, 0));
       list.forEach((x) => { const b = boxes[x.name]; b.y = tops[b.r]; const p = md.pos[x.name]; if (p) { b.x = p.x; b.y = p.y; } maxW = Math.max(maxW, b.x + b.w - x0); });
@@ -1934,14 +1991,15 @@
     if (ER_VIEW[v].all) {  // every module a region of its own, two to a row
       const mods = [...new Set(m.objects.map(modOf))];
       let x = ER.pad, y = ER.pad, rowH = 0;
+      const perRow = md.perRow || 2;
       mods.forEach((label, i) => {
         const r = place(ordered(m.objects.filter((o) => modOf(o) === label)), x, y, ER.cols, label, false);
         rowH = Math.max(rowH, r.h);
-        if (i % 2 === 1) { x = ER.pad; y += rowH + 28; rowH = 0; } else x += r.w + 40;
+        if (i % perRow === perRow - 1) { x = ER.pad; y += rowH + 28; rowH = 0; } else x += r.w + 40;
       });
       return { boxes, regions, home: '온톨로지 전체' };
     }
-    const top = place(order, ER.pad, ER.pad, ER.cols, home, false);
+    const top = place(order, ER.pad, ER.pad, md.cols || ER.cols, home, false);
     // the modules it reaches stand in a column beside it, one card wide, so its relations stay short
     const byMod = {};
     [...near].map((n) => mgObj(n)).filter(Boolean).forEach((x) => { (byMod[modOf(x)] = byMod[modOf(x)] || []).push(x); });
@@ -2002,13 +2060,14 @@
     const columns = [...chunk(inc).reverse(), [...up, sel, ...down], ...chunk(out)];
     const leftN = chunk(inc).length;
     const tall = (c) => c.reduce((a, n) => a + base[n].h, 0) + (c.length - 1) * FOCUS.gapY;
-    const w = columns.length * ER.w + (columns.length - 1) * FOCUS.gapX;
+    const cw = Math.max(ER.w, ...[...ids].map((n) => base[n].w));  // columns as wide as the widest card gathered
+    const w = columns.length * cw + (columns.length - 1) * FOCUS.gapX;
     const h = Math.max(...columns.map(tall));
-    const at = md.anchor || { x: base[sel].x + ER.w / 2, y: base[sel].y + base[sel].h / 2 };
+    const at = md.anchor || { x: base[sel].x + base[sel].w / 2, y: base[sel].y + base[sel].h / 2 };
     const x0 = Math.max(8, at.x - w / 2), y0 = Math.max(34, at.y - h / 2);
     const boxes = {}, from = {};
     columns.forEach((c, i) => {
-      const x = x0 + i * (ER.w + FOCUS.gapX);
+      const x = x0 + i * (cw + FOCUS.gapX);
       let y = y0 + (h - tall(c)) / 2;
       c.forEach((n) => {
         boxes[n] = { ...base[n], x, y };
@@ -2019,7 +2078,7 @@
     });
     const heads = [];
     if (inc.length) heads.push({ x: x0, text: `들어오는 관계 ${inc.length}` });
-    if (out.length) heads.push({ x: x0 + (leftN + 1) * (ER.w + FOCUS.gapX), text: `나가는 관계 ${out.length}` });
+    if (out.length) heads.push({ x: x0 + (leftN + 1) * (cw + FOCUS.gapX), text: `나가는 관계 ${out.length}` });
     return { sel, ids, base, boxes, from, heads, w, h, y0, cx: x0 + w / 2, cy: y0 + h / 2 };
   }
 
@@ -2056,12 +2115,15 @@
     }).join('');
     const card = (b, cls, shift) => {
       const o = b.o, on = md.sel === o.name;
-      const rows = erRows(o).map((r, i) => `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${esc(r.text.length > 27 ? `${r.text.slice(0, 26)}…` : r.text)}</text>`).join('');
+      const rows = erRows(o).map((r, i) => {  // a row longer than the card is shortened, and the whole of it shows on hover
+        const [t, cut] = erFit(r.text, 11, b.w - 24);
+        return `<text class="r ${r.kind}" x="${b.x + 12}" y="${b.y + ER.head + 13 + i * ER.row}">${cut ? `<title>${esc(r.text)}</title>` : ''}${esc(t)}</text>`;
+      }).join('');
       const bad = (prob[o.name] || []).length;
       const tag = bad ? `문제 ${bad}` : o.status === 'deprecated' ? '폐기 예정' : o.status === 'draft' ? '초안' : o.new ? '새 객체' : o.pending ? '변경' : (o.extended_by || []).length ? `+ ${shortMod(o.extended_by[0])}` : (o.concept ? '개념' : '');
       const plus = live && !F ? `<g class="erplus" data-from="${esc(o.name)}"><circle cx="${b.x + b.w}" cy="${b.y + b.h / 2}" r="9"/><text x="${b.x + b.w}" y="${b.y + b.h / 2 + 4}" text-anchor="middle">+</text></g>` : '';
       return `<g class="ernode${on ? ' on' : ''}${o.new ? ' fresh' : o.pending ? ' pend' : ''}${bad ? ' problem' : ''}${quiet(o.name) ? ' erdim' : ''}${cls}" data-er="${esc(o.name)}"${shift ? ` data-dx="${shift[0]}" data-dy="${shift[1]}"` : ''} transform="translate(0,0)"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="10"/>
-        <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 14 + o.label.length * 13}" y="${b.y + 21}">${esc(o.name)}</text>
+        <text class="t" x="${b.x + 12}" y="${b.y + 21}">${esc(o.label)}</text><text class="n" x="${b.x + 12 + erTextW(o.label, 13, 800) + 6}" y="${b.y + 21}">${esc(o.name)}</text>
         ${tag ? `<text class="tag" x="${b.x + b.w - 10}" y="${b.y + 21}" text-anchor="end">${esc(tag)}</text>` : ''}
         <line x1="${b.x}" y1="${b.y + ER.head - 4}" x2="${b.x + b.w}" y2="${b.y + ER.head - 4}" class="sep"/>${rows}${plus}</g>`;
     };
@@ -2175,22 +2237,46 @@
   }
 
   function erZoomAt(ev, step, v) {  // zoom so that the point under the pointer stays under it
-    const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
-    if (!box) return;
-    const r = box.getBoundingClientRect(), z0 = md.zoom || 1;
-    const px = ev.clientX - r.left, py = ev.clientY - r.top;
-    const cx = (box.scrollLeft + px) / z0, cy = (box.scrollTop + py) / z0;
+    const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`), svg = box && box.querySelector('svg');
+    if (!svg) return;
+    const s = svg.getBoundingClientRect(), z0 = md.zoom || 1;
+    const cx = (ev.clientX - s.left) / z0, cy = (ev.clientY - s.top) / z0;  // the drawing point under the pointer
     erZoom(step, 0.4, v);
     const after = $(`#${ER_VIEW[v].box}`), z1 = md.zoom || 1;
-    if (after) { after.scrollLeft = cx * z1 - px; after.scrollTop = cy * z1 - py; }
+    if (!after) return;
+    const r = after.getBoundingClientRect();  // a drawing narrower than the canvas is centred and does not scroll, so this holds only where it can
+    after.scrollLeft = cx * z1 - (ev.clientX - r.left);
+    after.scrollTop = cy * z1 - (ev.clientY - r.top);
+  }
+
+  function erCols(v) {  // how many cards stand side by side: as many as the canvas is wide at reading size
+    const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
+    if (!box || !box.clientWidth) return;
+    const unit = ER.w + ER.gapX, inner = box.clientWidth - 2 * ER.pad;
+    if (ER_VIEW[v].all) {  // whole modules side by side
+      const region = ER.cols * ER.w + (ER.cols - 1) * ER.gapX + 2 * ER.regionPad;
+      md.perRow = Math.max(2, Math.min(4, Math.floor((inner + 40) / (region + 40))));  // never fewer than two: a narrow canvas fits by zoom instead
+    } else {  // the picked module's cards, beside the one-card column of the modules it reaches
+      const avail = inner - 56 - (ER.w + 2 * ER.regionPad);
+      md.cols = Math.max(ER.cols, Math.min(4, Math.floor((avail - 2 * ER.regionPad + ER.gapX) / unit)));
+    }
+  }
+
+  function erExtent(v) {  // the drawing's size at reading size
+    const L = erLayout(v);
+    if (!L) return null;
+    const every = Object.values(L.boxes);
+    return { W: Math.max(...every.map((b) => b.x + b.w), ...L.regions.map((r) => r.x + r.w)) + ER.pad,
+      H: Math.max(...every.map((b) => b.y + b.h), ...L.regions.map((r) => r.y + r.h)) + ER.pad };
   }
 
   function erZoom(step, floor = 0.4, v = 'model') {  // 0 fits the diagram to the canvas's width
     const md = ER_VIEW[v].state(), box = $(`#${ER_VIEW[v].box}`);
     if (step === 0 && md.focus) { focusPaint(v); return; }
     if (step === 0 && box) {
-      const svg = box.querySelector('svg'), w = svg ? Number(svg.getAttribute('viewBox').split(' ')[2]) : 0;
-      md.zoom = w ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / w)) : 1;
+      erCols(v);
+      const e = erExtent(v);
+      md.zoom = e ? Math.min(1, Math.max(floor, (box.clientWidth - 8) / e.W)) : 1;
     } else md.zoom = Math.min(1.6, Math.max(0.4, Math.round(((md.zoom || 1) + step * 0.1) * 10) / 10));
     const card = $(`#${ER_VIEW[v].card}`);
     if (card) {
@@ -4134,7 +4220,7 @@ ${controls}${body}`;
         <div class="chips"><a class="btn sm" href="#${tab}">${navLabel(tab)} 열기</a>${ch && g.video ? `<button class="btn sm ghost" data-act="seek" data-t="${ch.t}">영상 ${clock(ch.t)}</button>` : ''}</div></div></div>`;
     }).join('');
     const ways = GUIDE_ADAPT.filter((x) => !x[3] || (S.st && S.st.ask));
-    const intro = `<div class="card gsec first"><div class="cb"><div class="fhead"><b>처음 사용하는 순서</b></div>
+    const intro = `<div class="card gsec"><div class="cb"><div class="fhead"><b>처음 사용하는 순서</b></div>
         <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs"><span class="fno">${i + 1}</span><b>${esc(title)}</b><span class="muted">${esc(what)}</span></a>`).join('')}</div></div></div>
       <div class="card gsec"><div class="cb"><div class="fhead"><b>스페이스 용도</b></div>
         <table class="tight">${GUIDE_USE.map(([k, v]) => `<tr><td style="white-space:nowrap"><b>${esc(k)}</b></td><td style="font-size:12.5px">${esc(v)}</td></tr>`).join('')}</table></div></div>
@@ -4301,6 +4387,15 @@ ${controls}${body}`;
     try { S.files = await api('files'); } catch (e) { S.files = { error: e.message }; }
     if (!S.dr.rules && S.files.rules) S.dr.rules = JSON.parse(JSON.stringify(S.files.rules));
     if (S.tab === 'data' || S.tab === 'library') render();
+  }
+  async function refreshFiles() {  // in a team the draft is shared: what another person filed, applied or dropped shows on coming back
+    if (!S.files || S.files.busy) return;
+    try {
+      const f = await api('files');
+      if (JSON.stringify(f.request || null) === JSON.stringify(S.files.request || null) && !!f.pending === !!S.files.pending) return;
+      S.files = f;
+      if (S.tab === 'data') render();
+    } catch (e) { /* the page keeps what it has */ }
   }
 
   async function filesCall(path, body, done) {
@@ -4745,9 +4840,20 @@ ${controls}${body}`;
     const nst = next && p.steps.find((s) => s.id === next[0]);
     const hint = nst ? `<span class="muted">다음 단계에서 ${esc(REVIEW[i + 1][1])} ${esc(stepTotal(nst))}를 검토합니다</span>` : '';
     const all = left ? '<button class="btn" data-act="dokall">남은 제안 모두 채택</button>' : '';
-    const go = next ? `<button class="btn primary" data-act="dview" data-view="${next[0]}">다음: ${next[1]}</button>`
-      : `<button class="btn primary" data-act="dapply"${S.dr.busy || !S.dr.plan || S.dr.plan.busy || (S.dr.plan.issues || []).length || !canApplyDraft() ? ' disabled' : ''}${canApplyDraft() ? '' : ' title="적용은 승인자가 합니다. 검토한 내용은 그대로 남습니다."'}>${S.dr.busy ? '<span class="spin"></span>적용 중' : '스페이스에 적용'}</button>`;
-    return `<div class="rvfoot">${say}${hint}<span style="flex:1"></span>${all}${go}${canApplyDraft() ? '' : '<span class="muted" style="font-size:12px">적용은 승인자가 합니다</span>'}</div>`;
+    const req = S.files.request, blocked = S.dr.busy || !S.dr.plan || S.dr.plan.busy || (S.dr.plan.issues || []).length;
+    const busy = '<span class="spin"></span>적용 중';
+    let go, note = '';
+    if (next) go = `<button class="btn primary" data-act="dview" data-view="${next[0]}">다음: ${next[1]}</button>`;
+    else if (req) {  // a request waits: the approver applies it as filed, the requester can take it back
+      note = `<span class="chip sm warn">적용 요청 대기 · ${esc(req.by)} · ${esc(dayOf(req.at))}</span>`;
+      go = canApplyDraft() ? `<button class="btn" data-act="drequestdrop"${S.dr.busy ? ' disabled' : ''}>반려</button><button class="btn primary" data-act="drequestapply"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? busy : '요청대로 적용'}</button>`
+        : (S.me && S.me.user && S.me.user.name === req.by ? '<button class="btn" data-act="drequestdrop">요청 거두기</button>' : '');
+    } else if (canApplyDraft()) go = `<button class="btn primary" data-act="dapply"${blocked ? ' disabled' : ''}>${S.dr.busy ? busy : '스페이스에 적용'}</button>`;
+    else {  // an editor in a team: the last step files the request
+      note = '<span class="muted" style="font-size:12px">적용은 승인자가 합니다</span>';
+      go = `<button class="btn primary" data-act="drequest"${blocked ? ' disabled' : ''} title="검토한 그대로 승인자에게 보냅니다">${S.dr.busy ? '<span class="spin"></span>보내는 중' : '적용 요청'}</button>`;
+    }
+    return `<div class="rvfoot">${say}${hint}<span style="flex:1"></span>${all}${note}${go}</div>`;
   }
 
   function draftBody() {
@@ -5586,6 +5692,31 @@ ${controls}${body}`;
   // ---- rules, named values, states, actions and roles: the same way as an object, an edit and then a change request
 
   const CELL_OPS = { any: '조건 없음', eq: '같음', ne: '다름', lte: '이하', gte: '이상', lt: '미만', gt: '초과', in: '다음 중 하나', notin: '다음 제외', null: '값 없음', notnull: '값 있음', raw: '직접 입력' };
+  // a condition typed the way people say it ("14일 이하", "NORMAL 아님", "A, B 중", "값 없음", "조건 없음") becomes a comparison
+  // and a value; null when the text is a plain value, which stays as typed
+  function cellPhrase(text, i, op) {
+    const t = String(text || '').trim();
+    if (!t || !i) return null;
+    const plain = (s) => {
+      s = s.trim();
+      if (i.type === 'boolean') return ['예', 'true', '참'].includes(s) ? 'true' : ['아니요', 'false', '거짓'].includes(s) ? 'false' : s;
+      return Object.keys(i.labels || {}).find((x) => i.labels[x] === s) || s;
+    };
+    if (['조건 없음', '아무거나', '-', '–', '—'].includes(t)) return { op: 'any', value: '' };
+    if (['값 없음', '없음', '비어 있음'].includes(t)) return { op: 'null', value: '' };
+    if (['값 있음', '있음'].includes(t)) return { op: 'notnull', value: '' };
+    let m = t.match(/^(.+?)\s*(이하|까지|이상|부터|미만|초과)$/);
+    if (m) { const n = m[1].replace(/[,\s]/g, '').match(/-?\d+(\.\d+)?/); if (n) return { op: { 이하: 'lte', 까지: 'lte', 이상: 'gte', 부터: 'gte', 미만: 'lt', 초과: 'gt' }[m[2]], value: n[0] }; }
+    m = t.match(/^(.+?)\s*(아님|아닌|제외|빼고)$/);
+    if (m) { const list = m[1].split(',').map(plain).filter(Boolean); return list.length > 1 ? { op: 'notin', value: list.join(',') } : { op: 'ne', value: list[0] || '' }; }
+    m = t.match(/^(.+?)\s*(중 하나|중에|중)$/);
+    if (m) return { op: 'in', value: m[1].split(',').map(plain).filter(Boolean).join(',') };
+    if (t.includes(',') && !['in', 'notin'].includes(op)) return { op: 'in', value: t.split(',').map(plain).filter(Boolean).join(',') };
+    if (i.type === 'boolean' && ['예', '아니요', '참', '거짓'].includes(t)) return { op: 'eq', value: plain(t) };
+    const k = Object.keys(i.labels || {}).find((x) => i.labels[x] === t);
+    return k ? { op: 'eq', value: k } : null;
+  }
+  const cellHint = (i, op) => (op === 'in' || op === 'notin' ? '쉼표로 구분' : ['integer', 'decimal', 'number'].includes(i.type) ? `예: 14${i.unit || ''} 이하` : i.type === 'boolean' ? '예 · 아니요' : '예: NORMAL 아님');
   const opsOf = (type) => (['integer', 'decimal', 'number', 'float', 'date', 'datetime'].includes(type) ? ['any', 'eq', 'ne', 'lte', 'gte', 'lt', 'gt', 'null', 'notnull']
     : (type === 'boolean' ? ['any', 'eq'] : ['any', 'eq', 'ne', 'in', 'notin', 'null', 'notnull']));
   const mgField = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${esc(hint)}</span>` : ''}</div>`;
@@ -5604,7 +5735,7 @@ ${controls}${body}`;
     if (['any', 'null', 'notnull'].includes(part.op)) return '';
     if (i.type === 'boolean') return `<select ${name}>${[['true', '예'], ['false', '아니요']].map(([k, l]) => opt(k, l, part.value)).join('')}</select>`;
     if (i.values.length && ['eq', 'ne'].includes(part.op)) return `<select ${name}>${i.values.map((x) => opt(x, i.labels[x] || x, part.value)).join('')}</select>`;
-    return `<input type="text" ${name} value="${esc(part.value)}" placeholder="${part.op === 'in' || part.op === 'notin' ? '쉼표로 구분' : (i.unit || '값')}">`;
+    return `<input type="text" ${name} value="${esc(part.value)}" placeholder="${esc(cellHint(i, part.op))}" title="사람 말로 적어도 됩니다. 예: 14일 이하, NORMAL 아님, A, B 중, 값 없음">`;
   }
 
   function ruleForm(d) {
@@ -5768,7 +5899,7 @@ ${controls}${body}`;
       const ops = part.op === 'raw' ? ['raw'] : opsOf(i.type);
       const val = ['any', 'null', 'notnull'].includes(part.op) ? '' : (i.type === 'boolean' ? `<select data-in="cellv">${[['true', '예'], ['false', '아니요']].map(([k, l]) => opt(k, l, part.value)).join('')}</select>`
         : i.values.length && ['eq', 'ne'].includes(part.op) ? `<select data-in="cellv">${i.values.map((x) => opt(x, i.labels[x] || x, part.value)).join('')}</select>`
-          : `<input type="text" data-in="cellv" value="${esc(part.value)}" style="width:70px">`);
+          : `<input type="text" data-in="cellv" value="${esc(part.value)}" style="width:110px" placeholder="${esc(cellHint(i, part.op))}" title="사람 말로 적어도 됩니다. 예: 14일 이하, NORMAL 아님, 값 없음">`);
       return `<td class="cellon"><div class="celled"><select data-in="cellop">${ops.map((o) => opt(o, CELL_OPS[o], part.op)).join('')}</select>${val}
         <button class="iconbtn" data-act="cellsave" aria-label="저장">✓</button><button class="iconbtn" data-act="cellx" aria-label="취소">×</button></div></td>`;
     }
@@ -6584,7 +6715,7 @@ ${controls}${body}`;
       const name = (window.prompt('관점 이름', S.gx.view || '고객 상담') || '').trim();
       if (!name) return;
       try {
-        const r = await api('graph/view', { name, hide: S.gx.hide, color: S.gx.color, label: S.gx.labelBy });
+        const r = await api('graph/view', { name, hide: S.gx.hide, color: S.gx.color, label: S.gx.labelBy, role: S.gx.viewRole || '' });
         S.gx.views = r.views; S.gx.view = name; toast(`관점 '${name}'을 저장했습니다. 이 스페이스를 여는 모두가 고를 수 있습니다.`);
       } catch (e) { fail(e); return; }
       render();
@@ -6809,7 +6940,12 @@ ${controls}${body}`;
     ibtab: (t) => { S.home.tab = t.dataset.k; render(); },
     ibapprove: (t) => inboxDecide(t.dataset.id, true),
     ibreject: (t) => inboxDecide(t.dataset.id, false),
-    hrole: (t) => { S.home.role = t.dataset.k; try { localStorage.setItem('xspace-role', S.home.role); } catch (e) { /* this visit only */ } render(); renderSide(); },
+    hrole: (t) => {
+      S.home.role = t.dataset.k;
+      try { localStorage.setItem('xspace-role', S.home.role); } catch (e) { /* this visit only */ }
+      gxLoadViews().then(gxApplyRole);  // the graph takes the perspective kept for this role
+      render(); renderSide();
+    },
     homeask: (t) => { S.sr.text = t.dataset.q; location.hash = '#search'; searchNow(); },
     homego: () => { if (!S.home.q.trim()) { toast('찾을 말이나 질문을 입력해 주세요.', true); return; } S.sr.text = S.home.q; location.hash = '#search'; searchNow(); },
     homeq2: (t) => { location.hash = '#query'; S.q.mode = 'list'; pickQuery(t.dataset.q); },
@@ -7436,27 +7572,63 @@ ${controls}${body}`;
       mgEdit('delete_question', { id: t.dataset.id }, `검증 질문 ${t.dataset.id}을 제외했습니다.`);
     },
     dapply: async () => {
-      const p = S.files.pending, os = p.steps.find((x) => x.id === 'objects');
-      const rows = os.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
-      const left = rows.filter((r) => r.status === 'check');
-      if (left.length) { S.dr.view = 'objects'; S.dr.pick = left[0].x.table; render(); toast(`확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다. 표준에 연결할지 새 객체로 둘지 정해 주세요.`, true); return; }
-      const choices = Object.fromEntries(rows.map((r) => [r.x.table, r.choice]));
+      const got = draftChoices();
+      if (!got) return;
       S.dr.busy = true;
       render();
       try {
-        await api('draft/review/apply', { standard: S.map.picked, edits: toEdits(), choices });
-        Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
-        S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false, auto: '' };
-        S.changes = null; S.agree = null; S.flset = null;
-        stale();
-        S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
+        await api('draft/review/apply', { standard: S.map.picked, edits: toEdits(), choices: got });
+        await draftApplied();
+      } catch (e) { S.dr.busy = false; render(); fail(e); }
+    },
+    drequest: async () => {  // in a team, an editor's last step: the reviewed draft goes to an approver as it stands
+      const got = draftChoices();
+      if (!got) return;
+      S.dr.busy = true;
+      render();
+      try {
+        await api('draft/request', { standard: S.map.picked, edits: toEdits(), choices: got });
         S.dr.busy = false;
-        await load();
-        location.hash = '#flow';
-        toast('온톨로지를 스페이스에 적용했습니다.');
+        await loadFiles();
+        toast('적용 요청을 보냈습니다. 승인자가 할 일이나 초안 화면에서 적용합니다.');
+      } catch (e) { S.dr.busy = false; render(); fail(e); }
+    },
+    drequestdrop: async () => {
+      try { await api('draft/request/drop', {}); } catch (e) { fail(e); return; }
+      S.home.box = null;
+      await loadFiles();
+      if (S.tab !== 'data') render();
+      toast('적용 요청을 거두었습니다. 검토한 초안은 그대로 남습니다.');
+    },
+    drequestapply: async () => {
+      S.dr.busy = true;
+      render();
+      try {
+        await api('draft/request/apply', {});
+        await draftApplied();
       } catch (e) { S.dr.busy = false; render(); fail(e); }
     },
   };
+
+  function draftChoices() {  // every table settled as standard or new; otherwise the first unsettled one is shown and nothing goes
+    const p = S.files.pending, os = p.steps.find((x) => x.id === 'objects');
+    const rows = os.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
+    const left = rows.filter((r) => r.status === 'check');
+    if (left.length) { S.dr.view = 'objects'; S.dr.pick = left[0].x.table; render(); toast(`확인할 테이블 ${left.length}개가 남아 적용하지 못했습니다. 표준에 연결할지 새 객체로 둘지 정해 주세요.`, true); return null; }
+    return Object.fromEntries(rows.map((r) => [r.x.table, r.choice]));
+  }
+
+  async function draftApplied() {  // the space is another one now: everything read from the old one goes
+    Object.assign(S, { impact: null, pos: {}, sel: null, gsel: null, files: null, dpos: {}, cat: NEW_CAT(), conv: null });
+    S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false, auto: '' };
+    S.changes = null; S.agree = null; S.flset = null;
+    stale();
+    S.q.name = null; S.q.text = ''; S.q.dirty = false; S.q.role = ''; S.q.principal = {}; S.d.name = null; S.d.key = null;
+    S.dr.busy = false;
+    await load();
+    location.hash = '#flow';
+    toast('온톨로지를 스페이스에 적용했습니다.');
+  }
 
   const INPUT = {
     gxq: (t) => { S.gx.q = t.value; gxFindSoon('start'); },
@@ -7486,7 +7658,12 @@ ${controls}${body}`;
     qbcv: (t) => { S.q.b.conds[Number(t.dataset.i)].value = t.value; },
     qbname: (t) => { S.q.b.name = t.value; },
     qblabel: (t) => { S.q.b.label = t.value; },
-    cellv: (t) => { if (S.mg.cell) S.mg.cell.part.value = t.value; },
+    cellv: (t) => {
+      if (!S.mg.cell) return;
+      const d = S.mg.st.decisions.find((x) => x.name === S.mg.dec), i = d && d.inputs.find((x) => x.name === S.mg.cell.input);
+      const said = cellPhrase(t.value, i, S.mg.cell.part.op);  // "14일 이하" in the cell sets the comparison as well
+      if (said) { S.mg.cell.part = said; render(); } else S.mg.cell.part.value = t.value;
+    },
     mdyaml: (t) => { if (S.md.yaml) S.md.yaml.text = t.value; const b = $('[data-act=mdyamlsave]'); if (b) b.disabled = S.md.yaml.text === S.md.yaml.was; },
     mdnote: (t) => { S.md.note = t.value; },
     srfkey: (t) => { S.sr.fix.key = t.value; },
@@ -7557,6 +7734,7 @@ ${controls}${body}`;
     gxrel: (t) => { if (t.checked) gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); else gxShrink(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); },
     gxshow: (t) => { S.gx.hide = t.checked ? S.gx.hide.filter((x) => x !== t.dataset.t) : [...S.gx.hide, t.dataset.t]; S.gx.view = ''; render(); },
     gxview: (t) => { gxApplyView(t.value); render(); },
+    gxviewrole: (t) => { S.gx.viewRole = t.value; },
     gxcolor: (t) => { S.gx.color = { ...S.gx.color, [t.dataset.t]: t.value }; S.gx.view = ''; render(); },
     gxlabel: (t) => { S.gx.labelBy = { ...S.gx.labelBy }; if (t.value) S.gx.labelBy[t.dataset.t] = t.value; else delete S.gx.labelBy[t.dataset.t]; S.gx.view = ''; gxFetchLabels().then(render); },
     recrole: (t) => { S.rec.seeAs = t.value; render(); },
@@ -7582,9 +7760,14 @@ ${controls}${body}`;
     cellop: (t) => { S.mg.cell.part.op = t.value; render(); },
     mgwhen: (t) => {
       const w = S.mg.form.v.when, k = t.dataset.k;
-      w[k] = { ...(w[k] || { op: 'any', value: '' }), [t.dataset.p]: t.value };
-      if (t.dataset.p !== 'op') return;
       const i = S.mg.st.decisions.find((x) => x.name === S.mg.dec).inputs.find((x) => x.name === k);
+      if (t.dataset.p === 'value') {  // a phrase like "14일 이하" sets the comparison too
+        const said = cellPhrase(t.value, i, (w[k] || {}).op);
+        w[k] = said || { ...(w[k] || { op: 'any', value: '' }), value: t.value };
+        if (said) render();
+        return;
+      }
+      w[k] = { ...(w[k] || { op: 'any', value: '' }), op: t.value };
       if (!w[k].value && ['eq', 'ne'].includes(t.value)) w[k].value = i.type === 'boolean' ? 'true' : (i.values[0] || '');
       render();
     },
