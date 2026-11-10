@@ -673,9 +673,10 @@ class PagesMixin:
     # ---- the order an ontology is built in, as this space stands -------------------------------------------------------
 
     def build_steps(self) -> dict:
-        """The eight steps a person builds an ontology in, each with where this space stands on it, read from what is
-        here (nothing is measured anew): files and tables, a draft and its pipelines, the definition and its pending
-        edits, rules and actions, change requests, the last check, requests handled, and how agents come in."""
+        """The five steps a space is built in, each with where this space stands on it, read from what is here (nothing
+        is measured anew): the definition (the ontology), its rules, the data it is bound to, the last check, and what
+        waits for approval. A definition needs no data, so the data step is optional: it never holds the next one back.
+        `part` names the part of the system a step belongs to; `start` says nothing is defined yet."""
         st, o = self.studio, self.studio.onto
         files = self.repositories.files(self.repo)
         kept = [f for f in files.values() if f["included"] and not f.get("error") and (f.get("facts") or {}).get("kind") != "raw"]
@@ -690,29 +691,26 @@ class PagesMixin:
         measured = self._measured or {}
         check = measured.get("check") or {}
         gates = [{"passed": g.passed} for g in flow_gates(measured, st.flow)] if measured else []  # the last measurement, read again
-        audit = list(st.actions.audit)
-        agents = sum(1 for p in st.actions.proposals.values() if p.requested_by.kind != "human")
+        drafting = ("적용 요청 대기" if self.draft_request else "초안 검토 중") if self.pending is not None else ""
         steps = [
-            {"id": "catalog", "title": "데이터 가져오기", "done": bool(kept or tables),
-             "detail": " · ".join(x for x in (f"파일 {len(kept)}개" if kept else "", f"원천 테이블 {len(tables)}개" if tables else "") if x) or "파일을 올리거나 DB를 연결합니다"},
-            {"id": "data", "title": "초안 검토", "done": bool(o.objects) or self.pending is not None,
-             "detail": ("적용 요청 대기" if self.draft_request else "초안 검토 중") if self.pending is not None else (f"파이프라인 {len(self.pipelines)}개 · 객체 {len(o.objects)}개" if o.objects else "초안을 만들어 제안을 검토합니다")},
-            {"id": "model", "title": "모델링", "done": bool(o.objects and o.links),
-             "detail": f"객체 {len(o.objects)} · 관계 {len(o.links)}" + (f" · 대기 중인 변경 {pending}" if pending else "")},
-            {"id": "mgrules", "title": "규칙 · 액션", "done": bool(o.decisions or o.actions),
-             "detail": f"결정표 {len(o.decisions)} · 액션 {len(o.actions)} · 역할 {len(o.roles)}"},
-            {"id": "changes", "title": "변경 요청", "done": decided > 0,
-             "detail": " · ".join(x for x in (f"결정 {decided}" if decided else "", f"대기 {waiting}" if waiting else "") if x) or "변경은 검토와 승인을 거쳐 반영됩니다"},
-            {"id": "check", "title": "검증", "done": bool(gates) and all(g.get("passed") for g in gates),
+            {"id": "model", "title": "온톨로지", "part": "Ontology manager", "done": bool(o.objects),
+             "detail": " · ".join(x for x in (f"객체 {len(o.objects)} · 관계 {len(o.links)}" if o.objects else "객체와 속성, 관계를 정의합니다",
+                                              f"대기 중인 변경 {pending}" if pending else "", drafting) if x)},
+            {"id": "mgrules", "title": "규칙", "part": "Semantic layer", "done": bool(o.decisions or o.actions),
+             "detail": f"결정표 {len(o.decisions)} · 액션 {len(o.actions)} · 역할 {len(o.roles)}" if (o.decisions or o.actions or o.roles) else "결정표와 액션, 권한을 정합니다"},
+            {"id": "catalog", "title": "데이터 연결", "part": "Data binder", "done": bool(tables), "optional": True,
+             "detail": " · ".join(x for x in (f"원천 테이블 {len(tables)}개" if tables else "", f"파일 {len(kept)}개" if kept else "") if x)
+             or "연결하지 않아도 정의와 규칙, 판정은 동작합니다"},
+            {"id": "check", "title": "검증", "part": "QA", "done": bool(gates) and all(g.get("passed") for g in gates),
              "detail": (f"통과 조건 {sum(1 for g in gates if g.get('passed'))} / {len(gates)}" if gates else "아직 재지 않음")
              + (f" · 검증 질문 {check.get('right', check.get('passed', ''))} / {check.get('questions', len(o.questions))}" if check.get("questions") else (f" · 검증 질문 {len(o.questions)}개" if o.questions else ""))},
-            {"id": "search", "title": "사용", "done": bool(audit),
-             "detail": f"처리 요청 {len(audit)}건" if audit else "홈에서 묻고, 레코드와 그래프로 찾고, 판정 · 처리합니다"},
-            {"id": "connect", "title": "연동", "done": bool(agents) or not self.self_approve,
-             "detail": (f"Agent 요청 {agents}건" if agents else "") + (" · 팀 스페이스" if not self.self_approve else "") or "MCP · REST /v1 로 Agent와 플랫폼이 같은 공간을 씁니다"},
+            {"id": "changes", "title": "변경 승인", "part": "", "done": not pending and not waiting,
+             "detail": " · ".join(x for x in (f"요청 전 변경 {pending}" if pending else "", f"승인 대기 {waiting}" if waiting else "", f"결정 {decided}" if decided else "") if x)
+             or "기다리는 변경이 없습니다"},
         ]
-        nxt = next((s["id"] for s in steps if not s["done"]), "")
-        return plain({"steps": steps, "next": nxt})
+        need = [s for s in steps if not s["done"] and not s.get("optional")]
+        nxt = need[0]["id"] if need else next((s["id"] for s in steps if not s["done"]), "")
+        return plain({"steps": steps, "next": nxt, "start": not o.objects})
 
     def _standing_gates(self) -> dict:
         """The pass conditions as the studio meets them before any change, measured once per definition."""
