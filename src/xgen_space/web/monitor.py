@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from xgen_space.preview import MODULE_COLOR, TARGETS
+from xgen_space.review import tally
 
 FLOORS = [("source", "①", "원천 데이터", "catalog"), ("convert", "②", "변환", "convert"),
           ("ontology", "③", "온톨로지 구축", "library"), ("store", "④", "저장소 어댑터", "adapters"), ("use", "⑤", "활용", "search"),
@@ -157,6 +158,7 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
     conf = query.get("conformance") or {}
     agree = decide.get("agreement") or {}
     gates = [g for s in steps.values() for g in s.get("gates") or []]
+    met = tally(gates)  # of the conditions measured; those that read rows with no source connected are counted apart
     nodes, edges = _graph(onto)
 
     def state(*stage_ids: str) -> str:
@@ -193,18 +195,19 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
                    _tag("verify.grounded", "근거 제시율", _pct(check.get("grounded")), tab="check"),
                    *([_tag("verify.values", "거래 값 오류", check["value_errors"], "bad" if check["value_errors"] else "ok", "check")]
                      if check.get("value_errors") is not None else []),
-                   _tag("verify.gates", "통과 조건", f"{sum(g['passed'] for g in gates)} / {len(gates)}",
+                   _tag("verify.gates", "통과 조건", f"{met['met']} / {met['all']}",
                         "ok" if flow["passed"] else "bad", "flow")],
     }
     parts = {
-        "source": {"stores": [{"name": source["backend"], "dialect": str(source.get("dialect") or "").upper()}]},
+        "source": {"stores": [{"name": source["backend"], "dialect": str(source.get("dialect") or "").upper()}]
+                   if source["backend"] else []},
         "ontology": {"modules": [{"label": m["label"], "color": MODULE_COLOR.get(m["kind"], "#8a96a5")}
                                  for m in define["modules"][:MODULES_MAX]],
                      "nodes": nodes, "edges": edges, "store": bool(project.get("backends"))},
         "store": {"graphs": [g["name"] for g in graphs or []][:3], "vectors": [s["name"] for s in index["stores"]][:3],
                   "embedder": index["embedder"]["name"], "reasoners": (reasoners or [])[:3]},
         "use": {"targets": [label for _, label in TARGETS]},
-        "verify": {"gates": [{"label": g["label"], "passed": g["passed"]} for g in gates]},
+        "verify": {"gates": [{"label": g["label"], "passed": g["passed"], "unmeasured": g.get("unmeasured") or ""} for g in gates]},
     }
     floors = []
     for fid, no, label, tab in FLOORS:
@@ -214,6 +217,6 @@ def board(flow: dict, *, files: dict, onto, modules: list, owner_label, findings
     shape = {k: [v.get(x) for x in sorted(v) if x != "gates"] for k, v in parts.items()}
     shape["gates"] = [g["label"] for g in parts["verify"]["gates"]]
     return {"floors": floors, "parts": parts, "alerts": alerts, "passed": flow["passed"],
-            "status": _worst([f["status"] for f in floors]), "gates": {"met": sum(g["passed"] for g in gates), "all": len(gates)},
+            "status": _worst([f["status"] for f in floors]), "gates": met,
             "chain": _chain(steps, findings, owner_label), "faults": faults or [],
             "shape": hashlib.sha256(json.dumps(shape, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]}

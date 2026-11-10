@@ -252,7 +252,9 @@ def from_space(studio, space, files: dict | None = None) -> Catalog:
     are: the names in studio.yaml are keys, not words for a screen."""
     source = studio.source or "source"
     cat = from_ontology(studio.onto, database=source)
-    cat.assets[f"database:{source}"].label = "원천 DB"
+    db = cat.assets[f"database:{source}"]
+    db.label = "원천 DB" if studio.backends else "원천 DB (미연결)"  # the definition names a source; none is connected
+    db.attrs["connected"] = bool(studio.backends)
     for name, b in studio.backends.items():
         if b.capabilities.load:
             gid = f"graph:{name}"

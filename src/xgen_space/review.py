@@ -31,6 +31,7 @@ REQUIRED = ("source", "define")
 GATES = {"bind": ("max_errors", "max_warnings"), "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
          "check": ("min_accuracy", "min_grounded", "max_value_errors")}
 DEFAULT_GATES = {"bind": {"max_errors": 0}, "query": {"min_agree": 1.0}}
+NO_SOURCE = "no_source"  # why a condition was not measured: it reads rows, and no backend is connected to read them from
 
 
 class ChangeError(ValueError):
@@ -126,6 +127,7 @@ class GateResult:
     limit: float
     value: float | None
     passed: bool
+    unmeasured: str = ""  # NO_SOURCE when the condition reads rows and there is no source: passed, since nothing failed
 
 
 def agreement(studio, spec: dict[str, Any]) -> dict[str, Any]:
@@ -139,6 +141,7 @@ def agreement(studio, spec: dict[str, Any]) -> dict[str, Any]:
     table = studio.onto.decisions.get(name)
     if table is None:
         raise KeyError(f"unknown decision '{name}'")
+    studio.backend()  # past cases are rows: with no source to read them from, that is said before anything else
     res = studio.run(spec["query"], dict(spec.get("params") or {}))
     rows = res.records()
     expect: dict[str, str] = dict(spec["expect"])
@@ -225,6 +228,7 @@ def value_accuracy(studio, specs: list[dict[str, Any]]) -> dict[str, Any]:
     {type, property}) and tolerance.
     """
     items, cases, errors = [], 0, 0
+    studio.backend()  # every case is a row: with no source to read them from, that is said before anything else
     for spec in specs:
         rows = studio.run(spec["query"], dict(spec.get("params") or {})).records()
         wrong = []
@@ -241,8 +245,16 @@ def value_accuracy(studio, specs: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def measure(studio, settings: FlowSettings) -> dict[str, Any]:
-    """The numbers the pass conditions read, for the stages that are on."""
+    """The numbers the pass conditions read, for the stages that are on. A studio with no backend holds its definition
+    only: what reads rows (the database check, backends compared, questions on records, values, past cases) is left
+    unmeasured and named under `unmeasured` ({"stage.condition": reason}), as a stage with nothing to measure is."""
     out: dict[str, Any] = {}
+    skipped: dict[str, str] = {}
+    no_source = not studio.backends
+    if settings.on("bind") and not studio.source:
+        skipped.update({f"bind.{c}": NO_SOURCE for c in GATES["bind"]})
+    if settings.on("query") and no_source:
+        skipped["query.min_agree"] = NO_SOURCE
     if settings.on("bind") and studio.source:
         rep = studio.check_bindings()
         out["bind"] = {"ok": rep.ok, "checked": rep.checked,
@@ -267,21 +279,32 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
             out["query"] = {"error": f"{type(e).__name__}: {e}", "share": 0.0}
     if settings.on("check") and studio.onto.questions:
         q = studio.questions()
-        out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in q.results if not r.passed],
-                        "wrong": [{"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got),
-                                   "error": r.error} for r in q.results if not r.passed][:20],
-                        "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in q.results if not r.grounded}}
-    if settings.on("check") and settings.values:
+        asked = q.measured  # without a source, only the questions a table answers from given values
+        if asked:
+            out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed],
+                            "wrong": [{"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got),
+                                       "error": r.error} for r in asked if not r.passed][:20],
+                            "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in asked if not r.grounded},
+                            "unasked": [r.id for r in q.results if r.unmeasured]}
+        else:
+            skipped.update({"check.min_accuracy": NO_SOURCE, "check.min_grounded": NO_SOURCE})
+    if settings.on("check") and settings.values and no_source:
+        skipped["check.max_value_errors"] = NO_SOURCE
+    elif settings.on("check") and settings.values:
         try:
             v = value_accuracy(studio, settings.values)
             out.setdefault("check", {}).update({"value_errors": v["errors"], "value_cases": v["cases"], "values": v["items"]})
         except Exception as e:  # a value that cannot be read is a failed condition, not a crash of the review
             out.setdefault("check", {}).update({"value_errors": 1, "value_error": f"{type(e).__name__}: {e}"})
-    if settings.on("decide") and settings.agreement:
+    if settings.on("decide") and settings.agreement and no_source:
+        skipped["decide.min_agreement"] = NO_SOURCE
+    elif settings.on("decide") and settings.agreement:
         try:
             out["decide"] = agreement(studio, settings.agreement)
         except Exception as e:
             out["decide"] = {"error": f"{type(e).__name__}: {e}", "rate": 0.0}
+    if skipped:
+        out["unmeasured"] = skipped
     return out
 
 
@@ -294,6 +317,7 @@ def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
               ("check", "min_accuracy"): (measured.get("check") or {}).get("accuracy"),
               ("check", "min_grounded"): (measured.get("check") or {}).get("grounded"),
               ("check", "max_value_errors"): (measured.get("check") or {}).get("value_errors")}
+    skipped = measured.get("unmeasured") or {}
     out = []
     for stage, conds in settings.gates.items():
         if not settings.on(stage):
@@ -302,12 +326,23 @@ def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
             if limit is None:
                 continue
             v = values.get((stage, cond))
+            why = skipped.get(f"{stage}.{cond}", "") if v is None else ""
             if v is None:
-                passed = stage not in measured  # nothing to measure (no questions, one backend): not a failure
+                # nothing to measure (no questions, one backend, no source to read rows from): not a failure
+                passed = bool(why) or stage not in measured
             else:
                 passed = v <= limit if cond.startswith("max_") else v >= limit
-            out.append(GateResult(stage, cond, limit, v, passed))
+            out.append(GateResult(stage, cond, limit, v, passed, why))
     return out
+
+
+def tally(results: list) -> dict[str, int]:
+    """Conditions met out of those measured. A condition that reads rows, with no source to read them from, is
+    neither met nor missed: it is counted apart, under `unmeasured`, when there is one."""
+    rows = [asdict(g) if isinstance(g, GateResult) else g for g in results]
+    live = [g for g in rows if not g.get("unmeasured")]
+    out = {"met": sum(bool(g.get("passed")) for g in live), "all": len(live)}
+    return {**out, "unmeasured": len(rows) - len(live)} if len(rows) > len(live) else out
 
 
 def _elements(onto) -> dict[str, str]:

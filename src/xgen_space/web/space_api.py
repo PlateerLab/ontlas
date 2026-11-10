@@ -550,6 +550,12 @@ class SpaceMixin:
         return {"ok": True, "pending": True}
 
     def transitions_advance(self) -> dict:
+        from xgen_space.backends.base import NoSource
+
+        if not self.studio.backends:
+            raise NoSource()
+        if self.studio.actions.writeback is None:
+            raise ValueError("원천에 쓸 수 없어 상태 전이를 실행하지 못했습니다. 쓰기 가능한 원천을 연결해 주세요.")
         moved = self.studio.actions.advance()
         return {"ok": True, "moved": len(moved)}
 
@@ -559,6 +565,7 @@ class SpaceMixin:
         from xgen_space.compile.base import CompileError
         from xgen_space.embed import _KINDS as EMBEDDERS
         from xgen_space.preview import TARGETS
+        from xgen_space.web.api import _issue_text
 
         self._sync_space()
         st = self.studio
@@ -578,11 +585,12 @@ class SpaceMixin:
                 try:
                     st.translate(q, t)
                 except CompileError as e:
-                    refused.append({"query": q, "error": str(e)})
+                    refused.append({"query": q, "error": _issue_text(str(e))})
             label = labels.get(t) or (f"SQL · {t.split(':', 1)[1]}" if t.startswith("sql:") else t)
             languages.append({"id": t, "label": label, "compiled": len(st.onto.queries) - len(refused),
                               "refused": refused, "backends": [b["name"] for b in backends if b["target"] == t]})
-        return {"backends": backends, "languages": languages, "queries": len(st.onto.queries), "vectors": sp["stores"],
+        return {"source": st.source_info(), "backends": backends, "languages": languages, "queries": len(st.onto.queries),
+                "vectors": sp["stores"],
                 "vector_kinds": known_kinds(), "embedder": sp["embedder"], "embedder_kinds": sorted(EMBEDDERS),
                 "retriever": self.space.knowledge(st.onto, self._terms()).describe(),
                 "reasoners": [r.describe() for r in st.reasoners.values()], "can_connect": self.data.allow_connect}
@@ -603,19 +611,20 @@ class SpaceMixin:
         for n, b in st.backends.items():
             started, error = time.perf_counter(), ""
             try:
-                if probe is None:
-                    raise LookupError("원천 테이블과 연결된 객체가 없어 질의하지 못했습니다.")
-                st.run({"match": {"x": probe[0]}, "return": [f"x.{probe[1]}"], "limit": 1}, backend=n)
+                if probe is not None:
+                    st.run({"match": {"x": probe[0]}, "return": [f"x.{probe[1]}"], "limit": 1}, backend=n)
             except Exception as e:  # a store that does not answer is what this shows, not a failure of the page
                 error = said(e)
             t = _target(b.capabilities.language, b.capabilities.dialect)
+            # with no object bound to a table there is nothing to ask a store: it was not tried, which is not an outage
             stores.append({"name": n, "kind": kinds.get(n) or b.kind, "source": n == st.source,
                            "language": labels.get(t) or ("SQL" if t.startswith("sql:") else t.upper()),
-                           "state": "bad" if error else "ok", "error": error, "ms": round((time.perf_counter() - started) * 1000)})
+                           "state": "bad" if error else "idle" if probe is None else "ok", "error": error,
+                           "ms": round((time.perf_counter() - started) * 1000)})
         ran = {_target(b.capabilities.language, b.capabilities.dialect) for b in st.backends.values()}
         emb, last = sp.embedder.describe(), self._llm_last
         return plain({
-            "pipeline": self.pipeline, "stores": stores,
+            "pipeline": self.pipeline, "source": st.source_info(), "stores": stores,
             "vectors": [{"name": n, "kind": s.kind, "state": "bad" if sp.errors.get(n) else "ok", "error": sp.errors.get(n, "")}
                         for n, s in sp.stores.items()],
             "translate": [label for t, label in labels.items() if t not in ran],

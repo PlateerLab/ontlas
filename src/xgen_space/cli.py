@@ -171,6 +171,27 @@ def _draft(a) -> int:
     return 0
 
 
+def _new(a) -> int:
+    """Write a studio folder that holds nothing yet: a studio file with no modules and no backends, and an empty
+    library. Definitions are then made by hand on the page; an approved change is saved there as the workspace module."""
+    import re
+
+    import yaml
+
+    out = Path(a.dir)
+    if (out / "studio.yaml").exists():
+        raise SystemExit(f"{out / 'studio.yaml'} already exists; give another folder")
+    name = a.name or out.resolve().name
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", name).strip("-") or "studio"
+    (out / "library").mkdir(parents=True, exist_ok=True)
+    studio = {"library": "library", "name": name, **({"label": a.label} if a.label else {}),
+              "namespace": f"https://example.org/{slug}#", "modules": []}
+    (out / "studio.yaml").write_text(yaml.safe_dump(studio, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    _out({"written": [str(out / "studio.yaml"), str(out / "library")],
+          "next": f"xspace serve {out / 'studio.yaml'} --library-write  (approved changes are saved to the library folder)"})
+    return 0
+
+
 def _embedder(a) -> dict | None:
     if not a.embedder:
         return None
@@ -202,6 +223,16 @@ def _api_agents(path: str) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from xgen_space.backends.base import NoSource
+
+    try:
+        return _main(argv)
+    except NoSource as e:  # a command that reads rows, on a studio that holds its definition only
+        print(f"{e}; add a backend under `backends:` in the studio file to read rows", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="xspace", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -238,11 +269,13 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--role")
         s.add_argument("--principal", action="append", default=[])
 
-    s = sub.add_parser("decide", help="evaluate a decision table for one object")
+    s = sub.add_parser("decide", help="evaluate a decision table for one object, or on values given with --input")
     s.add_argument("config")
     s.add_argument("decision")
-    s.add_argument("key")
+    s.add_argument("key", nargs="?", default=None)
     s.add_argument("--param", action="append", default=[])
+    s.add_argument("--input", action="append", default=[], help="name=value for an input of the table; with these the "
+                                                                "table decides on the values given and reads no source")
 
     for name, help_ in (("questions", "score the validation questions"),
                         ("rules", "derive links and list rule findings"),
@@ -408,6 +441,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--principal", action="append", default=[])
     s.add_argument("--read-only", action="store_true")
     s.add_argument("--transport", default="stdio")
+
+    s = sub.add_parser("new", help="start an empty studio folder: no modules, no data; definitions are made by hand")
+    s.add_argument("dir")
+    s.add_argument("--name", default="", help="the studio's name (default: the folder's)")
+    s.add_argument("--label", default="", help="the name people read it by")
 
     s = sub.add_parser("draft", help="draft modules from files or a database: objects, keys, types, relations")
     s.add_argument("files", nargs="*", help=".csv, .tsv or .xlsx files, one table each (a workbook, one per sheet)")
@@ -604,6 +642,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "draft":
         return _draft(a)
 
+    if a.cmd == "new":
+        return _new(a)
+
     if a.cmd == "ingest":
         return _ingest(a)
 
@@ -682,11 +723,15 @@ def main(argv: list[str] | None = None) -> int:
         _out({"backend": res.backend, "text": res.compiled.text,
               "rows": _jsonable(res.rows, res.columns, res.compiled.column_types)})
     elif a.cmd == "decide":
-        _out(studio.decide(a.decision, a.key, _params(a.param)).to_dict())
+        given = _params(a.input)
+        if a.key is None and not given:
+            raise SystemExit("give the object's key, or --input name=value for the table's inputs")
+        _out(studio.decide(a.decision, a.key, _params(a.param), inputs=given or None).to_dict())
     elif a.cmd == "questions":
         rep = studio.questions()
         _out(rep.to_dict())
-        return 0 if rep.accuracy == 1.0 else 1
+        asked = rep.measured  # without a source the questions that read rows are not asked: only a wrong answer fails
+        return 0 if rep.accuracy == 1.0 or (len(asked) < len(rep.results) and all(r.passed for r in asked)) else 1
     elif a.cmd == "search":
         from xgen_space.tools import StudioTools
 
