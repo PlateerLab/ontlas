@@ -128,6 +128,11 @@ def load_studio(path: str | Path) -> Studio:
         return _open_studio(path, False)
 
 
+def _modular(spec: dict) -> bool:
+    """A studio made of modules: it names some, or it names no ontology file and starts empty for the workspace to fill."""
+    return bool(spec.get("modules")) or "ontology" not in spec
+
+
 def _keeps_modules(path: str | Path) -> bool:
     import yaml
 
@@ -135,7 +140,7 @@ def _keeps_modules(path: str | Path) -> bool:
 
     p = Path(path)
     spec = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    return bool(spec.get("modules")) and bool(Library(p.parent / spec.get("library", ".")).applied())
+    return _modular(spec) and bool(Library(p.parent / spec.get("library", ".")).applied())
 
 
 def _open_studio(path: str | Path, applied: bool) -> Studio:
@@ -149,20 +154,23 @@ def _open_studio(path: str | Path, applied: bool) -> Studio:
         fixed = datetime.fromisoformat(str(spec["now"]))
         now = lambda: fixed  # noqa: E731
     kw = {"now": now, "use_zen": bool(spec.get("zen", False))}
-    if spec.get("modules"):
+    if _modular(spec):
         from xgen_space.library import Library
         from xgen_space.manage import NAME
 
         lib = Library(base / spec.get("library", "."))
         kept = lib.applied() if applied else []
-        wanted = kept or list(spec["modules"])
+        wanted = kept or list(spec.get("modules") or [])
         if NAME in lib.names() and NAME not in wanted:  # what the management screens approved belongs to this studio
             wanted.append(NAME)
-        studio = Studio.from_library(lib, wanted, namespace=spec.get("namespace", ""), name=spec.get("name", ""), **kw)
+        studio = Studio.from_library(lib, wanted, namespace=spec.get("namespace", ""), name=spec.get("name", ""),
+                                     label=str(spec.get("label") or ""), **kw)
     else:
         studio = Studio(Ontology.load(base / spec["ontology"]).check(), **kw)
     for name, b in (spec.get("backends") or {}).items():
-        studio.add_backend(name, open_backend(b, base), source=bool(b.get("source", False)))
+        opened = open_backend(b, base)
+        opened.kind = str(b.get("kind") or opened.kind)  # postgres, mysql, ... rather than the driver class's dbapi
+        studio.add_backend(name, opened, source=bool(b.get("source", False)))
     calls = (spec.get("actions") or {}).get("call_hosts")
     if calls:
         from xgen_space.actions import HttpCaller

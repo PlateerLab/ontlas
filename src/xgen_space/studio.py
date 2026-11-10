@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from xgen_space.actions import ActionService, SqlWriteback
-from xgen_space.backends.base import Backend, Result
+from xgen_space.backends.base import Backend, NoSource, Result
 from xgen_space.check import all_props, check, column_of, find_prop, interface_view
 from xgen_space.compile.base import Compiled, CompileError, compiler_for
 from xgen_space.conformance import ConformanceReport
@@ -31,6 +31,7 @@ class QuestionResult:
     error: str = ""
     grounded: bool = False  # the answer carries its condition, its source and the version it was answered by
     gaps: list[str] = field(default_factory=list)  # what of those it lacks
+    unmeasured: str = ""  # why it was not asked (no_source: it reads rows and none are connected); neither right nor wrong
 
 
 @dataclass
@@ -38,16 +39,24 @@ class QuestionReport:
     results: list[QuestionResult] = field(default_factory=list)
 
     @property
+    def measured(self) -> list[QuestionResult]:
+        """The questions that were asked: the shares below are of these."""
+        return [r for r in self.results if not r.unmeasured]
+
+    @property
     def accuracy(self) -> float:
-        return sum(r.passed for r in self.results) / len(self.results) if self.results else 0.0
+        got = self.measured
+        return sum(r.passed for r in got) / len(got) if got else 0.0
 
     @property
     def grounded(self) -> float:
         """The share of questions answered with condition, source and version (근거 제시율)."""
-        return sum(r.grounded for r in self.results) / len(self.results) if self.results else 0.0
+        got = self.measured
+        return sum(r.grounded for r in got) / len(got) if got else 0.0
 
     def to_dict(self) -> dict:
-        return {"accuracy": self.accuracy, "grounded": self.grounded, "results": [asdict(r) for r in self.results]}
+        return {"accuracy": self.accuracy, "grounded": self.grounded, "measured": len(self.measured),
+                "unmeasured": len(self.results) - len(self.measured), "results": [asdict(r) for r in self.results]}
 
 
 class Studio:
@@ -77,14 +86,15 @@ class Studio:
 
     @classmethod
     def from_modules(cls, modules: list[Module], *, library=None, namespace: str = "", name: str = "",
-                     **kw) -> Studio:
-        """A studio over a composition of modules, which can then be attached and detached at run time."""
-        comp = compose(modules, namespace=namespace, name=name)
+                     label: str = "", **kw) -> Studio:
+        """A studio over a composition of modules, which can then be attached and detached at run time. With no
+        modules yet it is an empty definition under `namespace`, which the workspace module then fills."""
+        comp = compose(modules, namespace=namespace, name=name, label=label)
         if comp.issues:
             raise ModuleError("; ".join(comp.issues))
         st = cls(comp.ontology, **kw)
         st.composition, st.library = comp, library
-        st._compose_kw = {"namespace": comp.ontology.namespace, "name": name}
+        st._compose_kw = {"namespace": comp.ontology.namespace, "name": name, **({"label": label} if label else {})}
         return st
 
     @classmethod
@@ -156,10 +166,22 @@ class Studio:
         return backend
 
     def backend(self, name: str | None = None) -> Backend:
+        if not name and not self.backends:
+            raise NoSource()
         name = name or self.source or next(iter(self.backends), "")
         if name not in self.backends:
             raise KeyError(f"unknown backend '{name}'; have {sorted(self.backends)}")
         return self.backends[name]
+
+    def source_info(self) -> dict[str, Any]:
+        """Whether rows can be read at all, and from what: the backend's name and its kind as a studio file calls it
+        (sqlite, postgres, gateway, rdflib, ...). A studio with no backend still defines, decides on given values,
+        searches documents and takes changes."""
+        if not self.backends:
+            return {"connected": False, "name": "", "kind": ""}
+        b = self.backend()
+        dialect = {"tsql": "mssql"}.get(b.capabilities.dialect, b.capabilities.dialect)
+        return {"connected": True, "name": b.name, "kind": dialect if b.kind == "dbapi" and dialect else b.kind}
 
     def query(self, q: Query | dict | str) -> Query:
         if isinstance(q, Query):
@@ -354,6 +376,8 @@ class Studio:
                 if not self.version_of(f"{'decision' if qs.decision else 'query'}:{qs.decision or qs.query}"):
                     gaps.append("no version")
                 report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps))
+            except NoSource:  # it reads rows and there are none to read: not asked, rather than answered wrong
+                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source"))
             except Exception as e:
                 report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None,
                                                      f"{type(e).__name__}: {e}", False, ["no answer"]))
