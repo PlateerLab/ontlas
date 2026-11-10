@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs, quote, urlparse
 
+from xgen_space.backends.base import NoSource
 from xgen_space.preview import CSS as BASE_CSS
-from xgen_space.web.api import DataOptions, StudioSession
+from xgen_space.web.api import NO_SOURCE, NO_SOURCE_SAID, DataOptions, StudioSession
 
 STATIC = Path(__file__).parent / "static"
 COOKIE = "xspace_session"
@@ -401,6 +402,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                         if user is not None:
                             s.who = user.name
                         out = self._route(method, route, a, s, sid)
+            except NoSource:  # it reads rows, and this studio holds its definition only: said as that, not as a failure
+                return self._json(409, {"error": NO_SOURCE_SAID.get(route, NO_SOURCE), "no_source": True}, sid=sid, new=new)
             except LookupError as e:
                 return self._json(400, {"error": f"요청한 항목을 찾을 수 없습니다. {e}"}, sid=sid, new=new)
             except PermissionError as e:
@@ -426,7 +429,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "object":
                     return s.object(a["name"])
                 if route == "keys":
-                    return {"keys": s.keys(a["type"])}
+                    return {"keys": s.keys(a["type"]), **s.no_source()}
                 if route == "actions/pending":
                     return s.pending_actions()
                 if route == "audit":

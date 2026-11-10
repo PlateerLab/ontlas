@@ -9,6 +9,7 @@ import hmac
 import threading
 from typing import Any, Callable
 
+from xgen_space.backends.base import NoSource
 from xgen_space.tools import StudioTools
 
 Handler = Callable[[StudioTools, dict], Any]
@@ -66,6 +67,7 @@ def openapi(version: str, server: str = "") -> dict:
         op: dict[str, Any] = {"operationId": name, "summary": summary, "security": [{"bearer": []}],
                               "responses": {"200": {"description": "The answer", "content": {"application/json": {"schema": {"type": "object"}}}},
                                             "400": {"description": "The request cannot be answered; `error` says why"},
+                                            "409": {"description": "It reads rows and no source is connected (`no_source`)"},
                                             "401": {"description": "No valid token"}, "403": {"description": "Outside this token's role"}}}
         if method == "POST":
             op["requestBody"] = {"required": True, "content": {"application/json": {"schema": {
@@ -130,6 +132,8 @@ class Rest:
                 return 200, handler(tools, body)
             except PermissionError as e:
                 return 403, {"error": str(e)}
+            except NoSource as e:  # the space holds its definition only: a caller tells this from a bad request
+                return 409, {"error": str(e), "no_source": True}
             except (ValueError, LookupError, KeyError, TypeError, RuntimeError) as e:
                 return 400, {"error": f"{type(e).__name__}: {e}"}
         return 404, {"error": "no such path"}

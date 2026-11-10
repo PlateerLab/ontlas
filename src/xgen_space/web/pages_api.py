@@ -11,6 +11,7 @@ import json
 import re
 from typing import Any
 
+from xgen_space.backends.base import NoSource
 from xgen_space.check import all_props, column_of, find_prop
 from xgen_space.ir import Agg, And, Cmp, Column, Contains, Edge, Or, Order, Query, Ref
 from xgen_space.web.space_api import plain
@@ -326,6 +327,10 @@ class PagesMixin:
         show = [t.key] + [p for p in [_title(o, type_name), t.states.property if t.states else ""] if p and p != t.key]
         show += [p for p in names if find_prop(o, type_name, p).type in ("datetime", "date") and p not in show][:1]
         q = " ".join(str(q or "").split())[:60]
+        if not st.backends:  # the list in its own shape, empty: there are no rows to read
+            return plain({"type": type_name, "label": t.label or type_name, "key": t.key, "title": _title(o, type_name),
+                          "columns": show, "labels": {p: find_prop(o, type_name, p).label or p for p in show}, "total": 0,
+                          "q": q, "rows": [], **self.no_source()})
         where = None
         if q:
             text = [p for p in show if find_prop(o, type_name, p).type in ("string", "enum")]
@@ -401,7 +406,7 @@ class PagesMixin:
         one = len(kinds) == 1
         return plain({"q": q, "type": kinds[0] if one else "", "type_label": (o.objects[kinds[0]].label or kinds[0]) if one else "",
                       "items": items[:limit], "total": total if one else len(items), "more": len(items) > limit,
-                      "offset": offset})
+                      "offset": offset, **self.no_source()})
 
     def _coded(self, type_name: str, props: list[str], word: str) -> list:
         """Conditions for the coded values a Korean word stands for: by the names the codes carry, or by the English
@@ -461,6 +466,7 @@ class PagesMixin:
                           "mine": p.requested_by.id == self.who, "change": change, "failed": failed,
                           "outside": len(outside), "waits": v["waits"],
                           "delta": " · ".join(_limit_words(v, x) for x in v["limits"])})
+        from xgen_space.review import tally
         from xgen_space.web.api import GATE_LABEL
         from xgen_space.web.monitor import FINDING
 
@@ -470,6 +476,7 @@ class PagesMixin:
                 continue
             rv = c.review or {}
             gates = rv.get("gates") or []
+            met = tally(gates)
             worse = []
             for g in gates:  # what the change would make worse, the way the review says it
                 was, now = standing.get(f"{g['stage']}.{g['condition']}"), g.get("value")
@@ -478,7 +485,7 @@ class PagesMixin:
                                   "rate": not g["condition"].startswith("max_")})
             items.append({"kind": "change", "id": c.id, "title": f"{self._change_label(c)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
                           "module": c.module, "by": c.requested_by, "mine": c.requested_by == self.who, "at": c.at,
-                          "passed": rv.get("passed"), "gates": [sum(bool(g.get("passed")) for g in gates), len(gates)],
+                          "passed": rv.get("passed"), "gates": [met["met"], met["all"]], "unmeasured": met.get("unmeasured", 0),
                           "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}, "worse": worse})
         rq = self.draft_request
         if rq:  # a reviewed draft an editor filed for an approver to apply
@@ -650,6 +657,8 @@ class PagesMixin:
         o = self.studio.onto
         if type_name not in o.objects or prop not in all_props(o, type_name):
             raise LookupError(f"{type_name}.{prop}")
+        if not self.studio.backends:
+            return plain({"type": type_name, "property": prop, "labels": {}, **self.no_source()})
         out = {}
         for k in [str(x) for x in keys][:60]:
             row = self.studio.fetch(type_name, k)
@@ -687,10 +696,11 @@ class PagesMixin:
         decided = sum(1 for c in requests if c.status in ("approved", "rejected"))
         waiting = sum(1 for c in requests if c.status == "pending")
         from xgen_space.review import gates as flow_gates
+        from xgen_space.review import tally
 
         measured = self._measured or {}
         check = measured.get("check") or {}
-        gates = [{"passed": g.passed} for g in flow_gates(measured, st.flow)] if measured else []  # the last measurement, read again
+        met = tally(flow_gates(measured, st.flow)) if measured else None  # the last measurement, read again
         drafting = ("적용 요청 대기" if self.draft_request else "초안 검토 중") if self.pending is not None else ""
         steps = [
             {"id": "model", "title": "온톨로지", "part": "Ontology manager", "done": bool(o.objects),
@@ -701,8 +711,9 @@ class PagesMixin:
             {"id": "catalog", "title": "데이터 연결", "part": "Data binder", "done": bool(tables), "optional": True,
              "detail": " · ".join(x for x in (f"원천 테이블 {len(tables)}개" if tables else "", f"파일 {len(kept)}개" if kept else "") if x)
              or "연결하지 않아도 정의와 규칙, 판정은 동작합니다"},
-            {"id": "check", "title": "검증", "part": "QA", "done": bool(gates) and all(g.get("passed") for g in gates),
-             "detail": (f"통과 조건 {sum(1 for g in gates if g.get('passed'))} / {len(gates)}" if gates else "아직 재지 않음")
+            {"id": "check", "title": "검증", "part": "QA", "done": bool(met) and met["all"] > 0 and met["met"] == met["all"],
+             "detail": (f"통과 조건 {met['met']} / {met['all']}" + (f" · 측정 대상 아님 {met['unmeasured']}" if met.get("unmeasured") else "")
+                        if met else "아직 재지 않음")
              + (f" · 검증 질문 {check.get('right', check.get('passed', ''))} / {check.get('questions', len(o.questions))}" if check.get("questions") else (f" · 검증 질문 {len(o.questions)}개" if o.questions else ""))},
             {"id": "changes", "title": "변경 요청", "part": "", "done": not pending and not waiting,
              "detail": " · ".join(x for x in (f"요청 전 변경 {pending}" if pending else "", f"승인 대기 {waiting}" if waiting else "", f"결정 {decided}" if decided else "") if x)
@@ -852,6 +863,7 @@ class PagesMixin:
         from xgen_space.decide.table import DecisionError, evaluate_table
         from xgen_space.decide.words import input_label, verdict
         from xgen_space.values import coerce
+        from xgen_space.web.api import UNMEASURED
 
         st = self.studio
         onto, pending = self._pending_onto()
@@ -878,6 +890,10 @@ class PagesMixin:
                 continue
             try:
                 got = run(dict(st.decide(name, q.key, q.params).inputs))["outputs"]
+            except NoSource:  # it is asked of a record, and there are no rows to read: not asked, rather than wrong
+                questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "passed": None,
+                                  "unmeasured": "no_source", "note": UNMEASURED["no_source"]})
+                continue
             except Exception as e:  # a question on a record the source no longer has
                 questions.append({"id": q.id, "text": q.text, "key": q.key, "passed": False, "error": str(e)})
                 continue
@@ -947,6 +963,8 @@ class PagesMixin:
         st, o = self.studio, self.studio.onto
         for name in (from_type, to_type):
             o.obj(name)  # an unknown type is said before any path is tried
+        if not st.backends:  # a path is found in the rows: with none to read, that is the answer
+            raise NoSource()
         ways: dict[str, list[tuple[str, bool, str]]] = {}
         for lk in o.links.values():
             ways.setdefault(lk.source, []).append((lk.name, True, lk.target))
