@@ -1195,3 +1195,11 @@ button.mdgh.mdarea:hover, button.mdgh.mdarea.on { background:var(--blue-soft); }
 button.mdgh.mdarea > span:first-child { font-weight:700; color:var(--ink); }
 button.mdgh.mdarea .mono { font-size:11px; }
 button.mdgh.mdarea > .muted:last-child { margin-left:auto; }
+/* no source connected: what a row-reading screen says, and the empty workspace */
+.card.nosrc > .cb { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:18px 20px; }
+.card.nosrc > .cb b { font-size:14px; }
+.card.nosrc > .cb .muted { font-size:12.5px; line-height:1.55; }
+tr.unasked td { color:#98a2b3; }
+.empty.wsstart { display:flex; flex-direction:column; align-items:center; gap:10px; padding:80px 20px; text-align:center; }
+.empty.wsstart b { font-size:15px; color:var(--ink); }
+.empty.wsstart span { font-size:12.5px; }

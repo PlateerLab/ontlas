@@ -526,6 +526,9 @@
 
   try { S.slim = localStorage.getItem('xspace-slim') === '1'; } catch (e) { S.slim = false; }
   const keep = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* this visit only */ } };
+  const noSource = () => !!(S.st && S.st.source && S.st.source.connected === false);
+  // what a screen that reads rows says when there are none to read, with the one way on
+  const noSourceCard = (what) => `<div class="card nosrc"><div class="cb"><b>원천 데이터가 연결되어 있지 않습니다</b><span class="muted">${what} 정의와 규칙, 값을 넣은 판정은 연결 없이 동작합니다.</span><a class="btn sm primary" href="#catalog">데이터 연결</a></div></div>`;
   try {
     S.lopen = localStorage.getItem('xspace-lopen') === '1';
     (localStorage.getItem('xspace-nopen') || '').split(',').filter(Boolean).forEach((k) => { S.nopen[k] = true; });
@@ -572,7 +575,7 @@
     const g = groupOf(S.tab);
     $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${S.tab === 'home' ? '' : `<i>›</i>${g && g[1] !== tabWord(S.tab) ? `<span>${esc(g[1])}</span><i>›</i>` : ''}<b>${esc(tabWord(S.tab))}</b>`}</nav>
       <div class="grow"></div>
-      ${originChip(st.origin)}
+      ${noSource() ? '<a class="chip" href="#catalog" title="연결하지 않아도 정의와 규칙, 판정은 동작합니다">원천 미연결</a>' : originChip(st.origin)}
       ${st.pipelines.length > 1 ? `<label class="pill pipe${st.pipeline === st.pipelines[0].id ? '' : ' other'}" title="화면의 정의와 데이터는 고른 파이프라인의 것입니다"><span>파이프라인</span><select class="pipesel" data-top="pipe" aria-label="파이프라인 선택">${st.pipelines.map((p) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(p.label)}</option>`).join('')}</select></label>` : ''}
       ${REPO_TABS.has(S.tab) ? `<button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>` : ''}
       <button class="pill quiet hide-sm" data-act="palette">${ui('search')}메뉴 검색<kbd>Ctrl K</kbd></button>
@@ -996,7 +999,8 @@
   function viewRecords() {
     const r = S.rl, res = r.res;
     const types = recordTypes();
-    const head = pageHead('레코드 탐색', '타입을 고르고 번호나 이름으로 찾아 레코드 한 건을 엽니다', '<a class="btn" href="#graph">그래프 탐색</a>');
+    const head = pageHead('레코드 탐색', '타입을 고르고 번호나 이름으로 찾아 레코드 한 건을 엽니다');
+    if (noSource() || !types.length) return head + noSourceCard('레코드는 연결한 원천에서 읽습니다.');
     const form = `<div class="card"><div class="cb"><div class="srform"><select data-in="rltype" aria-label="타입" style="width:auto;flex:none;min-width:180px">${types.map((n) => `<option value="${esc(n.id)}"${n.id === r.type ? ' selected' : ''}>${esc(n.label)} · ${esc(n.id)}</option>`).join('')}</select>
       <input type="search" id="rlq" data-in="rlq" value="${esc(r.q)}" placeholder="번호나 이름으로 찾기" aria-label="찾을 말"><button class="btn primary" data-act="rlgo">찾기</button></div>
       ${RECENT.length ? `<div class="chips" style="margin-top:10px"><span class="muted" style="font-size:12px">최근 본 레코드</span>${RECENT.slice(0, 6).map(recChip).join('')}</div>` : ''}</div></div>`;
@@ -2181,7 +2185,9 @@
 
   function erSvg(v = 'model') {
     const L = erLayout(v);
-    if (!L) return '<div class="empty">트리에서 객체를 고르세요.</div>';
+    if (!L) return S.mg.st && !S.mg.st.objects.length
+      ? '<div class="empty wsstart"><b>정의가 아직 없습니다</b><span>Object를 만들고 그 아래 Entity와 속성을 정의합니다. 데이터는 나중에 연결해도 됩니다.</span><span class="chips"><button class="btn primary" data-act="mdareanew">+ Object</button><button class="btn" data-act="mdobjnew">+ Entity</button><a class="btn ghost" href="#library">표준 모듈 적용</a></span></div>'
+      : '<div class="empty">트리에서 Entity를 고르세요.</div>';
     const m = S.mg.st, md = ER_VIEW[v].state();
     const F = erFocus(v, L);
     const live = v === 'model';
@@ -4035,6 +4041,11 @@
     const st = S.st, d = S.d;
     if (!st.decisions.length) return '<div class="head"><div><h1>판정 · 처리</h1></div></div><div class="empty">적용된 모듈에 결정표가 없습니다.</div>';
     const dec = st.decisions.find((x) => x.name === d.name) || st.decisions[0];
+    if (noSource()) {
+      return `<div class="head"><div><h1>판정 · 처리</h1><div class="sub">결정표 판정 결과와 근거를 확인하고 처리 요청을 승인합니다</div></div></div>
+        <div class="card nosrc"><div class="cb"><b>값을 넣어 판정합니다</b><span class="muted">원천이 연결되지 않아 저장된 레코드로는 판정하지 않습니다. 결정표에서 입력값을 넣어 판정 결과와 적용 규칙을 확인합니다.</span>
+        <div class="chips">${st.decisions.map((x) => `<a class="btn sm${x.name === dec.name ? ' primary' : ''}" href="#mgrules?decision=${encodeURIComponent(x.name)}">${esc(x.label)} 판정하기</a>`).join('')}<a class="btn sm" href="#catalog">데이터 연결</a></div></div></div>`;
+    }
     const keys = S.d.keys[dec.target] || [];
     const keyOpts = keys.map((k) => {
       const extra = Object.values(k.fields).filter((v) => v !== null && v !== '').map(plainText).join(' · ');
@@ -4253,14 +4264,15 @@ ${controls}${body}`;
     if (r.error) return head + `<div class="banner no"><div class="why">${esc(r.error)}</div></div>`;
     const passed = r.results.filter((x) => x.passed).length;
     const c = r.conformance;
-    const stats = `<div class="stats"><div class="stat"><b>${r.results.length ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
-      <div class="stat"><b>${passed} / ${r.results.length}</b><span>정답 수</span></div>
-      <div class="stat"><b>${r.results.length ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
+    const asked = r.results.filter((x) => x.passed !== null).length;  // questions that need rows wait for a source
+    const stats = `<div class="stats"><div class="stat"><b>${asked && r.accuracy !== null ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
+      <div class="stat"><b>${passed} / ${asked}</b><span>정답 수${asked < r.results.length ? ` · 측정 안 함 ${r.results.length - asked}` : ''}</span></div>
+      <div class="stat"><b>${asked && r.grounded !== null ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
       ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>Backend 결과 일치 질의</span></div>` : ''}</div>
       <div class="hint xp" style="margin:-4px 0 12px">정답률은 정답이 정해진 질문에 같은 답을 낸 비율이고, 근거 제시율은 답에 적용 규칙 또는 질의, 출처, 모듈 버전이 모두 있는 비율입니다. 기준보다 낮으면 오답 원인에서 질문을 확인하고, 정의를 고치거나 의도한 변경이면 정답을 갱신합니다.</div>`;
     // a question that passes with its grounds is one line; its answer and the expected one show for the ones that do not, or on request
     const qa = (x) => `<div class="qdetail"><span><i>정답</i>${showObj(x.expected)}</span><span><i>결과</i>${x.error ? `<span class="muted">${esc(x.error)}</span>` : (typeof x.got === 'number' ? `${show(x.got)}행` : showObj(x.got))}</span></div>`;
-    const rows = r.results.map((x) => `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}${S.qaAll || !x.passed ? qa(x) : ''}</td>
+    const rows = r.results.map((x) => x.passed === null ? `<tr data-row="q:${esc(x.id)}" class="unasked"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td></td><td><span class="chip sm" title="${esc(x.note || '')}">측정 안 함</span></td></tr>` : `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}${S.qaAll || !x.passed ? qa(x) : ''}</td>
       <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span>${x.passed && x.grounded ? '' : `<div class="iacts"><button class="btn sm" data-act="chkopen" data-id="${esc(x.id)}">열기</button>${x.passed || x.error ? '' : `<button class="btn sm" data-act="chkexpect" data-id="${esc(x.id)}">정답 갱신</button>`}</div>`}</td></tr>`).join('');
     const confAll = (c && c.queries) || [], confShown = S.confAll ? confAll : confAll.filter((x) => !x.agree);  // what agrees is a count until asked for
     const conf = confShown.map((x) => `<tr data-row="conf:${esc(x.name)}"><td><b>${esc(x.label)}</b><div class="muted mono cn">${esc(x.name)}</div></td>
@@ -4268,7 +4280,7 @@ ${controls}${body}`;
       <td><span class="ic ${x.agree ? 'y' : 'x'}">${x.agree ? '✓' : '!'}</span>${x.agree ? '' : `<div class="iacts"><a class="btn sm" href="#query?query=${encodeURIComponent(x.name)}">질의 열기</a></div>`}</td></tr>`).join('');
     const causes = {};
     const put = (k, id) => { (causes[k] = causes[k] || []).push(id); };
-    r.results.filter((x) => !x.passed).forEach((x) => put(x.error ? '실행 오류' : (typeof x.got === 'number' ? '질의 결과 불일치' : '판정 결과 불일치'), x.id));
+    r.results.filter((x) => x.passed === false).forEach((x) => put(x.error ? '실행 오류' : (typeof x.got === 'number' ? '질의 결과 불일치' : '판정 결과 불일치'), x.id));
     r.results.filter((x) => x.passed && !x.grounded).forEach((x) => (x.gaps || []).forEach((g) => put(`근거 부족 · ${g}`, x.id)));
     const wrong = Object.keys(causes).length ? `<div class="card"><div class="ch">오답 원인 <span class="chip sm warn">${Object.keys(causes).length}종</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>원인</th><th>질문 수</th><th>질문</th></tr>${Object.entries(causes).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${v.length}</td><td class="mono" style="font-size:12px">${v.slice(0, 12).map((id) => `<button class="ilinkb" data-act="chkrow" data-row="q:${esc(id)}">${esc(id)}</button>`).join(' ')}</td></tr>`).join('')}</table></div></div>` : '';
     return `${head}${stats}${wrong}
@@ -4388,7 +4400,8 @@ ${controls}${body}`;
     const [id, title, does, tab] = FLOW[i];
     let ok = true, lines = '';
     if (id === 'source') {
-      lines = `<b>${esc(BACKEND_KIND[(step.dialect || '').toLowerCase()] || (step.dialect || '').toUpperCase())}</b> · 테이블 ${show(step.tables.length)} · ${show(step.rows)}행`;
+      lines = noSource() ? '<b>원천 미연결</b> · 정의와 규칙은 연결 없이 동작합니다' : `<b>${esc(BACKEND_KIND[(step.dialect || '').toLowerCase()] || (step.dialect || '').toUpperCase())}</b> · 테이블 ${show(step.tables.length)} · ${show(step.rows)}행`;
+      if (noSource()) ok = null;
     } else if (id === 'define') {
       lines = `모듈 ${step.modules.length} · 객체 ${step.objects} · 관계 ${step.links} · 속성 ${step.properties}${step.computed ? ` · 계산 속성 ${step.computed}` : ''}${step.identities ? ` · 식별 통합 ${step.identities}` : ''}
         <div class="chips" style="margin-top:6px">${step.modules.map((m) => `<button class="chip sm" data-act="libshow" data-mod="${esc(m.name)}" title="라이브러리에서 이 모듈로">${esc(m.label)}</button>`).join('')}</div>`;
@@ -4412,14 +4425,15 @@ ${controls}${body}`;
       lines = step.decisions ? `결정 ${step.decisions} · 규칙 ${step.rules} · Action ${step.actions}` : (step.actions ? `Action ${step.actions}` : '등록된 결정표 없음');
       if (step.agreement && step.agreement.cases) lines += `<div style="margin-top:4px">판정 일치율 <b>${pct(step.agreement.rate)}</b> (${step.agreement.agree} / ${step.agreement.cases})</div>`;
     } else if (id === 'check') {
-      ok = step.questions ? step.accuracy === 1 : null;
-      lines = step.questions ? `검증 질문 ${step.questions} · 정답률 <b>${Math.round(step.accuracy * 100)}%</b> · 근거 제시율 <b>${Math.round((step.grounded || 0) * 100)}%</b>` : '등록된 검증 질문 없음';
+      ok = step.questions && step.accuracy !== null && step.accuracy !== undefined ? step.accuracy === 1 : null;
+      lines = !step.questions ? '등록된 검증 질문 없음' : (step.accuracy === null || step.accuracy === undefined) ? `검증 질문 ${step.questions} · 측정 안 함 (원천 미연결)`
+        : `검증 질문 ${step.questions} · 정답률 <b>${Math.round(step.accuracy * 100)}%</b> · 근거 제시율 <b>${Math.round((step.grounded || 0) * 100)}%</b>`;
     }
     const gates = step.gates || [];
     if (gates.length) ok = gates.every((g) => g.passed);
     let chip = ok === null ? '<span class="chip">미등록</span>' : (ok ? '<span class="chip ok">✓</span>' : '<span class="chip warn">확인 필요</span>');
     if (step.on === false) chip = '<span class="chip">꺼짐</span>';
-    const gateChips = gates.length ? `<div class="chips" style="margin-top:6px">${gates.map((g) => (g.passed ? `<span class="chip sm ok">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''}</span>`
+    const gateChips = gates.length ? `<div class="chips" style="margin-top:6px">${gates.map((g) => (g.unmeasured ? `<span class="chip sm" title="${esc(g.note || '')}">${esc(g.label)} · 측정 대상 아님</span>` : g.passed ? `<span class="chip sm ok">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''}</span>`
       : `<button class="chip sm bad" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(g.label)} ${gateValue(g, g.limit)} · 현재 ${gateValue(g, g.value)}${g.by ? ` · ${esc(g.by)}` : ''} · 조치 보기</button>`)).join('')}</div>` : '';
     const sync = id === 'project' && step.backends.length ? `<button class="btn sm ghost" data-act="sync">원천 다시 읽기</button>` : '';
     return `<div class="card fstep${step.on === false ? ' off' : ''}"><div class="cb">
