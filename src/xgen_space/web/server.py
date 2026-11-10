@@ -441,6 +441,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return s.module_preview(a["module"])
                 if route == "manage/link/suggest":
                     return s.link_suggest(a["source"], a["target"])
+                if route == "naming":
+                    return s.name_for(str(a.get("label", "")), str(a.get("kind", "object")))
                 if route == "object/profile":
                     return s.object_profile(a["name"])
                 if route == "files":
