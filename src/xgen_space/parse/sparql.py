@@ -232,10 +232,12 @@ class _Reader:
 
 def parse_sparql(text: str, onto: Ontology) -> Query:
     try:
-        from rdflib.plugins.sparql import prepareQuery
+        import rdflib.plugins.sparql  # noqa: F401
     except ImportError as e:
         raise ImportError("reading SPARQL needs the [rdf] extra (rdflib)") from e
-    alg = prepareQuery(text).algebra
+    from xgen_space.backends.rdf import prepare_query  # one thread at a time: see there
+
+    alg = prepare_query(text).algebra
     rd = _Reader(onto)
     node, limit, distinct, order_exprs, extends, aggs = alg["p"], None, False, [], {}, {}
     project_vars = list(alg.get("PV") or [])

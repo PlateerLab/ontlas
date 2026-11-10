@@ -45,6 +45,11 @@ The page is rebuilt around how a space is built and used, with less to read on i
   one 기본 데이터. Each menu item says what its screen is for on hover; the search page asks with 질문 as the home does;
   the build steps' part names moved to their hover; a decided change no longer shows an item review count; the
   sidebar head of the section a person is in is no longer a button that does nothing.
+- **The graph store reads SPARQL one thread at a time.** pyparsing, which reads SPARQL for rdflib, learns each parse
+  action's arity on its first call; a server whose first visitors arrived together could have two threads learning it at
+  once and keep the wrong one for the life of the process, so every graph query failed ("<lambda>() missing 1 required
+  positional argument: 'x'"), backend agreement read 0% and changes could not pass their conditions. Reading a query or an
+  update now takes a lock (`backends.rdf.prepare_query`, `prepare_update`); running it does not.
 
 ## 0.15.1
 
