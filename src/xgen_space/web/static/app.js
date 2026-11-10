@@ -114,7 +114,7 @@
       '맨 위 검색 상자에 레코드 번호, 정의, 문서 내용, 질문을 넣습니다. 예: 주문상품 I1001 반품 되나요?',
       '[보는 역할]에서 운영 담당, 도메인 전문가, 모델러를 고르면 홈의 카드 구성과 왼쪽 메뉴 순서가 그 역할에 맞게 바뀝니다.',
       '할 일 카드는 액션 승인, 변경 요청, 출처 충돌, DB 대조 경고, 아직 요청하지 않은 정의 변경을 한 목록으로 보여 줍니다.',
-      '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [파이프라인 관제 열기]로 이어집니다.',
+      '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [관제]로 이어집니다.',
       '자주 보는 레코드(이 브라우저에서 연 횟수 순)와 저장된 질의에서 바로 돌아갑니다. 등록 질의에는 검증됨, 지표에는 지표 표시가 붙습니다.']],
     ['inbox', '승인할 액션, 검토할 변경 요청, 고를 출처 충돌, 점검 경고를 한 목록에서 처리합니다.', [
       '나에게 할당, 내가 요청, 전체 탭으로 나눠 봅니다. 팀 스페이스에서는 다른 사람이 요청한 것이 나에게 할당에 옵니다.',
@@ -304,7 +304,7 @@
       '열람 문서에서 폴더 또는 문서를 선택하면 이 역할로 검색하고 답할 때 그 문서만 근거로 사용합니다.',
       'Agent와 외부 플랫폼은 지정한 역할의 범위 안에서만 조회하고 요청합니다.']],
     ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
-      '[규칙 수정]을 선택하면 규칙 관리로 이동합니다. 규칙과 기준값을 입력 폼에서 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
+      '[규칙 수정]을 선택하면 규칙 › 결정표로 이동합니다. 규칙과 기준값을 입력 폼에서 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
       '기준값은 결정표와 계산 속성이 @이름으로 참조합니다. 고객사 모듈은 기준값만 변경합니다.',
       '지표의 [계산]을 선택하면 값, 분자와 분모, 기준을 표시합니다.',
       '출처 충돌에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인 후 반영됩니다.',
@@ -386,7 +386,7 @@
     ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
     ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
     ['정책서, 화면설계서', '라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
-    ['객체, 속성, 관계 수정', '모델링 작업 공간', '관리 변경 모듈'],
+    ['객체, 속성, 관계 수정', '온톨로지 > 작업 공간', '관리 변경 모듈'],
     ['모듈 정의 파일', '라이브러리 > 새 모듈', '종류별 모듈']];
   const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
   const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
@@ -870,7 +870,7 @@
     const conf = (step('query').conformance || {});
     const agree = (step('decide').agreement || {});
     const stat = (v, w) => `<div class="stat"><b>${v}</b><span>${w}</span></div>`;
-    return `<div class="card"><div class="ch"><i class="dot ${f.passed ? 'ok' : 'bad'}"></i>운영 상태 ${f.passed ? '정상' : '확인 필요'}<div class="right"><a class="btn sm ghost" href="#monitor">파이프라인 관제</a></div></div>
+    return `<div class="card"><div class="ch"><i class="dot ${f.passed ? 'ok' : 'bad'}"></i>운영 상태 ${f.passed ? '정상' : '확인 필요'}<div class="right"><a class="btn sm ghost" href="#monitor">관제</a></div></div>
       <div class="cb"><div class="hstats">${stat(`${passed} / ${gates.length}`, '통과 조건')}${stat(conf.queries ? `${conf.agree} / ${conf.queries}` : '-', '저장소 간 결과 일치')}${stat(agree.rate === undefined || agree.rate === null ? '-' : pct(agree.rate), '과거 판정 일치율')}${stat(step('check').accuracy === undefined || step('check').accuracy === null ? '-' : pct(step('check').accuracy), '검증 질문 정답률')}</div>
       ${gates.filter((g) => !g.passed).map((g) => `<button class="hint warn ihint" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(g.label)} · 기준 ${esc(g.limit)} · 측정 ${g.value === null ? '-' : esc(Math.round(g.value * 1000) / 1000)}<span>조치 보기</span></button>`).join('')}</div></div>`;
   }
@@ -905,7 +905,7 @@
     const changes = box.items.filter((x) => x.kind === 'change').length;
     const link = (href, title, sub) => `<a class="hrow" href="${href}"><b>${esc(title)}</b><span class="muted">${esc(sub)}</span></a>`;
     return `<div class="card"><div class="ch">구축</div><div class="cb" style="padding:6px 8px">
-      ${link('#catalog', '데이터 가져오기', `레포지토리 파일 ${count(S.st.data.files)}개`)}${link('#data', '초안 생성', '파일과 DB에서 온톨로지 초안')}
+      ${link('#catalog', '데이터 연결', `레포지토리 파일 ${count(S.st.data.files)}개`)}${link('#data', '초안 생성', '파일과 DB에서 온톨로지 초안')}
       ${link('#model', '작업 공간', ws ? ws.title : '객체 · 속성 · 관계')}${link('#changes', '라이브러리 · 변경 요청', `모듈 ${S.st.modules_on}개 적용 · 검토 대기 ${changes}건`)}</div></div>`;
   }
 
@@ -931,8 +931,13 @@
     const said = s.start ? '<b>정의가 아직 없습니다.</b><span>시작할 방법을 고르세요.</span>'
       : nx ? `<b>다음 · ${esc(nx.title)}</b><span>${esc(nx.detail)}${nx.optional ? ' · 선택' : ''}</span><a class="btn sm" href="#${nx.id}">${esc(nx.title)} 열기</a>`
         : '<b>다섯 단계가 모두 되어 있습니다.</b>';
+    // what the space is made of, in one line: the source it reads, the modules applied, what they define
+    const st = S.st, o = st.origin || {}, src = (S.fl && S.fl.steps ? S.fl.steps.find((x) => x.id === 'source') : null) || {};
+    const kind = o.kind === 'files' ? '업로드 파일' : o.kind === 'database' ? '연결 DB' : BACKEND_KIND[(o.backends || {}).source] || '';
+    const made = [kind ? `원천 ${kind}${src.tables ? ` · 테이블 ${count(src.tables.length)}` : ''}` : '원천 미연결', `모듈 ${count(st.modules_on)}`,
+      `객체 ${count(st.stats.objects)} · 관계 ${count(st.stats.links)} · 속성 ${count(st.stats.properties)}`, `결정표 ${count(st.stats.decisions)}`].join('　');
     return `<div class="card bsteps"><div class="ch">구성 단계<span class="chip sm${done === s.steps.length ? ' ok' : ''}">${done} / ${s.steps.length}</span><div class="right"><a class="btn sm ghost" href="#guide">사용 안내</a></div></div>
-      <div class="cb"><div class="bstrip">${items}</div><div class="bnext">${said}</div>${s.start ? ways : ''}</div></div>`;
+      <div class="cb"><div class="bstrip">${items}</div><div class="bnext">${said}</div>${s.start ? ways : `<a class="bmade" href="#flow" title="단계별 현황 열기"><b>구성</b>${esc(made)}</a>`}</div></div>`;
   }
 
   function viewHome() {
@@ -2507,7 +2512,7 @@
 
   function wsSource() {
     const m = S.mg.st, md = S.md, s = m.sources.source;
-    if (!s.name) return '<div class="hint" style="margin:8px">원천 DB가 연결되지 않았습니다. 데이터 가져오기에서 연결해 주세요.</div>';
+    if (!s.name) return '<div class="hint" style="margin:8px">원천 DB가 연결되지 않았습니다. 데이터 연결에서 연결해 주세요.</div>';
     const used = (t, c) => t.objects.flatMap((o) => mgProps(o)).find((p) => (p.column || '').toLowerCase() === c.toLowerCase() || (p.columns || []).includes(c));
     const row = (t) => {
       const open = md.src[t.table], free = t.columns.filter((c) => !used(t, c.name)).length;
@@ -2711,7 +2716,7 @@
   }
 
   function viewModel() {
-    const wait = mgWait('모델링 작업 공간', '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다');
+    const wait = mgWait('작업 공간', '객체를 트리나 그래프에서 고르고 폼이나 정의 파일로 고칩니다');
     if (wait) return wait;
     erPosLoad();
     const md = S.md, f = S.mg.form;
@@ -2962,8 +2967,8 @@
   function changesCard() {
     const ch = S.changes;
     if (!ch || ch.busy || !ch.changes) return '';
-    if (!ch.changes.length) return `<div class="card"><div class="ch">변경 요청</div><div class="cb"><div class="muted" style="font-size:12.5px">검토할 변경 요청이 없습니다. 모델링 작업 공간이나 규칙 · 액션에서 고친 내용을 [변경 요청 만들기]로 보내면 여기와 변경 요청 화면에서 항목별로 검토합니다.</div>
-      <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#model">모델링 작업 공간</a><a class="btn sm" href="#changes">변경 요청 화면</a></div></div></div>`;
+    if (!ch.changes.length) return `<div class="card"><div class="ch">변경 요청</div><div class="cb"><div class="muted" style="font-size:12.5px">검토할 변경 요청이 없습니다. 온톨로지 작업 공간이나 규칙 · 액션에서 고친 내용을 [변경 요청 만들기]로 보내면 여기와 변경 요청 화면에서 항목별로 검토합니다.</div>
+      <div style="display:flex;gap:6px;margin-top:10px"><a class="btn sm" href="#model">작업 공간</a><a class="btn sm" href="#changes">변경 요청 화면</a></div></div></div>`;
     return `<div class="card"><div class="ch">변경 요청<div class="right muted" style="font-weight:600;font-size:12px">${ch.writes_folder ? '승인하면 라이브러리 폴더에 저장' : '승인하면 현재 세션에 저장'}</div></div><div class="cb loglist">${ch.changes.slice(0, 8).map((c) => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="chip sm ${CHANGE_STATUS[c.status] || ''}">${esc(c.status_label)}</span><b>${esc(c.module_label)} ${esc(c.version)}</b><span class="muted" style="font-size:12px">${esc(c.requested_by)}</span>
       <span style="flex:1"></span><button class="chip sm" data-act="cshow" data-id="${esc(c.id)}">검토 보기</button></div>`).join('')}</div></div>`;
@@ -3113,7 +3118,7 @@
   function answerCard(res, d, more) {
     const [cls, word] = answerBadge(res, more);
     const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-    const badges = [`<span class="chip ${cls}">${esc(word)}</span>`, ...d.rules.map((x) => `<button class="chip" data-act="rulego" data-dec="${esc(d.name)}" data-rule="${esc(x.id)}" title="규칙 관리에서 이 규칙으로">규칙 ${esc(x.id)}</button>`),
+    const badges = [`<span class="chip ${cls}">${esc(word)}</span>`, ...d.rules.map((x) => `<button class="chip" data-act="rulego" data-dec="${esc(d.name)}" data-rule="${esc(x.id)}" title="결정표에서 이 규칙으로">규칙 ${esc(x.id)}</button>`),
       ...uniq(d.rules.map((x) => x.cite)).map((c) => `<span class="chip">근거 ${esc(c)}</span>`),
       ...uniq(d.rules.map((x) => x.module)).map((m) => { const x = d.rules.find((y) => y.module === m); return `<button class="chip" data-act="libshow" data-mod="${esc(m)}" title="이 규칙을 정의한 모듈과 버전 · 라이브러리로">모듈 ${esc(x.module_label)} ${esc(x.version)}</button>`; })];
     const acts = d.actions.map((a) => `<button class="btn${a.ready ? ' primary' : ''}" data-act="sract" data-type="${esc(d.target)}" data-key="${esc(d.key)}" data-name="${esc(a.name)}"${a.ready ? '' : ' disabled'}>${esc(a.label)}하기</button>`).join('');
@@ -4023,7 +4028,7 @@ ${controls}${body}`;
     return `
 <div class="banner ${r.yes ? 'ok' : 'no'}"><span class="ic ${r.yes ? 'y' : 'x'}" style="width:30px;height:30px;font-size:16px">${r.yes ? '✓' : '!'}</span>
   <div><div class="big">${esc(r.label)} · ${esc(r.verdict)}</div><div class="why">${esc(r.reason)}</div>${(r.messages || []).map((m) => `<div class="cite">${esc(m.code)} · ${esc(m.text)}</div>`).join('')}${cite.length ? `<div class="cite">근거 규정 · ${esc(cite.join(', '))}</div>` : ''}</div>
-  <div style="margin-left:auto" class="chips">${engines.join('')}${matched.map((x) => `<button class="chip b" data-act="rulego" data-dec="${esc(S.d.name || '')}" data-rule="${esc(x.id)}" title="규칙 관리에서 이 규칙으로">규칙 ${esc(x.id)}</button>`).join('')}</div></div>
+  <div style="margin-left:auto" class="chips">${engines.join('')}${matched.map((x) => `<button class="chip b" data-act="rulego" data-dec="${esc(S.d.name || '')}" data-rule="${esc(x.id)}" title="결정표에서 이 규칙으로">규칙 ${esc(x.id)}</button>`).join('')}</div></div>
 <div class="grid" style="grid-template-columns:minmax(0,1.45fr) minmax(360px,1fr);align-items:start">
   <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
     <div class="card"><div class="ch">결정표<span class="chip" title="${esc(r.hit_policy)}">${esc(HIT_WORD[r.hit_policy] || r.hit_policy)}</span>${touched}</div>
