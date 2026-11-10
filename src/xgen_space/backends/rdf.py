@@ -3,12 +3,33 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import urllib.parse
 import urllib.request
 from typing import Any
 
 from xgen_space.backends.base import Backend, Capabilities, Result
 from xgen_space.compile.base import Compiled
+
+# pyparsing, which reads SPARQL for rdflib, works out how many arguments each parse action takes the first time it calls
+# it. Two threads doing that at once leave it wrong for the life of the process, and every later query then fails with
+# "<lambda>() missing 1 required positional argument: 'x'" (a server whose first visitors arrive together). Reading a
+# query or an update is therefore one thread at a time; running it is not.
+_READING = threading.Lock()
+
+
+def prepare_query(text: str, **kw: Any) -> Any:
+    from rdflib.plugins.sparql import prepareQuery
+
+    with _READING:
+        return prepareQuery(text, **kw)
+
+
+def prepare_update(text: str, **kw: Any) -> Any:
+    from rdflib.plugins.sparql import prepareUpdate
+
+    with _READING:
+        return prepareUpdate(text, **kw)
 
 
 def connected(triples: list[tuple], bound=lambda term: False) -> list[tuple]:
@@ -56,7 +77,7 @@ class RdflibBackend(Backend):
 
     def execute(self, compiled: Compiled, values: dict[str, Any] | None = None) -> Result:
         text, _ = compiled.bind(values)
-        res = self.graph.query(text)
+        res = self.graph.query(prepare_query(text, initNs=dict(self.graph.namespaces())))  # the prefixes a text query gets
         rows = []
         for r in res:
             rows.append(tuple(_py(r[c]) if c in r.labels else None for c in compiled.columns))
@@ -68,7 +89,7 @@ class RdflibBackend(Backend):
         self.graph.parse(data=ttl, format="turtle")
 
     def update(self, sparql_update: str) -> None:
-        self.graph.update(sparql_update)
+        self.graph.update(prepare_update(sparql_update, initNs=dict(self.graph.namespaces())))
 
 
 def _py(v: Any) -> Any:
