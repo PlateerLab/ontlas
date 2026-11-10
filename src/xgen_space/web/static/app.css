@@ -1176,7 +1176,7 @@ button.nhead .ui { width:13px; height:13px; transition:transform .15s ease; }
 @media (prefers-reduced-motion: reduce) { button.nhead .ui, .sfoot button.lhead .ui { transition:none; } }
 /* library rows: a module's description on one line (whole on hover), its actions shown when the row is pointed at or focused */
 .libname { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.libdesc { font-size:12px; margin-top:2px; max-width:34ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.libdesc { font-size:12px; margin-top:2px; max-width:min(34ch, 20vw); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .libacts { opacity:0; transition:opacity .12s ease; }
 tr:hover .libacts, tr:focus-within .libacts, tr.sel .libacts { opacity:1; }
 @media (hover: none) { .libacts { opacity:1; } }
