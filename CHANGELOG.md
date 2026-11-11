@@ -16,6 +16,9 @@
     tables made before, pass `prefix="xspace_vec_"`.
 - Nothing in a studio file, a module or the `/v1` API changed: definitions, modules, journals and tokens carry over as
   they are.
+- **On PyPI** as `ontlas` (Apache-2.0): `pip install ontlas`, with the same extras as a checkout. The README installs
+  from PyPI, links the live demo, and points its images and files at the repository so they show on PyPI too. The
+  source distribution holds only what the repository tracks.
 
 ## 0.16.0
 

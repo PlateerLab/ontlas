@@ -75,6 +75,10 @@ ontlas = "ontlas.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ontlas"]
 
+[tool.hatch.build.targets.sdist]
+# Only what the repository tracks: a checkout may hold other worktrees that git ignores outside .gitignore.
+only-include = ["src", "tests", "examples", "assets", "tools", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

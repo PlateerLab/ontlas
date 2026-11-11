@@ -4,6 +4,12 @@
 
 The name is *ontology* and *atlas*: a map of what a company knows, drawn once and read by people and agents alike.
 
+```bash
+pip install ontlas
+```
+
+A live demo on fictional shop data: https://ontlas.js-96.com
+
 - **Every kind of data in one place.** Files, databases, documents, embeddings, graphs and ontologies sit in one space and know about each other.
 - **Nothing is tied to a store.** Graph databases, vector databases, reasoners, embedding models and query languages are adapters, and a conformance test says whether a swap changed the answers.
 - **Knowledge plugs in and out.** A domain is a versioned module. Commerce is the first one in the examples, and another domain is one more package.
@@ -40,7 +46,7 @@ ontlas serve examples/library/studio.yaml --embedder fastembed --api-token-env O
 ```
 
 <p align="center">
-  <img src="assets/architecture.png" alt="One ontology definition feeding execution adapters that compile one query IR to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin for the backends a deployment has" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/architecture.png" alt="One ontology definition feeding execution adapters that compile one query IR to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin for the backends a deployment has" width="920">
 </p>
 
 ## Modules
@@ -90,7 +96,8 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 
 ## How to use it
 
-The package is not on PyPI yet, so install it from a checkout.
+The walk-through runs on the examples in the repository, so take a checkout (`pip install "ontlas[all]"` installs the
+same package without them).
 
 ```bash
 git clone https://github.com/PlateerLab/ontlas.git
@@ -144,7 +151,7 @@ ontlas draft --dsn "$ONTLAS_DSN" --name shop -o my-studio                       
 ontlas serve my-studio/studio.yaml
 ```
 
-A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
+A database needs `pip install "ontlas[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
 **5. Check it (구축 › 4 검증).** Validation questions with known answers (a passing one is one line; the ones that fail
@@ -216,7 +223,7 @@ queries, the rows from both backends, the decision with its evidence and the rea
 library computed for that example.
 
 <p align="center">
-  <img src="assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
 </p>
 
 <p align="center"><b>The ontology library.</b> Commerce and every domain added later live as separate, versioned packages;
@@ -224,32 +231,32 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screens/ontology.png" alt="Ontology screen: every object as a card with its key, properties and computed properties, grouped by module, relations drawn between cards with their names and cardinality, and the selected object's definition beside"></td>
-    <td width="50%"><img src="assets/screens/query.png" alt="Query screen: one ontology query, its text in eight backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/ontology.png" alt="Ontology screen: every object as a card with its key, properties and computed properties, grouped by module, relations drawn between cards with their names and cardinality, and the selected object's definition beside"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/query.png" alt="Query screen: one ontology query, its text in eight backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
   </tr>
   <tr>
     <td><b>Ontology.</b> Every object as a card with its key, representative and computed properties, in a region per module, with relations named and sized; press a card and what it connects to gathers around it, the rest fading. Domain types hang under common concepts (customer and seller under party, order under agreement).</td>
     <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, SQL Server, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
   </tr>
   <tr>
-    <td><img src="assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right"></td>
-    <td><img src="assets/screens/rules.png" alt="Rules screen: a decision table edited in place with its hit policy and modules in the header, overlaps and gaps above the table, and a simulator deciding one record on the edited table"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/rules.png" alt="Rules screen: a decision table edited in place with its hit policy and modules in the header, overlaps and gaps above the table, and a simulator deciding one record on the edited table"></td>
   </tr>
   <tr>
     <td><b>Model.</b> The workspace: cards on a canvas, a tree by module, and the picked object's form, data, uses, YAML and comments. Draw a relation from card to card, drop a column on a card, give an element a status, try the edits on a copy, file them.</td>
     <td><b>Rules.</b> A decision table edited where it stands, checked for overlaps and gaps as it is edited, and tried on a record with what single change would turn the answer.</td>
   </tr>
   <tr>
-    <td><img src="assets/screens/decision.png" alt="Decision screen: the decision table with the rule that fired, the evidence path to source columns, and an action request waiting for a person's approval"></td>
-    <td><img src="assets/screens/map.png" alt="Data map screen: everything that depends on one column, what an agent can reach, and the data nobody uses"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/decision.png" alt="Decision screen: the decision table with the rule that fired, the evidence path to source columns, and an action request waiting for a person's approval"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/map.png" alt="Data map screen: everything that depends on one column, what an agent can reach, and the data nobody uses"></td>
   </tr>
   <tr>
     <td><b>Decide and act.</b> A decision table (here with the customer's own VIP rule plugged in ahead of the standard ones, each rule citing its policy), the source column behind every input, and an agent's action request waiting for a person.</td>
     <td><b>The data map.</b> What a column change touches, from property to agent; what one agent can reach; what nobody uses.</td>
   </tr>
   <tr>
-    <td><img src="assets/screens/home.png" alt="Home screen: one box to search or ask, what waits on the person in one list, the pass conditions in brief, the records opened last and the registered queries"></td>
-    <td><img src="assets/screens/record.png" alt="Record page: one record with its values and columns, its state and where it can go, linked records, what each decision says of it now, the documents that name it and its history"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/home.png" alt="Home screen: one box to search or ask, what waits on the person in one list, the pass conditions in brief, the records opened last and the registered queries"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/record.png" alt="Record page: one record with its values and columns, its state and where it can go, linked records, what each decision says of it now, the documents that name it and its history"></td>
   </tr>
   <tr>
     <td><b>Home.</b> Where the people who use the ontology start: a box to search or ask, what waits on them, the measured pass conditions, the records they opened last and the saved queries, laid out for the role they pick.</td>
@@ -317,7 +324,7 @@ roles:
       Order: {eq: [$self.customer_id, {principal: customer_id}]}
 ```
 
-The full example is [`examples/commerce/ontology.yaml`](examples/commerce/ontology.yaml): eight object types
+The full example is [`examples/commerce/ontology.yaml`](https://github.com/PlateerLab/ontlas/blob/main/examples/commerce/ontology.yaml): eight object types
 (one of them a price history), nine links, eight computed properties, a decision, an action, three roles, twelve
 registered queries and seven validation questions.
 An object type with no `source` is a definition only: its decisions take typed values, and it binds to a table later
@@ -365,7 +372,7 @@ form for one says so before it runs.
 ## Swap anything: the ports
 
 <p align="center">
-  <img src="assets/screens/adapters.png" alt="Adapters screen: every swappable part, with the tests that say a swap changed nothing" width="100%">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/adapters.png" alt="Adapters screen: every swappable part, with the tests that say a swap changed nothing" width="100%">
 </p>
 
 Every part a deployment might want different is a port with a small interface, a registry, and a test that says the swap
@@ -407,8 +414,8 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screens/documents.png" alt="Document ontology screen: documents, sections and concepts as a graph, tied to the definitions they mention"></td>
-    <td width="50%"><img src="assets/screens/search.png" alt="Search screen: passages found by meaning, with the definitions they name"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/documents.png" alt="Document ontology screen: documents, sections and concepts as a graph, tied to the definitions they mention"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/search.png" alt="Search screen: passages found by meaning, with the definitions they name"></td>
   </tr>
 </table>
 
@@ -576,7 +583,7 @@ When each opened and closed is written to the journal.
 the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
 
 <p align="center">
-  <img src="assets/screens/monitor.png" alt="Pipeline board: six floors from raw data to verification, each with its live numbers, and a status strip below" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/monitor.png" alt="Pipeline board: six floors from raw data to verification, each with its live numbers, and a status strip below" width="920">
 </p>
 
 Nothing on it is scripted. Every number comes from the space as it is now, so it works on any ontology, including a
@@ -608,7 +615,7 @@ you started with (기본 데이터) included, and 초기화 is no longer the onl
 Raw material comes first. 데이터 카탈로그 keeps files in repositories, by folder, and says what each one turned out to be.
 
 <p align="center">
-  <img src="assets/screens/catalog.png" alt="Data catalog screen: the upload area, the folder toolbar and a table of files with their kind, format, size, amount, upload date, where each goes and whether it is in the draft" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/catalog.png" alt="Data catalog screen: the upload area, the folder toolbar and a table of files with their kind, format, size, amount, upload date, where each goes and whether it is in the draft" width="920">
 </p>
 
 | You do | It does |
@@ -709,7 +716,7 @@ queries that need it. On the example commerce database it gives the bindings a p
 included.
 
 <p align="center">
-  <img src="assets/screens/draft.png" alt="Draft review: the steps across the top with what each still asks a person to settle, every source table scored against the standards with 표준에 연결 or 새 Entity로 유지, an English API name for each, and the picked table's sample rows, key evidence and match evidence beside" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/draft.png" alt="Draft review: the steps across the top with what each still asks a person to settle, every source table scored against the standards with 표준에 연결 or 새 Entity로 유지, an English API name for each, and the picked table's sample rows, key evidence and match evidence beside" width="920">
 </p>
 
 <p align="center"><b>A draft from the six files in <code>examples/files</code>, reviewed table by table.</b> Each source table is scored against the standards the draft compares with and bound to the standard object or kept as a new one, with an English name from the standards and the glossaries; the picked table shows its sample rows, why its key is a key and the match evidence. The later steps settle properties, relations, queries and rules the same way before the draft is applied.</p>
@@ -942,7 +949,7 @@ source's tables with their rows, keys and references are on 데이터 소스, an
 remove, or import a YAML or JSON list) on 검증 질문.
 
 <p align="center">
-  <img src="assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/workspace.png" alt="Modelling workspace: the objects of every module as cards on a canvas with keys, properties and named relations, a tree by module on the left, and the picked object's form, status, uses and comments on the right" width="920">
 </p>
 
 Every edit goes into one overlay module, `workspace` ("관리 변경"). Saved to the library, it comes back at the next start
@@ -1010,11 +1017,11 @@ covers names and paths, the definitions a question names, and document text by w
 the trash with its folder, comes back where it was, and every change is in the repository's work record.
 
 <p align="center">
-  <img src="assets/screens/explorer.png" alt="Data explorer screen: a tree of the whole space beside the files of a repository, each with its size, what it holds and whether it is indexed and in the draft" width="100%">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/explorer.png" alt="Data explorer screen: a tree of the whole space beside the files of a repository, each with its size, what it holds and whether it is indexed and in the draft" width="100%">
 </p>
 
 <p align="center">
-  <img src="assets/screens/space-map.png" alt="Space map screen: files, tables, documents, vector stores, objects and queries as one graph, with a side panel for the picked node" width="100%">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/space-map.png" alt="Space map screen: files, tables, documents, vector stores, objects and queries as one graph, with a side panel for the picked node" width="100%">
 </p>
 
 ```python
@@ -1037,7 +1044,7 @@ OpenAI-compatible endpoint, and `ontlas serve --llm-url ... --llm-model ...` add
 that checks but finds no rows goes back once with sample values of the properties it compared (only what the role
 may read in clear). `ontlas nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
 own questions by execution: the gold query's rows must be in the answer's;
-[`examples/commerce/nl_questions.yaml`](examples/commerce/nl_questions.yaml) has sixteen.
+[`examples/commerce/nl_questions.yaml`](https://github.com/PlateerLab/ontlas/blob/main/examples/commerce/nl_questions.yaml) has sixteen.
 
 ## Rules from policy text
 
@@ -1049,7 +1056,7 @@ own, and a person files it as a change request, so it is tried on a copy and app
 On the page, `ontlas serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
 command is `ontlas policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
 minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
-[`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
+[`examples/policies/교환정책서.md`](https://github.com/PlateerLab/ontlas/blob/main/examples/policies/교환정책서.md) is a made-up exchange policy.
 
 ## Any platform: REST and a borrowed connection
 
@@ -1107,18 +1114,18 @@ process, so when people approve on a team's page, have the agent call `/v1` inst
 
 ## Install
 
-From a checkout (the package is not on PyPI yet):
+From PyPI, or `pip install -e ".[...]"` in a checkout (the examples and tests are only in the repository):
 
 ```bash
-pip install -e .                 # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
-pip install -e ".[all]"          # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP, openpyxl
-pip install -e ".[postgres]"     # + psycopg      ("[neo4j]" for the Neo4j driver)
-pip install -e ".[mysql]"        # + PyMySQL, sqlglot      ("[oracle]" for oracledb, "[mssql]" for SQL Server)
-pip install -e ".[pdf]"          # + pypdf, for reading PDF documents
-pip install -e ".[xlsx]"         # + openpyxl, for drafting from Excel workbooks
-pip install -e ".[gremlin]"      # + gremlinpython, for Gremlin Server
-pip install -e ".[embed]"        # + fastembed, a multilingual embedding model on this machine
-pip install -e ".[reasonable]"   # + reasonable, a fast OWL RL engine, off by default
+pip install ontlas                    # core, zero deps: SQLite, JSON, the IR, every compiler, decisions, rules
+pip install "ontlas[all]"             # + PyYAML, rdflib, sqlglot, pySHACL, owlrl, ZEN, MCP, openpyxl
+pip install "ontlas[postgres]"        # + psycopg      ("[neo4j]" for the Neo4j driver)
+pip install "ontlas[mysql]"           # + PyMySQL, sqlglot      ("[oracle]" for oracledb, "[mssql]" for SQL Server)
+pip install "ontlas[pdf]"             # + pypdf, for reading PDF documents
+pip install "ontlas[xlsx]"            # + openpyxl, for drafting from Excel workbooks
+pip install "ontlas[gremlin]"         # + gremlinpython, for Gremlin Server
+pip install "ontlas[embed]"           # + fastembed, a multilingual embedding model on this machine
+pip install "ontlas[reasonable]"      # + reasonable, a fast OWL RL engine, off by default
 ```
 
 Qdrant and any OpenAI-shaped embedding service need no package: they are spoken to over HTTP.
@@ -1275,7 +1282,7 @@ core suite with no optional dependencies.
 
 ## License
 
-Open source under the [Apache License 2.0](LICENSE). Copyright 2026 Jinsoo Kim.
+Open source under the [Apache License 2.0](https://github.com/PlateerLab/ontlas/blob/main/LICENSE). Copyright 2026 Jinsoo Kim.
 
 Use it, change it and ship it, in a product or not, as that license says. The page's graph engine is sigma.js and graphology,
 bundled under the MIT license; their notices are in `src/ontlas/web/static/graph-kit-NOTICE.txt`.
