@@ -509,6 +509,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                             f"{a['name']}.yaml")
                 if route == "rules":
                     return s.rules_state()
+                if route == "semantic":
+                    return s.semantic_state()
                 if route == "metric":
                     return s.metric_run(a["name"], a.get("since") or None, a.get("until") or None)
                 if route == "space":

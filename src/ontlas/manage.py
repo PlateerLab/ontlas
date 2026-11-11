@@ -15,6 +15,7 @@ from typing import Any
 from ontlas.lexicon import TermEdits, term_id
 from ontlas.model import TYPES, _scope_filter
 from ontlas.modules import Module, ModuleError, Requirement, compose, settle
+from ontlas.semantic import CARD_FIELDS, CARD_STATUS, LAYER_LABEL, CardError, card_spec
 
 NAME = "workspace"
 UNDO_DEPTH = 50  # the edits that can each be taken back; each keeps the module as it was before it
@@ -447,9 +448,17 @@ class Workspace(TermEdits):
         if unknown:
             raise EditError(f"decision {table.name} has no output '{unknown[0]}'")
         spec: dict[str, Any] = {"id": rid, "when": when, "then": then}
-        if a.get("cite"):
-            spec["cite"] = str(a["cite"])
+        for k in ("cite", "owner", "status"):
+            if a.get(k):
+                spec[k] = str(a[k])
+        _known_status(spec)
         return spec
+
+    @staticmethod
+    def _not_axiom(table, rid: str) -> None:
+        """An AXIOM rule stays as its module wrote it, first in its table."""
+        if any(r.id == rid and r.layer == "axiom" for r in table.rules):
+            raise EditError(f"rule '{rid}' of {table.name} is AXIOM; it is not changed, moved or removed here")
 
     def _table(self, name: str):
         t = self.composed().ontology.decisions.get(name)
@@ -478,6 +487,7 @@ class Workspace(TermEdits):
         spec = self._rule(a, t)
         if not any(r.id == spec["id"] for r in t.rules):
             raise EditError(f"rule '{spec['id']}' is unknown in {name}")
+        self._not_axiom(t, spec["id"])
         holders = [self._section("body", "decisions")[name].setdefault("rules", [])] if self._owns("decisions", name) else []
         patch = None if holders else self._section("extend", "decisions").setdefault(name, {})
         if patch is not None:
@@ -511,7 +521,8 @@ class Workspace(TermEdits):
         """A table's label, its clause, or how it picks among the rules that hold."""
         name = str(a.get("decision") or a.get("name") or "")
         t = self._table(name)
-        fields = {k: a[k] for k in ("label", "cite", "hit_policy", "owner") if k in a}
+        fields = {k: a[k] for k in ("label", "cite", "hit_policy", "owner", "status") if k in a}
+        _known_status(fields)
         if fields.get("hit_policy") and fields["hit_policy"] not in HIT_POLICIES:
             raise EditError(f"hit policy '{fields['hit_policy']}' is not one of {', '.join(HIT_POLICIES)}")
         bare = [r.id for r in t.rules if r.priority is None]
@@ -524,26 +535,30 @@ class Workspace(TermEdits):
 
     def _move_rule(self, a: dict) -> str:
         """A rule to another place in its table. Where the table is another module's, this module writes the whole
-        order: it takes the table's rules out and puts them back first, in the new order."""
+        order: it takes the table's rules out and puts them back first, in the new order. AXIOM rules stay where they
+        are, ahead of the rest."""
         name, rid = str(a.get("decision") or ""), str(a.get("id") or "")
         t = self._table(name)
         ids = [r.id for r in t.rules]
         if rid not in ids:
             raise EditError(f"rule '{rid}' is unknown in {name}")
+        self._not_axiom(t, rid)
+        fixed = {r.id for r in t.rules if r.layer == "axiom"}
         order = [i for i in ids if i != rid]
-        order.insert(max(0, min(int(a.get("to", 0)), len(order))), rid)
+        order.insert(max(len(fixed), min(int(a.get("to", 0)), len(order))), rid)
         if order == ids:
             return f"rule:{name}.{rid}"
-        specs = {r["id"]: r for r in self.composed().ontology.to_dict()["decisions"][name].get("rules") or []}
+        specs = {r["id"]: {k: v for k, v in r.items() if k != "layer"}  # the layer is the writer's, set on composing
+                 for r in self.composed().ontology.to_dict()["decisions"][name].get("rules") or []}
         if self._owns("decisions", name):
-            self._section("body", "decisions")[name]["rules"] = [specs[i] for i in order]
+            self._section("body", "decisions")[name]["rules"] = [specs[i] for i in order if i not in fixed]
             return f"rule:{name}.{rid}"
         patch = self._section("extend", "decisions").setdefault(name, {})
         mine = {r.get("id") for k in ("rules_prepend", "rules_append") for r in patch.get(k) or []}
-        patch["rules_remove"] = sorted(set(patch.get("rules_remove") or []) | {i for i in ids if i not in mine})
+        patch["rules_remove"] = sorted(set(patch.get("rules_remove") or []) | {i for i in ids if i not in mine | fixed})
         patch.pop("rules_append", None)
         patch.pop("rules_replace", None)
-        patch["rules_prepend"] = [specs[i] for i in order]
+        patch["rules_prepend"] = [specs[i] for i in order if i not in fixed]
         return f"rule:{name}.{rid}"
 
     def _delete_rule(self, a: dict) -> str:
@@ -551,6 +566,7 @@ class Workspace(TermEdits):
         t = self._table(name)
         if not any(r.id == rid for r in t.rules):
             raise EditError(f"rule '{rid}' is unknown in {name}")
+        self._not_axiom(t, rid)
         if len(t.rules) == 1:
             raise EditError(f"decision {name} needs at least one rule")
         if self._owns("decisions", name):
@@ -724,6 +740,58 @@ class Workspace(TermEdits):
 
     def _delete_function(self, a: dict) -> str:
         return self._gone_entry("functions", "function", a, self.composed().ontology.functions)
+
+    # ---- rule cards: the records of rules, Custom ones written here (semantic.py) ----------------------------------
+
+    def _custom_card(self, cid: str) -> dict:
+        card = next((c for c in self.composed().cards if c["id"] == cid), None)
+        if card is None:
+            raise EditError(f"rule card '{cid}' is unknown")
+        if card["layer"] != "custom":
+            raise EditError(f"rule card '{cid}' is {LAYER_LABEL[card['layer']]}; only Custom cards are edited here")
+        return card
+
+    @staticmethod
+    def _card_checked(spec: dict) -> None:
+        try:
+            card_spec(spec, "customer")
+        except CardError as e:
+            raise EditError(str(e)) from None
+
+    def _add_rule_card(self, a: dict) -> str:
+        spec = {k: copy.deepcopy(a[k]) for k in CARD_FIELDS if a.get(k) not in (None, "", [], {})}
+        if spec.pop("layer", "custom") != "custom":
+            raise EditError("rule cards made here are Custom")
+        self._card_checked(spec)
+        if any(c["id"] == spec["id"] for c in self.composed().cards):
+            raise EditError(f"rule card '{spec['id']}' already exists")
+        self.module.body.setdefault("rule_cards", []).append(spec)
+        return f"rule_card:{spec['id']}"
+
+    def _update_rule_card(self, a: dict) -> str:
+        cid = str(a.get("id") or "")
+        card = self._custom_card(cid)
+        fields = {k: copy.deepcopy(a[k]) for k in CARD_FIELDS if k in a and k not in ("id", "layer")}
+        self._card_checked({**{k: card[k] for k in CARD_FIELDS if card.get(k) is not None and k != "layer"}, **fields})
+        own = next((c for c in self.module.body.get("rule_cards") or [] if c.get("id") == cid), None)
+        if own is None:  # another customer module's card: this module gives it the fields
+            self._section("extend", "rule_cards").setdefault(cid, {}).update(fields)
+            return f"rule_card:{cid}"
+        own.update(fields)
+        for k in [k for k, v in own.items() if v in (None, "", [], {})]:
+            del own[k]
+        return f"rule_card:{cid}"
+
+    def _delete_rule_card(self, a: dict) -> str:
+        cid = str(a.get("id") or "")
+        self._custom_card(cid)
+        cards = self.module.body.get("rule_cards") or []
+        if any(c.get("id") == cid for c in cards):
+            self.module.body["rule_cards"] = [c for c in cards if c.get("id") != cid]
+        else:
+            (self.module.extend.get("rule_cards") or {}).pop(cid, None)
+            self._removed("rule_cards").append(cid)
+        return f"rule_card:{cid}"
 
     def _action_spec(self, a: dict) -> dict:
         spec: dict[str, Any] = {}
@@ -926,7 +994,8 @@ class Workspace(TermEdits):
         for lk in self.module.extend.get("links") or {}:
             owners.add(comp.owner(f"link:{lk}"))
         for section, kind in (("decisions", "decision"), ("actions", "action"), ("roles", "role"), ("parameters", "parameter"),
-                              ("metrics", "metric"), ("identities", "identity"), ("functions", "function"), ("areas", "area")):
+                              ("metrics", "metric"), ("identities", "identity"), ("functions", "function"), ("areas", "area"),
+                              ("rule_cards", "rule_card")):
             owners |= {comp.owner(f"{kind}:{k}") for k in self.module.extend.get(section) or {}}
         for section in ("decisions", "actions", "functions"):
             owners |= {comp.owner(f"object:{spec.get('target')}") for spec in (self.module.body.get(section) or {}).values()}
@@ -944,7 +1013,7 @@ class Workspace(TermEdits):
             else:
                 kind = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision",
                         "actions": "action", "identities": "identity", "parameters": "parameter", "metrics": "metric",
-                        "functions": "function", "roles": "role", "areas": "area"}.get(s, s)
+                        "functions": "function", "roles": "role", "areas": "area", "rule_cards": "rule_card"}.get(s, s)
                 owners |= {comp.owner(f"{kind}:{k}") for k in items}
         for spec in (self.module.body.get("objects") or {}).values():
             if spec.get("parent"):
@@ -988,7 +1057,7 @@ def _removals(d: dict) -> set[str]:
     kinds = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision", "actions": "action",
              "identities": "identity", "questions": "question", "states": "states", "roles": "role",
              "interfaces": "interface", "parameters": "parameter", "metrics": "metric", "functions": "function",
-             "areas": "area", "terms": "term"}
+             "areas": "area", "terms": "term", "rule_cards": "rule_card"}
     for s, items in (d.get("remove") or {}).items():
         if s == "properties":
             out |= {f"property:{t}.{p}" for t, ps in (items or {}).items() for p in ps}
@@ -1014,6 +1083,12 @@ def _question_meta(a: dict) -> dict:
     if words:
         out["keywords"] = [str(w) for w in words]
     return out
+
+
+def _known_status(a: dict) -> None:
+    """A rule's or a table's review status, when it is given."""
+    if a.get("status") and a["status"] not in CARD_STATUS:
+        raise EditError(f"status '{a['status']}' is not one of {', '.join(CARD_STATUS)}")
 
 
 def _known_type(a: dict) -> None:

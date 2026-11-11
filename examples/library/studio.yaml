@@ -3,7 +3,7 @@ name: studio
 namespace: https://example.org/studio#
 now: "2026-10-30T12:00:00"
 notice: 가상 예시 데이터
-modules: [core, commerce, commerce-bindings, commerce-operations, commerce-operations-bindings, fashion, acme-overlay]
+modules: [core, commerce, commerce-bindings, commerce-operations, commerce-operations-bindings, fashion, acme-overlay, commerce-law]
 flow:
   gates:
     bind: {max_errors: 0}

@@ -30,9 +30,9 @@ def test_a_new_rule_goes_before_the_standard_and_leaves_it_alone(ws):
     ws.apply("add_rule", {"decision": "returnEligibility", "id": "gold-window", "cite": "운영 정책 7.1",
                           "when": {"customer_grade": {"op": "eq", "value": "GOLD"}, "days_since_delivery": {"op": "lte", "value": "10"}},
                           "then": {"eligible": True, "reason": "GOLD 고객은 10일까지 반품할 수 있습니다"}})
-    rules = onto(ws).decisions["returnEligibility"].rules
+    rules = [r for r in onto(ws).decisions["returnEligibility"].rules if r.layer != "axiom"]  # AXIOM rules stay ahead
     assert rules[0].id == "gold-window" and rules[0].when == {"customer_grade": '"GOLD"', "days_since_delivery": "10".join(["<= ", ""])}
-    assert rules[0].cite == "운영 정책 7.1"
+    assert rules[0].cite == "운영 정책 7.1" and rules[0].layer == "custom"
     assert all(m.name != "workspace" for m in ws.base)
     assert "decisions" in ws.module.extend  # an overlay: no standard module was edited
 

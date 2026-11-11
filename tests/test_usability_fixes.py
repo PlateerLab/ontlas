@@ -57,7 +57,7 @@ def test_a_rule_edited_in_the_workspace_is_compared_field_by_field_after_it_is_a
     d = session.change_detail(first["change"]["id"])
     rule = next(x for x in d["items"] if x["element"] == "rule:returnEligibility.in-window")
     cell = next(f for f in rule["fields"] if f["field"] == "when.days_since_delivery")
-    assert (cell["before"], cell["after"], cell["said"]) == ("<= 7", "<= 10", ["7일 이하", "10일 이하"])
+    assert (cell["before"], cell["after"], cell["said"]) == ("<= @return_window_days", "<= 10", ["7일 이하", "10일 이하"])
     assert cell["label"] == "조건 · 배송 완료 일시 경과일" and rule["change"] == "changed"
     assert {t for t, _ in d["yaml"]} == {"+"}  # the module's first version: every line is new
     # the next change is written over the first one and compared with it, the file too

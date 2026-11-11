@@ -799,7 +799,7 @@ class PagesMixin:
                    "source": "출발 Entity", "target": "도착 Entity", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
                    "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
-                   "area": "Object"}
+                   "area": "Object", "layer": "계층", "owner": "담당", "status": "상태"}
 
     def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
         """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""
@@ -948,6 +948,16 @@ class PagesMixin:
             questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "got": got, "passed": passed})
 
         now = run(values)
+        if "error" not in now:  # layer by layer, AXIOM first: what fired and which module wrote it
+            from ontlas.decide.table import holding
+            from ontlas.manage import NAME
+            from ontlas.semantic import decision_path
+
+            labels = {m.name: m.label or m.name for m in (st.composition.modules if st.composition else [])}
+            if pending:
+                labels[NAME] = self._ws().module.label
+            now["path"] = decision_path(table, now["matched"], [r.id for r in holding(table, values)], labels)
+            now["layer"] = now["path"]["layer"]
         tries = self._candidates(table, values)
         other, edges = [], []
         for i, vals in tries:
