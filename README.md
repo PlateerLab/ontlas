@@ -266,12 +266,20 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
     <td><b>The data map.</b> What a column change touches, from property to agent; what one agent can reach; what nobody uses.</td>
   </tr>
   <tr>
-    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/home.png" alt="Home screen: one box to search or ask, what waits on the person in one list, the pass conditions in brief, the records opened last and the registered queries"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/home.png" alt="Home screen: the version applied, the Entities per maturity level, the four parts of the space with their status, a box to search or ask, what waits on the person, the pass conditions in brief and an Object map"></td>
     <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/record.png" alt="Record page: one record with its values and columns, its state and where it can go, linked records, what each decision says of it now, the documents that name it and its history"></td>
   </tr>
   <tr>
-    <td><b>Home.</b> Where the people who use the ontology start: a box to search or ask, what waits on them, the measured pass conditions, the records they opened last and the saved queries, laid out for the role they pick.</td>
+    <td><b>Home.</b> Where the space stands and where its people start: the version applied, how far its Entities have come, the milestones and its four parts (rules, ontology, data binding, quality) with their status, a box to search or ask, what waits on them, the measured pass conditions and an Object map, laid out for the role they pick.</td>
     <td><b>A record.</b> Values with their columns, the state machine's current and next steps, the actions a role may take, linked records, what the decisions say of it now, the documents that name it, and its history.</td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/rule-layers.png" alt="Rules by layer: AXIOM, Custom and Standard side by side with their rules, cards and modules, the rule cards with type, source, owner and status, one card opened, and the AXIOM value checks"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/objects.png" alt="Object management: the Objects with their definition, Entity count, maturity and owner, and one Object opened with its maturity, Entities, relations, decision tables, questions, source and version"></td>
+  </tr>
+  <tr>
+    <td><b>Rules in three layers.</b> AXIOM (laws and integrity, checked first), a customer's Custom rules and the common Standard ones, each with the modules that wrote them; every rule card with its statement, source, owner and status, and the AXIOM checks on the values in force.</td>
+    <td><b>Objects.</b> The top-level classifications with their definition, tier, owner and how far their Entities have come (L0 to L3); one opened shows its Entities, relations, decision tables, questions, source and version.</td>
   </tr>
 </table>
 

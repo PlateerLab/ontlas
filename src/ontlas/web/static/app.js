@@ -5994,7 +5994,8 @@ ${controls}${body}`;
     S.mg.busy = true;
     try { S.mg.st = await api('manage'); } catch (e) { S.mg.st = { error: e.message }; }
     S.mg.busy = false;
-    if (MG_TABS.includes(S.tab) || S.tab === 'check') render();
+    // the sidebar's maturity reads it on every screen, so a screen that reads it may be waiting on a load it did not start
+    if (MG_TABS.includes(S.tab) || ['check', 'onto', 'lexicon'].includes(S.tab)) render(); else if (S.st) renderSide();
   }
 
   async function mgEdit(op, args, done) {
