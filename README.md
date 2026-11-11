@@ -5,7 +5,7 @@
 The name is *ontology* and *atlas*: a map of what a company knows, drawn once and read by people and agents alike.
 
 ```bash
-pip install ontlas
+pip install "ontlas[all]"     # or pip install ontlas for the core alone, with no dependencies (JSON files, no YAML)
 ```
 
 A live demo on fictional shop data: https://ontlas.js-96.com
