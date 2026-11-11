@@ -277,7 +277,8 @@ def test_the_state_shows_areas_and_each_types_area_and_level(session):
     areas = {a["name"]: a for a in st["areas"]}
     assert areas["Order"] == {
         "name": "Order", "label": "주문", "description": "주문과 주문에 담긴 주문상품", "cite": "",
-        "aligned": ["https://schema.org/Order"], "status": "active", "objects": ["Order", "OrderItem", "CheckoutRecord"],
+        "aligned": ["https://schema.org/Order"], "status": "active", "owner": "주문팀", "tier": 1,
+        "objects": ["Order", "OrderItem", "CheckoutRecord"],
         "pending": False, "new": False, "module": "commerce", "module_label": "이커머스 표준 온톨로지"}
     assert list(areas) == ["Customer", "Product", "Category", "Order", "Claim", "Payment", "Shipment", "Seller",
                            "Promotion", "Review"]

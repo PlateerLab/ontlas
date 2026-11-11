@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ontlas.lexicon import collect
 from ontlas.model import Ontology
 
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
@@ -171,6 +172,7 @@ class Composition:
     messages: list[dict] = field(default_factory=list)  # the dictionary modules' messages
     findings: list = field(default_factory=list)  # what the decision tables say twice or leave open (decide.checks)
     conflicts: list = field(default_factory=list)  # where two sources answer one input differently (decide.conflicts)
+    term_origin: dict[str, str] = field(default_factory=dict)  # term id -> the module whose entry holds (lexicon.collect)
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -241,7 +243,7 @@ def _extend_object(acc: dict, m: Module, name: str, patch: dict, touched: dict, 
     obj = acc["objects"].get(name)
     if obj is None:
         raise ModuleError(f"{m.key} extends object type '{name}', which no attached module defines")
-    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view", "status", "area"):
+    for k in ("label", "description", "title", "parent", "cite", "series", "period", "view", "status", "area", "owner"):
         if k in patch:
             obj[k] = copy.deepcopy(patch[k])
     if "table" in patch or "source" in patch:
@@ -345,7 +347,7 @@ def _extend_decision(acc: dict, m: Module, name: str, patch: dict, touched: dict
     rules = [copy.deepcopy(changed.get(r.get("id"), r)) for r in d.get("rules") or [] if r.get("id") not in gone]
     d["rules"] = copy.deepcopy(list(patch.get("rules_prepend") or [])) + rules + \
         copy.deepcopy(list(patch.get("rules_append") or []))
-    for k in ("label", "cite", "hit_policy"):
+    for k in ("label", "cite", "hit_policy", "owner"):
         if k in patch:
             d[k] = patch[k]
     touched.setdefault(f"decision:{name}", []).append(m.name)
@@ -499,6 +501,8 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     del acc["objects"][t]["states"]
                     removed[f"states:{t}"] = m.name
                 continue
+            if s == "terms":  # the lexicon takes these out where it collects the terms
+                continue
             if s not in SECTIONS:
                 raise ModuleError(f"{m.key}: cannot remove '{s}'")
             for k in items:
@@ -538,9 +542,10 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         origin.pop(e, None)
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
+    terms, term_origin = collect(ordered)
     return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
-                       [t for m in ordered for t in m.terms], [x for m in ordered for x in m.messages],
-                       onto.findings(), onto.source_conflicts())
+                       terms, [x for m in ordered for x in m.messages], onto.findings(), onto.source_conflicts(),
+                       term_origin)
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:

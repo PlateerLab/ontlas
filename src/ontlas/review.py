@@ -281,9 +281,9 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
         q = studio.questions()
         asked = q.measured  # without a source, only the questions a table answers from given values
         if asked:
-            out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed],
+            out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed], "sets": q.split(),
                             "wrong": [{"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got),
-                                       "error": r.error} for r in asked if not r.passed][:20],
+                                       "error": r.error, "holdout": r.holdout} for r in asked if not r.passed][:20],
                             "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in asked if not r.grounded},
                             "unasked": [r.id for r in q.results if r.unmeasured]}
         else:
