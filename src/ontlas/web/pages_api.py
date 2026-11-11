@@ -764,7 +764,7 @@ class PagesMixin:
             got = {f"{g.stage}.{g.condition}": g.value for g in gates(measured, st.flow)}
         except Exception:  # the studio as it stands cannot be measured: the review shows the change's numbers alone
             measured, got = {}, {}
-        self._standing = (sig, got, measured)
+        self._standing = (sig, got, measured, st.onto)  # the definition is held, so a later one never takes its id
         return got
 
     _standing: tuple | None = None
