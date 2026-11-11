@@ -7,6 +7,7 @@
     sec_qa: '<path d="M4.5 12.5l4.5 4.5L19.5 6.5"/>',
     sec_ops: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
     objmgr: '<rect x="3.5" y="4" width="7" height="7" rx="1.5"/><rect x="13.5" y="4" width="7" height="7" rx="1.5"/><rect x="3.5" y="14" width="7" height="6" rx="1.5"/><rect x="13.5" y="14" width="7" height="6" rx="1.5"/>',
+    lexicon: '<path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10.5"/><path d="M9 8.5h6"/>',
     versions: '<path d="M12 8v4l2.5 2.5"/><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4.5V9h4.5"/>',
     ruleagent: '<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18.5 15l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z"/>',
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
@@ -60,11 +61,11 @@
   const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['graph', '레코드 그래프'], ['model', '그래프 탐색'], ['rules', '기준값 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름 · 통과 조건'], ['explorer', '자산 탐색기'], ['map', '자산 그래프'], ['docs', '문서'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
     ['search', '질문해 보기'], ['connect', '외부 연동'], ['catalog', '재료 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', '엔티티 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '결정표'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한'], ['library', '모듈 라이브러리'], ['onto', '전체 보기'],
-    ['query', '질의'], ['decide', '처리 요청'], ['check', '검증 질문'], ['bind', 'DB 대조'], ['objmgr', '오브젝트 관리'], ['ruleagent', '규칙 생성 에이전트'], ['versions', '판본 이력']];
+    ['query', '질의'], ['decide', '처리 요청'], ['check', '검증 질문'], ['bind', 'DB 대조'], ['objmgr', '오브젝트 관리'], ['ruleagent', '규칙 생성 에이전트'], ['versions', '판본 이력'], ['lexicon', '용어사전']];
   // the sidebar: 홈, then the four parts a space is made of (the rules, the ontology, the data it is bound to, what proves
   // it), then what keeps it running. A part opens to its screens; a screen's own views are tabs on its page.
   const NAV_GROUP = [['home', '홈', ['home', 'inbox']],
-    ['sem', '규칙', ['mgrules', 'rules', 'mgfuncs']], ['sem', '규칙 생성 에이전트', ['ruleagent']], ['sem', '권한', ['roles']],
+    ['sem', '규칙', ['mgrules', 'rules', 'mgfuncs']], ['sem', '용어사전', ['lexicon']], ['sem', '규칙 생성 에이전트', ['ruleagent']], ['sem', '권한', ['roles']],
     ['ont', '오브젝트 관리', ['objmgr']], ['ont', '엔티티 관리', ['objects', 'states']], ['ont', '그래프 탐색', ['model', 'onto']],
     ['ont', '문서', ['docs']], ['ont', '질의', ['query']], ['ont', '온톨로지', ['changes', 'versions', 'library']],
     ['bnd', '데이터 가져오기', ['catalog', 'db', 'data', 'convert']], ['bnd', '데이터 매핑', ['sources', 'bind']],
@@ -436,7 +437,7 @@
     pol: { open: false, text: '', target: '', busy: false, res: null },
     ind: { target: '', inputs: {} },
     mg: { st: null, busy: false, sel: '', form: null, q: '', obj: '', table: '', open: false, keep: false, qt: 0, review: null },
-    cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false, om: { tier: 'all', q: '', sel: '' },
+    cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false, om: { tier: 'all', q: '', sel: '' }, lx: { st: null, busy: false, q: '', show: 'all', sel: '', form: null, imp: null },
     mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
     home: { role: 'ops', box: null, busy: false, tab: 'assigned', q: '', ov: null, ovBusy: false },
     rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', seeAs: '', params: {}, fn: {}, tab: 'overview' },
@@ -517,7 +518,7 @@
   function stale() {
     S.q.res = null; S.d.res = null; S.d.proposal = null; S.d.keys = {}; S.qa = null; S.bind = null; S.obj = null; S.fl = null;
     S.mg.st = null; S.iss.list = null; S.home.box = null;
-    S.home.sug = null; S.home.ov = null; S.ver = null; S.q.props = {}; S.md.trial = null;  // read from a definition that is no longer the one shown
+    S.home.sug = null; S.home.ov = null; S.ver = null; S.lx.st = null; S.q.props = {}; S.md.trial = null;  // read from a definition that is no longer the one shown
     Object.assign(S.sim, { dec: '', key: '', vals: {}, res: null, err: '', auto: false });  // a record and a verdict of the space that was shown
   }
 
@@ -743,7 +744,7 @@
     renderSide();
     const views = { graph: viewGraph, model: viewModel, changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
       sources: viewSources, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles,
-      objmgr: viewObjMgr, ruleagent: viewRuleAgent, versions: viewVersions };
+      objmgr: viewObjMgr, ruleagent: viewRuleAgent, versions: viewVersions, lexicon: viewLexicon };
     const main = $('#main');
     main.classList.toggle('wsmode', S.tab === 'model');
     main.classList.remove('pgo');
@@ -761,6 +762,7 @@
     if (S.tab === 'home' && S.home.role !== 'domain' && !S.fl) loadHomeFlow();
     if (S.tab === 'home' && !S.home.ov && !S.home.ovBusy) loadOverview();
     if (S.tab === 'versions' && !S.ver) loadVersions();
+    if (S.tab === 'lexicon' && !S.lx.st && !S.lx.busy) loadLexicon();
     if (S.tab === 'records' && !S.rl.res && !S.rl.busy) loadRecords();
     if (S.tab === 'graph' && $('#gxcanvas')) { mountGx(); gxPaint(); }
     if (S.tab === 'graph' && !S.gx.views) gxLoadViews();
@@ -2775,6 +2777,7 @@
       ${a ? '' : nameField(f, '예: Order')}
       ${field('정의', `<input type="text" data-in="mgf" data-f="description" value="${esc(v.description)}" placeholder="예: 고객이 상품이나 서비스의 구매를 요청하는 것">`)}
       ${field('출처', `<input type="text" data-in="mgf" data-f="cite" value="${esc(v.cite)}" placeholder="예: 주문결제 정책서 · 주문 개요">`)}
+      <div class="rgrid two">${field('소유자', `<input type="text" data-in="mgf" data-f="owner" value="${esc(v.owner || '')}" placeholder="예: 주문팀">`)}${field('차수', `<input type="number" min="1" data-in="mgf" data-f="tier" value="${esc(v.tier || '')}" placeholder="예: 1">`)}</div>
       ${a ? field('상태', statusSelect(v.status)) : ''}
       ${a ? `<div class="sec">Entity</div><div class="chips" style="margin-bottom:12px">${ents.map((o) => `<button class="chip" data-act="mdpick" data-name="${esc(o.name)}">${esc(o.label)}</button>`).join('') || '<span class="muted" style="font-size:12px">아직 없습니다.</span>'}<button class="chip b" data-act="mdobjnewin" data-area="${esc(a.name)}">+ Entity</button></div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>${a ? '저장' : 'Object 추가'}</button>
@@ -3064,6 +3067,101 @@
         ${row('근거', esc(a.cite || '-'))}
         ${row('소유자 · 판본', `${esc(a.owner || '-')} · ${esc(a.module_label || a.module || '-')}${lib ? ` ${esc(lib.version)}` : ''}`)}</div>
       <div class="cb" style="border-top:1px solid var(--line);display:flex;gap:8px"><button class="btn sm" data-act="omedit" data-name="${esc(a.name)}">편집</button></div></div>`;
+  }
+
+  // ---- 용어사전: what people call each definition, the words that mean the same, the pairs that must not be swapped ----
+  const TERM_STATUS = { active: ['ok', '사용 중'], draft: ['warn', '초안'], review: ['warn', '확인 필요'], deprecated: ['bad', '폐기 예정'] };
+  const CONFLICT_WORD = { label: '같은 표기가 두 정의에', synonym_confusable: '동의어이면서 혼동 금지', missing_concept: '없는 정의를 가리킴' };
+  const csv = (s) => String(s || '').split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+
+  async function loadLexicon() {
+    S.lx.busy = true;
+    try { S.lx.st = await api('lexicon'); } catch (e) { S.lx.st = { error: e.message }; }
+    S.lx.busy = false;
+    if (S.tab === 'lexicon') render();
+  }
+
+  async function lexEdit(op, args, said) {
+    try {
+      S.lx.st = await api('lexicon/edit', { op, args });
+      S.lx.form = null;
+      toast(said);
+      loadManage();  // the edit waits in the workspace with the others, to be reviewed and filed as one change
+    } catch (e) { fail(e); }
+    render();
+  }
+
+  function viewLexicon() {
+    const head = pageHead('용어사전', '업무에서 부르는 말을 정의에 잇습니다. 대표어, 영문, 동의어, 약어, 화면별 표기와 서로 바꿔 쓰면 안 되는 짝을 둡니다',
+      '<button class="btn" data-act="lximp">용어집 불러오기</button><button class="btn primary" data-act="lxnew">새 용어</button>');
+    const x = S.lx, st = x.st;
+    if (!st || x.busy) return head + '<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>';
+    if (st.error) return head + `<div class="banner no"><div class="why">${esc(st.error)}</div></div>`;
+    const s = st.stats;
+    const strip = `<div class="lxstats"><span>용어 <b>${count(s.terms)}</b></span><span>표기 <b>${count(s.labels)}</b></span><span>정의 연결 <b>${count(s.linked)} / ${count(s.terms)}</b></span>
+      <span>혼동 금지 짝 <b>${count(s.confusables)}</b></span><span class="${s.conflicts ? 'bad' : ''}">충돌 <b>${count(s.conflicts)}</b></span><span class="${s.review ? 'warn' : ''}">확인 필요 <b>${count(s.review)}</b></span></div>`;
+    const conflicts = st.conflicts.length ? `<div class="banner no" style="margin-bottom:12px"><div class="why"><b>충돌 ${st.conflicts.length}</b>${st.conflicts.slice(0, 6).map((c) => `<div style="font-size:12.5px">${esc(CONFLICT_WORD[c.kind] || c.kind)} · ${esc(c.text || c.label)}</div>`).join('')}</div></div>` : '';
+    const q = x.q.trim().toLowerCase();
+    const rows = st.rows.filter((r) => (x.show === 'all' || (x.show === 'unlinked' ? !r.concept_found : x.show === 'confusable' ? r.confusable.length : r.status === x.show))
+      && (!q || [r.term, r.english, ...Object.values(r.labels).flat(), r.concept_label, r.definition].join(' ').toLowerCase().includes(q)));
+    if (!x.sel || !st.rows.some((r) => r.id === x.sel)) x.sel = (rows[0] || {}).id || '';
+    const seg = [['all', `전체 ${st.rows.length}`], ['confusable', '혼동 금지'], ['unlinked', '정의 없음'], ['review', '확인 필요']]
+      .map(([k, w]) => `<button class="${x.show === k ? 'on' : ''}" data-act="lxshow" data-k="${k}">${w}</button>`).join('');
+    const alt = (r) => [...r.labels.alternative, ...r.labels.abbreviation].join(', ');
+    const tr = (r) => {
+      const [cls, word] = TERM_STATUS[r.status] || TERM_STATUS.active;
+      return `<tr class="click${r.id === x.sel ? ' sel' : ''}" data-act="lxpick" data-id="${esc(r.id)}"><td><b>${esc(r.term)}</b>${r.english ? `<div class="muted" style="font-size:11.5px">${esc(r.english)}</div>` : ''}</td>
+        <td>${r.concept ? `${esc(r.concept_label || r.concept)}<div class="muted" style="font-size:11.5px">${esc(r.concept_kind || '')}${r.concept_of ? ` · ${esc(r.concept_of)}` : ''}${r.concept_found ? '' : ' · 없는 정의'}</div>` : '<span class="muted">-</span>'}</td>
+        <td style="font-size:12.5px">${esc(alt(r) || '-')}</td><td>${r.confusable.map((c) => `<span class="chip sm warn" title="${esc(c.note || '')}">≠ ${esc(c.term)}</span>`).join(' ') || '<span class="muted">-</span>'}</td>
+        <td>${esc(r.owner || '-')}</td><td><span class="chip sm ${cls}">${word}</span>${r.new ? ' <span class="chip sm ok">새로 추가</span>' : r.pending ? ' <span class="chip sm warn">변경 대기</span>' : ''}${r.conflicts ? ` <span class="chip sm bad">충돌 ${r.conflicts}</span>` : ''}</td></tr>`;
+    };
+    const table = `<div class="card"><div class="ch">용어 <span class="chip sm">${rows.length}</span><div class="right"><div class="seg sm">${seg}</div><input type="text" class="omq" data-in="lxq" value="${esc(x.q)}" placeholder="용어 · 표기 · 정의 찾기" aria-label="용어 찾기"></div></div>
+      <div class="cb scroll" style="padding:0"><table class="tight"><thead><tr><th>대표어</th><th>정의</th><th>동의어 · 약어</th><th>혼동 금지</th><th>소유자</th><th>상태</th></tr></thead><tbody id="lxrows">${rows.map(tr).join('') || '<tr><td colspan="6" class="empty">용어가 없습니다</td></tr>'}</tbody></table></div></div>`;
+    const side = x.imp ? lexImport() : x.form ? lexForm() : lexDetail(st.rows.find((r) => r.id === x.sel));
+    return `${head}${S.mg.st && !S.mg.st.error ? pendingBar() : ''}${strip}${conflicts}<div class="grid omgrid">${table}${side}</div>`;
+  }
+
+  function lexDetail(r) {
+    if (!r) return '<div class="card"><div class="cb empty">용어를 고르세요.</div></div>';
+    const row = (k, v) => (v ? `<div class="odrow"><span>${k}</span><b>${v}</b></div>` : '');
+    const labels = S.lx.st.label_kinds.filter((k) => k.kind !== 'preferred' && r.labels[k.kind] && r.labels[k.kind].length)
+      .map((k) => row(esc(k.label), r.labels[k.kind].map(esc).join(', '))).join('');
+    const ch = Object.entries(r.channels || {}).map(([c, w]) => `${esc(c)} · ${esc(w)}`).join('<br>');
+    return `<div class="card odetail"><div class="cb"><div class="muted" style="font-size:12px">용어${r.kind ? ` · ${esc(r.kind)}` : ''}</div>
+      <h2>${esc(r.term)}${r.english ? `<span class="mono">${esc(r.english)}</span>` : ''}</h2><div class="muted">${esc(r.definition || '정의 문장이 아직 없습니다')}</div></div>
+      <div class="cb" style="border-top:1px solid var(--line)">${row('정의', r.concept ? `${esc(r.concept_label || r.concept)} <span class="muted">${esc(r.concept_kind || '')}</span>` : '연결 안 됨')}${labels}${row('화면별 표기', ch)}
+        ${row('관련어', (r.related || []).map(esc).join(', '))}${row('상위어', (r.broader || []).map(esc).join(', '))}${row('하위어', (r.narrower || []).map(esc).join(', '))}</div>
+      ${r.confusable.length ? `<div class="cb" style="border-top:1px solid var(--line)"><div class="label">서로 바꿔 쓰면 안 되는 말</div>${r.confusable.map((c) => `<div class="rgq"><b>≠ ${esc(c.term)}</b>${c.note ? ` <span class="muted">${esc(c.note)}</span>` : ''}</div>`).join('')}</div>` : ''}
+      <div class="cb" style="border-top:1px solid var(--line)">${row('쓰는 곳', (r.used_by || []).map(esc).join(', ') || '없음')}${row('근거', esc(r.cite || r.source || '-'))}${row('소유자 · 판본', `${esc(r.owner || '-')} · ${esc(r.module_label || r.module || '-')}`)}</div>
+      <div class="cb" style="border-top:1px solid var(--line);display:flex;gap:8px"><button class="btn sm" data-act="lxedit" data-id="${esc(r.id)}">편집</button><div class="grow" style="flex:1"></div><button class="btn sm danger" data-act="lxdel" data-id="${esc(r.id)}">용어 제외</button></div></div>`;
+  }
+
+  function lexForm() {
+    const f = S.lx.form, v = f.v;
+    const field = (label, html, hint = '') => `<div class="field"><label>${label}</label>${html}${hint ? `<span class="muted" style="font-size:11.5px">${hint}</span>` : ''}</div>`;
+    const inp = (k, hold = '') => `<input type="text" data-in="lxf" data-f="${k}" value="${esc(v[k] || '')}" placeholder="${esc(hold)}">`;
+    const concepts = `<select data-in="lxf" data-f="concept"><option value="">연결 안 함</option>${S.lx.st.concepts.map((c) => `<option value="${esc(c.concept)}"${c.concept === v.concept ? ' selected' : ''}>${esc(c.kind_label)} · ${esc(c.label)}${c.of ? ` (${esc(c.of)})` : ''}</option>`).join('')}</select>`;
+    return `<div class="card"><div class="ch">${f.mode === 'new' ? '새 용어' : `용어 ${esc(v.term)}`}<div class="right"><button class="btn sm ghost" data-act="lxclose">닫기</button></div></div><div class="cb">
+      ${field('대표어', inp('term', '예: 결제금액'))}${field('영문', inp('english', '예: Payment Amount'))}${field('가리키는 정의', concepts)}
+      ${field('정의 문장', inp('definition'))}${field('동의어', inp('synonyms', '쉼표로 나눕니다'))}${field('약어', inp('abbreviations', '쉼표로 나눕니다'))}
+      ${field('화면별 표기', `<textarea data-in="lxf" data-f="channels" style="min-height:56px" placeholder="백오피스=승인금액">${esc(v.channels || '')}</textarea>`, '한 줄에 하나, 화면=표기')}
+      ${field('숨은 표기', inp('hidden', '오타 · 옛 표기, 찾을 때만 씁니다'))}
+      ${field('혼동 금지', `<textarea data-in="lxf" data-f="confusable" style="min-height:56px" placeholder="주문금액: 할인 전 금액입니다">${esc(v.confusable || '')}</textarea>`, '한 줄에 하나, 용어: 설명')}
+      <div class="rgrid two">${field('소유자', inp('owner', '예: 결제팀'))}${field('상태', `<select data-in="lxf" data-f="status">${Object.entries(TERM_STATUS).map(([k, [, w]]) => opt(k, w, v.status || 'active')).join('')}</select>`)}</div>
+      ${field('근거', inp('cite', '예: 용어집 v2 · 결제'))}
+      <div style="display:flex;gap:8px"><button class="btn primary" data-act="lxsave">${f.mode === 'new' ? '용어 추가' : '저장'}</button><button class="btn ghost" data-act="lxclose">닫기</button></div></div></div>`;
+  }
+
+  function lexImport() {
+    const m = S.lx.imp, r = m.report;
+    const said = r ? ['added', 'updated', 'synonym', 'abbreviation', 'confusable', 'linked', 'unlinked', 'review', 'skipped', 'conflicts']
+      .filter((k) => (r[k] || []).length).map((k) => `<span class="chip sm${['unlinked', 'review', 'conflicts', 'skipped'].includes(k) ? ' warn' : ''}">${esc({ added: '새 용어', updated: '고친 용어', synonym: '동의어', abbreviation: '약어', confusable: '혼동 금지', linked: '정의 연결', unlinked: '정의 못 찾음', review: '확인 필요', skipped: '건너뜀', conflicts: '새 충돌' }[k])} ${r[k].length}</span>`).join('') : '';
+    return `<div class="card"><div class="ch">용어집 불러오기<div class="right"><button class="btn sm ghost" data-act="lxclose">닫기</button></div></div><div class="cb">
+      <div class="hint xp" style="margin-bottom:10px">용어 목록(용어, 영문, 정의, 동의어 ...)이나 짝 표(구분, 용어 A, 용어 B, 관계, 설명, 근거, 확인 필요)를 CSV 로 붙여 넣습니다. 한 번에 변경 하나로 들어가 되돌릴 수 있습니다.</div>
+      <div class="field"><label>파일 이름</label><input type="text" data-in="lxi" data-f="name" value="${esc(m.name)}" placeholder="예: 용어집.csv"></div>
+      <div class="field"><label>내용</label><textarea class="code" data-in="lxi" data-f="text" style="min-height:180px" placeholder="구분,용어 A,용어 B,관계,설명">${esc(m.text)}</textarea></div>
+      <div style="display:flex;gap:8px"><button class="btn primary" data-act="lxrun"${m.busy ? ' disabled' : ''}>${m.busy ? '<span class="spin"></span>읽는 중' : '불러오기'}</button></div>
+      ${said ? `<div class="chips" style="margin-top:12px">${said}</div>` : ''}${r && (r.unlinked || []).length ? `<div class="muted" style="font-size:12px;margin-top:8px">정의를 못 찾은 용어: ${r.unlinked.slice(0, 8).map((u) => esc(u.term || u)).join(', ')}</div>` : ''}</div></div>`;
   }
 
   // ---- 판본 이력: each approved change that is swapped in makes a version; who asked, who decided, what it did to the answers
@@ -4573,11 +4671,13 @@ ${controls}${body}`;
     const stats = `<div class="stats"><div class="stat"><b>${asked && r.accuracy !== null ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
       <div class="stat"><b>${passed} / ${asked}</b><span>정답 수${asked < r.results.length ? ` · 측정 안 함 ${r.results.length - asked}` : ''}</span></div>
       <div class="stat"><b>${asked && r.grounded !== null ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
+      ${r.sets && r.sets.holdout && r.sets.holdout.questions ? `<div class="stat"><b>${pct(r.sets.dev.accuracy)} · ${pct(r.sets.holdout.accuracy)}</b><span>개발 ${r.sets.dev.measured}문항 · 홀드아웃 ${r.sets.holdout.measured}문항</span></div>` : ''}
       ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>Backend 결과 일치 질의</span></div>` : ''}</div>
+      ${r.types ? `<div class="chips" style="margin:-4px 0 12px">${Object.entries(r.types).map(([k, t]) => `<span class="chip sm">${esc(Q_TYPE[k] || k)} ${t.passed} / ${t.measured}${t.measured < t.questions ? ` · 측정 안 함 ${t.questions - t.measured}` : ''}</span>`).join('')}</div>` : ''}
       <div class="hint xp" style="margin:-4px 0 12px">정답률은 정답이 정해진 질문에 같은 답을 낸 비율이고, 근거 제시율은 답에 적용 규칙 또는 질의, 출처, 모듈 버전이 모두 있는 비율입니다. 기준보다 낮으면 오답 원인에서 질문을 확인하고, 정의를 고치거나 의도한 변경이면 정답을 갱신합니다.</div>`;
     // a question that passes with its grounds is one line; its answer and the expected one show for the ones that do not, or on request
     const qa = (x) => `<div class="qdetail"><span><i>정답</i>${showObj(x.expected)}</span><span><i>결과</i>${x.error ? `<span class="muted">${esc(x.error)}</span>` : (typeof x.got === 'number' ? `${show(x.got)}행` : showObj(x.got))}</span></div>`;
-    const rows = r.results.map((x) => x.passed === null ? `<tr data-row="q:${esc(x.id)}" class="unasked"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td></td><td><span class="chip sm" title="${esc(x.note || '')}">측정 안 함</span></td></tr>` : `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}${S.qaAll || !x.passed ? qa(x) : ''}</td>
+    const rows = r.results.map((x) => x.passed === null ? `<tr data-row="q:${esc(x.id)}" class="unasked"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div></td><td></td><td><span class="chip sm" title="${esc(x.note || '')}">측정 안 함</span></td></tr>` : `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div>${S.qaAll || !x.passed ? qa(x) : ''}</td>
       <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span>${x.passed && x.grounded ? '' : `<div class="iacts"><button class="btn sm" data-act="chkopen" data-id="${esc(x.id)}">열기</button>${x.passed || x.error ? '' : `<button class="btn sm" data-act="chkexpect" data-id="${esc(x.id)}">정답 갱신</button>`}</div>`}</td></tr>`).join('');
     const confAll = (c && c.queries) || [], confShown = S.confAll ? confAll : confAll.filter((x) => !x.agree);  // what agrees is a count until asked for
     const conf = confShown.map((x) => `<tr data-row="conf:${esc(x.name)}"><td><b>${esc(x.label)}</b><div class="muted mono cn">${esc(x.name)}</div></td>
@@ -5800,7 +5900,7 @@ ${controls}${body}`;
   // Every edit lands in one overlay module ("관리 변경") over the standard modules, and reaches the other screens only
   // once it is filed as a change request and approved.
 
-  const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles', 'objmgr'];
+  const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles', 'objmgr', 'lexicon'];
   const OP_WORD = { add_object: 'Entity 추가', update_object: 'Entity 변경', delete_object: 'Entity 제외', add_property: '속성 추가',
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
@@ -6123,15 +6223,20 @@ ${controls}${body}`;
 
   // ---- questions (on the 검증 screen)
 
+  const Q_TYPE = { definition: '정의', decision: '판정', value: '값' };
+  const Q_GRADE = { keywords: '키워드 채점', evidence: '근거 채점', llm: '모델 채점' };
+  const qTags = (x) => `${x.type ? `<span class="chip sm">${esc(Q_TYPE[x.type] || x.type)}</span>` : ''}${x.holdout ? '<span class="chip sm b" title="개발에 쓰지 않고 따로 재는 질문">홀드아웃</span>' : ''}${Q_GRADE[x.grading] ? `<span class="chip sm">${Q_GRADE[x.grading]}</span>` : ''}`;
+
   function questionCard() {
     const m = S.mg.st;
     if (!m || m.error) return '';
     const f = S.mg.form && S.mg.form.kind === 'question' ? S.mg.form : null;
     const target = (x) => (x.decision ? `판정 <span class="mono">${esc(x.decision)}</span> · 키 <span class="mono">${esc(x.key)}</span>`
-      : `질의 <span class="mono">${esc(x.query)}</span>${Object.keys(x.params || {}).length ? ` <span class="muted mono">${esc(JSON.stringify(x.params))}</span>` : ''}`);
-    const rows = m.questions.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}</td><td style="font-size:12px">${target(x)}</td>
+      : x.query ? `질의 <span class="mono">${esc(x.query)}</span>${Object.keys(x.params || {}).length ? ` <span class="muted mono">${esc(JSON.stringify(x.params))}</span>` : ''}`
+        : `키워드 ${esc((x.keywords || []).join(', ') || '-')}`);
+    const rows = m.questions.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div></td><td style="font-size:12px">${target(x)}</td>
       <td style="font-size:12px">${showObj(x.expect)}</td><td><div class="chips">${ownerChip(x)}${x.pending ? '<span class="chip sm warn">새로 추가</span>' : ''}</div></td>
-      <td><button class="btn sm ghost" data-act="mgqdel" data-id="${esc(x.id)}"${S.mg.busy ? ' disabled' : ''}>제외</button></td></tr>`).join('');
+      <td style="white-space:nowrap"><button class="btn sm ghost" data-act="mgqhold" data-id="${esc(x.id)}"${S.mg.busy ? ' disabled' : ''} title="홀드아웃 질문은 정의를 고칠 때 보지 않고 따로 잽니다">${x.holdout ? '개발로' : '홀드아웃으로'}</button><button class="btn sm ghost" data-act="mgqdel" data-id="${esc(x.id)}"${S.mg.busy ? ' disabled' : ''}>제외</button></td></tr>`).join('');
     let form = '';
     if (f && f.mode === 'new') {
       const v = f.v;
@@ -6140,9 +6245,10 @@ ${controls}${body}`;
         ? `${field('판정', `<select data-in="mgf" data-f="decision">${S.st.decisions.map((d) => opt(d.name, `${d.label} (${d.name})`, v.decision)).join('')}</select>`)}${field('대상 키', `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: I1001">`)}`
         : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('JSON Parameter', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
       form = `<div class="review"><div class="rgrid">${field('번호', `<input type="text" data-in="mgf" data-f="id" value="${esc(v.id)}" placeholder="예: G1">`)}
-          ${field('종류', `<select data-in="mgf" data-f="kind" data-re="1">${opt('query', '질의 결과 행 수', v.kind)}${opt('decision', '판정 결과', v.kind)}</select>`)}
+          ${field('종류', `<select data-in="mgf" data-f="kind" data-re="1">${opt('query', '질의 결과 행 수', v.kind)}${opt('decision', '판정 결과', v.kind)}${opt('definition', '정의 질문(키워드)', v.kind)}</select>`)}
           ${field(v.kind === 'decision' ? 'JSON 기대값' : '기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="${v.kind === 'decision' ? '예: {&quot;eligible&quot;: true}' : '예: 2'}">`)}</div>
-        ${field('질문', `<input type="text" data-in="mgf" data-f="text" value="${esc(v.text)}" placeholder="예: C001 고객의 주문은 몇 건인가요?">`)}<div class="rgrid two">${pick}</div>
+        ${field('질문', `<input type="text" data-in="mgf" data-f="text" value="${esc(v.text)}" placeholder="예: C001 고객의 주문은 몇 건인가요?">`)}<div class="rgrid two">${v.kind === 'definition' ? field('키워드', `<input type="text" data-in="mgf" data-f="keywords" value="${esc(v.keywords || '')}" placeholder="답에 있어야 할 말, 쉼표로 나눕니다">`) : pick}</div>
+        <div class="rgrid two">${field('세트', `<select data-in="mgf" data-f="holdout">${opt('', '개발', v.holdout || '')}${opt('1', '홀드아웃', v.holdout || '')}</select>`)}${field('채점', `<select data-in="mgf" data-f="grading">${opt('', '기본', v.grading || '')}${opt('keywords', '키워드', v.grading || '')}${opt('evidence', '근거', v.grading || '')}</select>`)}</div>
         <div style="display:flex;gap:8px"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>질문 추가</button><button class="btn ghost" data-act="mgcancel">닫기</button></div></div>`;
     }
     if (f && f.mode === 'import') {
@@ -6722,13 +6828,14 @@ ${controls}${body}`;
           if (S.mg.form !== f) return;
           if (!v.name || !IDENT.test(v.name) || nameIssue(f)) { formStop('name', '영문 이름을 쓸 수 없어 Object를 추가하지 못했습니다. 영문 이름 칸 아래 안내대로 고쳐 주세요.'); return; }
           S.md.areaPick = v.name;
-          await mgEdit('add_area', { name: v.name, label: v.label || '', description: v.description || '', cite: v.cite || '' }, `Object ${v.label || v.name}을 추가했습니다.`);
+          await mgEdit('add_area', { name: v.name, label: v.label || '', description: v.description || '', cite: v.cite || '', ...(v.owner ? { owner: v.owner } : {}), ...(v.tier ? { tier: Number(v.tier) } : {}) }, `Object ${v.label || v.name}을 추가했습니다.`);
           if (mgArea(v.name)) { mgOpen('area', v.name, true); render(); }  // what was just made is what is shown next
         })();
         return true;
       }
       const o = f.orig, args = { name: v.name };
-      for (const k of ['label', 'description', 'cite']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      for (const k of ['label', 'description', 'cite', 'owner']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      if (String(v.tier || '') !== String(o.tier || '')) args.tier = v.tier ? Number(v.tier) : null;
       if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
       if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return true; }
       mgEdit('update_area', args, `Object ${v.label || v.name}을 바꿨습니다.`);
@@ -6920,6 +7027,12 @@ ${controls}${body}`;
     }
     if (f.kind === 'question') {
       let expect = {}, params = {};
+      const meta = { holdout: v.holdout === '1', ...(v.grading ? { grading: v.grading } : {}), ...(csv(v.keywords).length ? { keywords: csv(v.keywords) } : {}) };
+      if (v.kind === 'definition') {
+        if (!csv(v.keywords).length) { toast('정의 질문은 키워드가 있어야 채점합니다. 답에 있어야 할 말을 입력해 주세요.', true); return; }
+        mgEdit('add_question', { id: v.id, text: v.text, type: 'definition', ...meta }, `검증 질문 ${v.id}을 추가했습니다.`);
+        return;
+      }
       try {
         if (v.kind === 'decision') expect = v.expect.trim() ? JSON.parse(v.expect) : {};
         else { expect = v.expect.trim() === '' ? {} : { rows: Number(v.expect) }; params = v.params.trim() ? JSON.parse(v.params) : {}; }
@@ -6928,8 +7041,8 @@ ${controls}${body}`;
         toast(v.kind === 'decision' ? '기대값 형식이 올바르지 않아 저장하지 못했습니다. 예: {"eligible": true}' : '기대 행 수가 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.', true);
         return;
       }
-      const args = v.kind === 'decision' ? { id: v.id, text: v.text, decision: v.decision, key: v.key, expect }
-        : { id: v.id, text: v.text, query: v.query, params, expect };
+      const args = v.kind === 'decision' ? { id: v.id, text: v.text, decision: v.decision, key: v.key, expect, ...meta }
+        : { id: v.id, text: v.text, query: v.query, params, expect, ...meta };
       mgEdit('add_question', args, `검증 질문 ${v.id}을 추가했습니다.`);
     }
   }
@@ -6955,7 +7068,7 @@ ${controls}${body}`;
     }
     if (kind === 'area') {
       const a = mgArea(key);
-      S.mg.form = { kind, mode: 'edit', orig: a, v: { name: a.name, label: a.label || '', description: a.description || '', cite: a.cite || '', status: a.status || 'active' } };
+      S.mg.form = { kind, mode: 'edit', orig: a, v: { name: a.name, label: a.label || '', description: a.description || '', cite: a.cite || '', status: a.status || 'active', owner: a.owner || '', tier: a.tier ? String(a.tier) : '' } };
     }
     if (kind === 'prop') {
       const [obj, name] = key.split('.');
@@ -7348,6 +7461,47 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast(`정답 변경을 대기 중인 변경에 기록했습니다. ${fileAsk()}`); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    lxpick: (t) => { S.lx.sel = t.dataset.id; S.lx.form = null; S.lx.imp = null; render(); },
+    lxshow: (t) => { S.lx.show = t.dataset.k; render(); },
+    lxclose: () => { S.lx.form = null; S.lx.imp = null; render(); },
+    lximp: () => { S.lx.form = null; S.lx.imp = { name: '', text: '', report: null, busy: false }; render(); },
+    lxnew: () => { S.lx.imp = null; S.lx.form = { mode: 'new', v: { status: 'active' } }; render(); },
+    lxedit: (t) => {
+      const r = S.lx.st.rows.find((x) => x.id === t.dataset.id);
+      S.lx.imp = null;
+      S.lx.form = { mode: 'edit', id: r.id, v: { term: r.term, english: r.english, concept: r.concept, definition: r.definition, synonyms: r.synonyms.join(', '),
+        abbreviations: r.abbreviations.join(', '), hidden: r.hidden.join(', '), owner: r.owner, status: r.status, cite: r.cite,
+        channels: Object.entries(r.channels || {}).map(([c, w]) => `${c}=${w}`).join('\n'), confusable: r.confusable.map((c) => (c.note ? `${c.term}: ${c.note}` : c.term)).join('\n') } };
+      render();
+    },
+    lxsave: () => {
+      const f = S.lx.form, v = f.v;
+      if (!String(v.term || '').trim()) { toast('대표어가 비어 있어 저장하지 못했습니다. 대표어를 입력해 주세요.', true); return; }
+      const lines = (s) => String(s || '').split('\n').map((x) => x.trim()).filter(Boolean);
+      const args = { term: v.term.trim(), english: v.english || '', concept: v.concept || '', definition: v.definition || '', synonyms: csv(v.synonyms), abbreviations: csv(v.abbreviations),
+        hidden: csv(v.hidden), owner: v.owner || '', status: v.status || 'active', cite: v.cite || '',
+        channels: Object.fromEntries(lines(v.channels).map((x) => x.split('=')).filter((p) => p.length > 1).map(([c, ...w]) => [c.trim(), w.join('=').trim()])),
+        confusable: lines(v.confusable).map((x) => { const [term, ...note] = x.split(':'); return { term: term.trim(), note: note.join(':').trim() }; }) };
+      if (f.mode === 'new') lexEdit('add_term', args, `용어 ${args.term}을 추가했습니다.`);
+      else lexEdit('update_term', { id: f.id, ...args }, `용어 ${args.term}을 바꿨습니다.`);
+    },
+    lxdel: (t) => {
+      const r = S.lx.st.rows.find((x) => x.id === t.dataset.id);
+      if (!window.confirm(`용어 ${r.term}을 제외합니다. 제외된 항목은 대기 중인 변경에서 확인할 수 있습니다.`)) return;
+      S.lx.sel = '';
+      lexEdit('delete_term', { id: r.id }, `용어 ${r.term} 제외를 저장했습니다.`);
+    },
+    lxrun: async () => {
+      const m = S.lx.imp;
+      if (!m.text.trim()) { toast('붙여 넣은 내용이 없습니다. 용어집 CSV 를 붙여 넣어 주세요.', true); return; }
+      m.busy = true; render();
+      try {
+        const res = await api('lexicon/import', { text: m.text, name: m.name || '용어집.csv' });
+        m.report = res.report; S.lx.st = res; loadManage();
+        toast('용어집을 불러왔습니다. 대기 중인 변경에서 검토한 뒤 적용합니다.');
+      } catch (e) { fail(e); }
+      m.busy = false; render();
+    },
     homeobj: (t) => { if (t.dataset.name) { S.om.sel = t.dataset.name; location.hash = '#objmgr'; } else location.hash = '#objects'; },
     ompick: (t) => { S.om.sel = t.dataset.name; if (S.mg.form && S.mg.form.kind === 'area') S.mg.form = null; render(); },
     omtier: (t) => { S.om.tier = t.dataset.k; render(); },
@@ -8171,6 +8325,7 @@ ${controls}${body}`;
           : `사본에서 검토한 뒤 적용했습니다. '${r.change.module_label}' ${r.change.version} 기준으로 모든 화면이 바뀝니다.${r.warning ? ' ' + r.warning : ''}`);
       } catch (e) { S.mg.busy = false; render(); fail(e); }
     },
+    mgqhold: (t) => { const x = S.mg.st.questions.find((q) => q.id === t.dataset.id); mgEdit('update_question', { id: x.id, holdout: !x.holdout }, `검증 질문 ${x.id}을 ${x.holdout ? '개발' : '홀드아웃'} 세트로 옮겼습니다.`); },
     mgqnew: () => {
       const ids = new Set(S.mg.st.questions.map((x) => x.id));
       let i = 1;
@@ -8256,6 +8411,9 @@ ${controls}${body}`;
     gxq: (t) => { S.gx.q = t.value; gxFindSoon('start'); },
     gxfromq: (t) => { S.gx.fromq = t.value; S.gx.from = null; gxFindSoon('from'); },
     gxtoq: (t) => { S.gx.toq = t.value; S.gx.to = { type: '', key: '' }; gxFindSoon('to'); },
+    lxq: (t) => { S.lx.q = t.value; const at = t.selectionStart; render(); const box = $('#main [data-in="lxq"]'); if (box) { box.focus(); box.setSelectionRange(at, at); } },
+    lxf: (t) => { S.lx.form.v[t.dataset.f] = t.value; },
+    lxi: (t) => { S.lx.imp[t.dataset.f] = t.value; },
     omq: (t) => { S.om.q = t.value; const b = $('#omrows'); if (b) b.innerHTML = omRows(omShown()); },
     mdq: (t) => { S.md.q = t.value; const b = $('#mdtree'); if (b) b.innerHTML = modelTree(); },
     mdcq: (t) => {  // only that column's rows, so the box keeps the cursor
@@ -8559,7 +8717,7 @@ ${controls}${body}`;
       const c = ev.target.closest && ev.target.closest('[data-col]');
       if (c) { ev.dataTransfer.setData('text/x-column', c.dataset.col); ev.dataTransfer.effectAllowed = 'copy'; }
     });
-    main.addEventListener('change', (ev) => { const t = ev.target; if (t.dataset && CHANGE[t.dataset.in]) CHANGE[t.dataset.in](t); });
+    main.addEventListener('change', (ev) => { const t = ev.target; if (t.dataset && CHANGE[t.dataset.in]) CHANGE[t.dataset.in](t); else if (t.tagName === 'SELECT' && t.dataset && t.dataset.in === 'lxf') INPUT.lxf(t); });
     main.addEventListener('keydown', (ev) => {
       if (ev.target.dataset && ev.target.dataset.in === 'exq' && ev.key === 'Enter') { ev.preventDefault(); ACT.exsearch(); }
       if (ev.target.dataset && ev.target.dataset.in === 'exedit' && (ev.key === 'Enter' || ev.key === 'Escape')) { ev.preventDefault(); ACT[ev.key === 'Enter' ? 'exsave' : 'excancel'](); }
