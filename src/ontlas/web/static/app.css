@@ -1200,10 +1200,10 @@ tr.unasked td { color:#98a2b3; }
 
 /* the sidebar: the XGEN mark beside the product's name, the space being worked on, its parts, how far it has come */
 .sbrand { gap:8px; text-decoration:none; }
-.sbrand { justify-content:center; padding-left:12px; }
-.sbrand .xword { height:27px; width:auto; flex:none; fill:var(--navy); }
+.sbrand { justify-content:flex-end; padding:13px 24px 13px 12px; }
+.sbrand .xword { height:31px; width:auto; flex:none; fill:var(--navy); }
 .sbrand .xsym { display:none; width:26px; height:26px; flex:none; fill:var(--navy); }
-.sbrand .bname { display:block; flex:none; font-size:20px; font-weight:800; letter-spacing:-.3px; color:var(--navy); line-height:1; }
+.sbrand .bname { display:block; flex:none; font-size:23px; font-weight:800; letter-spacing:-.3px; color:var(--navy); line-height:1; }
 .sspace { display:flex; flex-direction:column; gap:3px; margin:10px 10px 0; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel); font-size:12px; min-width:0; }
 .sspace > b { font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sspace > span { color:var(--muted); }
@@ -1350,3 +1350,9 @@ tr.unasked td { color:#98a2b3; }
 .otsteps i.part { background:#93b4f5; }
 .otsteps i.full { background:var(--blue); }
 .otloose { border-top:1px solid var(--line); padding-top:8px !important; padding-bottom:10px !important; }
+
+/* the document graph: relation names on the lines of the node picked */
+.dgxcanvas .gxe text { display:none; }
+.dgxcanvas .gxe.on text { display:block; }
+.card > .ch .right select[data-in=dgxseed] { width:auto; max-width:220px; }
+.chipsel select { width:auto; }
