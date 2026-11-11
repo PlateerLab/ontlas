@@ -57,6 +57,7 @@ class DecisionResult:
     parameters: dict[str, Any] = field(default_factory=dict)  # the named values the matched rules read
     conflicts: list[dict] = field(default_factory=list)  # {rules, sources, says}: nobody has picked between them yet
     also: list[str] = field(default_factory=list)  # rules that held too, which the hit policy did not use
+    path: dict = field(default_factory=dict)  # layer by layer, AXIOM first: what fired, and where it came from (semantic)
 
     def __post_init__(self):
         self.overridden = self.overridden or getattr(self.matched, "overridden", [])
@@ -83,9 +84,11 @@ def _read(table: DecisionTable, hits: list[DecisionRule]) -> dict[str, Any]:
 
 
 def _by_priority(table: DecisionTable, hits: list[DecisionRule]) -> tuple[Any, list[str], list[str]]:
-    ranked = sorted(hits, key=lambda r: float("inf") if r.priority is None else r.priority)
+    # an AXIOM rule is checked before any number a lower layer gives its own rules
+    ranked = sorted(hits, key=lambda r: (r.layer != "axiom", float("inf") if r.priority is None else r.priority))
     top = ranked[0]
-    tied = [r.id for r in ranked[1:] if r.priority == top.priority and r.then != top.then]
+    tied = [r.id for r in ranked[1:] if r.priority == top.priority and r.then != top.then
+            and (r.layer == "axiom") == (top.layer == "axiom")]
     if tied:
         raise DecisionError(f"{table.name}: rules {[top.id, *tied]} match at priority {top.priority} and answer "
                             "differently")
@@ -116,8 +119,10 @@ def evaluate_table(table: DecisionTable, inputs: dict[str, Any]) -> tuple[Any, l
     """Return (outputs, matched rule ids, rule notes) under the table's hit policy."""
     matching = holding(table, inputs)
     ids = {r.id for r in matching}
-    aside = [r for r in matching if ids & set(r.overruled_by)]  # a person picked the other source here
-    hits = [r for r in matching if not ids & set(r.overruled_by)]
+    # a person picked the other source here; an AXIOM rule is never set aside by a pick
+    picked = [bool(ids & set(r.overruled_by)) and r.layer != "axiom" for r in matching]
+    aside = [r for r, out in zip(matching, picked) if out]
+    hits = [r for r, out in zip(matching, picked) if not out]
     disagree = _disagreements(table, hits)
     said = [f"{r.source or r.id} set aside here by conflict {r.overruled_by[k]}: {k} stands over {r.id}"
             for r in aside for k in r.overruled_by if k in ids]

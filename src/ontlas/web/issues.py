@@ -14,7 +14,7 @@ from typing import Any
 from ontlas.manage import NAME as WORKSPACE
 from ontlas.web.monitor import FINDING
 
-KEEP_ON = {"core", "domain", "binding"}  # what everything else stands on: taking one off is never offered as a fix
+KEEP_ON = {"core", "domain", "binding", "axiom"}  # what everything else stands on: taking one off is never offered as a fix
 KIND_WORD = {"property": "속성", "query": "질의", "link": "관계", "object": "Entity", "decision": "결정", "action": "액션", "rule": "규칙",
              "function": "함수", "role": "역할", "question": "검증 질문"}
 SQL_TYPE = (("TIMESTAMP", "datetime"), ("DATETIME", "datetime"), ("DATE", "date"), ("TIME", "datetime"), ("BOOL", "boolean"), ("BIT", "boolean"),

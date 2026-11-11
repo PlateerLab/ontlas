@@ -445,7 +445,9 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("config")
     s.add_argument("--impact", help="module to check before detaching")
     s.add_argument("--cascade", action="store_true")
-    s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open")
+    s.add_argument("--check", action="store_true", help="what the composition breaks and what its rules leave open, "
+                                                        "and how the rule cards' checks come out")
+    s.add_argument("--rules", action="store_true", help="the rule layers (AXIOM, Custom, Standard) and every rule card")
 
     s = sub.add_parser("views", help="the statements that make the views objects are defined by")
     s.add_argument("config")
@@ -934,8 +936,14 @@ def _main(argv: list[str] | None = None) -> int:
             comp = studio.composition
             issues, found = (comp.issues, comp.findings) if comp else (studio.onto.validate(), studio.onto.findings())
             _out({"issues": issues, "findings": [f.to_dict() for f in found],
-                  "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts())})
+                  "conflicts": _conflicts(comp.conflicts if comp else studio.onto.source_conflicts()),
+                  "checks": comp.checks if comp else []})
             return 0 if not issues else 1
+        if a.rules:
+            from ontlas.semantic import semantic_view
+
+            _out(semantic_view(studio.onto, studio.composition))
+            return 0
         _out(studio.composition.summary() if studio.composition else [])
     elif a.cmd == "views":
         from ontlas.decide.views import create_views, view_statements

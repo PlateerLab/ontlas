@@ -10,15 +10,18 @@ from typing import Any
 
 from ontlas.lexicon import collect
 from ontlas.model import Ontology
+from ontlas.semantic import check_cards, define_cards, extend_cards, layer_of, remove_cards, violations
 
 # quality: how a definition is checked (questions and the flow's pass conditions); method: how a draft is built from
-# data (the draft rules). Both plug in and out like the rest.
-KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary")
+# data (the draft rules). Both plug in and out like the rest. axiom: rules that always hold (laws, arithmetic
+# integrity), checked first and never changed or removed by the modules below (semantic.py).
+KINDS = ("core", "domain", "industry", "customer", "binding", "quality", "method", "dictionary", "axiom")
 SECTIONS = ("interfaces", "areas", "objects", "links", "decisions", "actions", "roles", "queries", "identities",
             "parameters", "metrics", "conflicts", "functions")
 SINGULAR = {"interfaces": "interface", "areas": "area", "objects": "object", "links": "link", "decisions": "decision",
             "actions": "action", "roles": "role", "queries": "query", "identities": "identity",
-            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict", "functions": "function"}
+            "parameters": "parameter", "metrics": "metric", "conflicts": "conflict", "functions": "function",
+            "rule_cards": "rule_card"}
 _REQ = re.compile(r"^\s*([A-Za-z0-9_.-]+?)\s*(?:(@|>=|==)\s*([0-9][0-9A-Za-z.\-]*))?\s*$")
 
 
@@ -82,6 +85,7 @@ class Module:
         body = {s: copy.deepcopy(d.get(s) or {}) for s in SECTIONS}
         body["questions"] = copy.deepcopy(d.get("questions") or [])
         body["exclusive"] = copy.deepcopy(d.get("exclusive") or [])
+        body["rule_cards"] = copy.deepcopy(d.get("rule_cards") or [])  # the records of its rules (semantic.py)
         return cls(name=d["module"], version=str(d.get("version", "0.1.0")), kind=d.get("kind", "domain"),
                    label=d.get("label", ""), description=d.get("description", ""), namespace=d.get("namespace", ""),
                    requires=[Requirement.parse(r) for r in d.get("requires", [])], body=body,
@@ -96,7 +100,7 @@ class Module:
                 out[k] = getattr(self, k)
         if self.requires:
             out["requires"] = [str(r) for r in self.requires]
-        for s in (*SECTIONS, "questions", "exclusive"):
+        for s in (*SECTIONS, "questions", "exclusive", "rule_cards"):
             if self.body.get(s):
                 out[s] = copy.deepcopy(self.body[s])
         if self.extend:
@@ -142,6 +146,7 @@ class Module:
                 if s == "objects":
                     out += [f"property:{k}.{p}" for p in ((v or {}).get("properties") or {})]
         out += [f"question:{q['id']}" for q in self.body.get("questions", [])]
+        out += [f"rule_card:{c.get('id')}" for c in self.body.get("rule_cards", []) if isinstance(c, dict)]
         return out
 
     def counts(self) -> dict[str, int]:
@@ -153,6 +158,7 @@ class Module:
         c["draft_rules"] = len(self.draft_rules)
         c["terms"] = len(self.terms)
         c["messages"] = len(self.messages)
+        c["rule_cards"] = len(self.body.get("rule_cards", []))
         return c
 
 
@@ -173,6 +179,8 @@ class Composition:
     findings: list = field(default_factory=list)  # what the decision tables say twice or leave open (decide.checks)
     conflicts: list = field(default_factory=list)  # where two sources answer one input differently (decide.conflicts)
     term_origin: dict[str, str] = field(default_factory=dict)  # term id -> the module whose entry holds (lexicon.collect)
+    cards: list[dict] = field(default_factory=list)  # the rule cards, each with its module, version and layer (semantic)
+    checks: list[dict] = field(default_factory=list)  # how the cards' checks came out on the final named values
 
     def owner(self, element: str) -> str:
         return self.origin.get(element, "")
@@ -333,6 +341,25 @@ def _extend_link(acc: dict, m: Module, name: str, patch: dict, touched: dict) ->
     touched.setdefault(f"link:{name}", []).append(m.name)
 
 
+_BY = "_by"  # while composing, the module that wrote a rule
+
+
+def _write(rules: Any, m: Module) -> list:
+    """Rules as a module writes them: in the module's layer, whatever they say of their own, and marked with it."""
+    out = copy.deepcopy(list(rules or []))
+    for r in out:
+        r["layer"], r[_BY] = layer_of(m.kind), m.name
+    return out
+
+
+def _bare(spec: Any) -> Any:
+    """A decision as written, without what composing marks on its rules."""
+    if not isinstance(spec, dict) or not spec.get("rules"):
+        return spec
+    return {**spec, "rules": [{k: v for k, v in r.items() if k not in ("layer", _BY)} if isinstance(r, dict) else r
+                              for r in spec["rules"]]}
+
+
 def _extend_decision(acc: dict, m: Module, name: str, patch: dict, touched: dict) -> None:
     d = acc["decisions"].get(name)
     if d is None:
@@ -344,10 +371,14 @@ def _extend_decision(acc: dict, m: Module, name: str, patch: dict, touched: dict
     missing = sorted((gone | set(changed)) - known)
     if missing:
         raise ModuleError(f"{m.key} changes rule '{missing[0]}' of decision '{name}', which it does not have")
-    rules = [copy.deepcopy(changed.get(r.get("id"), r)) for r in d.get("rules") or [] if r.get("id") not in gone]
-    d["rules"] = copy.deepcopy(list(patch.get("rules_prepend") or [])) + rules + \
-        copy.deepcopy(list(patch.get("rules_append") or []))
-    for k in ("label", "cite", "hit_policy", "owner"):
+    held = [r.get("id") for r in d.get("rules") or [] if r.get("layer") == "axiom" and r.get("id") in gone | set(changed)]
+    if held and m.kind != "axiom":
+        raise ModuleError(f"{m.key} {'removes' if held[0] in gone else 'rewrites'} AXIOM rule '{held[0]}' of decision "
+                          f"'{name}'; only an axiom module changes it")
+    rules = [_write([changed[r.get("id")]], m)[0] if r.get("id") in changed else copy.deepcopy(r)
+             for r in d.get("rules") or [] if r.get("id") not in gone]
+    d["rules"] = _write(patch.get("rules_prepend"), m) + rules + _write(patch.get("rules_append"), m)
+    for k in ("label", "cite", "hit_policy", "owner", "status"):
         if k in patch:
             d[k] = patch[k]
     touched.setdefault(f"decision:{name}", []).append(m.name)
@@ -441,12 +472,13 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
     origin: dict[str, str] = {}
     touched: dict[str, list[str]] = {}
     removed: dict[str, str] = {}
+    cards: dict[str, dict] = {}
     for m in ordered:
         for s in SECTIONS:
             for k, v in (m.body.get(s) or {}).items():
                 eid = f"{SINGULAR[s]}:{k}"
                 if k in acc[s]:
-                    if acc[s][k] == v:
+                    if acc[s][k] == v or (s == "decisions" and _bare(acc[s][k]) == _bare(v)):
                         continue
                     raise ModuleError(f"{m.key} defines {SINGULAR[s]} '{k}', already defined by {origin[eid]}; "
                                       "extend it instead")
@@ -455,11 +487,17 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                 if s == "objects":
                     for p in (v.get("properties") or {}):
                         origin[f"property:{k}.{p}"] = m.name
+                if s == "decisions" and isinstance(v, dict) and v.get("rules"):
+                    acc[s][k]["rules"] = _write(v["rules"], m)
         for q in m.body.get("questions") or []:
             acc["questions"].append(copy.deepcopy(q))
             origin[f"question:{q['id']}"] = m.name
         acc["exclusive"] += copy.deepcopy(m.body.get("exclusive") or [])
+        define_cards(cards, m, origin)
         for s, items in (m.extend or {}).items():
+            if s == "rule_cards":
+                extend_cards(cards, m, items or {}, touched)
+                continue
             for k, patch in (items or {}).items():
                 if s == "objects":
                     _extend_object(acc, m, k, patch or {}, touched, origin)
@@ -503,11 +541,18 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                 continue
             if s == "terms":  # the lexicon takes these out where it collects the terms
                 continue
+            if s == "rule_cards":
+                remove_cards(cards, m, items, removed)
+                continue
             if s not in SECTIONS:
                 raise ModuleError(f"{m.key}: cannot remove '{s}'")
             for k in items:
                 if k not in acc[s]:
                     raise ModuleError(f"{m.key} removes {SINGULAR[s]} '{k}', which is not there")
+                held = [r.get("id") for r in acc[s][k].get("rules") or [] if r.get("layer") == "axiom"] \
+                    if s == "decisions" else []
+                if held and m.kind != "axiom":
+                    raise ModuleError(f"{m.key} removes decision '{k}', which holds AXIOM rule '{held[0]}'")
                 del acc[s][k]
                 removed[f"{SINGULAR[s]}:{k}"] = m.name
                 if s == "objects":
@@ -522,6 +567,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
     for obj in acc["objects"].values():  # an area that is not attached (or was removed) leaves its types unclassified
         if obj.get("area") and obj["area"] not in acc["areas"]:
             del obj["area"]
+    writers: dict[str, list[str]] = {}
+    for k, spec in acc["decisions"].items():  # a table checks its AXIOM rules first; the others keep their order
+        rules = spec.get("rules") or []
+        rules.sort(key=lambda r: r.get("layer") != "axiom")
+        writers[k] = [r.pop(_BY, "") for r in rules]
     namespace = namespace or next((m.namespace for m in reversed(ordered) if m.namespace), "")
     if not namespace:
         raise ModuleError("no namespace: give one, or set it on a module")
@@ -530,6 +580,10 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
          "version": version or " ".join(m.key for m in ordered),
          "label": label or " + ".join(m.label or m.name for m in ordered if m.kind in ("domain", "industry")), **acc}
     onto = Ontology.from_dict(d)
+    versions = {m.name: m.version for m in ordered}
+    for k, who in writers.items():
+        for r, by in zip(onto.decisions[k].rules, who):
+            r.module, r.version = by, versions.get(by, "")
     for iname, ident in onto.identities.items():  # the object and links an identity expands into are its module's
         who = origin.get(f"identity:{iname}")
         if who:
@@ -543,9 +597,11 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
         touched.pop(e, None)
     gates, gate_by, rules, rules_by = _methods(ordered)
     terms, term_origin = collect(ordered)
-    return Composition(onto, ordered, origin, touched, removed, onto.validate(), gates, gate_by, rules, rules_by,
-                       terms, [x for m in ordered for x in m.messages], onto.findings(), onto.source_conflicts(),
-                       term_origin)
+    kept = list(cards.values())
+    checks = check_cards(kept, onto, ordered)  # a value an AXIOM card bounds, outside the bound: the composition fails
+    return Composition(onto, ordered, origin, touched, removed, onto.validate() + violations(checks), gates, gate_by,
+                       rules, rules_by, terms, [x for m in ordered for x in m.messages], onto.findings(),
+                       onto.source_conflicts(), term_origin, kept, checks)
 
 
 def _forget_in_roles(acc: dict, *, type_name: str = "", prop: str = "") -> None:

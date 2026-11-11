@@ -69,7 +69,7 @@ def _decision(tools, name: str, key: str, at=None) -> dict:
     def word(i: str) -> str:
         return input_label(st.onto, t, i) if i in t.inputs else i
 
-    rules = [{"id": i, "cite": by_id[i].cite or t.cite, **_rule_module(st, name, i),
+    rules = [{"id": i, "cite": by_id[i].cite or t.cite, **_rule_module(st, name, i), "layer": by_id[i].layer,
               "when": [{"input": word(k), "test": str(v)} for k, v in by_id[i].when.items()]}
              for i in res["matched"] or [] if i in by_id]
     also = [{"id": i, "cite": by_id[i].cite or t.cite, "fallback": not by_id[i].when} for i in res.get("also") or [] if i in by_id]
@@ -87,7 +87,8 @@ def _decision(tools, name: str, key: str, at=None) -> dict:
     target = st.onto.objects.get(t.target)
     return {"name": name, "label": t.label or name, "target": t.target, "target_label": (target.label or t.target) if target else "",
             "key": key, "verdict": said, "good": good, "reason": reason, "outputs": outs, "rules": rules, "evidence": evidence,
-            "also": also, "hit_policy": t.hit_policy, "at": (at or st.now()).isoformat(timespec="minutes"),
+            "also": also, "hit_policy": t.hit_policy, "path": res.get("path") or {},
+            "at": (at or st.now()).isoformat(timespec="minutes"),
             "actions": _next_actions(tools, t, key, outs), "reading": _reading(st, t, key)}
 
 
