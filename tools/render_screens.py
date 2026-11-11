@@ -4,8 +4,8 @@
     ONTLAS_BASE=http://127.0.0.1:7711 python tools/render_screens.py   # shoot a server already running with the example
 
 Writes assets/screens/{library,query,decision,map}.png from `ontlas preview`,
-assets/screens/{home,monitor,ontology,catalog,draft,workspace,rules,changes,record,graph,space-map,documents,search,
-adapters,explorer}.png from `ontlas serve` with the example files, and assets/architecture.png, all at 2x.
+assets/screens/{home,monitor,ontology,catalog,draft,workspace,rules,rule-layers,objects,changes,record,graph,space-map,
+documents,search,adapters,explorer}.png from `ontlas serve` with the example files, and assets/architecture.png, all at 2x.
 """
 from __future__ import annotations
 
@@ -110,6 +110,16 @@ def live_screens(page, base: str, out: Path) -> None:
             settle(page, 1200)
     settle(page, 500)
     page.screenshot(path=str(out / "rules.png"))
+
+    open_tab(page, base, "semrules")  # the rules by layer (AXIOM, Custom, Standard) with their cards
+    page.wait_for_selector(".lycard", timeout=30000)
+    settle(page, 600)
+    page.screenshot(path=str(out / "rule-layers.png"))
+
+    open_tab(page, base, "objmgr")  # the Objects with their maturity and owner, the first one opened
+    page.wait_for_selector("#omrows tr", timeout=30000)
+    settle(page, 600)
+    page.screenshot(path=str(out / "objects.png"))
 
     open_tab(page, base, "records")
     page.wait_for_selector("[data-act=rec]", timeout=60000)
