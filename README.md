@@ -1282,7 +1282,4 @@ core suite with no optional dependencies.
 
 ## License
 
-Open source under the [Apache License 2.0](https://github.com/PlateerLab/ontlas/blob/main/LICENSE). Copyright 2026 Jinsoo Kim.
-
-Use it, change it and ship it, in a product or not, as that license says. The page's graph engine is sigma.js and graphology,
-bundled under the MIT license; their notices are in `src/ontlas/web/static/graph-kit-NOTICE.txt`.
+Apache License 2.0. See [LICENSE.md](https://github.com/PlateerLab/ontlas/blob/main/LICENSE.md) for details.
