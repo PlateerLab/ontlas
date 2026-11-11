@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.bindings import entity_level
-from xgen_space.model import Ontology
-from xgen_space.modules import Module, ModuleError, compose, removal_impact
+from ontlas.bindings import entity_level
+from ontlas.model import Ontology
+from ontlas.modules import Module, ModuleError, compose, removal_impact
 
 ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "examples" / "library"
@@ -103,7 +103,7 @@ def test_detaching_the_module_of_an_area_leaves_its_types_unclassified():
 @pytest.fixture
 def shop():
     pytest.importorskip("yaml")
-    from xgen_space.library import Library
+    from ontlas.library import Library
 
     return Library(LIB).resolve(SHOP)
 
@@ -129,13 +129,13 @@ def test_the_example_library_files_its_types_under_areas(shop):
 
 @pytest.fixture
 def ws(shop):
-    from xgen_space.manage import Workspace
+    from ontlas.manage import Workspace
 
     return Workspace(shop, compose_kw=KW)
 
 
 def test_areas_are_added_changed_and_deleted_from_the_management_screens(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     e = ws.apply("add_area", {"name": "Member", "label": "회원", "description": "회원과 등급",
                               "aligned": ["https://schema.org/Person"]})
@@ -174,7 +174,7 @@ def test_areas_are_added_changed_and_deleted_from_the_management_screens(ws):
 
 
 def test_a_type_is_filed_under_an_area_when_it_is_added_or_changed(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     ws.apply("add_area", {"name": "Member", "label": "회원"})
     ws.apply("add_object", {"name": "Tier", "label": "등급", "key": "tier_id", "area": "Member",
@@ -199,7 +199,7 @@ def test_a_type_is_filed_under_an_area_when_it_is_added_or_changed(ws):
 
 
 def test_area_edits_are_taken_back_and_made_again(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     def filed():
         o = ws.composed().ontology
@@ -265,8 +265,8 @@ def test_the_level_of_a_type_goes_from_a_definition_to_a_checked_binding():
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(LIB / "studio.yaml"), data=DataOptions(samples=ROOT / "examples" / "files"))
 
@@ -293,7 +293,7 @@ def test_the_state_shows_areas_and_each_types_area_and_level(session):
 
 
 def test_a_level_reads_the_last_check_and_never_takes_one(session, monkeypatch):
-    from xgen_space import bindings
+    from ontlas import bindings
 
     def never(*a, **kw):
         raise AssertionError("the state took a database check")
@@ -360,8 +360,8 @@ def test_area_edits_are_said_in_korean_and_filed_as_one_change(session):
 
 def test_areas_are_exchanged_as_skos_collections(shop):
     rdflib = pytest.importorskip("rdflib")
-    from xgen_space.exchange.importer import from_owl
-    from xgen_space.exchange.owl import to_owl
+    from ontlas.exchange.importer import from_owl
+    from ontlas.exchange.owl import to_owl
 
     comp = compose(shop, **KW)
     ttl, rep = to_owl(comp.ontology, origin=comp.origin)
@@ -372,7 +372,7 @@ def test_areas_are_exchanged_as_skos_collections(shop):
     assert set(g.objects(area, skos.member)) == {ns.Order, ns.OrderItem, ns.CheckoutRecord}
     assert str(g.value(area, skos.definition)) == "주문과 주문에 담긴 주문상품"
     assert (area, skos.exactMatch, rdflib.URIRef("https://schema.org/Order")) in g
-    assert (area, rdflib.RDFS.isDefinedBy, rdflib.URIRef("urn:xgen-space:module:commerce")) in g
+    assert (area, rdflib.RDFS.isDefinedBy, rdflib.URIRef("urn:ontlas:module:commerce")) in g
     assert "area Order" in rep.preserved
     back, read = from_owl(ttl)
     assert read.summary()["unsupported"] == 0 and "area Order" in read.preserved

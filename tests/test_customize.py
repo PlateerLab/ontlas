@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.manage import EditError, Workspace
-from xgen_space.modules import compose
+from ontlas.manage import EditError, Workspace
+from ontlas.modules import compose
 
 SHOP = Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml"
 
@@ -12,7 +12,7 @@ SHOP = Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.ya
 def shop():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     return load_studio(SHOP)
 

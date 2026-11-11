@@ -3,12 +3,12 @@ import json
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.cli import main
-from xgen_space.decide.conflicts import conflict_view, record_pick, source_conflicts
-from xgen_space.decide.table import DecisionError, DecisionResult, evaluate_table
-from xgen_space.decide.zen import to_jdm
-from xgen_space.modules import Module, compose
+from ontlas import Ontology
+from ontlas.cli import main
+from ontlas.decide.conflicts import conflict_view, record_pick, source_conflicts
+from ontlas.decide.table import DecisionError, DecisionResult, evaluate_table
+from ontlas.decide.zen import to_jdm
+from ontlas.modules import Module, compose
 
 
 def _rules() -> list[dict]:
@@ -211,7 +211,7 @@ def test_record_pick_writes_the_pick_into_a_module():
 
 
 def test_a_conflict_that_loses_its_rule_goes_when_settled():
-    from xgen_space.modules import settle
+    from ontlas.modules import settle
 
     base = _module(conflicts={FOUND: {"decision": "return_fee", "rules": ["p1", "s1"]}})
     gone = Module.from_dict({"module": "acme", "kind": "customer", "requires": ["returns"],

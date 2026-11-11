@@ -14,7 +14,7 @@ KW = {"namespace": "https://example.org/studio#", "name": "studio"}
 @pytest.fixture
 def base():
     pytest.importorskip("yaml")
-    from xgen_space.library import Library
+    from ontlas.library import Library
 
     return Library(LIB).resolve(MODULES)
 
@@ -25,8 +25,8 @@ def coupon():
 
 
 def test_a_later_edit_that_no_longer_composes_leaves_the_edits_as_they_were(base):
-    from xgen_space.manage import EditError, Workspace
-    from xgen_space.modules import Module
+    from ontlas.manage import EditError, Workspace
+    from ontlas.modules import Module
 
     old = Workspace(base, compose_kw=KW)
     old.apply("add_object", coupon())
@@ -44,8 +44,8 @@ def test_a_later_edit_that_no_longer_composes_leaves_the_edits_as_they_were(base
 
 
 def test_an_edit_that_cannot_be_made_again_stays_to_be_made(base):
-    from xgen_space.manage import EditError, Workspace
-    from xgen_space.modules import Module
+    from ontlas.manage import EditError, Workspace
+    from ontlas.modules import Module
 
     old = Workspace(base, compose_kw=KW)
     old.apply("update_property", {"object": "Customer", "name": "name", "label": "B"})
@@ -61,7 +61,7 @@ def test_an_edit_that_cannot_be_made_again_stays_to_be_made(base):
 
 
 def test_only_the_last_edits_can_each_be_taken_back(base):
-    from xgen_space.manage import UNDO_DEPTH, TooFarBack, Workspace
+    from ontlas.manage import UNDO_DEPTH, TooFarBack, Workspace
 
     ws = Workspace(base, compose_kw=KW)
     for i in range(UNDO_DEPTH + 2):
@@ -76,8 +76,8 @@ def test_only_the_last_edits_can_each_be_taken_back(base):
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(LIB / "studio.yaml"), data=DataOptions(samples=ROOT / "examples" / "files"))
 
@@ -97,8 +97,8 @@ def test_a_source_pick_is_an_edit_and_stays_when_an_earlier_edit_is_taken_back(s
 
 
 def test_a_question_that_takes_a_new_answer_keeps_its_params(base):
-    from xgen_space.manage import Workspace
-    from xgen_space.modules import Module
+    from ontlas.manage import Workspace
+    from ontlas.modules import Module
 
     mods = []
     for m in base:

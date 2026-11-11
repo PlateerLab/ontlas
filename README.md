@@ -1,6 +1,8 @@
-# XGEN Space
+# Ontlas
 
 **One space for every kind of data an AI can use, tied to no store, no model, no domain and no platform.**
+
+The name is *ontology* and *atlas*: a map of what a company knows, drawn once and read by people and agents alike.
 
 - **Every kind of data in one place.** Files, databases, documents, embeddings, graphs and ontologies sit in one space and know about each other.
 - **Nothing is tied to a store.** Graph databases, vector databases, reasoners, embedding models and query languages are adapters, and a conformance test says whether a swap changed the answers.
@@ -14,10 +16,10 @@ store the space has, and become a document ontology tied to the domain through t
 passage and go on to the definition. **Zero hard dependencies, zero infra to try it.**
 
 ```python
-from xgen_space import Ontology
-from xgen_space.studio import Studio
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.backends.rdf import RdflibBackend
+from ontlas import Ontology
+from ontlas.studio import Studio
+from ontlas.backends.sql import SqliteBackend
+from ontlas.backends.rdf import RdflibBackend
 
 studio = Studio(Ontology.load("examples/commerce/ontology.yaml").check())
 studio.add_backend("source", SqliteBackend()).script(open("examples/commerce/seed.sql", encoding="utf-8").read())
@@ -32,14 +34,27 @@ studio.decide("returnEligibility", "I1001")        # outputs, the rule that fire
 ```
 
 ```bash
-xspace search examples/library/studio.yaml "포장을 뜯은 속옷도 돌려보낼 수 있나요"   # passages, and the definitions the question names
-xspace vectors examples/library/studio.yaml                                     # every vector store against exact search
-xspace serve examples/library/studio.yaml --embedder fastembed --api-token-env XSPACE_API_TOKEN   # the page and /v1
+ontlas search examples/library/studio.yaml "포장을 뜯은 속옷도 돌려보낼 수 있나요"   # passages, and the definitions the question names
+ontlas vectors examples/library/studio.yaml                                     # every vector store against exact search
+ontlas serve examples/library/studio.yaml --embedder fastembed --api-token-env ONTLAS_API_TOKEN   # the page and /v1
 ```
 
 <p align="center">
   <img src="assets/architecture.png" alt="One ontology definition feeding execution adapters that compile one query IR to SQL, Cypher, GQL, SPARQL, SQL/PGQ and Gremlin for the backends a deployment has" width="920">
 </p>
+
+## Modules
+
+Ontlas is one product in five parts, each named for what it does. They share one definition, so a part is a way in, not a
+separate copy.
+
+| Module | What it does | Where it is on the page |
+|---|---|---|
+| **Ontlas Studio** | Define and check: Objects, the Entities under them and their properties and relations, the workspace, validation questions and the flow's pass conditions | 구축 › 1 온톨로지, 4 검증 |
+| **Ontlas Map** | Bind the definition to source tables, columns and codes, and to the words people use for it; check the definition against the database | 구축 › 3 데이터 연결 |
+| **Ontlas Rule** | Formulas and decision criteria: decision tables in plain words, parameters, functions and computed properties | 구축 › 2 규칙 |
+| **Ontlas Query** | Answers from checked definitions: one query compiled for whatever store a deployment has, search over documents and records, the REST API and MCP tools | 업무 › 질문, 레코드 |
+| **Ontlas Guard** | What people and agents may do: actions with criteria and approval, roles, masking and row scope, change requests tried on a copy before they apply | 업무 › 판정 · 처리, 구축 › 5 변경 요청 |
 
 ## What it is for
 
@@ -62,15 +77,15 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 
 | Feature | How it works | Try it |
 |---|---|---|
-| One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `xspace conformance examples/library/studio.yaml` |
-| Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `xspace modules examples/library/studio.yaml --impact fashion` |
-| Anything goes in, one JSON comes out | SQL scripts, ERD files, definition sheets, glossaries, message lists, Word, PowerPoint, Hangul and PDF documents all roll up into one JSON, and the same path makes modules from it | `xspace ingest examples/definitions/*.csv -o bundle.json` |
-| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice. Composite keys and references stay whole | `xspace draft examples/files/*.csv -o my-studio` |
-| Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `xspace decide examples/library/studio.yaml returnEligibility I1001` |
-| Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `xspace agreement examples/library/studio.yaml` |
-| Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `xspace review examples/library/studio.yaml acme-1.1.0.yaml` |
+| One query, compared across stores | A query is a typed IR, not text. Compilers write each language, SPARQL and Cypher read back into the same IR, and a conformance run compares the rows store by store | `ontlas conformance examples/library/studio.yaml` |
+| Standards that are never edited | Every element knows the module it came from. A customer's difference extends or removes from a module of its own, and detaching a module shows what would go before anything goes | `ontlas modules examples/library/studio.yaml --impact fashion` |
+| Anything goes in, one JSON comes out | SQL scripts, ERD files, definition sheets, glossaries, message lists, Word, PowerPoint, Hangul and PDF documents all roll up into one JSON, and the same path makes modules from it | `ontlas ingest examples/definitions/*.csv -o bundle.json` |
+| A studio from what already exists | Drafts come from data, from table and code definitions with no rows, or onto a standard, and keep the reason for each choice. Composite keys and references stay whole | `ontlas draft examples/files/*.csv -o my-studio` |
+| Answers that show their grounds | A decision gives the rule that fired, the clause it cites and the source column of each input. A question counts as grounded only when its answer has all of them and the version, and that share can be a pass condition | `ontlas decide examples/library/studio.yaml returnEligibility I1001` |
+| Rules checked against what was decided | Past cases are decided again with the values they had then, and the ones that differ are listed with the rule that fired | `ontlas agreement examples/library/studio.yaml` |
+| Changes tried before they count | A new module version runs on a copy of the studio, and it can be approved only when it passes the flow's conditions | `ontlas review examples/library/studio.yaml acme-1.1.0.yaml` |
 | Edits that say what they take | Removing a property or a relation in the modelling workspace takes out the queries, decisions and questions that need it, and lists them before anything is filed; an element carries a status (초안 · 사용 중 · 폐기 예정) | The page's 구축 › 온톨로지 › 작업 공간 |
-| Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
+| Agents inside limits | Every MCP call runs inside the role's row filters and masks. An agent files a request, and nothing is written until a person approves it | `ontlas mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001` |
 | Nothing to run first | The core has no required dependencies. SQLite and an in-process RDF graph are enough to try everything, and values stay in the source unless you ask for a projection | `python examples/commerce/demo.py` |
 
 ## How to use it
@@ -78,8 +93,8 @@ tables, and the engine checks what it writes; the rest of the studio runs withou
 The package is not on PyPI yet, so install it from a checkout.
 
 ```bash
-git clone https://github.com/PlateerLab/xgen-space.git
-cd xgen-space
+git clone https://github.com/PlateerLab/ontlas.git
+cd ontlas
 pip install -e ".[all]"
 ```
 
@@ -87,7 +102,7 @@ pip install -e ".[all]"
 refunds, shipping, coupons, reviews), a fashion extension and one customer's differences.
 
 ```bash
-xspace serve examples/library/studio.yaml --samples examples/files --policies examples/policies
+ontlas serve examples/library/studio.yaml --samples examples/files --policies examples/policies
 ```
 
 Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the library folder is not written. The home
@@ -122,11 +137,11 @@ drawn from a column of past outcomes, and the module files applying would write.
 is 적용 요청 and an approver applies it. DB 대조 checks the definition against the database. From the command line:
 
 ```bash
-xspace draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
-xspace draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
-xspace draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
-xspace draft --dsn "$XSPACE_DSN" --name shop -o my-studio                                     # from a database
-xspace serve my-studio/studio.yaml
+ontlas draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
+ontlas draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --name shop -o my-studio   # from definitions, no rows
+ontlas draft --definitions schema.sql --definitions 코드정의서.xlsx --name shop -o my-studio       # from a SQL script
+ontlas draft --dsn "$ONTLAS_DSN" --name shop -o my-studio                                     # from a database
+ontlas serve my-studio/studio.yaml
 ```
 
 A database needs `pip install -e ".[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
@@ -137,10 +152,10 @@ show the expected and the given answer), the backends compared query by query, a
 measured; 흐름 shows every stage from the source to the questions and sets the conditions.
 
 ```bash
-xspace bindings my-studio/studio.yaml       # the definition against the database
-xspace questions my-studio/studio.yaml      # validation questions: right, and grounded
-xspace conformance my-studio/studio.yaml    # every registered query on every backend
-xspace gates my-studio/studio.yaml          # the flow's pass conditions, measured
+ontlas bindings my-studio/studio.yaml       # the definition against the database
+ontlas questions my-studio/studio.yaml      # validation questions: right, and grounded
+ontlas conformance my-studio/studio.yaml    # every registered query on every backend
+ontlas gates my-studio/studio.yaml          # the flow's pass conditions, measured
 ```
 
 **6. Review and approve (구축 › 5 변경 요청).** A change request is reviewed element by element: each element's fields
@@ -150,20 +165,20 @@ the author cannot approve their own. 라이브러리 applies and removes modules
 on the page leads to it. The same review from the command line:
 
 ```bash
-xspace review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
+ontlas review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
 ```
 
 **7. Use it and plug it in (업무, 운영 › 저장소 · 연동).** The people who use the ontology start on 홈 with what waits on them;
 ask in one box and get the answer with how the question was read, where the answer came from and what to do next; open
 a record's page; grow the graph from one record (each type its own colour and shape) and keep a perspective for the
-team, bound to a role. `xspace serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)),
-and `xspace mcp` and the token REST API give agents and platforms the same studio inside a role (see
+team, bound to a role. `ontlas serve --users` gives a team one studio with roles (see [A team studio](#a-team-studio)),
+and `ontlas mcp` and the token REST API give agents and platforms the same studio inside a role (see
 [Agents over MCP](#agents-over-mcp)).
 
 ```bash
-xspace run examples/library/studio.yaml revenueByCategory
-xspace translate examples/commerce/ontology.yaml revenueByCategory --to cypher
-xspace decide examples/library/studio.yaml returnEligibility I1001
+ontlas run examples/library/studio.yaml revenueByCategory
+ontlas translate examples/commerce/ontology.yaml revenueByCategory --to cypher
+ontlas decide examples/library/studio.yaml returnEligibility I1001
 ```
 
 The sidebar has three sections: what a person comes to do (업무), the five steps that build the definition (구축) and what
@@ -196,7 +211,7 @@ and the help drawer can show them all; `Ctrl K` jumps to any screen, Object defi
 
 The screens below are the example library in `examples/library` (common concepts, commerce and its operations, a
 fashion extension, one customer's differences, and the bindings to one database), rendered by `tools/render_screens.py`
-from `xspace preview` and from a running `xspace serve`. Nothing on them is drawn by hand: the modules, the compiled
+from `ontlas preview` and from a running `ontlas serve`. Nothing on them is drawn by hand: the modules, the compiled
 queries, the rows from both backends, the decision with its evidence and the reach of a column change are what the
 library computed for that example.
 
@@ -263,7 +278,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 | `exchange` | OWL and R2RML export with a report of what each format cannot hold; OWL/RDFS import as a starting definition |
 | `catalog` | The data space as a graph: databases, tables, columns, files, collections, ontology objects, queries, decisions, actions, roles, agents |
 | `nl` | A schema card and IR guide for a language model, and a loop that checks its answer and asks again with the issues |
-| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `xspace` command; the MCP server; the studio page as a file |
+| `conformance` · `studio` · `cli` · `mcp_server` · `preview` | Runs across backends compared row for row; the facade; the `ontlas` command; the MCP server; the studio page as a file |
 | `repository` | Repositories of raw files: folders and files by path in an index, bytes by hash, kept in a folder or gone with the visitor |
 | `web` | The studio page served over HTTP with the standard library only: the pipeline board, flow with its pass conditions, the data catalog, the one JSON, the draft and standard bindings, library with the module editor and change review, ontology graph, queries, decisions, approvals and rollback, checks, and the guide with its video; one studio per visitor, or one per team behind a sign-in |
 
@@ -358,10 +373,10 @@ changed nothing.
 
 | Port | In the package | Add your own | The test |
 |---|---|---|---|
-| Query backends | SQLite, PostgreSQL, MySQL, Oracle, SQL Server, any DB-API, rdflib, SPARQL endpoints, Neo4j, Gremlin, a query gateway | `kind: dbapi`, or a `Backend` | `xspace conformance`: the same rows on every store |
-| Vector stores | memory (exact), Qdrant, pgvector | `register_vector_store` | `xspace vectors`: every store against exact search |
+| Query backends | SQLite, PostgreSQL, MySQL, Oracle, SQL Server, any DB-API, rdflib, SPARQL endpoints, Neo4j, Gremlin, a query gateway | `kind: dbapi`, or a `Backend` | `ontlas conformance`: the same rows on every store |
+| Vector stores | memory (exact), Qdrant, pgvector | `register_vector_store` | `ontlas vectors`: every store against exact search |
 | Embedders | hash (no model), any OpenAI-shaped service, fastembed (a local multilingual model) | `register_embedder` | Search checks in `space.checks`, a pass condition of the flow |
-| Reasoners | rules, owlrl, shacl, reasonable, any HTTP service that takes and returns turtle | `register_reasoner` | `xspace reasoners`: engines of one logic must derive the same facts |
+| Reasoners | rules, owlrl, shacl, reasonable, any HTTP service that takes and returns turtle | `register_reasoner` | `ontlas reasoners`: engines of one logic must derive the same facts |
 | Relation readers | basic (any chat model), xgen-ontology-build's relation formation | `register_reader` | Both read the same passages; every relation's two ends are concepts its sentence names |
 | Domains | modules in a library | a package | Validation questions and the flow's conditions |
 
@@ -373,7 +388,7 @@ space:
   embedder: {kind: openai, url: https://models.example/v1, model: bge-m3, key_env: EMBED_KEY}
   vectors:
     main: {kind: qdrant, url: http://localhost:6333}
-    pg:   {kind: pgvector, dsn: "${XSPACE_PG}"}      # every store holds the same chunks
+    pg:   {kind: pgvector, dsn: "${ONTLAS_PG}"}      # every store holds the same chunks
   documents: ["docs/*.md", "policies/*.pdf"]
   checks:
     - {text: 택배가 일주일째 안 와요, document: 배송안내}   # the flow's index stage: found in the top five?
@@ -388,7 +403,7 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 
 - **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one. Every vector carries the folder its file is in and the model that made it. A file's embedding can be turned off in the catalog: its documents leave the stores, and so the search, and stay in the document ontology.
 - **Document ontology.** It becomes rows of document, section and concept. Concepts are the names the definitions give (objects, properties, allowed values, decisions, glossary terms) plus the words a document keeps returning to, found without a model. The rows run on the same engine as the domain ontology, so the same compilers and the same conformance apply.
-- **Relations, when asked.** With a model connected, 관계 추출 sends the sentences that name two concepts or more to a reader, their concepts numbered, and keeps a relation only between concepts its sentence names, with that sentence. Relations join the document ontology (`relationsOf`, `relationNames`) and its graph, and an answer lists the ones its shown passages state. They do not change which passages a search finds: on a set of 100 relation questions the ranks were the same with and without them. Readers are a port: `basic` needs only the model, `ontology-build` is xgen-ontology-build's relation formation (`pip install "xgen-space[build]"`). A reading runs on the server, stops and resumes, covers a folder or everything, and with `--repositories` is kept next to them; a passage that changes is read again.
+- **Relations, when asked.** With a model connected, 관계 추출 sends the sentences that name two concepts or more to a reader, their concepts numbered, and keeps a relation only between concepts its sentence names, with that sentence. Relations join the document ontology (`relationsOf`, `relationNames`) and its graph, and an answer lists the ones its shown passages state. They do not change which passages a search finds: on a set of 100 relation questions the ranks were the same with and without them. Readers are a port: `basic` needs only the model, `ontology-build` is xgen-ontology-build's relation formation (`pip install "ontlas[build]"`). A reading runs on the server, stops and resumes, covers a folder or everything, and with `--repositories` is kept next to them; a passage that changes is read again.
 
 <table>
   <tr>
@@ -400,7 +415,7 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 A search takes more passages from the store than it returns and orders them by the model's score and the question's own
 words, since the nearest passage to a model is not always the one that says it.
 
-Concepts tie the two together. `xspace search` returns the passages and the definitions a question names, the object screen
+Concepts tie the two together. `ontlas search` returns the passages and the definitions a question names, the object screen
 shows the sections that mention an object, and the map shows which queries a document touches. Without a reading, concepts are tied
 by co-mention only: two names in one section. A relation a reader found replaces the co-mention between its two concepts.
 
@@ -417,7 +432,7 @@ it could not embed say so.
 
 Definitions and rules from the ontology and passages from the documents sit in one index, so a rule and the clause it cites land
 side by side. How the index is searched is a port, `space.retriever`: `omnifuse` fuses lexical and dense seeds with the graph between
-the entries (`pip install "xgen-space[omnifuse]"`), and `words` needs nothing beyond the space. With nothing said, the best one
+the entries (`pip install "ontlas[omnifuse]"`), and `words` needs nothing beyond the space. With nothing said, the best one
 installed is used.
 
 A question then goes to whatever can settle it, and a model is the last resort:
@@ -429,12 +444,12 @@ A question then goes to whatever can settle it, and a model is the last resort:
 | a registered query's name | the query | no |
 | anything else | rules and passages found; a data question becomes a query | words only what was found |
 
-The page's 통합 검색, `POST /v1/answer` and the MCP tool `answer_question` are the same code. `xspace compare` puts one question file to
+The page's 통합 검색, `POST /v1/answer` and the MCP tool `answer_question` are the same code. `ontlas compare` puts one question file to
 one model three ways, with nothing, with the documents alone and through the space, and counts the right answers. What is right comes
 from the file, not from a model:
 
 ```bash
-xspace compare examples/library/studio.yaml examples/library/answers.yaml --llm-url https://models.example/v1 --llm-model my-model
+ontlas compare examples/library/studio.yaml examples/library/answers.yaml --llm-url https://models.example/v1 --llm-model my-model
 ```
 
 ## Plug domains in and out
@@ -470,7 +485,7 @@ remove: {queries: [wishlistCount]}
 ```
 
 ```python
-from xgen_space.library import Library
+from ontlas.library import Library
 lib = Library("examples/library")
 studio = Studio.from_library(lib, ["commerce-operations-bindings", "fashion", "acme-overlay"])  # + requirements
 db = studio.add_backend("source", SqliteBackend())
@@ -499,13 +514,13 @@ the rest.
 | You have | Path | It becomes |
 |---|---|---|
 | A standard that fits, and the system's tables | `mapping.suggest`, the page's "표준에 연결" | A `binding` module |
-| Table and code definitions, a SQL script, an ERD file | `xspace draft --definitions` | A definition and its `binding`, with no rows needed |
+| Table and code definitions, a SQL script, an ERD file | `ontlas draft --definitions` | A definition and its `binding`, with no rows needed |
 | A code definition whose codes refer to other codes | The same draft | Decision tables: what each code implies, or what each state allows |
 | A glossary, a message list | The same draft | A `dictionary` module |
-| Data files or a database | `xspace draft` | A definition and its `binding` |
+| Data files or a database | `ontlas draft` | A definition and its `binding` |
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
-| Policy text, in any document format | `xspace policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
-| An OWL or RDFS ontology | `xspace import-owl` | A starting definition |
+| Policy text, in any document format | `ontlas policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
+| An OWL or RDFS ontology | `ontlas import-owl` | A starting definition |
 | Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
 | Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
 
@@ -520,7 +535,7 @@ the same shape, which says nothing about real rows: for that, get read-only acce
 
 ### Anything in, one JSON
 
-`xspace ingest` reads each file through an adapter and rolls everything into one JSON, which `xspace draft --definitions`
+`ontlas ingest` reads each file through an adapter and rolls everything into one JSON, which `ontlas draft --definitions`
 takes like any other input. On the page, the same adapters read what reaches the catalog, and 변환 결과 shows the JSON.
 
 | Input | Read as |
@@ -544,7 +559,7 @@ takes like any other input. On the page, the same adapters read what reaches the
 ```
 
 A format with no adapter here goes through a plug-in: a Python file that calls `ingest.register([".ext"], fn)` and
-returns `Definitions`, loaded with `xspace ingest --adapter FILE` or `XSPACE_ADAPTERS`. A binary format nothing reads is
+returns `Definitions`, loaded with `ontlas ingest --adapter FILE` or `ONTLAS_ADAPTERS`. A binary format nothing reads is
 refused with what to export it to.
 
 ## The pipeline board
@@ -614,12 +629,12 @@ folder across restarts, one set for all visitors. `--file-kb`, `--max-files` and
 `--allow-connect` adds 경로 입력, which brings in a file or folder from the server's own disk.
 
 ```bash
-xspace serve studio.yaml --repositories ./repositories --file-kb 51200 --max-files 2000 --total-mb 4096 --allow-connect
+ontlas serve studio.yaml --repositories ./repositories --file-kb 51200 --max-files 2000 --total-mb 4096 --allow-connect
 ```
 
 ## Start from your own data
 
-A definition does not have to be written first. `xspace draft` reads files or a database and drafts the two
+A definition does not have to be written first. `ontlas draft` reads files or a database and drafts the two
 modules a library expects, a definition and its bindings, keeping the reason for every choice:
 
 | | How it is decided |
@@ -635,11 +650,11 @@ modules a library expects, a definition and its bindings, keeping the reason for
 | Questions | Each generated query with the rows it gives now, to check later changes against |
 
 ```bash
-xspace draft members.csv products.csv orders.csv -o shop-demo   # shop-demo/library/, data.sqlite, studio.yaml
-xspace draft --sqlite shop.db --name shop                     # opened read-only; prints the two modules
-xspace draft --dsn "$XSPACE_DSN" -o shop                         # the studio file reads ${XSPACE_DSN}, not the password
-xspace draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o shop-demo
-xspace serve shop-demo/studio.yaml
+ontlas draft members.csv products.csv orders.csv -o shop-demo   # shop-demo/library/, data.sqlite, studio.yaml
+ontlas draft --sqlite shop.db --name shop                     # opened read-only; prints the two modules
+ontlas draft --dsn "$ONTLAS_DSN" -o shop                         # the studio file reads ${ONTLAS_DSN}, not the password
+ontlas draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop object:Log -o shop-demo
+ontlas serve shop-demo/studio.yaml
 ```
 
 Nothing in the draft is fixed. The rules above are `DraftRules` (how many distinct values still make a category,
@@ -674,8 +689,8 @@ by column. A standard's key can read several columns the same way, in a binding:
 `columns: {item_id: [ORDER_NO, ITEM_SEQ]}`.
 
 ```bash
-xspace draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
-xspace draft --sqlite shop.db --definitions 코드정의서.xlsx                                       # names and codes for data
+ontlas draft --definitions 테이블정의서.csv --definitions 코드정의서.csv --tables 'TB_*' -o shop   # the schema alone
+ontlas draft --sqlite shop.db --definitions 코드정의서.xlsx                                       # names and codes for data
 ```
 
 An allowed value carries its name in the definition itself: `values: {"10": 주문접수, "20": 결제완료}`, or `values`
@@ -729,8 +744,8 @@ parameters, so a model or a person can pick one by name.
 
 A backend declares its `Capabilities`; a query that needs something a backend lacks is refused before it runs,
 with the reason. `tests/test_live.py` runs the same studio on live PostgreSQL, MySQL, Oracle, SQL Server, Fuseki, Neo4j and Gremlin Server when
-their addresses are set (`XSPACE_LIVE_PG`, `XSPACE_LIVE_MYSQL`, `XSPACE_LIVE_ORACLE`, `XSPACE_LIVE_FUSEKI`, `XSPACE_LIVE_NEO4J`,
-`XSPACE_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
+their addresses are set (`ONTLAS_LIVE_PG`, `ONTLAS_LIVE_MYSQL`, `ONTLAS_LIVE_ORACLE`, `ONTLAS_LIVE_FUSEKI`, `ONTLAS_LIVE_NEO4J`,
+`ONTLAS_LIVE_GREMLIN`), and the CI runs it against service containers (Oracle by hand). Values stay in the source: a graph backend gets a projection only when you ask for one, and
 after that only the change set (`DELETE DATA` / `INSERT DATA`, or `MERGE` / `DELETE`).
 
 The same IRIs are used by the SPARQL compiler, the projection and the R2RML export, so an R2RML-aware engine
@@ -744,7 +759,7 @@ r.outputs    # {'eligible': True, 'reason': '배송 완료 후 반품기간 7일
 r.matched    # ['in-window']
 r.evidence   # days_since_delivery = 4 <- order_items.delivered_at, category_returnable = True <- categories.returnable
 
-from xgen_space.actions import Actor
+from ontlas.actions import Actor
 p = studio.actions.request("requestReturn", "I1001", {"reason": "size"}, actor=Actor("bot", "agent", ["customer_agent"]))
 p.status     # 'pending': role, parameters, state transition and decision all checked
 studio.actions.approve(p.id, approver=Actor("kim", "human", ["operator"]))   # only a person approves
@@ -848,7 +863,7 @@ declared outputs. `status` is `active`, `draft` (a person tries it out, no role 
 sees a row the way the caller's role sees it. An action can take a function as a condition.
 
 ```bash
-xspace functions examples/library/studio.yaml --run refundEstimate --key I1001 --param fee_rate=0.1
+ontlas functions examples/library/studio.yaml --run refundEstimate --key I1001 --param fee_rate=0.1
 ```
 
 ## Values held against the system
@@ -868,7 +883,7 @@ flow:
 ```
 
 `truth` is a column of the case or a request to the system's API, on an allowed host. `answer` is a decision, a function or a
-property. The check screen lists each case that differs, and `xspace values examples/library/studio.yaml` exits non-zero if any does.
+property. The check screen lists each case that differs, and `ontlas values examples/library/studio.yaml` exits non-zero if any does.
 
 ## Identity across systems
 
@@ -914,7 +929,7 @@ A change is a new version of one module: `studio.changes.propose(module, by="kim
 studio (the same source, a fresh graph) and records what it adds, removes and changes, the database check, the
 conformance run, the questions and the agreement; `approve(id, by="lee")` refuses a change that does not pass the
 flow or that its own author approves, then saves the version to the library and swaps it in. On the page, saving a
-module files a change request and shows its review; `xspace review studio.yaml module.yaml` prints the same review.
+module files a change request and shows its review; `ontlas review studio.yaml module.yaml` prints the same review.
 
 ## Manage objects, properties and relations
 
@@ -937,7 +952,7 @@ type and key and a property a type inherits stay where they are defined. Each ed
 elsewhere and says what that was:
 
 ```python
-from xgen_space.manage import Workspace
+from ontlas.manage import Workspace
 
 ws = Workspace(studio.composition.modules)
 ws.apply("update_property", {"object": "Customer", "name": "grade", "label": "회원 등급"})
@@ -962,8 +977,8 @@ kept module no longer fits the source, the studio starts from its file's own lis
 ## A team studio
 
 ```bash
-xspace users add users.yaml kim --name 김하람 --roles editor,approver    # the password from XSPACE_PASSWORD, or asked
-xspace serve studio.yaml --users users.yaml --library-write --journal records/journal.jsonl --sync 60
+ontlas users add users.yaml kim --name 김하람 --roles editor,approver    # the password from ONTLAS_PASSWORD, or asked
+ontlas serve studio.yaml --users users.yaml --library-write --journal records/journal.jsonl --sync 60
 ```
 
 With `--users`, people sign in (PBKDF2 hashes, a session cookie that is HttpOnly and SameSite=Strict, writes only
@@ -1003,7 +1018,7 @@ the trash with its folder, comes back where it was, and every change is in the r
 </p>
 
 ```python
-from xgen_space.catalog import from_ontology
+from ontlas.catalog import from_ontology
 cat = from_ontology(studio.onto)                  # tables, columns, objects, properties, queries, decisions, roles
 cat.add_file("policies/returns.pdf", folder="policies", collection="commerce-policies")
 cat.add_agent("support", roles=["customer_agent"], uses=["collection:commerce-policies"])
@@ -1018,9 +1033,9 @@ cat.unused()                                      # what no agent or workflow us
 takes back either an IR object or a registered query name with parameters. The answer is checked against the
 ontology; if it fails, the model is asked again with the list of issues. The model never writes backend
 query text. `llm` is any `(system, prompt) -> str`; `nl.openai_chat(url, model)` makes one for any
-OpenAI-compatible endpoint, and `xspace serve --llm-url ... --llm-model ...` adds a question box to the page. An answer
+OpenAI-compatible endpoint, and `ontlas serve --llm-url ... --llm-model ...` adds a question box to the page. An answer
 that checks but finds no rows goes back once with sample values of the properties it compared (only what the role
-may read in clear). `xspace nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
+may read in clear). `ontlas nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
 own questions by execution: the gold query's rows must be in the answer's;
 [`examples/commerce/nl_questions.yaml`](examples/commerce/nl_questions.yaml) has sixteen.
 
@@ -1031,22 +1046,22 @@ decision table format and the policy's clauses, and takes back one decision tabl
 (inputs it can read from the target or along a path, tests it can evaluate, outputs the rules set) and checks that
 every rule cites a clause the text numbers; whatever is wrong goes back to the model. The draft is a module of its
 own, and a person files it as a change request, so it is tried on a copy and approved before it decides anything.
-On the page, `xspace serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
-command is `xspace policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
+On the page, `ontlas serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
+command is `ontlas policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
 minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
 [`examples/policies/교환정책서.md`](examples/policies/교환정책서.md) is a made-up exchange policy.
 
 ## Any platform: REST and a borrowed connection
 
 ```bash
-export XSPACE_API_TOKEN=...
-xspace serve studio.yaml --api-token-env XSPACE_API_TOKEN --api-role support_agent
-curl localhost:7710/v1/search -H "Authorization: Bearer $XSPACE_API_TOKEN" \
+export ONTLAS_API_TOKEN=...
+ontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN --api-role support_agent
+curl localhost:7710/v1/search -H "Authorization: Bearer $ONTLAS_API_TOKEN" \
      -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'
 ```
 
 `/v1/openapi.json` describes the API for whatever imports OpenAPI, with the address it was reached at, and `/v1/tools` lists it as
-function definitions; `xspace openapi --server URL` writes the same file. `/v1/context` gives what a question is about as text for an
+function definitions; `ontlas openapi --server URL` writes the same file. `/v1/context` gives what a question is about as text for an
 agent's prompt, and `/v1/function` runs a function. Search, queries in any language, translation and decisions run under the role of the token, with
 its row filters and masks. It is read-only unless started with `--api-write`, and then an action is only a request a person
 approves. `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
@@ -1056,10 +1071,10 @@ Give each agent a token of its own, so the audit trail says which agent asked an
 Tokens come from the environment, never from the file:
 
 ```yaml
-# agents.yaml, for xspace serve ... --api-agents agents.yaml
+# agents.yaml, for ontlas serve ... --api-agents agents.yaml
 agents:
-  - {name: 고객 응대 Agent, token_env: XSPACE_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}
-  - {name: 상담원 Agent, token_env: XSPACE_SUPPORT_TOKEN, role: support_agent}
+  - {name: 고객 응대 Agent, token_env: ONTLAS_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}
+  - {name: 상담원 Agent, token_env: ONTLAS_SUPPORT_TOKEN, role: support_agent}
 ```
 
 `/v1/proposals` gives a token the requests it made and how each stands, and `/v1/record` one object by its key, inside the
@@ -1077,7 +1092,7 @@ backends:
 ## Agents over MCP
 
 ```bash
-xspace mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
+ontlas mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
 ```
 
 Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
@@ -1124,47 +1139,47 @@ python tools/run_live.py pgvector qdrant  # some of them
 ## Command line
 
 ```bash
-xspace validate examples/commerce/ontology.yaml
-xspace translate examples/commerce/ontology.yaml lowStock --to sql:snowflake --param threshold=5
-xspace translate examples/commerce/ontology.yaml "MATCH (o:Order) RETURN o.status, count(o) AS n" --from cypher --to sparql
-xspace export examples/commerce/ontology.yaml --format owl         # shacl · r2rml · pgq · jdm · json · yaml · report
-xspace import-owl vocabulary.ttl -o ontology.yaml
-xspace run examples/commerce/studio.yaml myOrders --role customer_agent --principal customer_id=C001
-xspace sparql examples/commerce/studio.yaml query.rq --backend source
-xspace decide examples/commerce/studio.yaml returnEligibility I1001
-xspace questions examples/commerce/studio.yaml                    # validation questions and accuracy
-xspace conformance examples/commerce/studio.yaml                  # every registered query on every backend
-xspace preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
-xspace serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
-xspace serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
-xspace serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
-xspace serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
-xspace serve examples/library/studio.yaml --repositories ./repositories --max-files 2000 --total-mb 4096  # files kept across restarts
-xspace draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
-xspace ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
-xspace draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
-xspace gates examples/library/studio.yaml                         # the flow's pass conditions, measured
-xspace agreement examples/library/studio.yaml                     # past decisions decided again
-xspace values examples/library/studio.yaml                        # answers held against the transaction system
-xspace functions examples/library/studio.yaml                     # registered functions; --run NAME --key K to run one
-xspace review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
-xspace identity studio.yaml Person --write       # join the records, write the crosswalk
-xspace sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
-xspace nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
-xspace policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
-xspace users add users.yaml kim --roles editor                    # a person of a team studio (xspace serve --users)
-xspace search examples/library/studio.yaml "반품 기간" -k 3          # passages by meaning, and the definitions named
-xspace documents examples/library/studio.yaml                     # what the space holds: documents, stores, embedder, reasoners
-xspace vectors examples/library/studio.yaml                       # every vector store against exact search
-xspace reasoners examples/library/studio.yaml                     # what each engine derives; engines of one logic must agree
-xspace openapi --server https://space.example > openapi.json      # the REST API, for a platform to import
-xspace library list examples/library                              # every package, its kind, versions and requirements
-xspace library create my-lib energy --kind domain --label "에너지 설비" --requires core
-xspace library import-owl my-lib schema-orders.ttl schema-orders --requires core
-xspace library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
-xspace library compose examples/library commerce-operations-bindings -o ontology.yaml
-xspace modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
-xspace bindings examples/library/studio.yaml                      # the definition against the database
+ontlas validate examples/commerce/ontology.yaml
+ontlas translate examples/commerce/ontology.yaml lowStock --to sql:snowflake --param threshold=5
+ontlas translate examples/commerce/ontology.yaml "MATCH (o:Order) RETURN o.status, count(o) AS n" --from cypher --to sparql
+ontlas export examples/commerce/ontology.yaml --format owl         # shacl · r2rml · pgq · jdm · json · yaml · report
+ontlas import-owl vocabulary.ttl -o ontology.yaml
+ontlas run examples/commerce/studio.yaml myOrders --role customer_agent --principal customer_id=C001
+ontlas sparql examples/commerce/studio.yaml query.rq --backend source
+ontlas decide examples/commerce/studio.yaml returnEligibility I1001
+ontlas questions examples/commerce/studio.yaml                    # validation questions and accuracy
+ontlas conformance examples/commerce/studio.yaml                  # every registered query on every backend
+ontlas preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
+ontlas serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
+ontlas serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
+ontlas serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
+ontlas serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
+ontlas serve examples/library/studio.yaml --repositories ./repositories --max-files 2000 --total-mb 4096  # files kept across restarts
+ontlas draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
+ontlas ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
+ontlas draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
+ontlas gates examples/library/studio.yaml                         # the flow's pass conditions, measured
+ontlas agreement examples/library/studio.yaml                     # past decisions decided again
+ontlas values examples/library/studio.yaml                        # answers held against the transaction system
+ontlas functions examples/library/studio.yaml                     # registered functions; --run NAME --key K to run one
+ontlas review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
+ontlas identity studio.yaml Person --write       # join the records, write the crosswalk
+ontlas sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
+ontlas nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
+ontlas policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
+ontlas users add users.yaml kim --roles editor                    # a person of a team studio (ontlas serve --users)
+ontlas search examples/library/studio.yaml "반품 기간" -k 3          # passages by meaning, and the definitions named
+ontlas documents examples/library/studio.yaml                     # what the space holds: documents, stores, embedder, reasoners
+ontlas vectors examples/library/studio.yaml                       # every vector store against exact search
+ontlas reasoners examples/library/studio.yaml                     # what each engine derives; engines of one logic must agree
+ontlas openapi --server https://space.example > openapi.json      # the REST API, for a platform to import
+ontlas library list examples/library                              # every package, its kind, versions and requirements
+ontlas library create my-lib energy --kind domain --label "에너지 설비" --requires core
+ontlas library import-owl my-lib schema-orders.ttl schema-orders --requires core
+ontlas library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
+ontlas library compose examples/library commerce-operations-bindings -o ontology.yaml
+ontlas modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
+ontlas bindings examples/library/studio.yaml                      # the definition against the database
 ```
 
 A studio file names the ontology, the backends and what to project at start:
@@ -1197,7 +1212,7 @@ project: [graph]
 - **`dependencies = []`.** Everything optional is an extra; with all of them blocked the core test suite still passes.
 
 ```
-src/xgen_space/
+src/ontlas/
   model.py validate.py      # the definition and its checks
   modules.py library.py     # packages, composition, attach / detach; the library of versioned packages
   bindings.py               # the definition against the actual database
@@ -1215,7 +1230,7 @@ src/xgen_space/
   space.py embed.py vectors.py    # documents and their ontology, the embedding port, the vector store port
   rest.py                   # the token API, its OpenAPI and tool definitions
   catalog.py repository.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
-  web/                      # xspace serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
+  web/                      # ontlas serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus shop operations, fashion, food and a customer overlay
 examples/files/             # a fictional shop's CSV files, for drafting from data
@@ -1225,7 +1240,7 @@ tools/                      # render_screens.py (the README images), make_commer
 
 ## Prior art
 
-XGEN Space is an independent project. It is not affiliated with the products below and does not copy them; these are the public
+Ontlas is an independent project. It is not affiliated with the products below and does not copy them; these are the public
 ideas it studied and what it took from each.
 
 | Reference | What it took | Where it is here | Where it differs |
@@ -1237,8 +1252,8 @@ ideas it studied and what it took from each.
 | [SHACL](https://www.w3.org/TR/shacl/) and [OWL 2 RL](https://www.w3.org/TR/owl2-profiles/) | Structure checks and derived facts as a layer over the store | `reason/` | Business decisions stay out of the reasoner |
 | [Ontop](https://ontop-vkg.org/) and [Stardog virtual graphs](https://docs.stardog.com/virtual-graphs/) | A graph view over tables that stay where they are | `compile/`, `projection.py` | Compiles from its own query IR to six languages |
 | [GoRules ZEN](https://github.com/gorules/zen) | Decision tables as data, run by an engine | `decide/`, `decide/zen.py` | A built-in evaluator gives the same answer with the grounds |
-| [LinkML](https://linkml.io/) | One definition, many artifacts | `exchange/`, `xspace export` | The definition also carries rules, actions and roles |
-| [TinkerPop](https://tinkerpop.apache.org/) | A conformance suite that every provider must pass | `conformance.py`, `xspace conformance` | Compares rows across languages, not one language across providers |
+| [LinkML](https://linkml.io/) | One definition, many artifacts | `exchange/`, `ontlas export` | The definition also carries rules, actions and roles |
+| [TinkerPop](https://tinkerpop.apache.org/) | A conformance suite that every provider must pass | `conformance.py`, `ontlas conformance` | Compares rows across languages, not one language across providers |
 | [schema.org](https://schema.org/), [GS1 Web Vocabulary](https://ref.gs1.org/voc/), [FIBO](https://spec.edmcouncil.org/fibo/), [Brick](https://brickschema.org/) | Terms an element can align with, kept as `aligned` | `aligned`, `exchange/owl.py` | A domain stays a module, so no vocabulary is built in |
 | [LightRAG](https://github.com/HKUDS/LightRAG) and [sigma.js](https://www.sigmajs.org/) | The look of the graph screen | `static/graph.js`, `static/graph-kit.js` | Clusters fold past 120 nodes for a schema of hundreds of tables |
 
@@ -1254,7 +1269,7 @@ ideas it studied and what it took from each.
 
 ## Repository model
 
-[`PlateerLab/xgen-space`](https://github.com/PlateerLab/xgen-space) is the source of truth.
+[`PlateerLab/ontlas`](https://github.com/PlateerLab/ontlas) is the source of truth.
 Members of the PlateerLab organization commit there directly; CI runs the full suite on Python 3.10–3.12 and the
 core suite with no optional dependencies.
 
@@ -1263,4 +1278,4 @@ core suite with no optional dependencies.
 Open source under the [Apache License 2.0](LICENSE). Copyright 2026 Jinsoo Kim.
 
 Use it, change it and ship it, in a product or not, as that license says. The page's graph engine is sigma.js and graphology,
-bundled under the MIT license; their notices are in `src/xgen_space/web/static/graph-kit-NOTICE.txt`.
+bundled under the MIT license; their notices are in `src/ontlas/web/static/graph-kit-NOTICE.txt`.

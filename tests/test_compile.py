@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_space.compile.base import CompileError, compiler_for
-from xgen_space.compile.pgq import graph_ddl
+from ontlas.compile.base import CompileError, compiler_for
+from ontlas.compile.pgq import graph_ddl
 
 
 def _q(onto, name):

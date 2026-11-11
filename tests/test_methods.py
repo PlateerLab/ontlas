@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_space.library import Library
-from xgen_space.modules import Module, ModuleError, compose
+from ontlas.library import Library
+from ontlas.modules import Module, ModuleError, compose
 
 from .conftest import LIB
 from .test_web import _build

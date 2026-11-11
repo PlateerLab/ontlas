@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "xgen-space"
-version = "0.16.0"
+name = "ontlas"
+version = "0.17.0"
 description = "One space for every kind of data an AI can use: files, documents, vectors, graphs and ontologies, tied to no store, model, domain or platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,8 +27,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/PlateerLab/xgen-space"
-Changelog = "https://github.com/PlateerLab/xgen-space/blob/main/CHANGELOG.md"
+Repository = "https://github.com/PlateerLab/ontlas"
+Changelog = "https://github.com/PlateerLab/ontlas/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # One retrieval over rules, definitions and passages, fused with the graph between them.
@@ -62,7 +62,7 @@ pdf = ["pypdf>=4"]
 embed = ["fastembed==0.7.3"]
 # xgen-ontology-build's relation formation as the reader of relations between a document's concepts.
 build = ["xgen-ontology-build>=0.17.1"]
-# A second OWL 2 RL engine, compared with owlrl by `xspace reasoners`.
+# A second OWL 2 RL engine, compared with owlrl by `ontlas reasoners`.
 reasonable = ["reasonable==0.4.4", "rdflib>=7"]
 all = ["pyyaml>=6", "rdflib>=7", "sqlglot>=25", "pyshacl>=0.26", "owlrl>=7", "zen-engine>=2", "mcp>=1.2", "openpyxl>=3.1", "pypdf>=4", "xgen-omnifuse>=0.8.4", "xgen-ontology-build>=0.17.1"]
 # The live-server tests (tests/test_live.py): drivers for PostgreSQL, Neo4j and Gremlin Server.
@@ -70,10 +70,10 @@ live = ["psycopg[binary]>=3", "neo4j>=5", "gremlinpython>=3.7", "pymysql>=1.1"]
 dev = ["pytest>=7", "ruff>=0.4"]
 
 [project.scripts]
-xspace = "xgen_space.cli:main"
+ontlas = "ontlas.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/xgen_space"]
+packages = ["src/ontlas"]
 
 [tool.ruff]
 line-length = 120

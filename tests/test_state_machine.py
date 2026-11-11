@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import ActionError, Actor, HttpCaller
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.cli import main
-from xgen_space.modules import Module, compose
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.actions import ActionError, Actor, HttpCaller
+from ontlas.backends.sql import SqliteBackend
+from ontlas.cli import main
+from ontlas.modules import Module, compose
+from ontlas.studio import Studio
 
 NOW = datetime(2026, 3, 15, 12, 0)
 AGENT = Actor("agent", "agent", ["clerk"])

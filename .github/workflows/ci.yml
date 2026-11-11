@@ -37,37 +37,37 @@ jobs:
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_ROOT_PASSWORD: xspace-ci-only
-          MYSQL_DATABASE: xspace
+          MYSQL_ROOT_PASSWORD: ontlas-ci-only
+          MYSQL_DATABASE: ontlas
         ports: ["3306:3306"]
         options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -pxspace-ci-only" --health-interval 5s --health-timeout 5s
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pontlas-ci-only" --health-interval 5s --health-timeout 5s
           --health-retries 20
       postgres:
         image: postgres:16-alpine
-        env: {POSTGRES_PASSWORD: xspace-ci-only, POSTGRES_DB: xspace}
+        env: {POSTGRES_PASSWORD: ontlas-ci-only, POSTGRES_DB: ontlas}
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
       neo4j:
         image: neo4j:5.26
-        env: {NEO4J_AUTH: neo4j/xspace-ci-only-pass}
+        env: {NEO4J_AUTH: neo4j/ontlas-ci-only-pass}
         ports: ["7687:7687"]
       gremlin:
         image: tinkerpop/gremlin-server:3.8.2
         ports: ["8182:8182"]
       fuseki:
         image: stain/jena-fuseki
-        env: {ADMIN_PASSWORD: xspace-ci-only}
+        env: {ADMIN_PASSWORD: ontlas-ci-only}
         ports: ["3030:3030"]
     env:
-      XSPACE_LIVE_PG: postgresql://postgres:xspace-ci-only@localhost:5432/xspace
-      XSPACE_LIVE_MYSQL: mysql://root:xspace-ci-only@127.0.0.1:3306/xspace
-      XSPACE_LIVE_NEO4J: bolt://localhost:7687
-      XSPACE_LIVE_NEO4J_AUTH: neo4j:xspace-ci-only-pass
-      XSPACE_LIVE_GREMLIN: ws://localhost:8182/gremlin
-      XSPACE_LIVE_FUSEKI: http://localhost:3030/ds
-      XSPACE_LIVE_FUSEKI_AUTH: admin:xspace-ci-only
+      ONTLAS_LIVE_PG: postgresql://postgres:ontlas-ci-only@localhost:5432/ontlas
+      ONTLAS_LIVE_MYSQL: mysql://root:ontlas-ci-only@127.0.0.1:3306/ontlas
+      ONTLAS_LIVE_NEO4J: bolt://localhost:7687
+      ONTLAS_LIVE_NEO4J_AUTH: neo4j:ontlas-ci-only-pass
+      ONTLAS_LIVE_GREMLIN: ws://localhost:8182/gremlin
+      ONTLAS_LIVE_FUSEKI: http://localhost:3030/ds
+      ONTLAS_LIVE_FUSEKI_AUTH: admin:ontlas-ci-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -77,7 +77,7 @@ jobs:
       - name: wait for the servers, then make the Fuseki dataset
         run: |
           for i in $(seq 1 60); do curl -sf http://localhost:3030/\$/ping > /dev/null && break; sleep 2; done
-          curl -s -u admin:xspace-ci-only -X POST -d "dbName=ds&dbType=mem" "http://localhost:3030/\$/datasets"
+          curl -s -u admin:ontlas-ci-only -X POST -d "dbName=ds&dbType=mem" "http://localhost:3030/\$/datasets"
           for port in 7687 8182; do
             for i in $(seq 1 60); do (echo > /dev/tcp/localhost/$port) 2>/dev/null && break; sleep 2; done
           done

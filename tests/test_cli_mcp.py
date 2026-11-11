@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from xgen_space.cli import main
-from xgen_space.tools import StudioTools
+from ontlas.cli import main
+from ontlas.tools import StudioTools
 
 from .conftest import BOOKS, EXAMPLE
 
@@ -58,7 +58,7 @@ def test_tools_are_role_scoped(studio):
 
 
 def test_preview_page(graph_studio):
-    from xgen_space.preview import render
+    from ontlas.preview import render
 
     html = render(graph_studio, query="revenueByCategory", decision="returnEligibility", key="I1001")
     for sid in ("ontology", "query", "decision", "map"):
@@ -68,7 +68,7 @@ def test_preview_page(graph_studio):
 
 def test_mcp_server_lists_and_calls_tools(studio):
     pytest.importorskip("mcp")
-    from xgen_space.mcp_server import build_server
+    from ontlas.mcp_server import build_server
 
     srv = build_server(studio, role="customer_agent", principal={"customer_id": "C001"}, read_only=True)
     names = {t.name for t in asyncio.run(srv.list_tools())}

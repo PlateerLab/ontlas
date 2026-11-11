@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.base import NoSource
-from xgen_space.cli import main
+from ontlas import Ontology
+from ontlas.backends.base import NoSource
+from ontlas.cli import main
 
 from .conftest import EXAMPLE, NOW
 
@@ -40,16 +40,16 @@ def cfg(tmp_path) -> Path:
 
 @pytest.fixture
 def session(cfg):
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(cfg))
 
 
 @pytest.mark.parametrize("tail", ["", "backends: {}\n"])
 def test_a_studio_with_no_backend_loads_and_says_so(tmp_path, tail):
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     st = load_studio(_no_backend(tmp_path, tail))
     assert st.backends == {} and st.source == "" and len(st.onto.objects) == 18
@@ -62,8 +62,8 @@ def test_a_studio_with_no_backend_loads_and_says_so(tmp_path, tail):
 
 
 def test_a_studio_with_a_source_says_which():
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     pytest.importorskip("rdflib")
     st = load_studio(EXAMPLE.parent / "library" / "studio.yaml")
@@ -131,9 +131,9 @@ def test_the_flow_does_not_fail_on_stages_that_need_rows(session):
 
 
 def test_the_page_routes_answer_without_a_source(cfg):
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
-    from xgen_space.web.server import RateLimit, Sessions, make_handler
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
+    from ontlas.web.server import RateLimit, Sessions, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Sessions(lambda: StudioSession(load_studio(cfg)), spare=0),
                                                                ask_limit=RateLimit(5), quiet=True))
@@ -178,9 +178,9 @@ def test_the_page_routes_answer_without_a_source(cfg):
 
 
 def test_the_api_for_platforms_says_no_source():
-    from xgen_space.rest import Rest
-    from xgen_space.studio import Studio
-    from xgen_space.tools import StudioTools
+    from ontlas.rest import Rest
+    from ontlas.studio import Studio
+    from ontlas.tools import StudioTools
 
     st = Studio(Ontology.load(EXAMPLE / "ontology.yaml").check(), now=lambda: NOW)
     rest = Rest(StudioTools(st))
@@ -203,14 +203,14 @@ def test_cli_without_a_source(cfg, capsys):
     assert main(["modules", str(cfg)]) == 0
 
 
-def test_xspace_new_starts_from_nothing_and_takes_hand_made_definitions(tmp_path, capsys):
-    from xgen_space.config import load_studio
-    from xgen_space.library import Library
-    from xgen_space.web.api import StudioSession
+def test_ontlas_new_starts_from_nothing_and_takes_hand_made_definitions(tmp_path, capsys):
+    from ontlas.config import load_studio
+    from ontlas.library import Library
+    from ontlas.web.api import StudioSession
 
     folder = tmp_path / "support"
     assert main(["new", str(folder), "--label", "고객 지원"]) == 0
-    assert "xspace serve" in json.loads(capsys.readouterr().out)["next"]
+    assert "ontlas serve" in json.loads(capsys.readouterr().out)["next"]
     assert "backends" not in (folder / "studio.yaml").read_text(encoding="utf-8") and (folder / "library").is_dir()
     with pytest.raises(SystemExit):
         main(["new", str(folder)])  # an existing studio is never written over
@@ -218,7 +218,7 @@ def test_xspace_new_starts_from_nothing_and_takes_hand_made_definitions(tmp_path
     st = load_studio(folder / "studio.yaml")
     assert st.onto.objects == {} and list(st.composition.modules) == []
     s = StudioSession(st)
-    s.store = Library(folder / "library")  # as `xspace serve --library-write` does
+    s.store = Library(folder / "library")  # as `ontlas serve --library-write` does
     s._adopt(s.studio)
     assert s.state()["title"] == "고객 지원" and s.state()["source"]["connected"] is False
     s.manage_edit("add_object", {"name": "Ticket", "label": "문의", "key": "ticket_id",

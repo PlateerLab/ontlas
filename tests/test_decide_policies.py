@@ -3,14 +3,14 @@ import json
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.cli import main
-from xgen_space.decide import checks
-from xgen_space.decide.checks import MAX_SHOWN, decision_findings, table_findings
-from xgen_space.decide.table import DecisionError, DecisionResult, evaluate_table
-from xgen_space.decide.zen import to_jdm
-from xgen_space.model import DecisionInput, DecisionRule, DecisionTable
-from xgen_space.modules import Module, compose
+from ontlas import Ontology
+from ontlas.cli import main
+from ontlas.decide import checks
+from ontlas.decide.checks import MAX_SHOWN, decision_findings, table_findings
+from ontlas.decide.table import DecisionError, DecisionResult, evaluate_table
+from ontlas.decide.zen import to_jdm
+from ontlas.model import DecisionInput, DecisionRule, DecisionTable
+from ontlas.modules import Module, compose
 
 from .conftest import EXAMPLE
 
@@ -100,7 +100,7 @@ def test_zen_export_lists_rules_in_priority_order():
 
 def test_zen_gives_the_priority_answer():
     pytest.importorskip("zen")
-    from xgen_space.decide.zen import evaluate_zen
+    from ontlas.decide.zen import evaluate_zen
 
     t = _table("priority", [_rule({"a": "> 1"}, 1, "low", 5), _rule({"a": "> 2"}, 2, "high", 1)])
     t.inputs = {"a": DecisionInput("a", "integer", {"param": "a"})}

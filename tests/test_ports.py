@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.backends.gateway import GatewayBackend, GatewayError, inline, literal
-from xgen_space.rest import ROUTES, Rest, openapi, tool_list
+from ontlas.backends.gateway import GatewayBackend, GatewayError, inline, literal
+from ontlas.rest import ROUTES, Rest, openapi, tool_list
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG = ROOT / "examples" / "library" / "studio.yaml"
@@ -106,9 +106,9 @@ def test_a_full_answer_is_marked_as_possibly_cut(service, monkeypatch):
 
 def test_a_whole_ontology_runs_through_a_gateway(service):
     pytest.importorskip("yaml")
-    from xgen_space.config import open_backend
-    from xgen_space.modules import Module
-    from xgen_space.studio import Studio
+    from ontlas.config import open_backend
+    from ontlas.modules import Module
+    from ontlas.studio import Studio
 
     m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
         "Thing": {"key": "id", "table": "t", "properties": {"id": {"type": "string"}, "name": {"type": "string"}}}},
@@ -131,8 +131,8 @@ def test_the_api_is_described_for_whoever_imports_it():
 def tools():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.tools import StudioTools
+    from ontlas.config import load_studio
+    from ontlas.tools import StudioTools
 
     return StudioTools(load_studio(CFG), read_only=True)
 
@@ -155,7 +155,7 @@ def test_rest_answers_with_a_token_and_only_then(tools):
 
 
 def test_a_read_only_token_cannot_request_and_a_role_holds(tools):
-    from xgen_space.tools import StudioTools
+    from ontlas.tools import StudioTools
 
     assert Rest(tools, "s").answer("POST", "/v1/actions", {"action": "requestReturn", "key": "I1001"})[0] == 403
     agent = StudioTools(tools.studio, role="customer_agent", principal={"customer_id": "C001"})
@@ -169,9 +169,9 @@ def test_the_server_serves_the_api_beside_the_page():
     pytest.importorskip("rdflib")
     import socket
 
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
-    from xgen_space.web.server import serve
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
+    from ontlas.web.server import serve
 
     data = DataOptions(rest=True)
     with socket.socket() as s:
@@ -206,7 +206,7 @@ def test_the_server_serves_the_api_beside_the_page():
 
 def test_reasoners_swap_and_two_engines_of_one_logic_are_compared(tools):
     pytest.importorskip("owlrl")
-    from xgen_space.reason.port import (
+    from ontlas.reason.port import (
         HttpReasoner,
         Reasoner,
         agreement,
@@ -239,8 +239,8 @@ def test_reasoners_swap_and_two_engines_of_one_logic_are_compared(tools):
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(CFG), data=DataOptions(samples=ROOT / "examples" / "files"))
 
@@ -320,9 +320,9 @@ def test_the_flow_and_the_board_hold_the_space(session):
 def test_pipelines_outlive_the_server_where_repositories_do(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.repository import Repositories
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.repository import Repositories
+    from ontlas.web import DataOptions, StudioSession
 
     data = DataOptions(samples=ROOT / "examples" / "files", repositories=tmp_path)
 
@@ -350,11 +350,11 @@ def test_pipelines_outlive_the_server_where_repositories_do(tmp_path):
 def test_a_connected_pipeline_keeps_its_modules_and_no_secret(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.modules import Module
-    from xgen_space.repository import Repositories
-    from xgen_space.studio import Studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.modules import Module
+    from ontlas.repository import Repositories
+    from ontlas.studio import Studio
+    from ontlas.web import DataOptions, StudioSession
 
     data = DataOptions(repositories=tmp_path)
     s = StudioSession(load_studio(CFG), data=data, repositories=Repositories(tmp_path))
@@ -385,12 +385,12 @@ def test_the_page_asks_for_what_a_platform_connection_needs(session):
 
 def test_live_draft_through_a_query_service_over_postgres():
     """A real PostgreSQL behind a service of the platform's shape: the whole way from the catalog queries to a compiled query."""
-    dsn = os.environ.get("XSPACE_LIVE_PG")
+    dsn = os.environ.get("ONTLAS_LIVE_PG")
     if not dsn:
-        pytest.skip("XSPACE_LIVE_PG not set")
+        pytest.skip("ONTLAS_LIVE_PG not set")
     psycopg = pytest.importorskip("psycopg")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     conn = psycopg.connect(dsn, autocommit=True)
     conn.execute("DROP TABLE IF EXISTS gw_items, gw_orders")
@@ -461,9 +461,9 @@ def test_a_pick_between_sources_waits_for_review_like_any_change(session):
 
 
 def test_a_view_rides_along_with_the_query_where_the_source_cannot_hold_one():
-    from xgen_space.backends.sql import SqliteBackend
-    from xgen_space.modules import Module
-    from xgen_space.studio import Studio
+    from ontlas.backends.sql import SqliteBackend
+    from ontlas.modules import Module
+    from ontlas.studio import Studio
 
     m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
         "Entry": {"key": "id", "table": "ledger", "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "units": {"type": "integer"}}},
@@ -482,10 +482,10 @@ def test_a_view_rides_along_with_the_query_where_the_source_cannot_hold_one():
 def test_an_agent_carries_its_scope_and_the_studio_its_clock():
     from datetime import datetime
 
-    from xgen_space.backends.sql import SqliteBackend
-    from xgen_space.modules import Module
-    from xgen_space.studio import Studio
-    from xgen_space.tools import StudioTools
+    from ontlas.backends.sql import SqliteBackend
+    from ontlas.modules import Module
+    from ontlas.studio import Studio
+    from ontlas.tools import StudioTools
 
     m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
         "T": {"key": "id", "table": "t", "properties": {"id": {"type": "string"}, "d": {"type": "integer", "expr": "days_between(today(), today())"}}}}})

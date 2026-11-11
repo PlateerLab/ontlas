@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.decide.cells import parse_test
-from xgen_space.decide.words import cell_of, cell_parts, cell_words, input_label, rule_sentence, verdict
-from xgen_space.knowledge import OmniFuseRetriever, WordsRetriever, build, default_retriever, entries, links_between
-from xgen_space.tools import StudioTools
+from ontlas.decide.cells import parse_test
+from ontlas.decide.words import cell_of, cell_parts, cell_words, input_label, rule_sentence, verdict
+from ontlas.knowledge import OmniFuseRetriever, WordsRetriever, build, default_retriever, entries, links_between
+from ontlas.tools import StudioTools
 
 SHOP = Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml"
 
@@ -14,7 +14,7 @@ SHOP = Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.ya
 def shop():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     return load_studio(SHOP)
 

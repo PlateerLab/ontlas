@@ -1,14 +1,14 @@
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.base import Capabilities
-from xgen_space.backends.graph import CallableBackend
-from xgen_space.check import CheckError
-from xgen_space.compile.base import compiler_for
-from xgen_space.compile.pgq import graph_ddl
-from xgen_space.expr import ExprError, dependencies, parse_expr
-from xgen_space.ir import Agg, Column, Exists, IRError, Query, Ref
-from xgen_space.roles import mask_style
+from ontlas import Ontology
+from ontlas.backends.base import Capabilities
+from ontlas.backends.graph import CallableBackend
+from ontlas.check import CheckError
+from ontlas.compile.base import compiler_for
+from ontlas.compile.pgq import graph_ddl
+from ontlas.expr import ExprError, dependencies, parse_expr
+from ontlas.ir import Agg, Column, Exists, IRError, Query, Ref
+from ontlas.roles import mask_style
 
 from .compile_cases import COLUMNS, PARAMETER_VALUES, PARAMETERS, all_cases, studio_with_cases
 from .conftest import NOW
@@ -22,7 +22,7 @@ def cases(onto, source):
 @pytest.fixture
 def graph_cases(cases):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     cases.add_backend("graph", RdflibBackend())
     cases.project()

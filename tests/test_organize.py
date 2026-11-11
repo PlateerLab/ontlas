@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.embed import EmbedError, HashEmbedder
-from xgen_space.repository import Repositories
-from xgen_space.space import Space, signature
-from xgen_space.vectors import MemoryStore
+from ontlas.embed import EmbedError, HashEmbedder
+from ontlas.repository import Repositories
+from ontlas.space import Space, signature
+from ontlas.vectors import MemoryStore
 
 ROOT = Path(__file__).resolve().parent.parent
 CFG = ROOT / "examples" / "library" / "studio.yaml"
@@ -121,7 +121,7 @@ def test_the_repository_keeps_each_files_embedding_and_says_it_in_its_record(tmp
 
 
 def test_a_role_reads_documents_by_the_folder_of_their_file():
-    from xgen_space.model import Role
+    from ontlas.model import Role
 
     r = Role("cs", documents=["정책/*"])
     assert r.can_read_document("반품정책", "정책/반품/반품정책.md") and not r.can_read_document("배송안내", "안내/배송안내.md")
@@ -134,8 +134,8 @@ def test_a_role_reads_documents_by_the_folder_of_their_file():
 def session(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     s = StudioSession(load_studio(CFG), data=DataOptions(repositories=tmp_path), repositories=Repositories(tmp_path))
     s.catalog_upload("정책/반품/반품규정.md", "# 반품규정\n\n## 반품 승인\n\n반품 승인은 고객센터가 합니다. 고객센터는 평일에 답합니다. 반품 기간은 7일입니다.\n".encode("utf-8"))
@@ -188,8 +188,8 @@ def test_the_page_lists_the_models_and_plans_a_change(session):
 
 
 def test_relations_are_read_on_the_server_and_kept_with_the_repositories(session, tmp_path):
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     def llm(system, user):
         import re
@@ -222,8 +222,8 @@ def test_relations_are_read_on_the_server_and_kept_with_the_repositories(session
 
 
 def test_rest_and_tools_take_a_folder(session):
-    from xgen_space.rest import ROUTES
-    from xgen_space.tools import StudioTools
+    from ontlas.rest import ROUTES
+    from ontlas.tools import StudioTools
 
     session.space_state()  # a page request brings the catalog's documents into the space
     t = StudioTools(session.studio)

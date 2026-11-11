@@ -1,10 +1,10 @@
 import pytest
 
-from xgen_space.backends.base import Capabilities
-from xgen_space.backends.graph import CallableBackend
-from xgen_space.backends.gremlin import GremlinBackend
-from xgen_space.compile.base import CompileError, compiler_for
-from xgen_space.expr import GremlinRenderer, parse_expr
+from ontlas.backends.base import Capabilities
+from ontlas.backends.graph import CallableBackend
+from ontlas.backends.gremlin import GremlinBackend
+from ontlas.compile.base import CompileError, compiler_for
+from ontlas.expr import GremlinRenderer, parse_expr
 
 
 def test_gremlin_text_carries_names_and_every_value_as_a_binding(studio):

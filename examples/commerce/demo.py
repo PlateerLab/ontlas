@@ -5,10 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from xgen_space import Ontology  # noqa: E402
-from xgen_space.backends.rdf import RdflibBackend  # noqa: E402
-from xgen_space.backends.sql import SqliteBackend  # noqa: E402
-from xgen_space.studio import Studio  # noqa: E402
+from ontlas import Ontology  # noqa: E402
+from ontlas.backends.rdf import RdflibBackend  # noqa: E402
+from ontlas.backends.sql import SqliteBackend  # noqa: E402
+from ontlas.studio import Studio  # noqa: E402
 
 HERE = Path(__file__).parent
 

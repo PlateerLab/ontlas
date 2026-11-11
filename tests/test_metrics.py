@@ -3,13 +3,13 @@ import json
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.cli import main
-from xgen_space.decide.metrics import MetricError, answer_metric, dictionary, formula_text, metric_queries
-from xgen_space.modules import Module, ModuleError, compose, settle
-from xgen_space.roles import AccessDenied
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.backends.sql import SqliteBackend
+from ontlas.cli import main
+from ontlas.decide.metrics import MetricError, answer_metric, dictionary, formula_text, metric_queries
+from ontlas.modules import Module, ModuleError, compose, settle
+from ontlas.roles import AccessDenied
+from ontlas.studio import Studio
 
 
 def _definition() -> dict:
@@ -156,7 +156,7 @@ def test_a_role_needs_the_right_to_run_it_and_to_read_it(studio):
 
 def test_the_graph_gives_the_same_number(studio):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     studio.project()

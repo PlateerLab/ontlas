@@ -4,16 +4,16 @@ from datetime import datetime
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import Actor
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.cli import main
-from xgen_space.compile.base import CompileError, compiler_for
-from xgen_space.decide.periods import overlapping_periods
-from xgen_space.expr import ExprError, check_computed, date_format, dependencies, encode_text_date, parse_expr
-from xgen_space.modules import Module, ModuleError, compose
-from xgen_space.roles import mask_style
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.actions import Actor
+from ontlas.backends.sql import SqliteBackend
+from ontlas.cli import main
+from ontlas.compile.base import CompileError, compiler_for
+from ontlas.decide.periods import overlapping_periods
+from ontlas.expr import ExprError, check_computed, date_format, dependencies, encode_text_date, parse_expr
+from ontlas.modules import Module, ModuleError, compose
+from ontlas.roles import mask_style
+from ontlas.studio import Studio
 
 NOW = datetime(2026, 3, 15, 9, 30)
 
@@ -278,7 +278,7 @@ def test_decisions_read_the_current_value(onto, source):
 
 def test_the_graph_answers_the_same(studio):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     studio.project()
@@ -303,7 +303,7 @@ def test_a_series_on_a_text_date_keeps_working_in_every_language(onto, source):
     q = {"match": {"o": "Order"}, "where": {"eq": ["o.order_id", "O1"]}, "return": ["o.last_note"]}
     assert st.run(q).rows == [("second",)]
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     st.add_backend("graph", RdflibBackend())
     st.project()

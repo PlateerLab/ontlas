@@ -11,11 +11,11 @@ from itertools import accumulate
 
 import pytest
 
-from xgen_space import ingest as ingest_module
-from xgen_space.cli import main
-from xgen_space.definitions import Definitions, from_sheets, schema_backend
-from xgen_space.draft import Table, draft
-from xgen_space.ingest import IngestError, adapter_paths, ingest, is_sheet, load_adapters, register
+from ontlas import ingest as ingest_module
+from ontlas.cli import main
+from ontlas.definitions import Definitions, from_sheets, schema_backend
+from ontlas.draft import Table, draft
+from ontlas.ingest import IngestError, adapter_paths, ingest, is_sheet, load_adapters, register
 
 from .conftest import EXAMPLE, LIB
 
@@ -672,7 +672,7 @@ def test_pdf_with_its_extra():
 
 def test_pdf_without_its_extra(monkeypatch):
     monkeypatch.setitem(sys.modules, "pypdf", None)  # the import fails, as it does when the extra is not installed
-    with pytest.raises(IngestError, match="xgen-space.pdf") as e:
+    with pytest.raises(IngestError, match="ontlas.pdf") as e:
         ingest(b"%PDF-1.4", "a.pdf")
     assert e.value.reason == "needs_extra"
 
@@ -847,8 +847,8 @@ def adapters(monkeypatch):
 
 
 PLUGIN = """
-from xgen_space.definitions import Definitions, TableDef
-from xgen_space.ingest import register
+from ontlas.definitions import Definitions, TableDef
+from ontlas.ingest import register
 
 
 def read(data, source):
@@ -874,7 +874,7 @@ def test_a_format_of_your_own(adapters, tmp_path):
 def test_adapters_from_the_environment(adapters, tmp_path, monkeypatch):
     f = tmp_path / "foo_adapter.py"
     f.write_text(PLUGIN, encoding="utf-8")
-    monkeypatch.setenv("XSPACE_ADAPTERS", str(f))
+    monkeypatch.setenv("ONTLAS_ADAPTERS", str(f))
     monkeypatch.setattr(ingest_module, "_env_loaded", False)
     assert ingest(b"hello", "x.foo").table("T").label == "hello"
 
@@ -1015,7 +1015,7 @@ def test_nothing_in_a_file_is_run(tmp_path):
 # ---- wiring --------------------------------------------------------------------------------------------------
 
 
-def test_xspace_ingest_writes_one_json_and_counts_it(tmp_path, capsys):
+def test_ontlas_ingest_writes_one_json_and_counts_it(tmp_path, capsys):
     sql, md = tmp_path / "shop.sql", tmp_path / "정책.md"
     sql.write_bytes(ORACLE.encode())
     md.write_text("# 반품\n내용\n", encoding="utf-8")
@@ -1030,7 +1030,7 @@ def test_xspace_ingest_writes_one_json_and_counts_it(tmp_path, capsys):
     assert json.loads(captured.out) == data and json.loads(captured.err)["tables"] == 2
 
 
-def test_xspace_ingest_takes_an_adapter_and_says_what_it_cannot_read(adapters, tmp_path, capsys):
+def test_ontlas_ingest_takes_an_adapter_and_says_what_it_cannot_read(adapters, tmp_path, capsys):
     plugin, f = tmp_path / "foo_adapter.py", tmp_path / "x.foo"
     plugin.write_text(PLUGIN, encoding="utf-8")
     f.write_bytes(b"hello")
@@ -1042,7 +1042,7 @@ def test_xspace_ingest_takes_an_adapter_and_says_what_it_cannot_read(adapters, t
         main(["ingest", str(blob)])
 
 
-def test_xspace_draft_takes_definitions_of_any_format(tmp_path, capsys):
+def test_ontlas_draft_takes_definitions_of_any_format(tmp_path, capsys):
     pytest.importorskip("yaml")
     sql = tmp_path / "shop.sql"
     sql.write_bytes(ORACLE.encode())
@@ -1062,8 +1062,8 @@ def test_xspace_draft_takes_definitions_of_any_format(tmp_path, capsys):
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(LIB / "studio.yaml"))
 
@@ -1182,8 +1182,8 @@ def test_an_index_sheet_gives_the_keys_and_merges_with_the_model(tmp_path):
 
 
 def test_codes_hold_decision_tables_of_both_shapes():
-    from xgen_space.definitions import schema_backend
-    from xgen_space.draft import draft, studio_from
+    from ontlas.definitions import schema_backend
+    from ontlas.draft import draft, studio_from
 
     pytest.importorskip("yaml")
     defs = Definitions.from_dict({
@@ -1214,8 +1214,8 @@ def test_codes_hold_decision_tables_of_both_shapes():
 def test_an_uploaded_document_feeds_the_policy_draft_by_section_and_a_code_shows_its_message():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     s = StudioSession(load_studio(LIB / "studio.yaml"))
     s.upload("규정.md", "# 반품\n\n7일 이내 반품합니다.\n\n# 교환\n\n14일 이내 교환합니다.\n".encode())
@@ -1715,7 +1715,7 @@ def test_xls_and_xlsx_give_the_same_definitions_and_the_same_rows():
 
     from openpyxl import Workbook
 
-    from xgen_space.draft import read_file
+    from ontlas.draft import read_file
 
     wb = Workbook()
     wb.active.title = "정의서"

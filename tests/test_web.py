@@ -15,8 +15,8 @@ ALL = {"core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "fina
 
 
 def _build():
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(CFG))
 
@@ -119,7 +119,7 @@ def test_checks_and_owl_export(session):
 def test_http_keeps_each_visitor_apart():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.web.server import RateLimit, Sessions, make_handler
+    from ontlas.web.server import RateLimit, Sessions, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Sessions(_build, spare=0), ask_limit=RateLimit(5),
                                                                quiet=True))
@@ -138,9 +138,9 @@ def test_http_keeps_each_visitor_apart():
 
     try:
         code, html, set_cookie = call("/")
-        assert code == 200 and "XGEN Space" in html and "/*JS*/" not in html and "/*CSS*/" not in html
+        assert code == 200 and "Ontlas" in html and "/*JS*/" not in html and "/*CSS*/" not in html
         first = set_cookie.split(";", 1)[0]
-        assert first.startswith("xspace_session=")
+        assert first.startswith("ontlas_session=")
         code, body, _ = call("/api/detach", {"name": "acme-overlay"}, first)
         assert code == 200 and json.loads(body)["ok"]
         on = {r["name"] for r in json.loads(call("/api/state", cookie=first)[1])["library"] if r["on"]}
@@ -156,7 +156,7 @@ def test_http_keeps_each_visitor_apart():
 
 
 def test_a_visitor_brings_files_reviews_the_draft_and_plugs_it_in(session):
-    from xgen_space.web.api import DataOptions
+    from ontlas.web.api import DataOptions
 
     session.data = DataOptions(samples=BOOKS)
     assert len(session.use_samples()["files"]) == 6
@@ -183,7 +183,7 @@ def test_a_visitor_brings_files_reviews_the_draft_and_plugs_it_in(session):
 def test_http_takes_a_file_as_the_body_and_keeps_to_the_limit():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.web.server import RateLimit, Sessions, make_handler
+    from ontlas.web.server import RateLimit, Sessions, make_handler
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(Sessions(_build, spare=0), ask_limit=RateLimit(5),
                                                                quiet=True, upload_max=64))
@@ -224,7 +224,7 @@ def test_http_takes_a_file_as_the_body_and_keeps_to_the_limit():
 def test_the_guide_offers_one_video_in_byte_ranges(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.web.server import RateLimit, Sessions, guide, make_handler
+    from ontlas.web.server import RateLimit, Sessions, guide, make_handler
 
     assert guide(None) == {"video": "", "chapters": []}
     video = tmp_path / "demo.mp4"
@@ -260,7 +260,7 @@ def test_the_guide_offers_one_video_in_byte_ranges(tmp_path):
 
 
 def test_a_visitor_sets_the_rules_edits_each_step_and_any_module(session):
-    from xgen_space.web.api import DataOptions
+    from ontlas.web.api import DataOptions
 
     session.data = DataOptions(samples=BOOKS)
     session.use_samples()

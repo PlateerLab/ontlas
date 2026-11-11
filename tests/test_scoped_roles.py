@@ -1,12 +1,12 @@
 """A role whose rows come from who is signed in: on reads, in decisions and on writes."""
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import Actor
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.modules import Module, compose
-from xgen_space.roles import AccessDenied, decide_in_scope, in_scope, mask_style
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.actions import Actor
+from ontlas.backends.sql import SqliteBackend
+from ontlas.modules import Module, compose
+from ontlas.roles import AccessDenied, decide_in_scope, in_scope, mask_style
+from ontlas.studio import Studio
 
 ALICE = {"seller_id": "S1"}
 BOB = {"seller_id": "S2"}

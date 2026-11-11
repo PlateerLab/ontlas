@@ -1,9 +1,9 @@
 {
-  "name": "xspace-graph-kit",
+  "name": "ontlas-graph-kit",
   "private": true,
   "description": "The graph engine the page loads when a graph opens. Build: npm ci --ignore-scripts && npm run build",
   "scripts": {
-    "build": "esbuild entry.js --bundle --minify --format=iife --target=es2020 --legal-comments=none --banner:js=\"/*! sigma, graphology and plugins, MIT. Notices: graph-kit-NOTICE.txt */\" --outfile=../../src/xgen_space/web/static/graph-kit.js"
+    "build": "esbuild entry.js --bundle --minify --format=iife --target=es2020 --legal-comments=none --banner:js=\"/*! sigma, graphology and plugins, MIT. Notices: graph-kit-NOTICE.txt */\" --outfile=../../src/ontlas/web/static/graph-kit.js"
   },
   "dependencies": {
     "@sigma/edge-curve": "3.1.0",

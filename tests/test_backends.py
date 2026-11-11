@@ -2,11 +2,11 @@ import sqlite3
 
 import pytest
 
-from xgen_space.backends.base import Capabilities
-from xgen_space.backends.graph import CallableBackend, Neo4jBackend
-from xgen_space.backends.sql import DbApiBackend
-from xgen_space.compile.base import CompileError
-from xgen_space.projection import Projection, project
+from ontlas.backends.base import Capabilities
+from ontlas.backends.graph import CallableBackend, Neo4jBackend
+from ontlas.backends.sql import DbApiBackend
+from ontlas.compile.base import CompileError
+from ontlas.projection import Projection, project
 
 
 def test_graph_backend_agrees_with_source(graph_studio):
@@ -73,7 +73,7 @@ def test_neo4j_backend_with_a_fake_driver(onto, source):
     assert b.execute(c, {"threshold": 5}).rows == [("S1", 3)]
     text, params, kw = d.calls[0]
     assert params == {"threshold": 5, "_v1": ["M", "L"]} and kw == {"database_": "neo4j"}
-    from xgen_space.projection import load
+    from ontlas.projection import load
 
     load(onto, project(onto, source), b)
     assert d.calls[1][0] == "MATCH (n) DETACH DELETE n"
