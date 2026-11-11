@@ -24,9 +24,9 @@ KIND_LABEL = {"column": "컬럼", "property": "속성", "query": "등록 질의"
               "collection": "컬렉션", "folder": "폴더", "database": "데이터베이스"}
 
 CSS = """
-:root { --navy:#16181d; --blue:#2563eb; --blue-soft:#eef3fe; --blue-line:#cddbf8; --ink:#1b1e24; --muted:#667085;
-  --line:#e6e8ec; --panel:#f7f8fa; --bg:#f4f5f7; --ok:#1e9e5a; --ok-soft:#e5f5ec; --warn:#b7791f; --warn-soft:#fdf3e1;
-  --bad:#d93025; --code:#0f1a2e; }
+:root { --navy:#16181d; --blue:#2563eb; --blue-soft:#eef3fe; --blue-line:#cddbf8; --ink:#1e293b; --muted:#475569;
+  --line:#e2e8f0; --panel:#f8fafc; --bg:#f8fafc; --ok:#1e9e5a; --ok-soft:#e5f5ec; --warn:#b7791f; --warn-soft:#fdf3e1;
+  --bad:#dc2626; --accent:#ea580c; --code:#0f1a2e; }
 * { box-sizing:border-box; }
 html, body { margin:0; background:var(--bg); }
 body { font-family:"Pretendard","Malgun Gothic",-apple-system,sans-serif; color:var(--ink); font-size:14px;
