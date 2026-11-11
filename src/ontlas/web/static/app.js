@@ -6392,7 +6392,7 @@ ${controls}${body}`;
       <div class="sec">적용 결과</div>${outs}
       ${mgField('출처', mgInput('cite', v.cite, 'placeholder="예: 반품 정책서 v1.2 3조"'))}
       ${f.mode === 'new' ? `<label class="tick"><input type="checkbox" data-in="mgf" data-f="first"${v.first ? ' checked' : ''}>기존 규칙보다 먼저 적용</label>` : ''}
-      ${mgButtons(f, '규칙 제외')}</div></div>`;
+      ${(d.rules.find((r) => r.id === v.id) || {}).layer === 'axiom' ? '<div class="hint">AXIOM 규칙은 법령 기준 모듈에서만 바꿉니다. 여기서는 바꾸거나 옮기거나 지울 수 없습니다.</div>' : mgButtons(f, '규칙 제외')}</div></div>`;
   }
 
   function paramForm() {
@@ -6527,6 +6527,7 @@ ${controls}${body}`;
   }
 
   function ruleCell(d, r, i) {
+    if (r.layer === 'axiom') return `<td title="AXIOM 규칙은 법령 기준 모듈에서만 바꿉니다">${esc(r.said[i.name])}</td>`;  // read where it stands
     const c = S.mg.cell;
     if (c && c.rule === r.id && c.input === i.name) {
       const part = c.part;
@@ -6585,7 +6586,7 @@ ${controls}${body}`;
     const fs = ((S.ru || {}).findings || []).filter((f) => f.decision === d.name);
     const warn = new Set(fs.filter((f) => f.severity === 'warning').flatMap((f) => f.rules));
     const near = new Set(fs.filter((f) => f.kind === 'overlap' && f.rules.includes(S.mg.sel)).flatMap((f) => f.rules).filter((x) => x !== S.mg.sel));
-    const rows = d.rules.map((r) => `<tr class="${S.mg.sel === r.id ? 'sel' : ''}${hitNow.includes(r.id) ? ' hitrow' : ''}${warn.has(r.id) || near.has(r.id) ? ' warnrow' : ''}" draggable="true" data-drag-rule="${esc(r.id)}">
+    const rows = d.rules.map((r) => `<tr class="${S.mg.sel === r.id ? 'sel' : ''}${hitNow.includes(r.id) ? ' hitrow' : ''}${warn.has(r.id) || near.has(r.id) ? ' warnrow' : ''}"${r.layer === 'axiom' ? '' : ` draggable="true" data-drag-rule="${esc(r.id)}"`}>
       <td class="draghandle" aria-hidden="true">⋮⋮</td>
       <td class="mono" style="white-space:nowrap;cursor:pointer" data-act="mgrule" data-name="${esc(r.id)}"><b>${esc(r.id)}</b> ${layerChip(r.layer)}${hitNow.includes(r.id) ? ' <span class="chip sm ok">적중</span>' : ''}${near.has(r.id) ? ' <span class="chip sm warn">겹침</span>' : ''}
         ${r.cite ? `<div><span class="chip sm${r.module && r.module !== d.module ? ' warn' : ''}" style="margin-top:3px">${esc(r.cite)}</span></div>` : ''}</td>
