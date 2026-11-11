@@ -4,18 +4,18 @@
 
 The page is regrouped into the four parts a space is made of, and rules, words and versions get screens of their own.
 
-- **The page in four parts.** The sidebar is 홈, then 시멘틱 매니저 (규칙 · 용어사전 · 규칙 생성 에이전트 · 권한),
-  온톨로지 매니저 (오브젝트 관리 · 엔티티 관리 · 그래프 탐색 · 문서 · 질의 · 온톨로지), 데이터 바인더 (데이터 가져오기 ·
-  데이터 매핑 · 액션 · 레코드), 품질 관리 (검증질문 관리 · 검증) and 운영. A part opens and closes from its head. A card
+- **The page in four parts.** The sidebar is 홈, then Semantic Layer (규칙 · 용어 사전 · 규칙 생성 Agent · 권한),
+  Ontology (Object · Entity · 그래프 탐색 · 문서 · 질의 · 변경 · 버전), Data Binding (데이터 가져오기 · Mapping ·
+  액션 · 레코드), Quality (검증 질문 · 검증) and Operations. A part opens and closes from its head. A card
   at the top names the space, its modules and source and switches the data; the definition's maturity (L0 to L3) sits
   at the foot. The XGEN mark stands beside Ontlas. The top bar finds a screen, an Entity, a rule or a record, or asks the
   words as a question, and 할 일 is a button with its count. Colours take slate text, line and background tokens and an
   accent.
 - **The home** shows the version applied, the Entities per maturity level, the milestones a studio file names, the four
   parts with their counts and status, and an Object map; the five build steps leave it. `GET /api/overview`.
-- **오브젝트 관리**: the Objects with definition, Entity count, maturity, tier and owner; one opens with its maturity,
-  Entities, relations, decision tables, questions, source, owner and version. **규칙 생성 에이전트** drafts tables from
-  policy text. The workspace's table is 엔티티 관리 and its diagram 그래프 탐색.
+- **Object**: the Objects with definition, Entity count, maturity, tier and owner; one opens with its maturity,
+  Entities, relations, decision tables, questions, source, owner and version. **규칙 생성 Agent** drafts tables from
+  policy text. The workspace's table is the Entity screen and its diagram 그래프 탐색.
 - **Rules in three layers: AXIOM › Custom › Standard.** New module kind `axiom`. Each decision rule takes the layer of the
   module that wrote it and records that module and version. AXIOM rules come first in every table, and a module below
   AXIOM that removes or rewrites one, or removes its table, is refused. Under `priority` an AXIOM rule ranks first, and a
@@ -27,7 +27,7 @@ The page is regrouped into the four parts a space is made of, and rules, words a
   cards; `ontlas modules --check` adds `checks`, and `--rules` lists the layers and cards.
 - **Decision path.** Decide and simulate answers carry `path` and `layer`, shown on a decision and in the simulator:
   AXIOM passed › Custom vip-window fired › Standard held, with the module, version and clause.
-- **A lexicon (용어사전).** Terms in any module's `terms:` name a definition (`concept: property:Payment.amount`) and carry
+- **A lexicon (용어 사전).** Terms in any module's `terms:` name a definition (`concept: property:Payment.amount`) and carry
   English, synonyms, abbreviations, channel labels, hidden labels, related, broader and narrower terms, and confusable
   pairs with a note. Conflicts are reported, never refused. The workspace adds, changes, removes and imports terms
   (`add_term`, `update_term`, `delete_term`, `import_terms`); `GET /api/lexicon`, `POST /api/lexicon/edit`,
@@ -38,7 +38,7 @@ The page is regrouped into the four parts a space is made of, and rules, words a
   `keywords`; a definition question needs no query or decision. 검증 reports the dev and held-out questions apart, and
   per type; a question moves between the sets in one press.
 - **Versions and the regression review.** Every approved change that is swapped in makes a new version of the space
-  (판본 N), listed on 판본 이력 with who asked and decided, when, and its regression. A change tried on a copy is compared
+  (버전 N), listed on 버전 이력 with who asked and decided, when, and its regression. A change tried on a copy is compared
   with the space as it stands: questions that newly fail or pass, accuracy, grounded share and agreement before and
   after, and pass conditions that stop or start passing; a question that reads rows with no source is not measured, not
   failed. `GET /api/versions`; `regression` on a change, its detail and the workspace trial. A change request keeps

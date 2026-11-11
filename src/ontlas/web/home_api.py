@@ -1,4 +1,4 @@
-"""What the home and the version history ask for: every version of the space (판본) with the change that made it, what a
+"""What the home and the version history ask for: every version of the space (버전) with the change that made it, what a
 change makes worse or better beside its review, and where the space stands as a whole: how far each Entity has come
 (L0 to L3), the four parts it is built from, the Objects it is filed under, what waits on people and the milestones its
 studio file names.
@@ -44,17 +44,17 @@ class HomeMixin:
                     "stage_label": STAGE_LABEL.get(g["stage"], g["stage"])}
 
         failing = [{**q, "error": said(q["error"]) if q.get("error") else ""} for q in reg.get("newly_failing") or []]
-        parts = [f"새로 틀리는 질문 {len(failing)}개" if failing else "",
-                 f"새로 맞는 질문 {len(reg.get('newly_passing') or [])}개" if reg.get("newly_passing") else ""]
+        parts = [f"신규 오답 {len(failing)}" if failing else "",
+                 f"신규 정답 {len(reg.get('newly_passing') or [])}" if reg.get("newly_passing") else ""]
         for key, word in (("accuracy", "정답률"), ("grounded", "근거 제시율"), ("agreement", "판정 일치율")):
             m = reg.get(key)
             if m and m.get("change"):
                 parts.append(f"{word} {_pct(m['before'])} → {_pct(m['after'])}")
-        parts += [f"통과 조건 {len(reg['gates_failing'])}개 미충족으로 바뀜" if reg.get("gates_failing") else "",
-                  f"통과 조건 {len(reg['gates_passing'])}개 충족으로 바뀜" if reg.get("gates_passing") else ""]
+        parts += [f"통과 조건 미충족 {len(reg['gates_failing'])}" if reg.get("gates_failing") else "",
+                  f"통과 조건 충족 {len(reg['gates_passing'])}" if reg.get("gates_passing") else ""]
         if reg.get("unmeasured"):  # questions that read rows, with none to read: neither failed nor passed
-            parts.append(f"측정 대상 아닌 질문 {len(reg['unmeasured'])}개 (원천 미연결)")
-        said_line = " · ".join(p for p in parts if p) or "달라진 결과 없음"
+            parts.append(f"원천 미연결로 미측정 {len(reg['unmeasured'])}")
+        said_line = " · ".join(p for p in parts if p) or "변화 없음"
         return {**reg, "newly_failing": failing, "gates_failing": [gate(g) for g in reg.get("gates_failing") or []],
                 "gates_passing": [gate(g) for g in reg.get("gates_passing") or []],
                 "note": UNMEASURED["no_source"] if reg.get("unmeasured") else "", "summary": said_line}
@@ -88,7 +88,7 @@ class HomeMixin:
         number = len(applied) + 1
         last = applied[-1] if applied else None
         key = hashlib.sha256("|".join(sorted(f"{m['name']}@{m['version']}" for m in mods)).encode("utf-8")).hexdigest()[:8]
-        return {"number": number, "label": f"판본 {number}", "key": key, "modules": mods,
+        return {"number": number, "label": f"버전 {number}", "key": key, "modules": mods,
                 "change": last.id if last else "", "at": self._decided_at(last) if last else ""}
 
     def _decided_at(self, cr) -> str:

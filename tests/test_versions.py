@@ -121,7 +121,7 @@ def test_without_a_source_a_question_that_reads_rows_is_not_measured_not_failed(
     reg = change["regression"]
     assert "Q2" in reg["unmeasured"] and reg["newly_failing"] == [] and not reg["worse"]
     assert reg["measured"] and "OP7" not in reg["unmeasured"]  # a definition question reads no rows: it is measured
-    assert reg["note"] and "측정 대상 아닌 질문" in reg["summary"]
+    assert reg["note"] and "원천 미연결로 미측정" in reg["summary"]
     assert change["passed"]
 
 
@@ -129,13 +129,13 @@ def test_the_trial_and_the_change_detail_carry_the_regression(session):
     session.manage_edit("update_object", {"name": "Order", "label": "주문서"})
     trial = session.manage_trial()
     assert trial["regression"]["measured"] and trial["regression"]["newly_failing"] == []
-    assert trial["regression"]["summary"] == "달라진 결과 없음"
+    assert trial["regression"]["summary"] == "변화 없음"
     session.manage_discard()
     session.studio.settings["flow"]["gates"]["check"]["min_accuracy"] = 0.95
     change = session.propose_module(_text(_overlay(session.studio.library, "1.1.0", "VIP 고객 반품 기간 연장")))["change"]
     detail = session.change_detail(change["id"])
     reg = detail["regression"]
-    assert [q["id"] for q in reg["newly_failing"]] == ["A1"] and reg["summary"].startswith("새로 틀리는 질문 1개")
+    assert [q["id"] for q in reg["newly_failing"]] == ["A1"] and reg["summary"].startswith("신규 오답 1")
     assert reg["gates_failing"][0]["label"] == "검증 질문 정답률 최소" and reg["gates_failing"][0]["stage_label"] == "검증"
     assert detail["from_version"] == "1.0.0" and detail["decided_at"] == ""
     json.dumps(detail)
@@ -145,7 +145,7 @@ def test_the_trial_and_the_change_detail_carry_the_regression(session):
 
 def test_every_applied_change_is_a_version_of_the_space_with_its_history(session):
     v = session.versions()
-    assert v["current"]["number"] == 1 and v["current"]["label"] == "판본 1" and v["history"] == [] and v["pending"] == []
+    assert v["current"]["number"] == 1 and v["current"]["label"] == "버전 1" and v["history"] == [] and v["pending"] == []
     first_key = v["current"]["key"]
     assert {m["name"]: m["version"] for m in v["current"]["modules"]}["acme-overlay"] == "1.0.0"
     session.manage_edit("update_object", {"name": "Order", "label": "주문서"})
@@ -157,7 +157,7 @@ def test_every_applied_change_is_a_version_of_the_space_with_its_history(session
     assert (row["module"], row["from"], row["status"], row["applied"], row["number"]) == ("workspace", "", "approved", True, 2)
     assert row["requested_by"] == row["decided_by"] == "방문자" and row["decided_at"] == v["current"]["at"]
     assert row["summary"] == "주문서 변경" and row["counts"] == {"added": 0, "changed": 1, "removed": 0}
-    assert row["regression"]["summary"] == "달라진 결과 없음"
+    assert row["regression"]["summary"] == "변화 없음"
     ws = next(r for r in v["library"] if r["name"] == "workspace")
     assert ws["applied"] == row["to"] and ws["versions"][0] == {"version": row["to"], "applied": True, "on_disk": False,
                                                                  "change": row["id"]}
@@ -243,7 +243,7 @@ def test_the_object_map_files_each_entity_with_its_level_and_reads_a_tier_where_
     loose = ov["objects"][-1]
     assert loose["name"] == "" and loose["label"] == "미분류" and {e["name"] for e in loose["entities"]} == {"Party", "Agreement"}
     assert ov["components"][1]["counts"]["unfiled"] == 2 and ov["components"][1]["counts"]["objects"] == len(session.studio.onto.areas)
-    assert set(ov["todo"]) >= {"assigned", "mine", "all", "kinds"} and ov["version"]["label"] == "판본 1"
+    assert set(ov["todo"]) >= {"assigned", "mine", "all", "kinds"} and ov["version"]["label"] == "버전 1"
     assert ov["milestones"] == []  # the example names none
 
 

@@ -229,7 +229,7 @@ EDIT_TEXT = [
      r"규칙 카드 '\1'을(를) AXIOM 규칙으로 둘 수 없습니다. AXIOM 규칙은 axiom 모듈에서만 정합니다."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
-            (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
+            (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "버전 없음"),
             (r"^no answer$", "답 없음")]
 DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives here as its label
     (r"^(.+) not found$", r"\1 레코드가 없어 판정하지 못했습니다. 레코드를 다시 골라 주세요."),
