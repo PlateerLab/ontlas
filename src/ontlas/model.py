@@ -208,6 +208,11 @@ class DecisionRule:
     priority: int | None = None  # hit policy priority: the matching rule with the lowest number decides
     source: str = ""  # where the rule came from: two sources that disagree are a conflict (see decide.conflicts)
     overruled_by: dict[str, str] = field(default_factory=dict, repr=False, compare=False)  # rule id -> conflict, by a pick
+    layer: str = "standard"  # axiom | custom | standard (semantic.LAYERS): a composition sets it from the module's kind
+    owner: str = ""  # the person or team that answers for the rule
+    status: str = ""  # draft | review | approved (semantic.CARD_STATUS); unset reads as the table's
+    module: str = field(default="", repr=False, compare=False)  # the module that wrote it, set by a composition
+    version: str = field(default="", repr=False, compare=False)  # that module's version
 
 
 @dataclass
@@ -220,6 +225,8 @@ class DecisionTable:
     label: str = ""
     hit_policy: str = "first"
     cite: str = ""
+    owner: str = ""
+    status: str = ""
     parameters: dict[str, Parameter] = field(default_factory=dict, repr=False, compare=False)  # the ontology's
 
     @property
@@ -614,11 +621,14 @@ def _decision(name: str, d: dict) -> DecisionTable:
         inputs[k] = DecisionInput(name=k, type=v.pop("type", "string"), source=v)
     rules = [DecisionRule(when={k: str(x) for k, x in (r.get("when") or {}).items()}, then=dict(r.get("then") or {}),
                           id=r.get("id", f"r{i + 1}"), note=r.get("note", ""), cite=r.get("cite", ""),
-                          priority=r.get("priority"), source=str(r.get("source", "") or ""))
+                          priority=r.get("priority"), source=str(r.get("source", "") or ""),
+                          layer=str(r.get("layer") or "standard"), owner=str(r.get("owner") or ""),
+                          status=str(r.get("status") or ""))
              for i, r in enumerate(d.get("rules", []))]
     return DecisionTable(name=name, inputs=inputs, outputs=dict(d.get("outputs", {})), rules=rules,
                          target=d.get("target", ""), label=d.get("label", ""),
-                         hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""))
+                         hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""),
+                         owner=str(d.get("owner") or ""), status=str(d.get("status") or ""))
 
 
 def _parameter(name: str, d: Any) -> Parameter:
@@ -888,10 +898,12 @@ def _to_dict(o: Ontology) -> dict:
     for dt in o.decisions.values():
         decisions[dt.name] = _clean({
             "label": dt.label, "target": dt.target, "hit_policy": dt.hit_policy, "cite": dt.cite,
+            "owner": dt.owner, "status": dt.status,
             "inputs": {i.name: {"type": i.type, **i.source} for i in dt.inputs.values()},
             "outputs": dt.outputs,
             "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite,
-                              "source": r.source})
+                              "source": r.source, "layer": None if r.layer == "standard" else r.layer,
+                              "owner": r.owner, "status": r.status})
                       | ({} if r.priority is None else {"priority": r.priority}) for r in dt.rules]})
     actions = {a.name: _clean({"label": a.label, "target": a.target, "parameters": a.parameters,
                                "criteria": [_clean({"decision": c.decision, "expect": c.expect, "states": c.states,

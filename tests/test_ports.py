@@ -440,7 +440,8 @@ def test_live_draft_through_a_query_service_over_postgres():
 
 def test_the_rules_screen_reads_what_the_modules_say(session):
     r = session.rules_state()
-    assert {p["name"] for p in r["parameters"]} == {"free_shipping_amount", "base_shipping_fee", "price_auto_percent"}
+    assert {p["name"] for p in r["parameters"]} == {"free_shipping_amount", "base_shipping_fee", "price_auto_percent",
+                                                    "return_window_days"}
     assert r["metrics"][0]["metric"] == "returnRate" and r["conflicts"][0]["status"] == "open"
     assert any(f["decision"] == "returnEligibility" for f in r["findings"])
     m = session.metric_run("returnRate")

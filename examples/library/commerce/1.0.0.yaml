@@ -160,6 +160,9 @@ links:
   wishes: {from: Customer, to: Product, label: 찜}
   priceOf: {from: PriceChange, to: Sku, cardinality: many_to_one, inverse: priceChanges, label: 판매가 변경 단품}
 
+parameters:
+  return_window_days: {type: integer, value: 7, min: 1, unit: 일, label: 반품 기간, cite: 반품 정책서 v1.2 3.2조}
+
 decisions:
   returnEligibility:
     label: 반품 가능 여부
@@ -175,8 +178,8 @@ decisions:
       - {id: not-delivered, when: {days_since_delivery: "null"}, then: {eligible: false, reason: 배송 완료 전입니다}}
       - {id: in-progress, when: {item_status: '!= "NORMAL"'}, then: {eligible: false, reason: 이미 반품이 진행 중입니다}}
       - {id: category, when: {category_returnable: "false"}, then: {eligible: false, reason: 반품할 수 없는 카테고리입니다}, cite: 반품 정책서 v1.2 2.1조}
-      - {id: in-window, when: {days_since_delivery: "<= 7"}, then: {eligible: true, reason: 배송 완료 후 반품기간 7일 이내입니다}, cite: 반품 정책서 v1.2 3.2조}
-      - {id: expired, when: {}, then: {eligible: false, reason: 반품기간 7일이 지났습니다}}
+      - {id: in-window, when: {days_since_delivery: "<= @return_window_days"}, then: {eligible: true, reason: "배송 완료 후 반품기간 {@return_window_days}일 이내입니다"}, cite: 반품 정책서 v1.2 3.2조}
+      - {id: expired, when: {}, then: {eligible: false, reason: "반품기간 {@return_window_days}일이 지났습니다"}}
 
 actions:
   requestReturn:
@@ -275,3 +278,16 @@ questions:
   - {id: Q2, text: "배송 완료 4일 된 주문상품 I1001 반품 되나요?", decision: returnEligibility, key: I1001, expect: {eligible: true}}
   - {id: Q3, text: "배송 완료 12일 지난 주문상품 I1003 반품 되나요?", decision: returnEligibility, key: I1003, expect: {eligible: false}}
   - {id: Q4, text: "속옷 주문상품 I1004 반품 되나요?", decision: returnEligibility, key: I1004, expect: {eligible: false, reason: 반품할 수 없는 카테고리입니다}}
+
+rule_cards:
+  - id: return-request-moves
+    type: transition
+    statement: 반품 신청이 승인되면 주문상품 상태가 정상에서 반품 요청으로 바뀝니다.
+    applies_to: [object:OrderItem]
+    conditions: [반품 가능 여부 판정이 가능]
+    result: 주문상품 상태 NORMAL → RETURN_REQUESTED
+    exceptions: [반품 신청이 반려되면 정상으로 돌아갑니다]
+    source: 반품 정책서 v1.2 4조
+    owner: 고객경험팀
+    status: approved
+    implements: [action:requestReturn, states:OrderItem]

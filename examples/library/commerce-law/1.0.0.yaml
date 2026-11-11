@@ -1,0 +1,65 @@
+module: commerce-law
+version: 1.0.0
+kind: axiom
+label: 법령 기준 (예시)
+description: 가상의 소비자 보호 법령을 예시로 옮긴 AXIOM 규칙입니다. 배송 전 반품 불가 규칙을 법령 기준으로 두고, 반품 기간이 7일보다 짧지 않은지 확인합니다. 판정에서 가장 먼저 확인하며, 고객사 모듈과 관리 변경으로 바꾸거나 지울 수 없습니다.
+requires: [commerce]
+
+extend:
+  decisions:
+    returnEligibility:
+      rules_replace:
+        not-delivered:
+          id: not-delivered
+          when: {days_since_delivery: "null"}
+          then: {eligible: false, reason: 배송 완료 전입니다}
+          cite: 소비자 보호 법령 (예시) 청약철회 조항
+          owner: 법무팀
+          status: approved
+
+rule_cards:
+  - id: law-return-min-days
+    type: decide
+    statement: 단순 변심 반품은 배송 완료 후 7일까지 받아야 합니다. 반품 기간을 7일보다 짧게 정할 수 없습니다.
+    applies_to: [object:OrderItem, parameter:return_window_days]
+    conditions: [단순 변심으로 반품을 신청]
+    result: 배송 완료 후 7일 이내이면 반품 가능
+    exceptions: [반품할 수 없는 카테고리(위생 상품 등)]
+    params: {min_days: 7}
+    source: 소비자 보호 법령 (예시) 청약철회 조항
+    owner: 법무팀
+    status: approved
+    legal_review: done
+    implements: [decision:returnEligibility#in-window, parameter:return_window_days]
+    check: {parameter: return_window_days, min: 7}
+  - id: law-delivered-first
+    type: decide
+    statement: 배송이 끝나지 않은 주문상품은 반품 대상이 아닙니다. 배송 전에는 주문 취소로 처리합니다.
+    applies_to: [object:OrderItem]
+    conditions: [배송 완료 일시가 없음]
+    result: 반품 불가
+    source: 소비자 보호 법령 (예시) 청약철회 조항
+    owner: 법무팀
+    status: approved
+    legal_review: done
+    implements: [decision:returnEligibility#not-delivered]
+  - id: law-refund-cap
+    type: compute
+    statement: 환불 금액은 0원보다 작을 수 없고 결제 금액을 넘을 수 없습니다.
+    applies_to: [object:OrderItem]
+    result: 0 ≤ 환불 금액 ≤ 결제 금액
+    source: 소비자 보호 법령 (예시) 환불 조항
+    owner: 정산팀
+    status: approved
+    legal_review: done
+    implements: [function:refundEstimate]
+  - id: law-price-shown
+    type: display
+    statement: 결제 화면에 보이는 판매가는 실제로 결제하는 판매가와 같아야 합니다.
+    applies_to: [object:CheckoutRecord, property:Sku.price]
+    result: 표시 판매가 = 단품 판매가
+    source: 소비자 보호 법령 (예시) 가격 표시 조항
+    owner: 상품운영팀
+    status: review
+    legal_review: pending
+    implements: [property:CheckoutRecord.shown_price]

@@ -48,5 +48,19 @@ extend:
 remove:
   queries: [wishlistCount]
 
+rule_cards:
+  - id: acme-vip-window
+    type: decide
+    statement: VIP 고객은 배송 완료 후 14일까지 반품할 수 있습니다.
+    applies_to: [object:OrderItem, object:Customer]
+    conditions: [고객 등급 VIP, 주문상품 상태 정상, 반품 가능 카테고리]
+    result: 배송 완료 후 14일 이내이면 반품 가능
+    params: {days: 14}
+    source: ACME 운영 정책 4.1
+    owner: 고객경험팀
+    status: approved
+    legal_review: done
+    implements: [decision:returnEligibility#vip-window]
+
 questions:
   - {id: A1, text: "VIP 고객의 I1001 은 어떤 규칙으로 반품되나요?", decision: returnEligibility, key: I1001, expect: {eligible: true, reason: VIP 고객은 배송 완료 후 14일까지 반품할 수 있습니다}}

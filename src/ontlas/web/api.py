@@ -172,6 +172,40 @@ EDIT_TEXT = [
      r"Object \1의 상태 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 초안, 사용 중, 폐기 예정 중에서 골라 주세요."),
     (r"^area name '(.*)' is not an identifier$",
      r"Object 이름 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
+    # rule layers and rule cards (semantic.py)
+    (r"^AXIOM (\S+): (\S+) \((.*)\) is (\S+), below the minimum (\S+); set by (\S+) \((.*)\)$",
+     r"\3 값은 AXIOM 규칙 \1에 따라 \5 이상이어야 하므로 저장하지 못했습니다. \7에서 \4(으)로 정한 값입니다."),
+    (r"^AXIOM (\S+): (\S+) \((.*)\) is (\S+), above the maximum (\S+); set by (\S+) \((.*)\)$",
+     r"\3 값은 AXIOM 규칙 \1에 따라 \5 이하여야 하므로 저장하지 못했습니다. \7에서 \4(으)로 정한 값입니다."),
+    (r"^AXIOM (\S+): (\S+) \((.*)\) is (.+), which is not a number; set by (\S+) \((.*)\)$",
+     r"\3 값은 AXIOM 규칙 \1에 따라 숫자여야 하므로 저장하지 못했습니다."),
+    (r"^rule '(.+)' of (\S+) is AXIOM; it is not changed, moved or removed here$",
+     r"AXIOM 규칙 '\1'은(는) 여기서 바꾸거나 옮기거나 지울 수 없습니다."),
+    (r"^(\S+) removes decision '(.+?)', which holds AXIOM rule '(.+?)'$",
+     r"결정표 '\2'에 AXIOM 규칙 '\3'이(가) 있어 이 변경을 적용하지 못했습니다. AXIOM 규칙이 읽는 항목은 지울 수 없습니다."),
+    (r"^status '(.+)' is not one of .*$", r"상태 '\1'은(는) 쓸 수 없습니다. 초안, 검토 중, 승인 중에서 골라 주세요."),
+    (r"^rule cards made here are Custom$", "여기서 만드는 규칙 카드는 Custom 규칙입니다. 계층을 Custom으로 두고 다시 저장해 주세요."),
+    (r"^rule card '(.+)' already exists$", r"규칙 카드 '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+    (r"^rule card '(.+)' is unknown$", r"규칙 카드 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^rule card '(.+)' is (AXIOM|Standard); only Custom cards are edited here$",
+     r"규칙 카드 '\1'은(는) \2 규칙이라 여기서 바꾸거나 지우지 못했습니다. Custom 규칙 카드만 바꿀 수 있습니다."),
+    (r"^rule card id '(.*)' must be letters, digits, _ and - starting with a letter$",
+     r"규칙 카드 번호 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
+    (r"^rule card '(.+)': type '(.*)' is not one of .*$",
+     r"규칙 카드 '\1'의 유형 '\2'은(는) 쓸 수 없습니다. 판정, 계산, 전이, 복원, 순서, 표시, 감시 중에서 골라 주세요."),
+    (r"^rule card '(.+)': give a statement$", r"규칙 카드 '\1'에 규칙 내용이 없어 저장하지 못했습니다. 규칙 내용을 입력해 주세요."),
+    (r"^rule card '(.+)': status '(.*)' is not one of .*$",
+     r"규칙 카드 '\1'의 상태 '\2'은(는) 쓸 수 없습니다. 초안, 검토 중, 승인 중에서 골라 주세요."),
+    (r"^rule card '(.+)': legal review '(.*)' is not one of .*$",
+     r"규칙 카드 '\1'의 법무 검토 '\2'은(는) 쓸 수 없습니다. 해당 없음, 검토 대기, 검토 완료 중에서 골라 주세요."),
+    (r"^rule card '(.+)': implements '(.*)' is not kind:name$",
+     r"규칙 카드 '\1'의 구현 항목 '\2'을(를) 읽지 못했습니다. decision:결정표#규칙, function:이름 형식으로 입력해 주세요."),
+    (r"^rule card '(.+)': check needs a parameter and a numeric min or max$",
+     r"규칙 카드 '\1'의 확인 조건에는 기준값 이름과 숫자로 된 최소값 또는 최대값이 있어야 합니다."),
+    (r"^rule card '(.+)': params is a mapping of names to values$", r"규칙 카드 '\1'의 매개변수는 이름과 값으로 입력해 주세요."),
+    (r"^rule card '(.+)': unknown fields .*$", r"규칙 카드 '\1'에 알 수 없는 항목이 있어 저장하지 못했습니다."),
+    (r"^rule card '(.+)': layer axiom is written only by an axiom module$",
+     r"규칙 카드 '\1'을(를) AXIOM 규칙으로 둘 수 없습니다. AXIOM 규칙은 axiom 모듈에서만 정합니다."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
             (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "판본 없음"),
@@ -201,7 +235,18 @@ ISSUE_TEXT = [
     (r"^(\S+) requires '(.+?)', which is not attached$", r"\1에 필요한 '\2' 모듈이 적용되어 있지 않습니다. '\2' 모듈을 먼저 적용해 주세요."),
     (r"^(\S+) requires '(.+?)', but (\S+) is attached$", r"\1에 필요한 '\2' 버전과 적용된 \3 버전이 맞지 않습니다. 버전을 확인해 주세요."),
     (r"^modules require each other in a cycle: (.+)$", r"모듈 의존 관계가 순환합니다. \1. requires 항목을 확인해 주세요."),
-    (r"^module (\S*): kind must be one of .*$", r"모듈 \1의 kind 값이 올바르지 않습니다. core, domain, industry, customer, binding, quality, method 중에서 지정해 주세요."),
+    (r"^module (\S*): kind must be one of .*$", r"모듈 \1의 kind 값이 올바르지 않습니다. core, domain, industry, customer, binding, quality, method, dictionary, axiom 중에서 지정해 주세요."),
+    # rule layers (semantic.py): an AXIOM rule, card or bound that a module would break
+    (r"^AXIOM (\S+): (\S+) \((.*)\) is (\S+), below the minimum (\S+); set by (\S+) \((.*)\)$",
+     r"\3 값은 AXIOM 규칙 \1에 따라 \5 이상이어야 하므로 적용하지 못했습니다. \7에서 \4(으)로 정한 값입니다."),
+    (r"^AXIOM (\S+): (\S+) \((.*)\) is (\S+), above the maximum (\S+); set by (\S+) \((.*)\)$",
+     r"\3 값은 AXIOM 규칙 \1에 따라 \5 이하여야 하므로 적용하지 못했습니다. \7에서 \4(으)로 정한 값입니다."),
+    (r"^(\S+) (?:removes|rewrites) AXIOM rule '(.+?)' of decision '(.+?)'.*$",
+     r"결정표 \3의 AXIOM 규칙 '\2'은(는) axiom 모듈만 바꾸거나 지울 수 있어 적용하지 못했습니다."),
+    (r"^(\S+) removes decision '(.+?)', which holds AXIOM rule '(.+?)'$",
+     r"결정표 '\2'에 AXIOM 규칙 '\3'이(가) 있어 제외하지 못했습니다."),
+    (r"^(\S+) (?:removes|changes) AXIOM rule card '(.+?)'$",
+     r"AXIOM 규칙 카드 '\2'은(는) axiom 모듈만 바꾸거나 지울 수 있어 적용하지 못했습니다."),
     (r"^(\w+)\.(\w+): type '(.+?)' is not one of .*$", r"\1.\2의 타입 '\3'은 사용할 수 없습니다. string, integer, decimal, boolean, date, datetime, enum 중에서 지정해 주세요."),
     (r"^(\w+)\.(\w+): expected .*$", r"\1.\2의 계산식을 해석하지 못했습니다. 식을 확인해 주세요."),
     (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 Entity '\2'를 찾지 못했습니다. target 항목을 확인해 주세요."),
@@ -550,7 +595,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             imp = self.studio.detach(name, cascade=cascade)
         except ModuleError as e:
             imp = getattr(e, "impact", None)
-            return {"ok": False, "error": str(e), "impact": imp.to_dict() if imp else None}
+            return {"ok": False, "error": _issue_text(str(e)), "impact": imp.to_dict() if imp else None}
         gone = [name, *imp.dependents] if cascade else [name]
         proj = self._reproject()
         warning = _projection_warning(proj)
@@ -584,7 +629,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         try:
             comp = self.studio.attach(name)
         except ModuleError as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": _issue_text(str(e))}
         added = [m.name for m in comp.modules if m.name not in before]
         self._keep_applied()
         proj = self._reproject()
@@ -849,7 +894,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         first = next(iter(table.outputs), "")
         named = table.named
         words = {i: {"unit": unit_of(st.onto, table, i), "labels": labels_of(st.onto, table, i)} for i in table.inputs}
-        rules = [{"id": r.id, "when": r.when, "then": r.then, "cite": r.cite, "hit": r.id in res.matched,
+        rules = [{"id": r.id, "when": r.when, "then": r.then, "cite": r.cite, "hit": r.id in res.matched, "layer": r.layer,
                   "said": {i: cell_words(r.when.get(i, "-"), named, **words[i]) for i in table.inputs}}
                  for r in table.rules]
         comp = st.composition
@@ -875,6 +920,7 @@ class StudioSession(SpaceMixin, PagesMixin):
             "messages": self._said(outs),
             "engine": res.engine, "zen": zen, "notes": res.notes,
             "touched": [self._label(m) for m in touched], "actions": actions,
+            "layer": (res.path or {}).get("layer", ""), "path": res.path,
         })
 
     def _proposal(self, p) -> dict:
@@ -2444,7 +2490,9 @@ class StudioSession(SpaceMixin, PagesMixin):
                 "name": t.name, "label": t.label or t.name, "target": t.target, "target_label": t.target and mine_label(o, t.target),
                 "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
                 "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
+                "owner": t.owner, "status": t.status,
                 "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "module": rule_owner(comp, t.name, r.id),
+                           "layer": r.layer, "owner": r.owner, "status": r.status,
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
                            "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
                           for r in t.rules]})
