@@ -61,13 +61,13 @@ def _text(module) -> str:
 def test_a_change_that_breaks_a_question_lists_it_as_newly_failing(st):
     cr = st.changes.propose(_overlay(st.library, "1.1.0", "VIP 고객 반품 기간 연장"), by="kim")
     reg = cr.review["regression"]
-    assert reg["measured"] and reg["questions"] == {"before": 12, "after": 12, "measured": 12, "unmeasured": 0}
+    assert reg["measured"] and reg["questions"] == {"before": 13, "after": 13, "measured": 13, "unmeasured": 0}
     assert [q["id"] for q in reg["newly_failing"]] == ["A1"]
     q = reg["newly_failing"][0]
     assert q["text"].startswith("VIP 고객의 I1001") and q["was"] == "passed" and q["error"] == ""
     assert q["expected"] == {"eligible": True, "reason": VIP} and q["got"]["reason"] == "VIP 고객 반품 기간 연장"
-    assert reg["accuracy"]["before"] == 1.0 and reg["accuracy"]["after"] == pytest.approx(11 / 12)
-    assert reg["accuracy"]["change"] == pytest.approx(-0.0833) and reg["grounded"]["change"] == 0
+    assert reg["accuracy"]["before"] == 1.0 and reg["accuracy"]["after"] == pytest.approx(12 / 13)
+    assert reg["accuracy"]["change"] == pytest.approx(-0.0769) and reg["grounded"]["change"] == 0
     assert reg["agreement"] == {"before": 0.9, "after": 0.9, "change": 0.0}  # past decisions are decided as before
     assert reg["newly_passing"] == [] and reg["unmeasured"] == [] and reg["worse"] and not reg["better"]
     assert reg["gates_failing"] == [] and cr.review["passed"]  # 11 of 12 still meets the 0.9 the studio asks
@@ -80,7 +80,7 @@ def test_a_condition_the_change_stops_meeting_is_named_with_both_values(st):
     reg = cr.review["regression"]
     assert [(g["stage"], g["condition"], g["was"]) for g in reg["gates_failing"]] == [("check", "min_accuracy", "passed")]
     g = reg["gates_failing"][0]
-    assert g["limit"] == 0.95 and g["before"] == 1.0 and g["after"] == pytest.approx(11 / 12)
+    assert g["limit"] == 0.95 and g["before"] == 1.0 and g["after"] == pytest.approx(12 / 13)
     assert not cr.review["passed"]
 
 
@@ -103,7 +103,7 @@ def test_a_question_the_change_adds_and_fails_is_new_not_a_regression_of_an_old_
              "expect": {"eligible": True}}
     reg = st.changes.propose(_overlay(st.library, "1.1.0", question=wrong), by="kim").review["regression"]
     assert [(q["id"], q["was"]) for q in reg["newly_failing"]] == [("A2", "absent")]
-    assert reg["questions"]["before"] == 12 and reg["questions"]["after"] == 13
+    assert reg["questions"]["before"] == 13 and reg["questions"]["after"] == 14
 
 
 def test_without_a_source_a_question_that_reads_rows_is_not_measured_not_failed(tmp_path):
@@ -119,8 +119,9 @@ def test_without_a_source_a_question_that_reads_rows_is_not_measured_not_failed(
     rule["then"]["eligible"] = False  # Q2 would fail, if it could be asked
     change = s.propose_module(_text(d))["change"]
     reg = change["regression"]
-    assert "Q2" in reg["unmeasured"] and reg["newly_failing"] == [] and not reg["measured"] and not reg["worse"]
-    assert reg["accuracy"] is None and reg["note"] and "측정 대상 아닌 질문" in reg["summary"]
+    assert "Q2" in reg["unmeasured"] and reg["newly_failing"] == [] and not reg["worse"]
+    assert reg["measured"] and "OP7" not in reg["unmeasured"]  # a definition question reads no rows: it is measured
+    assert reg["note"] and "측정 대상 아닌 질문" in reg["summary"]
     assert change["passed"]
 
 
@@ -218,14 +219,14 @@ def test_the_overview_reads_the_last_measurement_and_says_when_there_is_none(ses
     session.flow()
     ov = session.overview()
     qa, binding = ov["components"][3], ov["components"][2]
-    assert (qa["status"], qa["accuracy"], qa["counts"]["questions"], qa["gates"]["met"]) == ("ok", 1.0, 12, qa["gates"]["all"])
+    assert (qa["status"], qa["accuracy"], qa["counts"]["questions"], qa["gates"]["met"]) == ("ok", 1.0, 13, qa["gates"]["all"])
     assert (binding["status"], binding["check"]) == ("ok", {"errors": 0, "warnings": 0})
     levels = [x["entities"] for x in ov["maturity"]["levels"]]
     bound = sum(1 for t in session.studio.onto.objects.values() if t.table)
     assert ov["maturity"]["checked"] and levels[3] == bound and levels[1] == len(session.studio.onto.objects) - bound
     semantic = ov["components"][0]
     assert semantic["counts"]["decisions"] == 2 and semantic["status"] == "ok"
-    assert {r["kind"]: r["rules"] for r in semantic["by_kind"]} == {"domain": 8, "customer": 1}  # the VIP rule is the overlay's
+    assert {r["kind"]: r["rules"] for r in semantic["by_kind"]} == {"axiom": 1, "domain": 7, "customer": 1}  # the VIP rule is the overlay's, not-delivered the law module's
     session.manage_edit("update_object", {"name": "Order", "label": "주문서"})
     session.manage_propose()
     qa = session.overview()["components"][3]
