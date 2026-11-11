@@ -1,14 +1,31 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
 /build/
 dist/
-.pytest_cache/
-.ruff_cache/
 .venv/
 venv/
-*.jsonl
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local work that never belongs in the repository (or in a source distribution built here)
+_wt/
+.claude/
+.playwright-mcp/
+.env
+.env.*
+*.log
+
+# Editors and systems
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
+
+# Data a run leaves behind
+*.jsonl
 *.db
-.venv/
