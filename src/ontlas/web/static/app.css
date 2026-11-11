@@ -591,13 +591,12 @@ kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:
 @media (max-width:640px) { .mgcond { grid-template-columns:1fr; } .mgrow { flex-wrap:wrap; } }
 
 /* the sidebar's three sections: what a person comes to do, what builds the definition, what keeps it running */
-.nsec + .nsec { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
 .nhead { font-size:11px; font-weight:700; letter-spacing:.06em; color:#98a2b3; padding:2px 10px 6px; }
 .nbadge { margin-left:auto; min-width:18px; height:18px; padding:0 6px; border-radius:9px; background:#d92d20; color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
 .snav .nav.on .nbadge { background:#fff; color:var(--navy); }
 @media (min-width: 1101px) {
   .app.slim .nhead { display:none; }
-  .app.slim .nbadge { position:absolute; top:3px; right:5px; min-width:16px; height:16px; line-height:16px; padding:0 4px; font-size:10px; }
+  .app.slim .snav .nbadge { position:absolute; top:3px; right:5px; min-width:16px; height:16px; line-height:16px; padding:0 4px; font-size:10px; }
 }
 @media (max-width: 1100px) { .nsec { display:contents; } .nhead { display:none; } }
 
@@ -1216,3 +1215,65 @@ tr.unasked td { color:#98a2b3; }
 .empty.wsstart b { font-size:15px; color:var(--ink); }
 .empty.wsstart span { font-size:12.5px; }
 .drcard.shut > .cb { display:none; }  /* the draft's settings: defaults until someone opens them */
+
+/* the sidebar: the XGEN mark beside the product's name, the space being worked on, its parts, how far it has come */
+.sbrand { gap:8px; text-decoration:none; }
+.sbrand .xword { height:22px; width:auto; flex:none; fill:var(--navy); }
+.sbrand .xsym { display:none; width:26px; height:26px; flex:none; fill:var(--navy); }
+.sbrand .bname { display:block; flex:none; font-size:16.5px; font-weight:800; letter-spacing:-.2px; color:var(--navy); line-height:1; }
+.sspace { display:flex; flex-direction:column; gap:3px; margin:10px 10px 0; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel); font-size:12px; min-width:0; }
+.sspace > b { font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sspace > span { color:var(--muted); }
+.sspace .chip { align-self:flex-start; margin-top:4px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sspace select { margin-top:6px; width:100%; font-size:12px; padding:4px 8px; background:#fff; }
+.snav .nav.top { font-weight:600; color:#344054; }
+.snav button.nav { width:100%; border:0; background:none; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; text-align:left; }
+.snav .nav.msec .ui { margin-left:auto; width:14px; height:14px; color:#98a2b3; transition:transform .15s ease; }
+.nsec.open > .nav.msec .ui { transform:rotate(180deg); }
+.snav .nav.msec.cur { color:var(--navy); }
+.snav .nav.msec.cur svg:not(.ui) { color:var(--blue); }
+.nsub { display:flex; flex-direction:column; margin:0 0 6px 19px; padding-left:8px; border-left:1px solid var(--line); }
+.snav .nav.sub { height:32px; font-size:13px; padding:0 10px; color:#475467; font-weight:500; }
+.snav .nav.sub.on { background:var(--blue-soft); color:var(--blue); font-weight:700; }
+.snav .nav.sub.on .nbadge { background:#d92d20; color:#fff; }
+.smat { display:flex; flex-direction:column; gap:6px; margin:0 10px 8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; text-decoration:none; color:var(--ink); font-size:12px; }
+.smat:hover { border-color:var(--blue-line); }
+.smat .mh { display:flex; justify-content:space-between; align-items:baseline; }
+.smat .mh b { font-size:12.5px; }
+.smat .mh span { color:var(--blue); font-weight:700; font-size:11.5px; }
+.smat .msay { color:var(--muted); font-size:11px; line-height:1.45; }
+.mlvs { display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; }
+.mlv { text-align:center; padding:3px 0; border-radius:6px; background:#eef0f3; color:#98a2b3; font-size:11px; font-weight:700; }
+.mlv.part { background:var(--blue-soft); color:var(--blue); }
+.mlv.done { background:var(--blue); color:#fff; }
+.mlv.now { box-shadow:inset 0 0 0 1.5px var(--blue); }
+.mlvs.big .mlv { padding:6px 0; font-size:12px; }
+.top .tfind { min-width:300px; }
+.top .tfind kbd { margin-left:auto; }
+.top a.tinbox { text-decoration:none; color:var(--ink); }
+.top a.tinbox.on { border-color:var(--blue-line); background:var(--blue-soft); color:var(--blue); }
+.top a.tinbox .ui { color:var(--muted); }
+.top a.tinbox .nbadge { margin-left:2px; }
+@media (min-width: 1101px) {
+  .app.slim .sbrand .xword, .app.slim .sbrand .bname { display:none; }
+  .app.slim .sbrand .xsym { display:block; }
+}
+@media (max-width: 1100px) {
+  .sspace { flex-direction:row; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:6px 12px 0; padding:6px 10px; }
+  .sspace select { margin-top:0; width:auto; }
+  .sspace .chip { margin-top:0; }
+  .smat { display:none; }
+  .nsub { display:contents; }
+  .snav button.nav { width:auto; }
+}
+
+/* 오브젝트 관리 */
+.omgrid .ch .omq { width:200px; padding:5px 9px; font-size:12.5px; }
+.omgrid .ch .right { display:flex; gap:8px; align-items:center; margin-left:auto; }
+.omgrid { grid-template-columns:minmax(0, 1.5fr) minmax(320px, 1fr); align-items:start; }
+.odetail h2 { margin:4px 0 6px; font-size:19px; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.odetail h2 .mono { font-size:12.5px; color:var(--muted); font-weight:500; }
+.odrow { display:flex; justify-content:space-between; gap:12px; padding:5px 0; font-size:13px; }
+.odrow + .odrow { border-top:1px dashed var(--line); }
+.odrow > span { color:var(--muted); flex:none; }
+.odrow > b { font-weight:600; text-align:right; }

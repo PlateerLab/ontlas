@@ -1,6 +1,13 @@
 'use strict';
 (() => {
   const ICON = {
+    sec_sem: '<path d="M12 4v15M7 20h10"/><path d="M5 8h14"/><path d="M5 8l-2.6 5.5h5.2zM19 8l-2.6 5.5h5.2z"/>',
+    sec_ont: '<circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="6" r="2.3"/><circle cx="12" cy="18" r="2.3"/><path d="M8.2 7.6l7.5-1.2M7.3 9l3.6 7M16.8 8.1l-3.6 7.9"/>',
+    sec_bnd: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+    sec_qa: '<path d="M4.5 12.5l4.5 4.5L19.5 6.5"/>',
+    sec_ops: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+    objmgr: '<rect x="3.5" y="4" width="7" height="7" rx="1.5"/><rect x="13.5" y="4" width="7" height="7" rx="1.5"/><rect x="3.5" y="14" width="7" height="6" rx="1.5"/><rect x="13.5" y="14" width="7" height="6" rx="1.5"/>',
+    ruleagent: '<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18.5 15l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z"/>',
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
     inbox: '<path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2.5h4l1-2.5h5"/>',
     records: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h5"/>',
@@ -36,6 +43,7 @@
   };
   const UI = {
     chevron: '<path d="M6 9l6 6 6-6"/>',
+    inbox: '<path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2.5h4l1-2.5h5"/>',
     fold: '<path d="M14.5 6.5L9 12l5.5 5.5"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>',
@@ -48,28 +56,29 @@
     catalog2: '<path d="M3 7.5a2 2 0 012-2h4.2l2 2.2H19a2 2 0 012 2V18a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
-  const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['graph', '그래프 탐색'], ['model', '작업 공간'], ['rules', '규칙 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름'], ['explorer', '데이터 탐색기'], ['map', '데이터 지도'], ['docs', '문서 온톨로지'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
-    ['search', '통합 검색'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
-    ['data', '초안 생성'], ['objects', 'Entity 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '규칙 관리'], ['mgfuncs', '함수 관리'], ['actions', '액션 관리'], ['roles', '권한 관리'], ['library', '온톨로지 라이브러리'], ['onto', '온톨로지'],
-    ['query', '질의'], ['decide', '판정 · 처리'], ['check', '검증'], ['bind', 'DB 대조']];
-  // the sidebar: what a person comes to do (use), then the four parts a definition is built from, in the order they are
-  // built (build: the ontology, its rules, the data it is bound to, what proves it, what is filed for approval), then
-  // what keeps it running (run), folded until it is wanted. A group's screens are tabs on its page.
-  const NAV_GROUP = [['use', '홈', ['home']], ['use', '할 일', ['inbox']], ['use', '질문', ['search', 'query']], ['use', '레코드', ['records', 'record', 'graph']],
-    ['use', '판정 · 처리', ['decide', 'rules']],
-    ['build', '온톨로지', ['model', 'onto', 'docs', 'states', 'roles']], ['build', '규칙', ['mgrules', 'actions', 'mgfuncs']],
-    ['build', '데이터 연결', ['catalog', 'db', 'sources', 'data', 'convert', 'bind']], ['build', '검증', ['check', 'flow']],
-    ['build', '변경 요청', ['changes', 'library']],
-    ['run', '관제', ['monitor']], ['run', '저장소 · 연동', ['adapters', 'vectors', 'connect']],
-    ['run', '데이터 지도', ['explorer', 'map']], ['run', '사용 안내', ['guide']]];
-  const SECTION = [['use', '업무'], ['build', '구축'], ['run', '운영']];
-  const FOLDED = new Set(['run']);  // a section shown as one line until it is opened or one of its screens is
+  const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 제안'], ['graph', '레코드 그래프'], ['model', '그래프 탐색'], ['rules', '기준값 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름 · 통과 조건'], ['explorer', '자산 탐색기'], ['map', '자산 그래프'], ['docs', '문서'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
+    ['search', '질문해 보기'], ['connect', '외부 연동'], ['catalog', '재료 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
+    ['data', '초안 생성'], ['objects', '엔티티 관리'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '결정표'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한'], ['library', '모듈 라이브러리'], ['onto', '전체 보기'],
+    ['query', '질의'], ['decide', '처리 요청'], ['check', '검증 질문'], ['bind', 'DB 대조'], ['objmgr', '오브젝트 관리'], ['ruleagent', '규칙 생성 에이전트']];
+  // the sidebar: 홈, then the four parts a space is made of (the rules, the ontology, the data it is bound to, what proves
+  // it), then what keeps it running. A part opens to its screens; a screen's own views are tabs on its page.
+  const NAV_GROUP = [['home', '홈', ['home', 'inbox']],
+    ['sem', '규칙', ['mgrules', 'rules', 'mgfuncs']], ['sem', '규칙 생성 에이전트', ['ruleagent']], ['sem', '권한', ['roles']],
+    ['ont', '오브젝트 관리', ['objmgr']], ['ont', '엔티티 관리', ['objects', 'states']], ['ont', '그래프 탐색', ['model', 'onto']],
+    ['ont', '문서', ['docs']], ['ont', '질의', ['query']], ['ont', '온톨로지', ['changes', 'library']],
+    ['bnd', '데이터 가져오기', ['catalog', 'db', 'data', 'convert']], ['bnd', '데이터 매핑', ['sources', 'bind']],
+    ['bnd', '액션', ['actions', 'decide']], ['bnd', '레코드', ['records', 'record', 'graph']],
+    ['qa', '검증질문 관리', ['check']], ['qa', '검증', ['flow', 'search']],
+    ['ops', '저장소 · 연동', ['adapters', 'vectors', 'connect']], ['ops', '파이프라인 관제', ['monitor']],
+    ['ops', '데이터 지도', ['explorer', 'map']], ['ops', '사용 안내', ['guide']]];
+  const SECTION = [['home', '홈'], ['sem', '시멘틱 매니저'], ['ont', '온톨로지 매니저'], ['bnd', '데이터 바인더'], ['qa', '품질 관리'], ['ops', '운영']];
+  const SECTION_PART = { sem: 'Semantic layer', ont: 'Ontology manager', bnd: 'Data binder', qa: 'QA' };
   const REPO_TABS = new Set(['convert', 'data', 'explorer', 'map', 'docs', 'vectors']);  // where the repository decides what is shown (the catalog names it in its own head)
-  const NO_TAB = new Set(['record']);  // a screen reached from another, never picked from the tabs
-  // a tab sits under its stage, so it does not repeat the stage's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { mgrules: '결정표', actions: '액션', mgfuncs: '함수', changes: '변경 요청', model: '작업 공간', onto: '전체 보기', docs: '문서', graph: '그래프 탐색', records: '레코드 탐색', monitor: '관제', catalog: '카탈로그', convert: '변환 결과', library: '라이브러리', adapters: '어댑터', check: '검증 질문', flow: '흐름', bind: 'DB 대조', explorer: '자산 탐색기', map: '자산 그래프', search: '통합 검색' };
-  // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere (these tables are the workspace's)
-  const TAB_SETS = [['정의 관리', [['states', '상태'], ['roles', '권한']], [['objects', 'Entity'], ['props', '속성'], ['links', '관계']]], ['판정 · 규칙', [['decide', '판정 · 처리'], ['rules', '규칙 · 지표']]]];
+  const NO_TAB = new Set(['record', 'inbox']);  // screens reached from another (a record from its list, 할 일 from the top bar and the home)
+  // a tab sits under its screen, so it does not repeat the screen's word; screens of one thing are one tab with a switch
+  const TAB_WORD = { mgrules: '결정표', rules: '기준값 · 지표', mgfuncs: '함수', actions: '액션 정의', decide: '처리 요청', changes: '변경 제안', library: '모듈 라이브러리', model: '다이어그램', onto: '전체 보기', objects: 'Entity · 속성 · 관계', states: '상태 전이', docs: '문서', graph: '레코드 그래프', records: '레코드 탐색', monitor: '관제', catalog: '재료 카탈로그', db: 'DB 연결', data: '초안 생성', convert: '변환 결과', sources: '데이터 소스', bind: 'DB 대조', adapters: '어댑터', vectors: '벡터 · 임베딩', connect: '외부 연동', check: '검증 질문', flow: '흐름 · 통과 조건', search: '질문해 보기', explorer: '자산 탐색기', map: '자산 그래프' };
+  // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere
+  const TAB_SETS = [];
   const TABLE_TABS = ['objects', 'props', 'links'];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
   const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
@@ -426,7 +435,7 @@
     pol: { open: false, text: '', target: '', busy: false, res: null },
     ind: { target: '', inputs: {} },
     mg: { st: null, busy: false, sel: '', form: null, q: '', obj: '', table: '', open: false, keep: false, qt: 0, review: null },
-    cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false,
+    cat: null, conv: null, pick: false, menu: null, pal: null, seen: {}, slim: false, om: { tier: 'all', q: '', sel: '' },
     mon: { st: null, timer: 0, rtt: [], focus: '', busy: false, fault: 0, shape: '' },
     home: { role: 'ops', box: null, busy: false, tab: 'assigned', q: '', steps: null, stepsBusy: false },
     rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', seeAs: '', params: {}, fn: {}, tab: 'overview' },
@@ -566,20 +575,26 @@
       box.classList.toggle('xpo', on);
     });
   }
-  const groupOf = (tab) => NAV_GROUP.find((g) => g[2].includes(TABLE_TABS.includes(tab) ? 'model' : tab));
-  const BRAND = `<div class="sbrand"><div class="logo">O</div><div class="bname"><b>Ontlas</b></div></div>`;
+  const curTab = () => (S.tab === 'model' && S.md.view === 'table' ? 'objects' : S.tab);  // the workspace's table is 엔티티 관리, its diagram 그래프 탐색
+  const groupOf = (tab) => { const k = TABLE_TABS.includes(tab) || (tab === 'model' && S.tab === 'model' && S.md.view === 'table') ? 'objects' : tab; return NAV_GROUP.find((g) => g[2].includes(k)); };
+  // the XGEN mark (the platform's wordmark, its X alone when the sidebar is narrow) beside the product's name
+  const XGEN_WORD = '<svg class="xword" viewBox="128 0 72 32" aria-hidden="true"><path d="M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z"/><path d="M196.336 8.0835V23.9173H194.102L185.984 12.3481H185.852V23.9173H183.419V8.0835H185.675L193.792 19.6745H193.947V8.0835H196.336Z"/><path d="M168.419 23.9173V8.0835H178.332V10.1611H170.821V14.9506H177.808V17.0064H170.821V21.8397H178.419V23.9173H168.419Z"/><path d="M160.847 13.0211C160.258 11.0945 158.842 9.92961 156.75 9.92961C154.091 9.92961 152.043 12.0802 152.043 16.0006C152.043 19.9209 154.07 22.0715 156.859 22.0715C159.376 22.0715 161.043 20.4362 161.086 17.8376H157.208V15.799H163.418V17.6359C163.418 21.7355 160.672 24.3342 156.837 24.3342C152.566 24.3342 149.668 21.1307 149.668 16.0006C149.668 10.8257 152.653 7.66699 156.728 7.66699C160.149 7.66699 162.764 9.8624 163.309 13.0211H160.847Z"/></svg>';
+  const XGEN_X = '<svg class="xsym" viewBox="126 4 24 24" aria-hidden="true"><path d="M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z"/></svg>';
+  const BRAND = `<a class="sbrand" href="#home" aria-label="XGEN Ontlas 홈">${XGEN_WORD}${XGEN_X}<b class="bname">Ontlas</b></a>`;
 
   function renderTop() {
     const st = S.st;
     const u = S.me && S.me.team && S.me.user;
     const who = u ? `<span class="chip b">${esc(u.name)} · ${esc(u.roles.map((r) => ROLE_WORD[r] || r).join(', '))}</span><button class="btn sm ghost" data-act="logout">로그아웃</button>` : '';
-    const g = groupOf(S.tab);
-    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${S.tab === 'home' ? '' : `<i>›</i>${g && g[1] !== tabWord(S.tab) ? `<span>${esc(g[1])}</span><i>›</i>` : ''}<b>${esc(tabWord(S.tab))}</b>`}</nav>
+    const cur = curTab(), g = groupOf(S.tab), sec = g ? SECTION.find((x) => x[0] === g[0]) : null;
+    const word = tabWord(cur);
+    const trail = S.tab === 'home' ? '' : `${sec && sec[0] !== 'home' ? `<i>›</i><span>${esc(sec[1])}</span>` : ''}${g && g[0] !== 'home' && g[1] !== word ? `<i>›</i><span>${esc(g[1])}</span>` : ''}<i>›</i><b>${esc(word)}</b>`;
+    const waits = S.home.box ? S.home.box.counts.assigned : 0;
+    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${trail}</nav>
       <div class="grow"></div>
-      ${noSource() ? '<a class="chip" href="#catalog" title="연결하지 않아도 정의와 규칙, 판정은 동작합니다">원천 미연결</a>' : originChip(st.origin)}
-      ${st.pipelines.length > 1 ? `<label class="pill pipe${st.pipeline === st.pipelines[0].id ? '' : ' other'}" title="화면의 정의와 데이터는 여기서 고른 것입니다. 초안을 적용할 때마다 하나씩 늘고, 원래 데이터는 맨 위에 있습니다"><span>데이터</span><select class="pipesel" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select></label>` : ''}
       ${REPO_TABS.has(S.tab) ? `<button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>` : ''}
-      <button class="pill quiet hide-sm" data-act="palette">${ui('search')}메뉴 검색<kbd>Ctrl K</kbd></button>
+      <button class="pill quiet tfind hide-sm" data-act="palette">${ui('search')}<span>Entity · 규칙 · 레코드 찾기 또는 질문하기</span><kbd>Ctrl K</kbd></button>
+      <a class="pill quiet tinbox${S.tab === 'inbox' ? ' on' : ''}" href="#inbox" aria-label="할 일 ${waits}건">${ui('inbox')}<span>할 일</span>${waits ? `<span class="nbadge">${waits}</span>` : ''}</a>
       ${GUIDE.some((x) => x[0] === S.tab) ? '<button class="btn sm" data-act="helpopen">도움말</button>' : ''}
       ${who}${u && !u.roles.includes('admin') ? '' : '<button class="btn sm ghost" data-act="reset">초기화</button>'}`;
   }
@@ -600,7 +615,8 @@
 
   function subTabs() {
     const g = groupOf(S.tab);
-    if (!g || g[2].length < 2) return '';
+    if (!g || g[2].filter((k) => !NO_TAB.has(k)).length < 2) return '';
+    const cur = curTab();
     const n = tabCounts();
     const here = tabSet(S.tab);
     if (here) S.seen[here[0]] = S.tab;
@@ -608,7 +624,7 @@
       if (NO_TAB.has(k)) return '';
       const set = tabSet(k);
       if (set && set[1][0][0] !== k) return '';
-      const on = set ? set === here : S.tab === k;
+      const on = set ? set === here : cur === k;
       const keys = set ? set[1].map((x) => x[0]) : [k];
       const count = set ? 0 : n[k];
       return `<a class="stab${on ? ' on' : ''}" href="#${(set && S.seen[set[0]]) || k}" data-tabs="${keys.join(' ')}"${on ? ' aria-current="page"' : ''}>${esc(set ? set[0] : tabWord(k))}${count ? `<span class="n">${count}</span>` : ''}</a>`;
@@ -655,40 +671,61 @@
       ${open ? `<div class="lseg" role="tablist" aria-label="연결 종류">${tabs}</div><div class="lrows">${rows[S.ltab].join('')}</div>` : ''}</div>`;
   }
 
+  // how far the definition has come, L0 to L3, from the Entities' levels; with no source the last two wait for one
+  function sideMaturity() {
+    const m = S.mg.st;
+    if (!m || m.error || !m.objects) return '';
+    const filed = m.objects.filter((o) => o.area);  // the Entities under an Object; shared concepts outside every Object are not counted
+    const ls = (filed.length ? filed : m.objects).map((o) => o.level || 0);
+    if (!ls.length) return '';
+    const low = Math.min(...ls), high = Math.max(...ls);
+    const at = Math.min(low + 1, 3);  // the level the whole definition is working toward
+    const chips = [0, 1, 2, 3].map((l) => `<span class="mlv${l <= low ? ' done' : l <= high ? ' part' : ''}${l === at && low < 3 ? ' now' : ''}" title="${esc(['L0 개념', 'L1 논리', 'L2 연결', 'L3 검증'][l])} · Entity ${ls.filter((x) => x >= l).length} / ${ls.length}">L${l}</span>`).join('');
+    const say = noSource() ? '데이터 연결 없음 · 정의 · 규칙 조회와 판정은 연결 없이 동작합니다' : 'L2 · L3 은 원천 매핑과 DB 대조로 올라갑니다';
+    return `<a class="smat" href="#objmgr" title="오브젝트 관리에서 Object 별로 봅니다"><span class="mh"><b>성숙도</b><span>${low >= 3 ? 'L3 완료' : `L${at} 진행 중`}</span></span><span class="mlvs">${chips}</span><span class="msay">${esc(say)}</span></a>`;
+  }
+
+  // the space being worked on: its name, what it is made of, where its data comes from, and the data to switch to
+  function sideSpace() {
+    const st = S.st, src = st.source || {};
+    const where = noSource() ? '원천 미연결' : `원천 ${BACKEND_KIND[(src.kind || '').toLowerCase()] || src.kind || src.name || ''}`;
+    const pipes = st.pipelines.length > 1 ? `<select class="pipesel" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select>` : '';
+    return `<div class="sspace"><b title="${esc(st.title || '')}">${esc(st.title || '스페이스')}</b><span>모듈 ${count(st.modules_on)} · ${esc(where)}</span>${originChip(st.origin)}${pipes}</div>`;
+  }
+
   function renderSide() {
     if (S.st && !loadLinks.busy && (!S.links || S.links.pipeline !== S.st.pipeline || Date.now() - (loadLinks.at || 0) > LINKS_EVERY)) loadLinks();
+    if (S.st && !S.mg.st && !S.mg.busy) loadManage();  // the sidebar's maturity reads the definition
     const wait = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
     const waits = S.home.box ? S.home.box.counts.assigned : 0;
-    const place = (i) => {
+    const cur = curTab(), g = groupOf(S.tab), here = g ? g[0] : 'home';
+    const item = (i) => {
       const [, label, keys] = NAV_GROUP[i];
-      const on = keys.includes(S.tab);
-      if (on) S.seen[i] = S.tab;
-      const waiting = wait && keys.includes('model');
-      const badge = keys[0] === 'inbox' && waits ? `<span class="nbadge">${waits}</span>`
-        : keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
-      // the build group is an order: its items carry their step number where the others carry an icon
-      const no = NAV_GROUP[i][0] === 'build' ? NAV_GROUP.filter((g) => g[0] === 'build').indexOf(NAV_GROUP[i]) + 1 : 0;
-      const what = S.slim ? '' : ((GUIDE.find((x) => x[0] === keys[0]) || [])[1] || '');
-      return `<a class="nav${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}" data-tip="${esc(label)}"${what ? ` title="${esc(what)}"` : ''}${on ? ' aria-current="page"' : ''}>${no ? `<span class="step" aria-hidden="true">${no}</span>` : `<svg viewBox="0 0 24 24">${ICON[keys[0]]}</svg>`}<span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
+      const on = keys.includes(cur);
+      if (on) S.seen[i] = cur;
+      const waiting = wait && keys.includes('objects');
+      const badge = keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
+      const what = (GUIDE.find((x) => x[0] === keys[0]) || [])[1] || '';
+      return `<a class="nav sub${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}"${what ? ` title="${esc(what)}"` : ''}${on ? ' aria-current="page"' : ''}><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
     };
-    // the screens a role comes for stand first in its group; a role not listed keeps the group's own order
-    const USE_ORDER = { ops: ['home', 'inbox', 'decide', 'search', 'records'], domain: ['home', 'search', 'records', 'inbox', 'decide'],
-      model: ['home', 'search', 'records', 'inbox', 'decide'] };
-    const rank = (g) => { const o = USE_ORDER[S.home.role] || [], i = o.indexOf(g[2][0]); return i < 0 ? 99 : i; };
-    const here = (groupOf(S.tab) || [])[0];
     const section = ([id, word]) => {
-      const items = NAV_GROUP.map((g, i) => [g, i]).filter(([g]) => g[0] === id).sort((a, b) => rank(a[0]) - rank(b[0])).map(([, i]) => place(i)).join('');
-      if (!FOLDED.has(id)) return `<div class="nsec"><div class="nhead">${word}</div>${items}</div>`;
-      const open = S.slim || S.nopen[id] || here === id || window.matchMedia('(max-width: 1100px)').matches;  // the section a person is in stays open; a narrow sidebar or a top strip has no heads to press
-      if (here === id) return `<div class="nsec"><div class="nhead">${word}</div>${items}</div>`;  // the section a person is in stays open, so its head is not a button
-      return `<div class="nsec${open ? '' : ' shut'}"><button class="nhead nfold" data-act="nfold" data-k="${id}" aria-expanded="${open}">${word}${ui('chevron')}</button>${open ? items : ''}</div>`;
+      const idx = NAV_GROUP.map((x, i) => [x, i]).filter(([x]) => x[0] === id).map(([, i]) => i);
+      if (id === 'home') {
+        const on = here === 'home';
+        return `<a class="nav top${on ? ' on' : ''}" href="#home" data-tip="홈"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON.home}</svg><span class="nl">홈</span>${waits ? `<span class="nbadge" title="할 일">${waits}</span>` : ''}</a>`;
+      }
+      const icon = `<svg viewBox="0 0 24 24">${ICON[`sec_${id}`]}</svg>`;
+      if (S.slim) {  // a narrow sidebar has no room to open a part: its icon leads to the part's first screen
+        const first = NAV_GROUP[idx[0]];
+        return `<a class="nav top${here === id ? ' on' : ''}" href="#${S.seen[idx[0]] || first[2][0]}" data-tip="${esc(word)}"><span class="nl">${esc(word)}</span>${icon}</a>`;
+      }
+      const open = S.nopen[id] === undefined ? here === id : S.nopen[id];
+      return `<div class="nsec${open ? ' open' : ''}"><button class="nav top msec${here === id ? ' cur' : ''}" data-act="nfold" data-k="${id}" aria-expanded="${open}"${SECTION_PART[id] ? ` title="${esc(SECTION_PART[id])}"` : ''}>${icon}<span class="nl">${esc(word)}</span>${ui('chevron')}</button>${open ? `<div class="nsub">${idx.map(item).join('')}</div>` : ''}</div>`;
     };
     const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
     const nav = $('#side .snav');
     const kept = nav ? nav.scrollTop : 0;
-    const first = { ops: ['use', 'build', 'run'], domain: ['use', 'build', 'run'], model: ['build', 'use', 'run'] }[S.home.role] || ['use', 'build', 'run'];
-    const sections = [...SECTION].sort((a, b) => first.indexOf(a[0]) - first.indexOf(b[0]));
-    $('#side').innerHTML = `${BRAND}<div class="snav">${sections.map(section).join('')}</div>${sideLinks()}
+    $('#side').innerHTML = `${BRAND}${S.slim ? '' : sideSpace()}<div class="snav">${SECTION.map(section).join('')}</div>${S.slim ? '' : sideMaturity()}${sideLinks()}
       <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
     $('#side .snav').scrollTop = kept;
     if (S.tab !== renderSide.tab) {
@@ -704,11 +741,12 @@
     renderTop();
     renderSide();
     const views = { graph: viewGraph, model: viewModel, changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
-      sources: viewSources, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles };
+      sources: viewSources, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles,
+      objmgr: viewObjMgr, ruleagent: viewRuleAgent };
     const main = $('#main');
     main.classList.toggle('wsmode', S.tab === 'model');
     main.classList.remove('pgo');
-    main.dataset.sec = (groupOf(S.tab) || ['use'])[0];  // code names are left out of the screens people use the ontology on
+    main.dataset.sec = ['home', 'inbox', 'records', 'record', 'graph', 'decide', 'search'].includes(S.tab) ? 'use' : (groupOf(S.tab) || ['home'])[0];  // code names are left out of the screens people use the ontology on
     const kept = [...main.querySelectorAll('.wscolb')].map((x) => x.scrollTop);
     main.innerHTML = (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
     main.querySelectorAll('.wscolb').forEach((x, i) => { x.scrollTop = kept[i] || 0; });
@@ -2930,6 +2968,87 @@
     if (!box || !b) return;
     const z = S.md.zoom || 1;
     box.scrollTo({ left: Math.max(0, b.x * z - box.clientWidth / 2 + (b.w * z) / 2), top: Math.max(0, b.y * z - 40), behavior: 'smooth' });
+  }
+
+  // ---- 오브젝트 관리: the Objects with what is filed under each, how far it has come, and who owns it -------------------
+  const LV = ['L0', 'L1', 'L2', 'L3'];
+  const areaEntities = (a) => S.mg.st.objects.filter((o) => o.area === a.name);
+  function levelWord(ls) {
+    if (!ls.length) return 'Entity 없음';
+    const lo = Math.min(...ls), hi = Math.max(...ls);
+    return lo === hi ? LV[lo] : `${LV[lo]} · ${LV[hi]} 진행`;
+  }
+
+  function viewObjMgr() {
+    const wait = mgWait('오브젝트 관리', 'Object 는 최상위 분류입니다');
+    if (wait) return wait;
+    const m = S.mg.st, om = S.om;
+    const areas = m.areas || [];
+    const tiers = [...new Set(areas.map((a) => a.tier).filter((x) => x !== undefined && x !== null && x !== ''))].sort((x, y) => x - y);
+    const shown = omShown();
+    if (!om.sel || !areas.some((a) => a.name === om.sel)) om.sel = (shown[0] || areas[0] || {}).name || '';
+    const unfiled = m.objects.filter((o) => !o.area && !o.concept);  // shared concepts (no table, no Object) are not waiting to be filed
+    const head = pageHead('오브젝트 관리', 'Object 는 최상위 분류입니다. 한글 이름과 영문 이름으로 적고, 아래에 Entity 를 둡니다',
+      '<button class="btn primary" data-act="omnew">새 Object</button>');
+    const seg = tiers.length ? `<div class="seg sm" role="group" aria-label="차수">${[['all', `전체 ${areas.length}`], ...tiers.map((x) => [String(x), `${x}차 ${areas.filter((a) => String(a.tier) === String(x)).length}`])].map(([k, w]) => `<button class="${om.tier === k ? 'on' : ''}" data-act="omtier" data-k="${esc(k)}">${esc(w)}</button>`).join('')}</div>` : '';
+    const table = `<div class="card"><div class="ch">Object <span class="chip sm">${areas.length}</span><div class="right">${seg}<input type="text" class="omq" data-in="omq" value="${esc(om.q)}" placeholder="Object 찾기" aria-label="Object 찾기"></div></div><div class="cb scroll" style="padding:0"><table><thead><tr><th>Object</th><th>정의</th><th style="text-align:right">Entity</th><th>성숙도</th><th>소유자</th></tr></thead><tbody id="omrows">${omRows(shown)}</tbody></table></div>
+      ${unfiled.length ? `<div class="cb" style="border-top:1px solid var(--line);font-size:12.5px"><span class="muted">Object 미지정 Entity ${unfiled.length}</span> ${unfiled.slice(0, 8).map((o) => `<button class="chip sm" data-act="omentity" data-name="${esc(o.name)}">${esc(o.label)}</button>`).join(' ')}</div>` : ''}</div>`;
+    const f = S.mg.form;
+    const side = f && ['area', 'object'].includes(f.kind) ? `<div class="card">${wsForm()}</div>` : areaDetail(areas.find((a) => a.name === om.sel));
+    return `${head}<div class="grid omgrid">${table}${side}</div>`;
+  }
+
+  function omShown() {
+    const om = S.om, q = om.q.trim().toLowerCase();
+    return (S.mg.st.areas || []).filter((a) => (om.tier === 'all' || String(a.tier) === om.tier) && (!q || `${a.label} ${a.name} ${a.description}`.toLowerCase().includes(q)));
+  }
+
+  function omRows(shown) {
+    const om = S.om;
+    return shown.map((a) => {
+      const ls = areaEntities(a).map((o) => o.level || 0);
+      return `<tr class="${a.name === om.sel ? 'sel' : ''}" data-act="ompick" data-name="${esc(a.name)}" tabindex="0"><td><b>${esc(a.label || a.name)}</b> <span class="muted mono">@${esc(a.name)}</span>${a.new ? ' <span class="chip sm ok">새 Object</span>' : a.pending ? ' <span class="chip sm warn">변경</span>' : ''}</td>
+        <td class="muted">${esc(a.description || '-')}</td><td style="text-align:right">${a.objects.length}</td><td><span class="chip sm">${esc(levelWord(ls))}</span></td><td>${esc(a.owner || '-')}</td></tr>`;
+    }).join('') || `<tr><td colspan="5" class="empty">${S.om.q ? '찾는 Object 가 없습니다' : 'Object 가 없습니다. [+ Object] 로 만듭니다.'}</td></tr>`;
+  }
+
+  function areaDetail(a) {
+    if (!a) return '<div class="card"><div class="cb empty">Object 를 고르세요.</div></div>';
+    const m = S.mg.st, ents = areaEntities(a), names = new Set(ents.map((o) => o.name));
+    const ls = ents.map((o) => o.level || 0), low = ls.length ? Math.min(...ls) : -1;
+    const links = m.links.filter((l) => names.has(l.source) || names.has(l.target));
+    const decs = m.decisions.filter((d) => names.has(d.target));
+    const qs = m.questions.filter((x) => decs.some((d) => d.name === x.decision));
+    const row = (k, v) => `<div class="odrow"><span>${k}</span><b>${v}</b></div>`;
+    const lib = (S.st.library || []).find((r) => r.name === a.module);
+    const levels = [0, 1, 2, 3].map((l) => `<span class="mlv${l <= low ? ' done' : ls.some((x) => x >= l) ? ' part' : ''}">${LV[l]}${l <= low ? ' ✓' : ''}</span>`).join('');
+    const aligned = (a.aligned || []).length ? a.aligned.map((u) => `<span class="chip sm mono" title="${esc(u)}">${esc(u.replace(/^https?:\/\/schema\.org\//, 'schema:'))}</span>`).join('') : '<span class="chip sm">표준 어휘 대응 없음</span>';
+    return `<div class="card odetail"><div class="cb">
+      <div class="muted" style="font-size:12px">Object${a.tier ? ` · ${esc(a.tier)}차` : ''}</div>
+      <h2>${esc(a.label || a.name)}<span class="mono">@${esc(a.name)}</span></h2>
+      <div class="muted">${esc(a.description || '정의가 아직 없습니다')}</div>
+      <div class="chips" style="margin-top:8px">${aligned}</div></div>
+      <div class="cb" style="border-top:1px solid var(--line)"><div class="label">성숙도</div><div class="mlvs big">${levels}</div>
+        <div class="muted" style="font-size:12px;margin-top:6px">${noSource() ? 'L2 · L3 은 데이터 바인더 연결 후' : 'L2 연결 · L3 DB 대조'}</div></div>
+      <div class="cb" style="border-top:1px solid var(--line)"><div class="label" style="display:flex">Entity ${ents.length}<a class="right" href="#objects" style="margin-left:auto;font-weight:600">엔티티 관리 ›</a></div>
+        <div class="chips" style="margin-top:6px">${ents.map((o) => `<button class="chip" data-act="omentity" data-name="${esc(o.name)}">${esc(o.label)}<span class="muted mono">@${esc(o.name)}</span></button>`).join('') || '<span class="muted">아직 없습니다</span>'}<button class="chip b" data-act="mdobjnewin" data-area="${esc(a.name)}">+ Entity</button></div></div>
+      <div class="cb" style="border-top:1px solid var(--line)">
+        ${row('Relation', `<a href="#model">${links.length} · 그래프에서 보기</a>`)}
+        ${row('연결된 결정표', decs.length ? decs.map((d) => `<a href="#mgrules?decision=${encodeURIComponent(d.name)}">${esc(d.label)}</a>`).join(' · ') : '0')}
+        ${row('검증 질문', qs.length)}
+        ${row('근거', esc(a.cite || '-'))}
+        ${row('소유자 · 판본', `${esc(a.owner || '-')} · ${esc(a.module_label || a.module || '-')}${lib ? ` ${esc(lib.version)}` : ''}`)}</div>
+      <div class="cb" style="border-top:1px solid var(--line);display:flex;gap:8px"><button class="btn sm" data-act="omedit" data-name="${esc(a.name)}">편집</button></div></div>`;
+  }
+
+  // ---- 규칙 생성 에이전트: a decision table drafted from policy text, checked by the engine, filed as a change -----------
+  function viewRuleAgent() {
+    S.pol.open = true;
+    const head = pageHead('규칙 생성 에이전트', '정책서 조항으로 결정표 초안을 만들고, 근거 조항과 검사 결과를 확인한 뒤 변경 요청으로 올립니다');
+    if (!S.st.ask) {
+      return `${head}<div class="card nosrc"><div class="cb"><b>언어 모델이 연결되어 있지 않습니다</b><span class="muted">서버를 언어 모델과 함께 띄우면(--llm-url, --llm-model) 정책서로 초안을 만듭니다. 규칙을 직접 만들 때는 결정표에서 추가합니다.</span><a class="btn sm" href="#mgrules">결정표</a></div></div>`;
+    }
+    return head + policyCard() + editorCard();
   }
 
   // ---- library -------------------------------------------------------------------------------------------------
@@ -5443,13 +5562,14 @@ ${controls}${body}`;
     return [...tabs,
       ...st.graph.nodes.filter((n) => hit(n.label, n.id)).slice(0, 6).map((n) => [`onto?object=${encodeURIComponent(n.id)}`, n.label || n.id, '온톨로지 정의', 'model']),
       ...st.decisions.filter((d) => hit(d.label, d.name)).slice(0, 4).map((d) => [`mgrules?decision=${encodeURIComponent(d.name)}`, d.label, '결정표', 'mgrules']),
-      ...st.queries.filter((x) => hit(x.label, x.name)).slice(0, 4).map((x) => [`query?query=${encodeURIComponent(x.name)}`, x.label, '등록 질의', 'query'])];
+      ...st.queries.filter((x) => hit(x.label, x.name)).slice(0, 4).map((x) => [`query?query=${encodeURIComponent(x.name)}`, x.label, '등록 질의', 'query']),
+      [`search?q=${encodeURIComponent(S.pal.q.trim())}`, `"${S.pal.q.trim()}" 질문하기`, '질문해 보기', 'search']];
   }
 
   function paletteBox() {
     const items = palItems();
     S.pal.i = Math.min(S.pal.i, Math.max(items.length - 1, 0));
-    return `<div class="palback" data-act="palclose"></div><div class="pal" role="dialog" aria-label="메뉴 검색"><input type="text" id="palq" value="${esc(S.pal.q)}" placeholder="화면, 정의, 결정표, 질의 이름" aria-label="화면이나 정의 이름">
+    return `<div class="palback" data-act="palclose"></div><div class="pal" role="dialog" aria-label="메뉴 검색"><input type="text" id="palq" value="${esc(S.pal.q)}" placeholder="화면 · Entity · 결정표 · 질의 이름, 또는 질문" aria-label="화면이나 정의 이름">
       <div class="pallist">${items.map(([k, l, where, icon], i) => `<a class="${i === S.pal.i ? 'on' : ''}" href="#${k}" data-act="palgo"><svg viewBox="0 0 24 24">${ICON[icon] || ICON.home}</svg><span>${esc(l)}</span><span class="muted">${esc(where)}</span></a>`).join('') || '<div class="muted" style="padding:10px 12px;font-size:12.5px">검색 결과가 없습니다.</div>'}</div></div>`;
   }
 
@@ -5606,7 +5726,7 @@ ${controls}${body}`;
   // Every edit lands in one overlay module ("관리 변경") over the standard modules, and reaches the other screens only
   // once it is filed as a change request and approved.
 
-  const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles'];
+  const MG_TABS = ['model', 'sources', 'objects', 'props', 'links', 'states', 'mgrules', 'mgfuncs', 'actions', 'roles', 'objmgr'];
   const OP_WORD = { add_object: 'Entity 추가', update_object: 'Entity 변경', delete_object: 'Entity 제외', add_property: '속성 추가',
     update_property: '속성 변경', delete_property: '속성 제외', add_link: '관계 추가', update_link: '관계 변경', delete_link: '관계 제외',
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
@@ -6923,6 +7043,7 @@ ${controls}${body}`;
   function readHash() {
     const [tab, query] = location.hash.slice(1).split('?');
     if (TABLE_TABS.includes(tab)) { S.tab = 'model'; S.md.view = 'table'; S.md.arrive = tab; } else S.tab = tab || 'home';
+    if (tab === 'model') S.md.view = 'diagram';  // 그래프 탐색 is the diagram; the table is 엔티티 관리 (#objects)
     S.land = query ? Object.fromEntries(new URLSearchParams(query)) : null;
     S.hit = ''; S.hitDone = '';
     if (!S.land) S.md.hot = null;
@@ -6961,6 +7082,7 @@ ${controls}${body}`;
     flow: (l) => { if (!S.flset || S.flset.busy) return false; S.hit = l.row || ''; return true; },
     rules: (l) => { if (!S.ru) return false; S.hit = l.row || ''; return true; },
     inbox: (l) => { if (!S.home.box) return false; S.hit = l.row || ''; return true; },
+    search: (l) => { if (l.q) { S.land = null; S.sr.text = l.q; searchNow(); } return true; },
     query: (l) => {
       if (!l.query) return true;
       S.land = null;
@@ -7152,6 +7274,11 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast(`정답 변경을 대기 중인 변경에 기록했습니다. ${fileAsk()}`); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    ompick: (t) => { S.om.sel = t.dataset.name; if (S.mg.form && S.mg.form.kind === 'area') S.mg.form = null; render(); },
+    omtier: (t) => { S.om.tier = t.dataset.k; render(); },
+    omnew: () => { S.mg.sel = ''; S.mg.form = { kind: 'area', mode: 'new', v: { name: '', label: '', description: '', cite: '' } }; render(); },
+    omedit: (t) => { mgOpen('area', t.dataset.name); render(); },
+    omentity: (t) => { S.mg.form = null; S.mg.sel = ''; S.md.sel = t.dataset.name; location.hash = '#objects'; },
     mdarea: (t) => { Object.assign(S.md, { rightOff: false, view: 'diagram', tab: 'form' }); mgOpen('area', t.dataset.name, true); if (S.tab !== 'model') location.hash = '#model'; else render(); },
     mdareanew: () => { S.mg.sel = ''; S.md.tab = 'form'; S.md.group = 'area'; S.mg.form = { kind: 'area', mode: 'new', v: { name: '', label: '', description: '', cite: '' } }; render(); },
     mdobjnewin: (t) => { ACT.mdobjnew(); S.mg.form.v.area = t.dataset.area; render(); },
@@ -7212,10 +7339,10 @@ ${controls}${body}`;
       if (S.mg.st.workspace.issues.length) { render(); return; }
       ACT.mdtrial();
     },
-    mdview: (t) => {
-      S.md.view = t.dataset.k; S.md.focus = '';
+    mdview: (t) => {  // the diagram is 그래프 탐색 and the table 엔티티 관리: switching goes to that screen
+      S.md.focus = '';
       if (t.dataset.k === 'table') { S.mg.form = null; S.mg.sel = ''; }
-      render();
+      location.hash = t.dataset.k === 'table' ? '#objects' : '#model';
     },
     mdlist: (t) => { S.md.list = t.dataset.k; paintSide(); },
     mdpanel: (t) => { S.md[t.dataset.k] = !S.md[t.dataset.k]; render(); },
@@ -7537,7 +7664,13 @@ ${controls}${body}`;
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
     ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
     lopen: () => { S.lopen = !S.lopen; keep('ontlas-lopen', S.lopen ? '1' : ''); renderSide(); },
-    nfold: (t) => { S.nopen[t.dataset.k] = !S.nopen[t.dataset.k]; keep('ontlas-nopen', Object.keys(S.nopen).filter((k) => S.nopen[k]).join(',')); renderSide(); },
+    nfold: (t) => {
+      const k = t.dataset.k, g = groupOf(S.tab);
+      const open = S.nopen[k] === undefined ? (g && g[0] === k) : S.nopen[k];
+      S.nopen[k] = !open;
+      keep('ontlas-nopen', Object.keys(S.nopen).filter((x) => S.nopen[x]).join(','));
+      renderSide();
+    },
     // a card's notes open and close where they stand; what was opened stays open while the person is on that screen
     info: (t) => {
       const k = t.dataset.k, on = !S.xp.has(k);
@@ -8048,6 +8181,7 @@ ${controls}${body}`;
     gxq: (t) => { S.gx.q = t.value; gxFindSoon('start'); },
     gxfromq: (t) => { S.gx.fromq = t.value; S.gx.from = null; gxFindSoon('from'); },
     gxtoq: (t) => { S.gx.toq = t.value; S.gx.to = { type: '', key: '' }; gxFindSoon('to'); },
+    omq: (t) => { S.om.q = t.value; const b = $('#omrows'); if (b) b.innerHTML = omRows(omShown()); },
     mdq: (t) => { S.md.q = t.value; const b = $('#mdtree'); if (b) b.innerHTML = modelTree(); },
     mdcq: (t) => {  // only that column's rows, so the box keeps the cursor
       S.md.cq[t.dataset.k] = t.value;
@@ -8344,6 +8478,7 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && items[S.pal.i]) { ev.preventDefault(); const k = items[S.pal.i][0]; closeFloats(); location.hash = '#' + k; }
     });
     $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
+    $('#side').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('dragstart', (ev) => {
       const c = ev.target.closest && ev.target.closest('[data-col]');
