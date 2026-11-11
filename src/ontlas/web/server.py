@@ -537,6 +537,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     return {**s.monitor(), "visitors": len(getattr(sessions, "items", {})) or 1}
                 if route == "manage":
                     return s.manage_state()
+                if route == "lexicon":
+                    return s.lexicon_state()
                 if route == "flow":
                     return s.flow()
                 if route == "flow/settings":
@@ -702,6 +704,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.manage_edit(str(a.get("op", "")), a.get("args") if isinstance(a.get("args"), dict) else {})
             if route == "manage/questions":
                 return s.manage_import_questions(str(a.get("text", "")))
+            if route == "lexicon/edit":
+                return s.lexicon_edit(str(a.get("op", "")), a.get("args") if isinstance(a.get("args"), dict) else {})
+            if route == "lexicon/import":
+                return s.lexicon_import(str(a.get("text", "") or ""), str(a.get("name", "") or ""), str(a.get("path", "") or ""))
             if route == "manage/discard":
                 return s.manage_discard()
             if route == "manage/undo":

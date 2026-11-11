@@ -32,6 +32,9 @@ class QuestionResult:
     grounded: bool = False  # the answer carries its condition, its source and the version it was answered by
     gaps: list[str] = field(default_factory=list)  # what of those it lacks
     unmeasured: str = ""  # why it was not asked (no_source: it reads rows and none are connected); neither right nor wrong
+    type: str = ""  # definition | decision | value: what it checks (Question.kind)
+    holdout: bool = False  # of the held-out set: reported apart from the questions things are tuned on
+    grading: str = "match"  # how it was held right (Question.graded_by)
 
 
 @dataclass
@@ -54,9 +57,25 @@ class QuestionReport:
         got = self.measured
         return sum(r.grounded for r in got) / len(got) if got else 0.0
 
+    def split(self, by: str = "holdout") -> dict[str, dict]:
+        """The same shares for each set (dev, holdout) or each type: a held-out question is never read into the dev
+        figure, so what was tuned on and what was kept apart are seen side by side."""
+        names = {"holdout": lambda r: "holdout" if r.holdout else "dev", "type": lambda r: r.type}[by]
+        groups: dict[str, list[QuestionResult]] = {"dev": [], "holdout": []} if by == "holdout" else {}
+        for r in self.results:
+            groups.setdefault(names(r), []).append(r)
+        out = {}
+        for name, rs in groups.items():
+            got = [r for r in rs if not r.unmeasured]
+            out[name] = {"questions": len(rs), "measured": len(got), "passed": sum(r.passed for r in got),
+                         "accuracy": sum(r.passed for r in got) / len(got) if got else None,
+                         "grounded": sum(r.grounded for r in got) / len(got) if got else None}
+        return out
+
     def to_dict(self) -> dict:
         return {"accuracy": self.accuracy, "grounded": self.grounded, "measured": len(self.measured),
-                "unmeasured": len(self.results) - len(self.measured), "results": [asdict(r) for r in self.results]}
+                "unmeasured": len(self.results) - len(self.measured), "sets": self.split(), "types": self.split("type"),
+                "results": [asdict(r) for r in self.results]}
 
 
 class Studio:
@@ -362,26 +381,62 @@ class Studio:
 
     def questions(self, *, backend: str | None = None) -> QuestionReport:
         report = QuestionReport()
+        asker = None
         for qs in self.onto.questions:
+            meta = {"type": qs.kind, "holdout": qs.holdout, "grading": qs.graded_by}
+            if qs.graded_by == "llm":  # a model holds it right or wrong, and the check has none: not asked
+                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="needs_model", **meta))
+                continue
             try:
                 if qs.decision:
                     res = self.decide(qs.decision, qs.key, qs.params)
                     got = res.outputs
                     passed = isinstance(got, dict) and all(got.get(k) == v for k, v in qs.expect.items())
                     gaps = self._decision_gaps(res)
-                else:
+                    said, grounds = self._decision_words(res)
+                elif qs.query:
                     res = self.run(qs.query, qs.params, backend=backend)
                     got, passed = _judge(qs.expect, res, check(self.query(qs.query), self.onto).column_types)
                     gaps = []  # a registered query answers with its own definition and the source columns it reads
-                if not self.version_of(f"{'decision' if qs.decision else 'query'}:{qs.decision or qs.query}"):
+                    rq = self.onto.queries[qs.query]
+                    said = " ".join(str(normalize(v)) for row in res.rows for v in row)
+                    grounds = f"{qs.query} {rq.label} {rq.description} {res.compiled.text}"
+                else:  # what a word means: answered as the page answers a question, from definitions and documents
+                    asker = asker or self._asker()
+                    got, passed, gaps, said, grounds = _defined(asker, qs)
+                if (qs.decision or qs.query) and not self.version_of(
+                        f"{'decision' if qs.decision else 'query'}:{qs.decision or qs.query}"):
                     gaps.append("no version")
-                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps))
+                passed = _graded(qs, passed, said, grounds, gaps)
+                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps, **meta))
             except NoSource:  # it reads rows and there are none to read: not asked, rather than answered wrong
-                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source"))
+                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source", **meta))
             except Exception as e:
                 report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None,
-                                                     f"{type(e).__name__}: {e}", False, ["no answer"]))
+                                                     f"{type(e).__name__}: {e}", False, ["no answer"], **meta))
         return report
+
+    def _asker(self):
+        """The tools a definition question is answered through: the page's answer, with the lexicon's words."""
+        from ontlas.tools import StudioTools
+
+        tools = StudioTools(self)
+        tools.terms = list(self.composition.terms) if self.composition is not None else []
+        return tools
+
+    def _decision_words(self, res: DecisionResult) -> tuple[str, str]:
+        """A verdict as a person reads it (its word and its outputs), and what it stands on (the rules, their clauses,
+        the source columns), for a grading by words."""
+        from ontlas.decide.words import verdict
+
+        table = self.onto.decisions[res.decision]
+        outs = res.outputs if isinstance(res.outputs, dict) else {"result": res.outputs}
+        by_id = {r.id: r for r in table.rules}
+        matched = res.matched or evaluate_table(table, res.inputs)[1]
+        said = " ".join([verdict(table, outs)[0], *(str(v) for v in outs.values())])
+        grounds = " ".join([table.label, table.cite, *matched, *(by_id[i].cite for i in matched if i in by_id),
+                            *(e.source or "" for e in res.evidence)])
+        return said, grounds
 
     def _decision_gaps(self, res: DecisionResult) -> list[str]:
         """What a verdict lacks of its grounds: a rule that matched, a cite for it (its own or its table's), a source
@@ -531,6 +586,39 @@ def _default_params(onto: Ontology) -> dict[str, dict]:
         if qs.query and qs.query not in out:
             out[qs.query] = dict(qs.params)
     return out
+
+
+def _words(text: Any) -> str:
+    return "".join(str(text or "").split()).lower()
+
+
+def _graded(qs, matched: bool, said: str, grounds: str, gaps: list[str]) -> bool:
+    """Whether an answer is right by the question's grading: as expected (match), when it says every keyword
+    (keywords), or when it stands on its grounds and they name every keyword (evidence). Spaces and case aside."""
+    by = qs.graded_by
+    if by == "keywords":
+        return all(_words(k) in _words(said) for k in qs.keywords)
+    if by == "evidence":
+        expected = qs.expect not in (None, "", [], {})
+        return (matched or not expected) and not gaps and all(_words(k) in _words(grounds) for k in qs.keywords)
+    return matched
+
+
+def _defined(tools, qs) -> tuple[Any, bool, list[str], str, str]:
+    """A question on what a word means, answered as the page answers it (no model): what was said, whether it says
+    what was expected, what it lacks, the words to grade and the grounds it stands on."""
+    from ontlas.answer import answer_question
+
+    out = answer_question(tools, qs.text)
+    words = (out.get("lexicon") or {}).get("matched") or []
+    said = " ".join([out["answer"], *(f"{w['term']} {w['definition']}" for w in words),
+                     *(d["title"] for d in out.get("definitions") or [])])
+    grounds = " ".join([*(f"{s['title']} {s['text']}" for s in out.get("sources") or []),
+                        *(f"{w['term']} {w['definition']}" for w in words if w["definition"])])
+    gaps = [] if out.get("sources") or any(w["definition"] for w in words) else ["no answer"]
+    want = qs.expect if isinstance(qs.expect, list) else [qs.expect] if qs.expect not in (None, "", {}) else []
+    passed = bool(want) and all(_words(x) in _words(said) for x in want)
+    return said[:400], passed, gaps, said, grounds
 
 
 def _judge(expect: Any, res: Result, types: dict[str, str]) -> tuple[Any, bool]:

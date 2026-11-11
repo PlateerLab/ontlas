@@ -23,6 +23,8 @@ RAW_SUFFIX = "__raw"          # the stored value of a property that a transform 
 FUNCTION_RUNTIMES = ("expr", "decision", "query", "python", "http")
 FUNCTION_STATUS = ("draft", "active", "retired")
 STATUSES = ("draft", "active", "deprecated")  # an object, property or relation: being drafted, in use, going out of use
+QUESTION_TYPES = ("definition", "decision", "value")  # what a validation question checks: a meaning, a verdict, a value
+GRADINGS = ("match", "keywords", "evidence", "llm")  # its answer held right: as expected, by words, by grounds, by a model
 
 
 @dataclass
@@ -107,6 +109,7 @@ class ObjectType:
     view: dict[str, Any] = field(default_factory=dict)  # defined by a query, not a table: {name, query} (decide.views)
     status: str = "active"  # draft | active | deprecated (STATUSES)
     area: str = ""  # the area this type is filed under (Ontology.areas); none while it is unclassified
+    owner: str = ""  # who answers for the definition
 
     @property
     def abstract(self) -> bool:
@@ -174,6 +177,8 @@ class Area:
     cite: str = ""
     aligned: list[str] = field(default_factory=list)
     status: str = "active"  # draft | active | deprecated (STATUSES)
+    owner: str = ""  # who answers for the definitions filed under it
+    tier: int | None = None  # its priority or phase: 1 first, then 2, 3
 
 
 @dataclass
@@ -220,6 +225,7 @@ class DecisionTable:
     label: str = ""
     hit_policy: str = "first"
     cite: str = ""
+    owner: str = ""  # who answers for the rules
     parameters: dict[str, Parameter] = field(default_factory=dict, repr=False, compare=False)  # the ontology's
 
     @property
@@ -405,6 +411,21 @@ class Question:
     decision: str = ""
     key: str = ""
     params: dict[str, Any] = field(default_factory=dict)
+    type: str = ""  # definition | decision | value (QUESTION_TYPES); unset, `kind` says it from what it asks
+    holdout: bool = False  # kept out of tuning: measured and reported apart, never fitted to
+    grading: str = ""  # match | keywords | evidence | llm (GRADINGS); unset, `graded_by` says it
+    keywords: list[str] = field(default_factory=list)  # the words a keywords or evidence grading looks for
+    owner: str = ""
+
+    @property
+    def kind(self) -> str:
+        """What it checks: a decision's verdict, a query's value, or else what a word means (answered from the
+        definitions, the lexicon and the documents)."""
+        return self.type or ("decision" if self.decision else "value" if self.query else "definition")
+
+    @property
+    def graded_by(self) -> str:
+        return self.grading or ("keywords" if self.keywords and not (self.query or self.decision) else "match")
 
 
 @dataclass
@@ -585,7 +606,8 @@ def _object(name: str, d: dict) -> ObjectType:
                       parent=d.get("parent", ""), implements=list(d.get("implements", [])),
                       states=_states(d.get("states")), cite=d.get("cite", ""), aligned=list(d.get("aligned", [])),
                       series=series, period=dict(d.get("period") or {}), view=dict(d.get("view") or {}),
-                      status=str(d.get("status") or "active"), area=str(d.get("area") or ""))
+                      status=str(d.get("status") or "active"), area=str(d.get("area") or ""),
+                      owner=str(d.get("owner") or ""))
     if t.view and not t.table:  # bound to the view it makes, as to a table
         t.table = t.view_name
     return t
@@ -618,7 +640,7 @@ def _decision(name: str, d: dict) -> DecisionTable:
              for i, r in enumerate(d.get("rules", []))]
     return DecisionTable(name=name, inputs=inputs, outputs=dict(d.get("outputs", {})), rules=rules,
                          target=d.get("target", ""), label=d.get("label", ""),
-                         hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""))
+                         hit_policy=d.get("hit_policy", "first"), cite=d.get("cite", ""), owner=str(d.get("owner") or ""))
 
 
 def _parameter(name: str, d: Any) -> Parameter:
@@ -632,8 +654,10 @@ def _parameter(name: str, d: Any) -> Parameter:
 
 def _area(name: str, d: dict | None) -> Area:
     d = d or {}  # a name alone is an area: Order:
+    tier = None if d.get("tier") in (None, "") else d["tier"]  # an area left without one, or one taken back
     return Area(name, d.get("label", ""), d.get("description", ""), d.get("cite", ""), list(d.get("aligned", [])),
-                str(d.get("status") or "active"))
+                str(d.get("status") or "active"), str(d.get("owner") or ""),
+                int(tier) if isinstance(tier, str) and tier.strip().isdigit() else tier)
 
 
 def _conflict(name: str, d: dict) -> SourceConflict:
@@ -830,7 +854,9 @@ def _from_dict(d: dict) -> Ontology:
                  for k, v in d.get("queries", {}).items()},
         questions=[Question(id=q["id"], text=q["text"], expect=q.get("expect"), query=q.get("query", ""),
                             decision=q.get("decision", ""), key=str(q.get("key", "")),
-                            params=dict(q.get("params", {}))) for q in d.get("questions", [])],
+                            params=dict(q.get("params", {})), type=str(q.get("type") or ""), holdout=bool(q.get("holdout")),
+                            grading=str(q.get("grading") or ""), keywords=[str(x) for x in q.get("keywords") or []],
+                            owner=str(q.get("owner") or "")) for q in d.get("questions", [])],
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
         identities=identities,
         parameters=parameters,
@@ -874,7 +900,7 @@ def _to_dict(o: Ontology) -> dict:
                                   "source": {"table": t.table} if bound else None, "key": t.key, "title": t.title,
                                   "parent": t.parent, "implements": t.implements, "cite": t.cite,
                                   "aligned": t.aligned, "properties": props, "states": sm, "period": t.period,
-                                  "view": t.view, "status": None if t.status == "active" else t.status,
+                                  "view": t.view, "status": None if t.status == "active" else t.status, "owner": t.owner,
                                   "series": t.series and {**t.series, "time": t.series["time"].removesuffix(TEXT_SUFFIX)}})
     links = {lk.name: _clean({"from": lk.source, "to": lk.target, "cardinality": lk.cardinality,
                               "on": {lk.on[0]: lk.on[1]} if lk.on else None,
@@ -887,7 +913,7 @@ def _to_dict(o: Ontology) -> dict:
     decisions = {}
     for dt in o.decisions.values():
         decisions[dt.name] = _clean({
-            "label": dt.label, "target": dt.target, "hit_policy": dt.hit_policy, "cite": dt.cite,
+            "label": dt.label, "target": dt.target, "hit_policy": dt.hit_policy, "cite": dt.cite, "owner": dt.owner,
             "inputs": {i.name: {"type": i.type, **i.source} for i in dt.inputs.values()},
             "outputs": dt.outputs,
             "rules": [_clean({"id": r.id, "when": r.when, "then": r.then, "note": r.note, "cite": r.cite,
@@ -929,9 +955,11 @@ def _to_dict(o: Ontology) -> dict:
     queries = {q.name: _clean({"label": q.label, "description": q.description, "params": q.params,
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
-                         "params": q.params}) | {"expect": q.expect} for q in o.questions]
+                         "params": q.params, "type": q.type, "holdout": q.holdout, "grading": q.grading,
+                         "keywords": q.keywords, "owner": q.owner}) | {"expect": q.expect} for q in o.questions]
     areas = {a.name: _clean({"label": a.label, "description": a.description, "cite": a.cite, "aligned": a.aligned,
-                             "status": None if a.status == "active" else a.status}) for a in o.areas.values()}
+                             "status": None if a.status == "active" else a.status, "owner": a.owner, "tier": a.tier})
+             for a in o.areas.values()}
     return _clean({
         "ontology": o.name, "namespace": o.namespace, "version": o.version, "label": o.label,
         "parameters": parameters, "areas": areas, "objects": objects, "links": links,

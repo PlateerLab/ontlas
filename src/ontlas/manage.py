@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from ontlas.lexicon import TermEdits, term_id
 from ontlas.model import TYPES, _scope_filter
 from ontlas.modules import Module, ModuleError, Requirement, compose, settle
 
@@ -22,8 +23,8 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
                "cite", "transform", "source_type", "status")
-OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status", "area")
-AREA_FIELDS = ("label", "description", "cite", "aligned", "status")
+OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status", "area", "owner")
+AREA_FIELDS = ("label", "description", "cite", "aligned", "status", "owner", "tier")
 LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite", "status")
 PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
 METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
@@ -48,7 +49,7 @@ class Edit:
     args: dict[str, Any] = field(default_factory=dict)  # what it was asked with, to make it again
 
 
-class Workspace:
+class Workspace(TermEdits):
     """Pending edits over the attached modules (`base`), with the attached workspace module as the starting point."""
 
     def __init__(self, base: list[Module], current: Module | None = None, *, label: str = "관리 변경",
@@ -181,7 +182,7 @@ class Workspace:
         if not key or key not in props:
             raise EditError("give the key and the key property")
         spec: dict[str, Any] = {"key": key, "properties": props}
-        for k in ("label", "description", "parent", "title", "area"):
+        for k in ("label", "description", "parent", "title", "area", "owner"):
             if a.get(k):
                 spec[k] = a[k]
         if a.get("table"):
@@ -357,9 +358,10 @@ class Workspace:
         q = {"id": qid, "text": str(a.get("text") or "")}
         if a.get("decision"):
             q.update({"decision": a["decision"], "key": str(a.get("key") or "")})
-        else:
+        elif a.get("query") or a.get("params"):  # one with neither asks what a word means (type definition)
             q.update({"query": a.get("query"), "params": dict(a.get("params") or {})})
         q["expect"] = a.get("expect") or {}
+        q.update(_question_meta(a))
         self.module.body.setdefault("questions", []).append(q)
         return f"question:{qid}"
 
@@ -377,12 +379,20 @@ class Workspace:
             mine = {"id": qid, "text": current.text}
             if current.decision:
                 mine.update({"decision": current.decision, "key": current.key})
-            else:
+            elif current.query:
                 mine["query"] = current.query
             if current.params:  # a decision question is decided with its params too (Studio.questions)
                 mine["params"] = dict(current.params)
+            mine.update(_question_meta({"type": current.type, "holdout": current.holdout, "grading": current.grading,
+                                        "keywords": current.keywords, "owner": current.owner}))
+            mine["expect"] = copy.deepcopy(current.expect)
             own.append(mine)
-        mine["expect"] = dict(a.get("expect") or {})
+        if "expect" in a:
+            mine["expect"] = a["expect"] if isinstance(a["expect"], (str, list)) and a["expect"] else dict(a["expect"] or {})
+        for k in QUESTION_FIELDS:  # what a person sets of it: the rest stays as it was
+            if k in a:
+                mine.pop(k, None)
+                mine.update(_question_meta({k: a[k]}))
         return f"question:{qid}"
 
     def _pick_conflict(self, a: dict) -> str:
@@ -501,7 +511,7 @@ class Workspace:
         """A table's label, its clause, or how it picks among the rules that hold."""
         name = str(a.get("decision") or a.get("name") or "")
         t = self._table(name)
-        fields = {k: a[k] for k in ("label", "cite", "hit_policy") if k in a}
+        fields = {k: a[k] for k in ("label", "cite", "hit_policy", "owner") if k in a}
         if fields.get("hit_policy") and fields["hit_policy"] not in HIT_POLICIES:
             raise EditError(f"hit policy '{fields['hit_policy']}' is not one of {', '.join(HIT_POLICIES)}")
         bare = [r.id for r in t.rules if r.priority is None]
@@ -944,6 +954,8 @@ class Workspace:
         for q in self.module.body.get("questions") or []:
             owners.add(comp.owner(f"query:{q.get('query')}") if q.get("query") else
                        comp.owner(f"decision:{q.get('decision')}"))
+        owners |= {comp.term_origin.get(term_id(t), "") for t in self.module.terms}  # a term written over, or taken out
+        owners |= {comp.term_origin.get(str(t), "") for t in self.module.remove.get("terms") or []}
         self.module.requires = [Requirement(o) for o in sorted(o for o in owners if o and o != NAME)]
 
 
@@ -976,12 +988,31 @@ def _removals(d: dict) -> set[str]:
     kinds = {"objects": "object", "links": "link", "queries": "query", "decisions": "decision", "actions": "action",
              "identities": "identity", "questions": "question", "states": "states", "roles": "role",
              "interfaces": "interface", "parameters": "parameter", "metrics": "metric", "functions": "function",
-             "areas": "area"}
+             "areas": "area", "terms": "term"}
     for s, items in (d.get("remove") or {}).items():
         if s == "properties":
             out |= {f"property:{t}.{p}" for t, ps in (items or {}).items() for p in ps}
         else:
             out |= {f"{kinds.get(s, s)}:{k}" for k in items or []}
+    return out
+
+
+QUESTION_FIELDS = ("type", "holdout", "grading", "keywords", "owner")
+
+
+def _question_meta(a: dict) -> dict:
+    """What a question says of itself beyond what it asks: its type, whether it is held out, how it is graded, by
+    whom. Only what is set is written."""
+    out: dict[str, Any] = {}
+    for k in ("type", "grading", "owner"):
+        if a.get(k):
+            out[k] = str(a[k])
+    if a.get("holdout"):
+        out["holdout"] = True
+    words = a.get("keywords")
+    words = [w.strip() for w in (words.split(",") if isinstance(words, str) else words or []) if str(w).strip()]
+    if words:
+        out["keywords"] = [str(w) for w in words]
     return out
 
 

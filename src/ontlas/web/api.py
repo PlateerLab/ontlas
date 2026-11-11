@@ -29,6 +29,7 @@ from ontlas.repository import Repositories, clean_path, is_litter
 from ontlas.roles import apply_role
 from ontlas.studio import Studio
 from ontlas.web.home_api import HomeMixin
+from ontlas.web.lexicon_api import LexiconMixin
 from ontlas.web.pages_api import PagesMixin
 from ontlas.web.space_api import SpaceMixin, attach
 
@@ -84,7 +85,8 @@ NO_SOURCE_SAID = {  # by route, where a person asked for something that reads ro
     "metric": "원천 데이터가 연결되어 있지 않아 지표를 계산하지 못했습니다. 원천을 연결한 뒤 다시 계산해 주세요.",
 }
 NO_SOURCE_NOTE = "원천 데이터가 연결되어 있지 않아 값을 읽지 않았습니다. 값을 보려면 원천을 연결해 주세요."  # beside an empty answer
-UNMEASURED = {"no_source": "측정 대상 아님 (원천 미연결)"}  # a pass condition or a question that reads rows, with none to read
+UNMEASURED = {"no_source": "측정 대상 아님 (원천 미연결)",  # a pass condition or a question that reads rows, with none to read
+              "needs_model": "측정 대상 아님 (언어 모델 채점)"}  # a question a model grades: the check has none
 READ_ERROR = {
     "encoding": "파일 인코딩을 확인할 수 없어 읽지 못했습니다. UTF-8 또는 CP949로 저장해 다시 업로드해 주세요.",
     "empty": "데이터 행이 없어 테이블을 만들지 못했습니다. 첫 행에 컬럼 이름이 있는지 확인해 주세요.",
@@ -161,6 +163,23 @@ EDIT_TEXT = [
     (r"^question id '(.*)' is empty or already used$",
      r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^question (\S+): type '(.*)' is not one of .*$",
+     r"검증 질문 \1의 유형 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 정의형, 판정형, 값 조회형 중에서 골라 주세요."),
+    (r"^question (\S+): grading '(.*)' is not one of .*$",
+     r"검증 질문 \1의 채점 방식 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 일치, 키워드, 근거, 모델 채점 중에서 골라 주세요."),
+    (r"^question (\S+): grading by keywords needs keywords$", r"검증 질문 \1은(는) 키워드로 채점하므로 키워드를 하나 이상 입력해 주세요."),
+    (r"^question (\S+): give the words a right answer has .*$",
+     r"검증 질문 \1은(는) 정의형이라 정답에 들어갈 키워드나 기대 답변이 있어야 합니다. 키워드 또는 기대 답변을 입력해 주세요."),
+    (r"^area (\S+): tier '(.*)' is not a whole number from 1$",
+     r"Object \1의 단계 '\2'은(는) 1 이상의 정수여야 하므로 저장하지 못했습니다."),
+    (r"^term '(.+)' already exists$", r"용어 '\1'이(가) 이미 있어 추가하지 못했습니다. 기존 용어를 수정해 주세요."),
+    (r"^term '(.+)' is unknown$", r"용어 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^a term needs its word$", "용어가 비어 있어 저장하지 못했습니다. 용어를 입력해 주세요."),
+    (r"^term status '(.*)' is not one of .*$",
+     r"용어 상태 '\1'은(는) 쓸 수 없어 저장하지 못했습니다. 사용 중, 초안, 확인 필요, 폐기 예정 중에서 골라 주세요."),
+    (r"^term (.+): concept '(.*)' is unknown$", r"용어 \1이(가) 연결한 정의 '\2'을(를) 찾지 못해 저장하지 못했습니다. 연결할 정의를 다시 골라 주세요."),
+    (r"^term (.+) cannot be confused with itself$", r"용어 \1을(를) 자기 자신과 혼동주의로 묶을 수 없어 저장하지 못했습니다."),
+    (r"^no terms to import$", "가져올 용어가 없어 불러오지 못했습니다. 파일 내용을 확인해 주세요."),
     (r"^object type '(.+)' is the parent of (.+)$",
      r"하위 Entity \2이(가) \1을(를) 상위 Entity로 두고 있어 제외하지 못했습니다. 하위 Entity의 상위 Entity를 먼저 바꿔 주세요."),
     (r"^(\S+): parent '(.+)' is unknown$", r"\1의 상위 Entity '\2'이(가) 정의에 없습니다. 상위 Entity를 바꾸거나 비워 주세요."),
@@ -310,7 +329,7 @@ class DataOptions:
     rest: bool = False  # /v1 is on: the page says so, and how to reach it
 
 
-class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
+class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
     def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
@@ -459,7 +478,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
             "queries": [{"name": q.name, "label": q.label or q.name, "params": q.params,
                          "example": registered.get(q.name, (None, {}))[1]} for q in o.queries.values()],
             "questions": [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
-                           "params": q.params} for q in o.questions],
+                           "params": q.params, "type": q.kind, "holdout": q.holdout} for q in o.questions],
             "decisions": [{"name": d.name, "label": d.label or d.name, "target": d.target,
                            "target_label": self._obj_label(d.target)} for d in o.decisions.values()],
             "actions": [{"name": a.name, "label": a.label or a.name, "target": a.target, "parameters": a.parameters,
@@ -2387,12 +2406,12 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
                 "computed": sum(1 for p in props if find_prop(o, t.name, p).expr),
                 "links": sum(1 for lk in o.links.values() if t.name in (lk.source, lk.target)),
                 "rows": rows.get(t.table) if t.table else None, "states": bool(t.states), "series": bool(t.series),
-                "status": t.status,
+                "status": t.status, "owner": t.owner,
                 "extended_by": [mine.label if x == WORKSPACE else self._label(x) for x in comp.touched.get(f"object:{t.name}", [])
                                 if x != comp.owner(f"object:{t.name}") and kinds.get(x) != "binding"],  # a binding only places it
                 "pending": f"object:{t.name}" in touched, "new": t.name not in base.objects, **owner(f"object:{t.name}")})
         areas = [{"name": a.name, "label": a.label or a.name, "description": a.description, "cite": a.cite,
-                  "aligned": a.aligned, "status": a.status,
+                  "aligned": a.aligned, "status": a.status, "owner": a.owner, "tier": a.tier,
                   "objects": [t.name for t in o.objects.values() if t.area == a.name],
                   "pending": f"area:{a.name}" in touched, "new": a.name not in base.areas, **owner(f"area:{a.name}")}
                  for a in o.areas.values()]
@@ -2425,7 +2444,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
                   "pending": f"link:{lk.name}" in touched, "new": lk.name not in base.links, **owner(f"link:{lk.name}")}
                  for lk in o.links.values()]
         questions = [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
-                      "params": q.params, "expect": q.expect, "pending": f"question:{q.id}" in diff["added"],
+                      "params": q.params, "expect": q.expect, "type": q.kind, "holdout": q.holdout, "grading": q.graded_by,
+                      "keywords": q.keywords, "owner": q.owner, "pending": f"question:{q.id}" in diff["added"],
                       **owner(f"question:{q.id}")} for q in o.questions]
         via: dict[str, list[str]] = {}
         for lk in o.links.values():
@@ -2446,7 +2466,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
                      "labels": labels_of(o, t, i)} for i, v in t.inputs.items()]
             decisions.append({
                 "name": t.name, "label": t.label or t.name, "target": t.target, "target_label": t.target and mine_label(o, t.target),
-                "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
+                "hit_policy": t.hit_policy, "owner": t.owner, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
                 "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
                 "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "module": rule_owner(comp, t.name, r.id),
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
@@ -3010,6 +3030,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
         none = bool(rep.results) and not asked
         return plain({"accuracy": None if none else rep.accuracy, "grounded": None if none else rep.grounded,
                       "measured": len(asked), "unmeasured": len(rep.results) - len(asked),
+                      "sets": rep.split(), "types": rep.split("type"),  # dev and holdout apart; each type
                       "results": [{**r.__dict__, "passed": None if r.unmeasured else r.passed,
                                    "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps],
                                    "note": UNMEASURED.get(r.unmeasured, "")} for r in rep.results],

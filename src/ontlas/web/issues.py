@@ -255,6 +255,8 @@ def _bindings(s, bind: dict, alert: bool) -> list[dict]:
 
 
 def _open_for(q) -> dict:
+    if not (q.decision or q.query):  # a question on what a word means reads neither: its row is where it is seen
+        return {"tab": "check", "row": f"q:{q.id}"}
     return {"tab": "mgrules", "decision": q.decision} if q.decision else {"tab": "query", "query": q.query}
 
 
