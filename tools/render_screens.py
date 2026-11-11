@@ -142,7 +142,7 @@ def live_screens(page, base: str, out: Path) -> None:
     page.screenshot(path=str(out / "space-map.png"))
 
     open_tab(page, base, "docs")
-    page.wait_for_selector("#docgraph .kg-stage canvas", timeout=30000)
+    page.wait_for_selector("#dgxcanvas .gxn", timeout=30000)
     page.wait_for_timeout(1500)
     page.screenshot(path=str(out / "documents.png"))
 

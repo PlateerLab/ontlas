@@ -43,6 +43,10 @@ The page is regrouped into the four parts a space is made of, and rules, words a
   after, and pass conditions that stop or start passing; a question that reads rows with no source is not measured, not
   failed. `GET /api/versions`; `regression` on a change, its detail and the workspace trial. A change request keeps
   `decided_at`.
+- **The document graph is drawn as the record graph is**: one document or concept in the middle, its sections and the
+  concepts they name around it, by kind in colour and outline; a double press moves the middle, relation names show on
+  the lines of the node picked. The radial layout turns each ring toward the nodes it hangs off and widens a ring that
+  holds more. 모듈 라이브러리 is a screen of its own (Ontology › 라이브러리).
 - **A reason that names a value says the value in force.** `{@name}` in a rule's reason read as written on the decision
   view, the table editor and the search index's rule sentences; it now reads the value, as the answer did.
 - **Example.** `commerce` gets the parameter `return_window_days` and terms; the new `commerce-law` module (법령 기준,

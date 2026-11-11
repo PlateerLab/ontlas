@@ -213,7 +213,8 @@ any screen, Object definition, decision table or query, or asks the words as a q
 | | 그래프 탐색 | 다이어그램 · 전체 보기 | Define on the canvas, the tree and the forms (see step 2), and see the whole definition as cards grouped by Object |
 | | 문서 | | See documents as sections and concepts, and the relations a model finds between concepts |
 | | 질의 | | Run a query, see it in each language, and ask in plain language when a model is connected |
-| | 변경 · 버전 | 변경 요청 · 버전 이력 · 모듈 라이브러리 | Review changes element by element with their regression, see every version of the space, and apply or remove modules (see step 6) |
+| | 변경 · 버전 | 변경 요청 · 버전 이력 | Review changes element by element with their regression, and see every version of the space (see step 6) |
+| | 라이브러리 | | Apply or remove modules, see each module's kind, versions and what it holds, and draft rules from policy text |
 | Data Binding | 데이터 가져오기 | 재료 카탈로그 · DB 연결 · 초안 생성 · 변환 결과 | Bring files and databases in and draft from them (see step 4) |
 | | Mapping | 데이터 소스 · DB 대조 | See the source's tables, keys and references, and check the definition against them |
 | | 액션 | 액션 정의 · 처리 요청 | Define actions; decide a case with its grounds and the path it took through the layers, request an action, approve it, roll it back |

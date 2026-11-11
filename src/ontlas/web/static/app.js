@@ -68,7 +68,7 @@
   const NAV_GROUP = [['home', '홈', ['home', 'inbox']],
     ['sem', '규칙', ['semrules', 'mgrules', 'rules', 'mgfuncs']], ['sem', '용어 사전', ['lexicon']], ['sem', '규칙 생성 Agent', ['ruleagent']], ['sem', '권한', ['roles']],
     ['ont', 'Object', ['objmgr']], ['ont', 'Entity', ['objects', 'states']], ['ont', '그래프 탐색', ['model', 'onto']],
-    ['ont', '문서', ['docs']], ['ont', '질의', ['query']], ['ont', '변경 · 버전', ['changes', 'versions', 'library']],
+    ['ont', '문서', ['docs']], ['ont', '질의', ['query']], ['ont', '변경 · 버전', ['changes', 'versions']], ['ont', '라이브러리', ['library']],
     ['bnd', '데이터 가져오기', ['catalog', 'db', 'data', 'convert']], ['bnd', 'Mapping', ['sources', 'bind']],
     ['bnd', '액션', ['actions', 'decide']], ['bnd', '레코드', ['records', 'record', 'graph']],
     ['qa', '검증 질문', ['check']], ['qa', '검증', ['flow', 'search']],
@@ -445,7 +445,7 @@
   const S = {
     st: null, tab: 'library', kind: 'all', libFocus: '', libScroll: false, ontoPick: '', impact: null, pos: {}, sel: null, gsel: null, obj: null,
     nopen: {}, lopen: false, xp: new Set(), explain: false,  // the shell: folded sidebar sections, the connection card, notes opened on a card, notes always shown
-    ru: null, met: {}, sp: null, sr: { text: '', folder: '', res: null, busy: false, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: '' }, dg: null, dgsel: null, dsec: null, dq: null, docpos: {}, dfolder: '', drel: null, djob: null, dreader: '',
+    ru: null, met: {}, sp: null, sr: { text: '', folder: '', res: null, busy: false, more: null, moreBusy: false, fb: '', di: 0, fix: null, tab: '' }, dg: null, dsec: null, dq: null, dgx: { nodes: {}, edges: [], seed: '', layout: 'radial', zoom: 1, pos: {}, hide: [], sel: '', of: null }, dfolder: '', drel: null, djob: null, dreader: '',
     vs: { kind: 'qdrant', url: '' }, gw: { url: '', connection: '', dialect: 'postgres', token: '' }, ad: null, adrep: null, adbusy: false, adrs: null,
     ex: { tree: null, items: null, node: '', open: { 'group:repos': true }, tab: 'store', q: '', kind: '', hits: null, sel: {}, tsel: {}, edit: null, moving: null, busy: false, loading: false, error: '' }, amap: null, mapn: null, mapsel: null, mappos: {}, conn: null, links: null, ltab: 'store', help: false,
     q: { mode: 'list', name: null, params: {}, role: '', principal: {}, target: 'sql:postgres', res: null, code: false, props: {},
@@ -1687,8 +1687,8 @@
     const i = S.st.graph.nodes.findIndex((n) => n.id === type);
     return GX_SHAPE[(i < 0 ? 0 : i) % GX_SHAPE.length];
   }
-  function gxShapeSvg(type, b, fill, ink) {
-    const k = gxShape(type), st = `style="fill:${fill};stroke:${ink}"`, { x, y, w, h } = b;
+  function gxShapeSvg(type, b, fill, ink, k = gxShape(type)) {
+    const st = `style="fill:${fill};stroke:${ink}"`, { x, y, w, h } = b;
     if (k === 'box') return `<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="4" ${st}/>`;
     if (k === 'round') return `<rect class="shape" x="${x}" y="${y}" width="${w}" height="${h}" rx="9" ${st}/>`;
     if (k === 'hex') { const d = Math.min(10, h / 2); return `<path class="shape" d="M${x + d},${y} H${x + w - d} L${x + w},${y + h / 2} L${x + w - d},${y + h} H${x + d} L${x},${y + h / 2} Z" ${st}/>`; }
@@ -1702,10 +1702,12 @@
   const gxName = (n) => (n.alt !== undefined && n.alt !== '' ? n.alt : n.title);  // a perspective may name records by another property
   const gxWord = (n) => (n.type === 'bundle' ? `${n.label} ${n.key} · 펼치기` : `${n.label} ${n.key}${gxName(n) ? ` ${String(gxName(n)).length > 9 ? `${String(gxName(n)).slice(0, 8)}…` : gxName(n)}` : ''}`);
 
-  function gxLayout() {
-    const g = S.gx;
+  // how a graph of typed nodes is drawn: the record graph's look here, the document graph's by the documents
+  const GX_LOOK = { word: (n) => gxWord(n), shape: (type) => gxShape(type), color: (type) => gxColor(type), seed: (g) => gxId(g.seed.type, g.seed.key), name: '레코드 그래프' };
+
+  function gxLayout(g = S.gx, look = GX_LOOK) {
     const ids = Object.keys(g.nodes).filter((id) => !g.hide.includes(g.nodes[id].type));
-    const seed = gxId(g.seed.type, g.seed.key);
+    const seed = look.seed(g);
     const near = {};
     g.edges.forEach((e) => { (near[e.source] = near[e.source] || []).push(e.target); (near[e.target] = near[e.target] || []).push(e.source); });
     const dist = { [seed]: 0 }, queue = [seed];
@@ -1721,12 +1723,30 @@
       lv.forEach((id, i) => { at[id] = i; });
     });
     const boxes = {};
-    const size = (id) => ({ w: Math.max(70, textW(gxWord(g.nodes[id])) + GX.padX * 2 + (['hex', 'slant', 'tag'].includes(gxShape(g.nodes[id].type)) ? 16 : 0)), h: GX.h });  // a pointed outline needs room at its ends
+    const size = (id) => ({ w: Math.max(70, textW(look.word(g.nodes[id])) + GX.padX * 2 + (['hex', 'slant', 'tag'].includes(look.shape(g.nodes[id].type)) ? 16 : 0)), h: GX.h });  // a pointed outline needs room at its ends
     if (g.layout === 'radial') {
+      const ang = {};
+      let outer = 0;  // a ring is far enough out for its nodes to stand side by side, and past the ring inside it
+      // a node on a ring faces the nodes it hangs off: the ring is ordered by their mean angle and turned to match
+      const want = (id, d) => {
+        const xs = (near[id] || []).filter((y) => dist[y] === d - 1 && ang[y] !== undefined).map((y) => ang[y]);
+        return xs.length ? Math.atan2(xs.reduce((s, a) => s + Math.sin(a), 0), xs.reduce((s, a) => s + Math.cos(a), 0)) : 0;
+      };
       levels.forEach((lv, d) => {
         if (!lv) return;
+        const step = (Math.PI * 2) / lv.length;
+        let turn = -Math.PI / 2;
+        if (d > 0) {
+          const w = Object.fromEntries(lv.map((id) => [id, want(id, d)]));
+          lv.sort((x, y) => w[x] - w[y]);
+          const sx = lv.reduce((s, id, i) => s + Math.cos(w[id] - i * step), 0), sy = lv.reduce((s, id, i) => s + Math.sin(w[id] - i * step), 0);
+          turn = Math.atan2(sy, sx);
+        }
+        const r = d ? Math.max(d * GX.ring, outer + GX.ring * 0.75, lv.reduce((s, id) => s + size(id).w + 18, 0) * 1.35 / (Math.PI * 2)) : 0;
+        outer = r;
         lv.forEach((id, i) => {
-          const a = (i / lv.length) * Math.PI * 2 - Math.PI / 2 + d * 0.35, r = d * GX.ring;
+          const a = i * step + turn;
+          ang[id] = a;
           const sz = size(id);
           boxes[id] = { ...sz, x: r * Math.cos(a) - sz.w / 2, y: r * Math.sin(a) - sz.h / 2 };
         });
@@ -1749,10 +1769,9 @@
     return { boxes, minX, minY, W: Math.max(...xs.map((b) => b.x + b.w), 300) + GX.pad, H: Math.max(...xs.map((b) => b.y + b.h), 200) + GX.pad };
   }
 
-  function gxSvg() {
-    const g = S.gx;
+  function gxSvg(g = S.gx, look = GX_LOOK) {
     if (!Object.keys(g.nodes).length) return '';
-    const L = gxLayout(), z = g.zoom || 1;
+    const L = gxLayout(g, look), z = g.zoom || 1;
     const way = new Set((g.routeEdges || []).map((e) => `${e.source}|${e.target}`));
     const onWay = new Set((g.route || []).map((x) => x.id));
     const place = pairs(g.edges, (e) => [e.source, e.target]);
@@ -1764,29 +1783,28 @@
       const on = g.sel === e.source || g.sel === e.target;
       const c = bend(p, q, ...place(e));
       // an arrowhead for each way the relation was opened: from its source, from its target, or both
-      const back = e.groups.some((x) => x.endsWith('|0')), ahead = e.route || !back || e.groups.some((x) => x.endsWith('|1'));
+      const back = (e.groups || []).some((x) => x.endsWith('|0')), ahead = e.route || !back || (e.groups || []).some((x) => x.endsWith('|1'));
       const tip = `url(#${hot ? 'gxhot' : 'gxarrow'})`;
       return `<g class="gxe${hot ? ' hot' : ''}${on ? ' on' : ''}"><path d="${c.d}"${ahead ? ` marker-end="${tip}"` : ''}${back ? ` marker-start="${tip}"` : ''}/><text x="${c.x}" y="${c.y - 5}" text-anchor="middle">${esc(e.label || '')}</text></g>`;
     }).join('');
     const nodes = Object.entries(L.boxes).map(([id, b]) => {
-      const n = g.nodes[id], [ink, fill] = gxColor(n.type);
-      const cls = `${id === g.sel ? ' on' : ''}${onWay.has(id) ? ' way' : ''}${n.type === 'bundle' ? ' bundle' : ''}${id === gxId(g.seed.type, g.seed.key) ? ' seed' : ''}`;
-      return `<g class="gxn${cls}" data-gx="${esc(id)}">${gxShapeSvg(n.type, b, fill, ink)}
-        <text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 4.5}" text-anchor="middle" style="fill:${ink}">${esc(gxWord(n))}</text></g>`;
+      const n = g.nodes[id], [ink, fill] = look.color(n.type);
+      const cls = `${id === g.sel ? ' on' : ''}${onWay.has(id) ? ' way' : ''}${n.type === 'bundle' ? ' bundle' : ''}${id === look.seed(g) ? ' seed' : ''}`;
+      return `<g class="gxn${cls}" data-gx="${esc(id)}">${gxShapeSvg(n.type, b, fill, ink, look.shape(n.type))}
+        <text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 4.5}" text-anchor="middle" style="fill:${ink}">${esc(look.word(n))}</text></g>`;
     }).join('');
-    return `<svg class="gxsvg" width="${Math.round(L.W * z)}" height="${Math.round(L.H * z)}" viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="레코드 그래프">
+    return `<svg class="gxsvg" width="${Math.round(L.W * z)}" height="${Math.round(L.H * z)}" viewBox="0 0 ${L.W} ${L.H}" role="img" aria-label="${esc(look.name)}">
       <defs><marker id="gxarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#98a2b3"/></marker>
       <marker id="gxhot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#e8590c"/></marker></defs>${edges}${nodes}</svg>`;
   }
 
-  function mountGx() {
-    const box = $('#gxcanvas');
+  function mountGx(box = $('#gxcanvas'), g = S.gx, look = GX_LOOK, on = { pick: (id) => gxPick(id), open: (id) => gxOpen(id), zoom: (step) => gxZoom(step) }) {
     if (!box || box.dataset.on) return;
     box.dataset.on = '1';
     let drag = null;
     box.addEventListener('pointerdown', (ev) => {
       const n = ev.target.closest('[data-gx]');
-      const L = n && gxLayout(), b = L && L.boxes[n.dataset.gx];
+      const L = n && gxLayout(g, look), b = L && L.boxes[n.dataset.gx];
       drag = b ? { id: n.dataset.gx, x0: ev.clientX, y0: ev.clientY, bx: b.x + L.minX, by: b.y + L.minY, moved: false }
         : { pan: true, x0: ev.clientX, y0: ev.clientY, sl: box.scrollLeft, st: box.scrollTop, moved: false };
       box.setPointerCapture(ev.pointerId);
@@ -1797,22 +1815,22 @@
       if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
       drag.moved = true;
       if (drag.pan) { box.scrollLeft = drag.sl - dx; box.scrollTop = drag.st - dy; box.classList.add('panning'); return; }
-      const z = S.gx.zoom || 1;
-      S.gx.pos[drag.id] = { x: drag.bx + dx / z, y: drag.by + dy / z };
-      box.innerHTML = gxSvg();
+      const z = g.zoom || 1;
+      g.pos[drag.id] = { x: drag.bx + dx / z, y: drag.by + dy / z };
+      box.innerHTML = gxSvg(g, look);
     });
     let last = { id: '', at: 0 };  // the canvas is redrawn on a press, so a double-click is two presses on one box in time
     const end = () => {
       if (drag && !drag.moved && !drag.pan) {
         const twice = last.id === drag.id && Date.now() - last.at < 450;
         last = { id: drag.id, at: twice ? 0 : Date.now() };
-        if (twice) gxOpen(drag.id); else gxPick(drag.id);
+        if (twice) on.open(drag.id); else on.pick(drag.id);
       }
       drag = null; box.classList.remove('panning');
     };
     box.addEventListener('pointerup', end);
     box.addEventListener('pointercancel', end);
-    box.addEventListener('wheel', (ev) => { ev.preventDefault(); gxZoom(ev.deltaY < 0 ? 1 : -1); }, { passive: false });  // the wheel zooms; the canvas pans by dragging
+    box.addEventListener('wheel', (ev) => { ev.preventDefault(); on.zoom(ev.deltaY < 0 ? 1 : -1); }, { passive: false });  // the wheel zooms; the canvas pans by dragging
   }
 
   function gxZoom(step) {
@@ -1823,10 +1841,9 @@
     gxRedraw();
   }
 
-  function gxFit() {
-    const g = S.gx, box = $('#gxcanvas');
+  function gxFit(g = S.gx, box = $('#gxcanvas'), look = GX_LOOK) {
     if (g.zoomed || !box || !Object.keys(g.nodes).length) return;
-    const L = gxLayout();
+    const L = gxLayout(g, look);
     g.zoom = Math.min(1, Math.max(0.35, Math.min((box.clientWidth - 8) / L.W, (box.clientHeight - 8) / L.H)));
   }
 
@@ -3882,7 +3899,7 @@
     return `${head}<div class="stats">${stats}</div>
       <div class="card" id="dreadcard" style="margin-bottom:14px">${readCard()}</div>
       <div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr)">
-        <div class="card"><div class="ch">문서 그래프</div><div class="cb" style="padding:0"><div class="kg" id="docgraph"></div></div></div>
+        ${dgxCard(g)}
         <div class="card" id="docside">${docSide()}</div>
       </div>${relationCard()}${queries}`;
   }
@@ -3926,6 +3943,72 @@
     return `<div class="ch">${sel ? '절 내용' : '문서 목록'}${sel ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${detail}</div>`;
   }
 
+  // ---- the document graph: one document or concept in the middle, what it holds and names around it -----------------
+  const DGX_SHAPE = { document: 'box', section: 'round', ontology: 'pill', keyword: 'tag' };
+  const DGX_LOOK = {
+    word: (n) => (n.label.length > 14 ? `${n.label.slice(0, 13)}…` : n.label),
+    shape: (type) => DGX_SHAPE[type] || 'pill',
+    color: (type) => GX_COLOR[Math.max(0, ((S.dg && S.dg.clusters) || []).findIndex((c) => c.id === type)) % GX_COLOR.length],
+    seed: (g) => g.seed,
+    name: '문서 그래프',
+  };
+  const DGX_MAX = 26;  // nodes around the one in the middle, nearest first
+
+  function dgxAround(seed) {
+    const dg = S.dg, x = S.dgx, near = {};
+    const kind = Object.fromEntries(dg.nodes.map((n) => [n.id, n.module]));
+    // a document's sections carry what it names: around a document the path is document, section, concept
+    const direct = (e) => kind[seed] === 'document' && e.label !== '절' && (kind[e.source] === 'document' || kind[e.target] === 'document');
+    dg.edges.forEach((e) => { (near[e.source] = near[e.source] || []).push(e); (near[e.target] = near[e.target] || []).push(e); });
+    const keep = new Set([seed]);
+    let ring = [seed];
+    for (let d = 0; d < 2 && keep.size < DGX_MAX; d += 1) {
+      const next = [];
+      ring.forEach((id) => (near[id] || []).forEach((e) => {
+        if (e.label === '함께 언급') return;  // the section between two concepts says the same, without the crowd
+        if (direct(e)) return;
+        const o = e.source === id ? e.target : e.source;
+        if (!keep.has(o) && keep.size < DGX_MAX) { keep.add(o); next.push(o); }
+      }));
+      ring = next;
+    }
+    const byId = Object.fromEntries(dg.nodes.map((n) => [n.id, n]));
+    Object.assign(x, { seed, pos: {}, zoomed: false, sel: keep.has(x.sel) ? x.sel : '' });
+    x.nodes = Object.fromEntries([...keep].filter((id) => byId[id]).map((id) => [id, { type: byId[id].module, label: byId[id].label }]));
+    x.edges = dg.edges.filter((e) => keep.has(e.source) && keep.has(e.target) && !direct(e) && e.label !== '함께 언급')
+      .map((e) => ({ source: e.source, target: e.target, label: e.label }));
+  }
+
+  function dgxCard(g) {
+    const x = S.dgx, n = Object.keys(x.nodes).length;
+    const docs = g ? (g.nodes || []).filter((d) => d.module === 'document') : [];
+    const kinds = g ? (g.clusters || []).filter((c) => Object.values(x.nodes).some((v) => v.type === c.id)) : [];
+    const legend = kinds.map((c) => { const [ink, fill] = DGX_LOOK.color(c.id); return `<span class="gxleg"><i style="background:${fill};border-color:${ink}"></i>${esc(c.label)} ${Object.values(x.nodes).filter((v) => v.type === c.id).length}</span>`; }).join('');
+    const seed = x.nodes[x.seed];
+    return `<div class="card"><div class="ch">${seed ? `${esc(seed.label)} 중심` : '문서 그래프'}<div class="right">
+        ${docs.length ? `<select data-in="dgxseed" aria-label="중심 문서"><option value="">문서 선택</option>${docs.map((d) => opt(d.id, d.label, x.seed)).join('')}</select>` : ''}
+        <label class="chip chipsel">레이아웃: <select data-in="dgxlayout" aria-label="레이아웃">${[['radial', '방사형'], ['layered', '계층']].map(([k, w]) => opt(k, w, x.layout)).join('')}</select></label>
+        <span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="dgxzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="dgxzoom" data-z="0" title="화면에 맞춤">${Math.round((x.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="dgxzoom" data-z="1" aria-label="확대">+</button></span></div></div>
+      <div class="cb gxcanvas dgxcanvas" id="dgxcanvas">${n ? gxSvg(x, DGX_LOOK) : '<div class="empty">문서가 없습니다.</div>'}</div>
+      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">노드 ${n} · 관계 ${x.edges.length} · 선택한 노드의 관계 이름 표시 · 두 번 눌러 중심 이동 · 휠로 확대</span></div></div>`;
+  }
+
+  function dgxPaint() {
+    const box = $('#dgxcanvas'), x = S.dgx;
+    if (!box || !Object.keys(x.nodes).length) return;
+    gxFit(x, box, DGX_LOOK);
+    box.innerHTML = gxSvg(x, DGX_LOOK);
+    const z = $('[data-act=dgxzoom][data-z="0"]');
+    if (z) z.textContent = `${Math.round((x.zoom || 1) * 100)}%`;
+  }
+
+  function dgxZoom(step) {
+    const x = S.dgx;
+    x.zoomed = step !== 0;
+    if (step === 0) x.zoom = 1; else x.zoom = Math.min(1.8, Math.max(0.35, Math.round(((x.zoom || 1) + step * 0.1) * 10) / 10));
+    dgxPaint();
+  }
+
   async function mountDocs() {
     if (!S.sp) loadSpace();
     if (S.sp && !S.sp.busy && !S.sp.error) {
@@ -3945,14 +4028,22 @@
         const titles = S.dg.titles || {};
         const doc = Object.fromEntries((S.dg.nodes || []).filter((n) => n.module === 'document').map((n) => [n.id, n.label]));
         const parent = Object.fromEntries((S.dg.edges || []).filter((e) => e.label === '절').map((e) => [e.target, e.source]));
-        mountGraph($('#docgraph'), S.dg, { key: 'docs', pos: S.docpos, sel: () => S.dgsel, tag: (n) => (S.dg.clusters.find((c) => c.id === n.module) || {}).label || '', clear: () => { S.dgsel = null; },
+        if (S.dgx.of !== S.dg) {  // a graph read anew: its first document in the middle
+          S.dgx.of = S.dg;
+          const first = (S.dg.nodes || []).find((n) => n.module === 'document');
+          if (first) dgxAround(first.id); else Object.assign(S.dgx, { nodes: {}, edges: [], seed: '' });
+          if (S.tab === 'docs') render();
+          return;
+        }
+        mountGx($('#dgxcanvas'), S.dgx, DGX_LOOK, { open: (id) => { dgxAround(id); render(); }, zoom: dgxZoom,
           pick: async (id) => {
-            S.dgsel = id;
-            drawGraph();
+            S.dgx.sel = id;
+            dgxPaint();
             if (titles[id]) {
               try { S.dsec = await api(`space/section?document=${encodeURIComponent(doc[parent[id]] || '')}&section=${encodeURIComponent(titles[id])}`); $('#docside').innerHTML = docSide(); } catch (e) { fail(e); }
             }
           } });
+        dgxPaint();
       }
       if (!S.dq) { S.dq = 0; try { S.dq = await api('space/queries'); if (S.tab === 'docs') render(); } catch (e) { S.dq = null; } }
     }
@@ -7448,6 +7539,7 @@ ${controls}${body}`;
     rpmore: () => rpLoad(true),
     rppick: (t) => { const w = S.rp.which; S.rp = null; paintLayer(); gxChoose(w, { type: t.dataset.type, key: t.dataset.key, type_label: t.dataset.label, title: t.dataset.title }); },
     gxzoom: (t) => gxZoom(Number(t.dataset.z)),
+    dgxzoom: (t) => dgxZoom(Number(t.dataset.z)),
     gxfound: (t) => gxChoose(t.dataset.w, { type: t.dataset.type, key: t.dataset.key, type_label: t.dataset.label, title: t.dataset.title }),
     gxreset: () => { S.gx.pos = {}; S.gx.hide = []; S.gx.zoom = 1; S.gx.zoomed = false; gxStart(S.gx.seed.type, S.gx.seed.key); },
     gxviewsave: async () => {
@@ -7802,7 +7894,7 @@ ${controls}${body}`;
       location.hash = '#mgrules';
       simulateNow(t.dataset.key, {});
     },
-    dsecclose: () => { S.dsec = null; S.dgsel = null; drawGraph(); $('#docside').innerHTML = docSide(); },
+    dsecclose: () => { S.dsec = null; S.dgx.sel = ''; dgxPaint(); $('#docside').innerHTML = docSide(); },
     dread: () => readRelations(),
     dstop: async () => {
       if (!S.djob) return;
@@ -8547,7 +8639,7 @@ ${controls}${body}`;
     srfkey: (t) => { S.sr.fix.key = t.value; },
     srfat: (t) => { S.sr.fix.at = t.value; },
     vkind: (t) => { S.vs.kind = t.value; render(); },
-    dfolder: (t) => { S.dfolder = t.value; S.dg = null; S.drel = null; S.dsec = null; S.dgsel = null; render(); },
+    dfolder: (t) => { S.dfolder = t.value; S.dg = null; S.drel = null; S.dsec = null; S.dgx.sel = ''; render(); },
     dreader: (t) => { S.dreader = t.value; },
     vemb: (t) => { S.vemb = { pick: t.value, plan: null, busy: false }; render(); },
     vurl: (t) => { S.vs.url = t.value; },
@@ -8613,6 +8705,8 @@ ${controls}${body}`;
     hrole: (t) => ACT.hrole(t),
     srfdec: (t) => { S.sr.fix.decision = t.value; render(); },
     gxlayout: (t) => { S.gx.layout = t.value; S.gx.pos = {}; S.gx.zoomed = false; gxRedraw(); },
+    dgxlayout: (t) => { S.dgx.layout = t.value; S.dgx.pos = {}; S.dgx.zoomed = false; dgxPaint(); },
+    dgxseed: (t) => { if (t.value) { dgxAround(t.value); render(); } },
     gxrel: (t) => { if (t.checked) gxGrow(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); else gxShrink(S.gx.sel, t.dataset.link, t.dataset.fw === '1'); },
     gxshow: (t) => { S.gx.hide = t.checked ? S.gx.hide.filter((x) => x !== t.dataset.t) : [...S.gx.hide, t.dataset.t]; S.gx.view = ''; render(); },
     gxview: (t) => { gxApplyView(t.value); render(); },
