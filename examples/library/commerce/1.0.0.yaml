@@ -9,6 +9,8 @@ areas:
   Customer:
     label: 고객
     description: 상품을 주문하는 회원과 회원 등급
+    owner: 고객팀
+    tier: 1
   Product:
     label: 상품
     description: 판매하는 상품과 단품, 판매가 변경 이력
@@ -20,9 +22,13 @@ areas:
     label: 주문
     description: 주문과 주문에 담긴 주문상품
     aligned: [https://schema.org/Order]
+    owner: 주문팀
+    tier: 1
   Claim:
     label: 클레임
     description: 주문 뒤에 접수되는 반품 · 교환 · 취소
+    owner: 고객센터
+    tier: 2
 
 objects:
   Customer:
@@ -165,6 +171,7 @@ decisions:
     label: 반품 가능 여부
     target: OrderItem
     cite: 반품 정책서 v1.2 3조
+    owner: 고객센터
     hit_policy: first
     inputs:
       days_since_delivery: {type: integer, days_since: delivered_at}
@@ -273,5 +280,38 @@ queries:
 questions:
   - {id: Q1, text: "C001 고객의 주문은 몇 건인가요?", query: ordersOfCustomer, params: {customer: C001}, expect: {rows: 2}}
   - {id: Q2, text: "배송 완료 4일 된 주문상품 I1001 반품 되나요?", decision: returnEligibility, key: I1001, expect: {eligible: true}}
-  - {id: Q3, text: "배송 완료 12일 지난 주문상품 I1003 반품 되나요?", decision: returnEligibility, key: I1003, expect: {eligible: false}}
-  - {id: Q4, text: "속옷 주문상품 I1004 반품 되나요?", decision: returnEligibility, key: I1004, expect: {eligible: false, reason: 반품할 수 없는 카테고리입니다}}
+  - {id: Q3, text: "배송 완료 12일 지난 주문상품 I1003 반품 되나요?", decision: returnEligibility, key: I1003, expect: {eligible: false},
+     holdout: true}
+  - {id: Q4, text: "속옷 주문상품 I1004 반품 되나요?", decision: returnEligibility, key: I1004, expect: {eligible: false, reason: 반품할 수 없는 카테고리입니다},
+     grading: evidence, keywords: [2.1조], owner: 고객센터}
+
+terms:
+  - term: 고객
+    english: Customer
+    concept: object:Customer
+    definition: 쇼핑몰에 가입해 상품을 주문하는 회원
+    synonyms: [구매자]
+    channels: {백오피스: 회원, 쇼핑몰: 고객님}
+    owner: 고객팀
+  - term: 주문금액
+    english: Order Amount
+    concept: property:Order.total
+    definition: 주문에 담긴 주문상품 금액의 합입니다. 할인과 배송비는 들어가지 않습니다
+    synonyms: [주문 총액]
+    confusable:
+      - {term: 결제금액, note: 결제금액은 결제 수단에서 실제로 승인된 금액입니다}
+    owner: 주문팀
+  - term: 출고완료
+    english: Shipped
+    concept: value:Order.status=SHIPPED
+    definition: 상품을 택배사에 넘긴 상태입니다. 고객은 아직 받지 않았습니다
+    synonyms: [발송완료]
+    confusable:
+      - {term: 배송완료, note: 배송완료는 고객이 상품을 받은 상태이고 반품 기간은 배송완료부터 셉니다}
+    owner: 주문팀
+  - term: 배송완료
+    english: Delivered
+    concept: value:Order.status=DELIVERED
+    definition: 고객이 상품을 받은 상태입니다
+    hidden: [배달완료]
+    owner: 주문팀

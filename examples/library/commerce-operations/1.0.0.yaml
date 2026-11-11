@@ -74,9 +74,13 @@ areas:
   Payment:
     label: 결제
     description: 주문의 결제와 환불
+    owner: 결제팀
+    tier: 1
   Shipment:
     label: 배송
     description: 주문의 배송과 배송을 맡는 택배사
+    owner: 배송팀
+    tier: 2
   Seller:
     label: 판매자
     description: 상품을 판매하는 입점 판매자
@@ -218,6 +222,7 @@ decisions:
     label: 배송비
     target: Order
     cite: 배송비 정책서 v1.0 2조
+    owner: 배송팀
     hit_policy: first
     inputs:
       order_total: {type: decimal, property: total}
@@ -301,4 +306,25 @@ questions:
   - {id: OP3, text: "승인된 결제에 쓰인 결제 수단은 몇 가지인가요?", query: paymentsByMethod, expect: {rows: 4}}
   - {id: OP4, text: "9만 7천원 주문 O1 의 배송비는 얼마인가요?", decision: shippingFee, key: O1, expect: {fee: 0, reason: "50,000원 이상 주문은 무료 배송입니다"}}
   - {id: OP5, text: "취소된 주문 O4 의 배송비는 얼마인가요?", decision: shippingFee, key: O4, expect: {fee: 0, reason: 취소된 주문은 배송비가 없습니다}}
-  - {id: OP6, text: "3만 8천원 주문 O16 의 배송비는 얼마인가요?", decision: shippingFee, key: O16, expect: {fee: 3000}}
+  - {id: OP6, text: "3만 8천원 주문 O16 의 배송비는 얼마인가요?", decision: shippingFee, key: O16, expect: {fee: 3000},
+     type: value, grading: keywords, keywords: ["3000", 기본 배송비]}
+  - {id: OP7, text: "결재금액이 무엇인가요?", type: definition, grading: keywords, keywords: [결제 수단, 승인된 금액], owner: 결제팀}
+
+terms:
+  - term: 결제금액
+    english: Payment Amount
+    concept: property:Payment.amount
+    definition: 결제 수단에서 실제로 승인된 금액입니다. 할인과 배송비가 반영됩니다
+    synonyms: [실결제금액]
+    channels: {백오피스: 승인금액, 쇼핑몰: 최종 결제금액}
+    hidden: [결재금액]
+    confusable:
+      - {term: 주문금액, note: 주문금액은 할인 전 주문상품 금액의 합입니다}
+    owner: 결제팀
+  - term: 운송장 번호
+    english: Tracking Number
+    concept: property:Shipment.tracking_no
+    definition: 택배사가 배송 건마다 붙이는 번호입니다
+    synonyms: [송장번호]
+    abbreviations: [TRK]
+    owner: 배송팀

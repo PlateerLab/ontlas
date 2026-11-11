@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from ontlas import lexicon
 from ontlas.embed import Embedder, EmbedError, open_embedder, shared_wording
 from ontlas.relations import Busy, Relation
 from ontlas.vectors import MemoryStore, Point, VectorError, VectorStore, open_vector_store
@@ -130,9 +131,24 @@ def dictionary(onto, terms: list[dict] | None = None) -> dict[str, Concept]:
                 for label in (p.labels or {}).values():
                     add(label, "value", f"property:{o.name}.{p.name}")
     for t in terms or []:
+        e = lexicon.entry(t)
+        if e["concept"] and e["term"]:  # a term tied to a definition: each label it goes by finds that definition
+            kind, _, name = e["concept"].partition(":")
+            element = f"property:{name.split('=')[0]}" if kind == "value" else e["concept"]  # a value is its property's
+            c = out.get(e["term"]) if (out.get(e["term"]) or Concept("", "", "")).element == element else None
+            c = c or Concept(_id("term", e["term"]), e["term"], "term", element)
+            for label, _ in lexicon.labels(e):
+                label = label.strip()
+                if len(label) >= 2 and label not in out and label.lower() not in _STOP:
+                    out[label] = c
+            continue
         add(t.get("term"), "term")
         for s in t.get("synonyms") or []:
             add(s, "term")
+        own = out.get(str(t.get("term") or "").strip())
+        for label, kind in lexicon.labels(e):  # where a screen or a slip of the hand says it otherwise
+            if own is not None and kind in ("channel", "hidden") and len(label) >= 2 and label not in out:
+                out[label] = own
     return dict(sorted(out.items(), key=lambda kv: -len(kv[0])))
 
 
