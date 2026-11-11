@@ -411,3 +411,13 @@ def test_the_command_line_shows_the_checks_and_the_layers(capsys):
     assert main(["modules", str(SHOP), "--rules"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert [x["layer"] for x in out["layers"]] == list(LAYERS) and any(c["kind"] == "executable" for c in out["cards"])
+
+
+def test_a_rule_sentence_says_the_value_in_force_not_its_placeholder():
+    from ontlas.config import load_studio
+    from ontlas.decide.words import rule_sentence
+
+    st = load_studio(SHOP)
+    table = st.onto.decisions["returnEligibility"]
+    said = rule_sentence(st.onto, table, next(r for r in table.rules if r.id == "in-window"))
+    assert "{@" not in said and "7일" in said  # the search index and answers read the sentence

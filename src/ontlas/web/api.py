@@ -21,6 +21,7 @@ from ontlas.backends.base import NoSource
 from ontlas.check import all_props, column_of, find_prop
 from ontlas.compile.base import CompileError, compiler_for
 from ontlas.conformance import normalize_rows
+from ontlas.decide.table import answer as rule_gives
 from ontlas.ir import Column, Query, Ref
 from ontlas.library import OverlayLibrary
 from ontlas.modules import Module, ModuleError, Requirement, compose
@@ -915,7 +916,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         first = next(iter(table.outputs), "")
         named = table.named
         words = {i: {"unit": unit_of(st.onto, table, i), "labels": labels_of(st.onto, table, i)} for i in table.inputs}
-        rules = [{"id": r.id, "when": r.when, "then": r.then, "cite": r.cite, "hit": r.id in res.matched, "layer": r.layer,
+        rules = [{"id": r.id, "when": r.when, "then": rule_gives(table, r), "cite": r.cite, "hit": r.id in res.matched, "layer": r.layer,
                   "said": {i: cell_words(r.when.get(i, "-"), named, **words[i]) for i in table.inputs}}
                  for r in table.rules]
         comp = st.composition
@@ -2515,7 +2516,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                 "hit_policy": t.hit_policy, "inputs": spec, "outputs": [{"name": k, "type": v} for k, v in t.outputs.items()],
                 "pending": f"decision:{t.name}" in touched, "new": t.name not in base.decisions, **owner(f"decision:{t.name}"),
                 "owner": t.owner, "status": t.status,
-                "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "module": rule_owner(comp, t.name, r.id),
+                "rules": [{"id": r.id, "cite": r.cite, "then": r.then, "gives": rule_gives(t, r), "module": rule_owner(comp, t.name, r.id),
                            "layer": r.layer, "owner": r.owner, "status": r.status,
                            "when": {i["name"]: cell_parts(r.when.get(i["name"], "-")) for i in spec},
                            "said": {i["name"]: cell_words(r.when.get(i["name"], "-"), t.named, unit=unit_of(o, t, i["name"]), labels=i["labels"]) for i in spec}}
