@@ -224,7 +224,7 @@ def test_the_path_says_layer_by_layer_what_happened():
 
     p = path({"age": 3, "grade": "VIP"})
     assert [(x["label"], x["rules"], x["fired"], x["said"]) for x in p["layers"]] == [
-        ("AXIOM", 1, [], "통과"), ("Custom", 1, ["vip"], "적용"), ("Standard", 3, [], "앞 규칙 우선")]
+        ("AXIOM", 1, [], "통과"), ("Custom", 1, ["vip"], "적용"), ("Standard", 3, [], "선행 규칙 적용")]
     assert p["source"] == {"rule": "vip", "layer": "custom", "layer_label": "Custom", "module": "acme",
                            "module_label": "ACME", "version": "0.1.0", "cite": ""} and p["layer"] == "custom"
     p = path({"age": 30, "grade": "A"})
@@ -259,7 +259,7 @@ def test_the_example_shows_all_three_layers(session):
     rules = st.onto.decisions["returnEligibility"].rules
     assert [(r.id, r.layer) for r in rules[:3]] == [("not-delivered", "axiom"), ("vip-window", "custom"), ("in-progress", "standard")]
     r = st.decide("returnEligibility", "I1001")
-    assert r.matched == ["vip-window"] and r.path["text"] == "AXIOM 통과 › Custom vip-window 적용 › Standard 앞 규칙 우선"
+    assert r.matched == ["vip-window"] and r.path["text"] == "AXIOM 통과 › Custom vip-window 적용 › Standard 선행 규칙 적용"
     r = st.decide("returnEligibility", "I1005")
     assert r.outputs == {"eligible": False, "reason": "배송 완료 전입니다"} and r.path["source"]["module"] == "commerce-law"
     assert st.decide("returnEligibility", "I1003").path["source"]["layer"] == "standard"

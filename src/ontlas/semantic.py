@@ -18,10 +18,9 @@ from typing import Any
 LAYERS = ("axiom", "custom", "standard")  # the order a decision checks them in
 LAYER_LABEL = {"axiom": "AXIOM", "custom": "Custom", "standard": "Standard"}
 LAYER_TEXT = {
-    "axiom": "법령이나 산술 무결성처럼 항상 지켜야 하는 규칙입니다. 판정에서 가장 먼저 확인하며, Custom · Standard 모듈이나 "
-             "관리 변경으로 바꾸거나 지울 수 없습니다.",
-    "custom": "고객사 모듈과 관리 변경에서 정한 규칙입니다. Standard 규칙보다 우선합니다.",
-    "standard": "공통으로 쓰는 기본 규칙입니다.",
+    "axiom": "법령 · 정합성 규칙입니다. 판정에서 가장 먼저 적용하며 Custom · Standard 모듈과 관리 변경으로 변경할 수 없습니다.",
+    "custom": "고객사 모듈과 관리 변경에서 정의한 규칙입니다. Standard 규칙보다 먼저 적용합니다.",
+    "standard": "공통 기본 규칙입니다.",
 }
 CARD_TYPES = {"decide": "판정", "compute": "계산", "transition": "전이", "restore": "복원", "order": "순서",
               "display": "표시", "watch": "감시"}
@@ -29,7 +28,7 @@ CARD_STATUS = {"draft": "초안", "review": "검토 중", "approved": "승인"}
 LEGAL_REVIEW = {"none": "해당 없음", "pending": "검토 대기", "done": "검토 완료"}
 CARD_FIELDS = ("id", "type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner",
                "status", "legal_review", "layer", "implements", "check")
-STATE_WORD = {"fired": "적용", "passed": "통과", "none": "해당 없음", "held": "앞 규칙 우선"}
+STATE_WORD = {"fired": "적용", "passed": "통과", "none": "해당 없음", "held": "선행 규칙 적용"}
 REF_KINDS = ("decision", "function", "action", "object", "property", "link", "parameter", "query", "metric", "role",
              "states")
 _ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
