@@ -244,10 +244,11 @@ def value_accuracy(studio, specs: list[dict[str, Any]]) -> dict[str, Any]:
     return {"cases": cases, "errors": errors, "rate": (cases - errors) / cases if cases else None, "items": items}
 
 
-def measure(studio, settings: FlowSettings) -> dict[str, Any]:
+def measure(studio, settings: FlowSettings, *, questions=None) -> dict[str, Any]:
     """The numbers the pass conditions read, for the stages that are on. A studio with no backend holds its definition
     only: what reads rows (the database check, backends compared, questions on records, values, past cases) is left
-    unmeasured and named under `unmeasured` ({"stage.condition": reason}), as a stage with nothing to measure is."""
+    unmeasured and named under `unmeasured` ({"stage.condition": reason}), as a stage with nothing to measure is.
+    `questions` is the studio's QuestionReport where the caller has asked them already."""
     out: dict[str, Any] = {}
     skipped: dict[str, str] = {}
     no_source = not studio.backends
@@ -278,7 +279,7 @@ def measure(studio, settings: FlowSettings) -> dict[str, Any]:
         except Exception as e:  # a query a backend refuses is a failed condition, not a crash of the review
             out["query"] = {"error": f"{type(e).__name__}: {e}", "share": 0.0}
     if settings.on("check") and studio.onto.questions:
-        q = studio.questions()
+        q = questions if questions is not None else studio.questions()
         asked = q.measured  # without a source, only the questions a table answers from given values
         if asked:
             out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed],
@@ -382,6 +383,62 @@ def element_sides(before, after) -> dict[str, list[dict | None]]:
             for k in sorted(a.keys() | b.keys()) if a.get(k) != b.get(k)}
 
 
+def _moved(before: Any, after: Any) -> dict[str, Any] | None:
+    """A share on either side of a change and how far it moved; None where neither side measured it."""
+    if before is None and after is None:
+        return None
+    change = None if before is None or after is None else round(after - before, 4)
+    return {"before": before, "after": after, "change": change}
+
+
+def regression(before: dict[str, Any], after: dict[str, Any], report=None, *, questions: list[str] = (),
+               gates_before: list = (), gates_after: list = ()) -> dict[str, Any]:
+    """What a change makes worse or better, between the studio as it stands (`before`, as measure() gives it) and its
+    trial copy (`after`): the questions that newly fail or newly pass, accuracy, grounded share and agreement with past
+    decisions on either side, and the pass conditions that stop or start passing. `questions` are the ids the studio
+    holds now and `report` the copy's QuestionReport. A question that reads rows, with none to read, is not measured: it
+    neither fails nor passes, and is listed under `unmeasured`."""
+    check = before.get("check") or {}
+    failed, unasked = set(check.get("failed") or []), set(check.get("unasked") or [])
+    was = {i: "unmeasured" if not check or i in unasked else "failed" if i in failed else "passed" for i in questions}
+    failing, passing, unmeasured = [], [], []
+    results = list(report.results) if report is not None else []
+    for r in results:
+        if r.unmeasured:
+            unmeasured.append(r.id)
+            continue
+        prior = was.get(r.id, "absent")  # absent: the change adds the question
+        item = {"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got)}
+        if not r.passed and prior != "failed":
+            failing.append({**item, "error": r.error, "was": prior})
+        elif r.passed and prior == "failed":
+            passing.append(item)
+    def rows(gs: list) -> list[dict]:
+        return [asdict(g) if isinstance(g, GateResult) else g for g in gs]
+
+    rows_before = {(g["stage"], g["condition"]): g for g in rows(gates_before)}
+    stops, starts = [], []
+    for g in rows(gates_after):
+        b = rows_before.get((g["stage"], g["condition"]))
+        row = {"stage": g["stage"], "condition": g["condition"], "limit": g["limit"],
+               "before": b["value"] if b else None, "after": g["value"]}
+        if not g["passed"] and (b is None or b["passed"]):
+            stops.append({**row, "was": "passed" if b else "absent"})
+        elif g["passed"] and not g.get("unmeasured") and b is not None and not b["passed"]:
+            starts.append(row)
+    shares = {k: _moved((before.get(stage) or {}).get(key), (after.get(stage) or {}).get(key))
+              for k, stage, key in (("accuracy", "check", "accuracy"), ("grounded", "check", "grounded"),
+                                    ("agreement", "decide", "rate"))}
+    moved = [m["change"] for m in shares.values() if m and m["change"] is not None]
+    asked = len(results) - len(unmeasured)
+    return {"measured": asked > 0, "questions": {"before": len(questions), "after": len(results), "measured": asked,
+                                                 "unmeasured": len(unmeasured)},
+            "newly_failing": failing, "newly_passing": passing, "unmeasured": unmeasured, **shares,
+            "gates_failing": stops, "gates_passing": starts,
+            "worse": bool(failing or stops or any(c < 0 for c in moved)),
+            "better": bool(passing or starts or any(c > 0 for c in moved))}
+
+
 def trial(studio, modules: list[Module], settings: FlowSettings):
     """A copy of the studio over other modules: the same source, read only, and a fresh in-memory graph."""
     from ontlas.studio import Studio
@@ -405,8 +462,10 @@ def trial(studio, modules: list[Module], settings: FlowSettings):
     return copy
 
 
-def review(studio, module: Module, settings: FlowSettings | None = None, *, attach: bool = False) -> dict[str, Any]:
-    """What one new module version would do, measured on a trial copy, and whether it passes the flow."""
+def review(studio, module: Module, settings: FlowSettings | None = None, *, attach: bool = False,
+           before: dict[str, Any] | None = None) -> dict[str, Any]:
+    """What one new module version would do, measured on a trial copy, and whether it passes the flow. `before` is the
+    studio as it stands, measured, where the caller keeps one; otherwise it is measured here for the regression."""
     given = settings
     settings = settings or studio.flow
     current = list(studio.composition.modules) if studio.composition else []
@@ -421,6 +480,7 @@ def review(studio, module: Module, settings: FlowSettings | None = None, *, atta
         after = None
         mode = "library"
     out: dict[str, Any] = {"module": module.name, "version": module.version, "mode": mode}
+    out["from_version"] = next((m.version for m in current if m.name == module.name), "")  # the version it replaces
     base = None
     if studio.library is not None and studio.library.versions(module.name):
         try:
@@ -438,11 +498,20 @@ def review(studio, module: Module, settings: FlowSettings | None = None, *, atta
         out.update({"issues": [str(e)], "diff": {}, "measured": {}, "gates": [], "passed": False})
         return out
     settings = given or copy.flow  # the bar the studio would have after the change (a quality module may move it)
-    measured = measure(copy, settings)
+    report = copy.questions() if settings.on("check") and copy.onto.questions else None
+    measured = measure(copy, settings, questions=report)
     results = gates(measured, settings)
     out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto),
                 "elements": element_sides(studio.onto, copy.onto), "measured": measured,
                 "gates": [asdict(g) for g in results], "passed": all(g.passed for g in results)})
+    now = given or studio.flow
+    if before is None:
+        try:
+            before = measure(studio, now)
+        except Exception:  # the studio as it stands cannot be measured: every question counts as not measured before
+            before = {}
+    out["regression"] = regression(before, measured, report, questions=[q.id for q in studio.onto.questions],
+                                   gates_before=gates(before, now), gates_after=results)
     return out
 
 
@@ -461,6 +530,7 @@ class ChangeRequest:
     reason: str = ""
     marks: dict[str, str] = field(default_factory=dict)  # element -> ok | fix: a reviewer's word on each changed element
     comments: list[dict[str, Any]] = field(default_factory=list)  # {at, by, element, text}, kept with the change
+    decided_at: str = ""  # when it was approved or rejected
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -477,6 +547,8 @@ class ChangeService:
         self.audit: list[dict[str, Any]] = []
         self._ids = itertools.count(1)
         self.journal = None  # journal.Journal: change requests and their decisions outlive a restart
+        # () -> the studio as it stands, measured: a page that keeps that measurement lends it to the reviews
+        self.standing = None
 
     def keep(self, journal) -> None:
         """Write every change request and decision to `journal` from now on, after taking back what it holds."""
@@ -513,7 +585,7 @@ class ChangeService:
 
         cr = ChangeRequest(f"C{next(self._ids)}", module.name, module.version,
                            yaml.safe_dump(module.to_dict(), allow_unicode=True, sort_keys=False), by, "pending",
-                           review(self.studio, module, attach=attach), self._now(), attach)
+                           review(self.studio, module, attach=attach, before=self._standing()), self._now(), attach)
         self.requests[cr.id] = cr
         self._log(by, "proposed", cr)
         return cr
@@ -533,7 +605,8 @@ class ChangeService:
         if sent_back:
             raise ChangeError(f"change {cr.id} has elements sent back for a fix: {sent_back}")
         module = self._module(cr)
-        cr.review = review(self.studio, module, attach=cr.attach)  # the studio may have moved since the proposal
+        # the studio may have moved since the proposal
+        cr.review = review(self.studio, module, attach=cr.attach, before=self._standing())
         if not cr.review["passed"]:
             failed = [f"{g['stage']}.{g['condition']}" for g in cr.review["gates"] if not g["passed"]]
             raise ChangeError(f"change {cr.id} does not pass the flow: {failed or cr.review['issues']}")
@@ -542,7 +615,7 @@ class ChangeService:
             self.studio.replace(module)
         elif cr.review["mode"] == "attach":
             self.studio.attach(module)
-        cr.status, cr.decided_by = "approved", by
+        cr.status, cr.decided_by, cr.decided_at = "approved", by, self._now()
         self._log(by, "approved", cr)
         return cr
 
@@ -550,7 +623,7 @@ class ChangeService:
         cr = self._get(change_id)
         if cr.status != "pending":
             raise ChangeError(f"change {cr.id} is {cr.status}")
-        cr.status, cr.decided_by, cr.reason = "rejected", by, reason
+        cr.status, cr.decided_by, cr.reason, cr.decided_at = "rejected", by, reason, self._now()
         self._log(by, "rejected", cr, reason=reason)
         return cr
 
@@ -579,6 +652,9 @@ class ChangeService:
         cr.comments.append({"at": self._now(), "by": by, "element": element, "text": text})
         self._log(by, "commented", cr, element=element)
         return cr
+
+    def _standing(self) -> dict[str, Any] | None:
+        return self.standing() if self.standing is not None else None
 
     def _get(self, change_id: str) -> ChangeRequest:
         cr = self.requests.get(change_id)

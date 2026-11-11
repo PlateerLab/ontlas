@@ -176,7 +176,7 @@ def _open_studio(path: str | Path, applied: bool) -> Studio:
         from ontlas.actions import HttpCaller
 
         studio.actions.caller = HttpCaller(list(calls), float((spec.get("actions") or {}).get("timeout", 10)))
-    studio.settings = {k: spec[k] for k in ("flow", "sync", "notice", "monitor") if k in spec}
+    studio.settings = {k: spec[k] for k in ("flow", "sync", "notice", "monitor", "milestones") if k in spec}
     if (spec.get("functions") or {}).get("python"):
         from ontlas.functions import load_entries
 

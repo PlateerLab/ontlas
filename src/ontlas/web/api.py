@@ -28,6 +28,7 @@ from ontlas.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_t
 from ontlas.repository import Repositories, clean_path, is_litter
 from ontlas.roles import apply_role
 from ontlas.studio import Studio
+from ontlas.web.home_api import HomeMixin
 from ontlas.web.pages_api import PagesMixin
 from ontlas.web.space_api import SpaceMixin, attach
 
@@ -309,7 +310,7 @@ class DataOptions:
     rest: bool = False  # /v1 is on: the page says so, and how to reach it
 
 
-class StudioSession(SpaceMixin, PagesMixin):
+class StudioSession(SpaceMixin, PagesMixin, HomeMixin):
     """One visitor's studio: modules plugged in and out, queries, decisions and approvals, kept apart from others."""
 
     def __init__(self, studio: Studio, *, llm: Callable[[str, str], str] | None = None,
@@ -361,6 +362,7 @@ class StudioSession(SpaceMixin, PagesMixin):
         studio.changes.self_approve = self.self_approve
         studio.actions.self_approve = self.self_approve
         studio.changes.store = self.store
+        studio.changes.standing = self._standing_measured  # a review compares its copy with the measurement kept here
         attach(self)
 
     # ---- helpers -------------------------------------------------------------------------------------------
@@ -2245,6 +2247,8 @@ class StudioSession(SpaceMixin, PagesMixin):
             "base_version": rv.get("base_version", ""), "mode": rv.get("mode", ""), "status": cr.status,
             "status_label": CHANGE_STATUS.get(cr.status, cr.status), "requested_by": cr.requested_by,
             "decided_by": cr.decided_by, "reason": cr.reason, "at": cr.at, "passed": rv.get("passed"),
+            "from_version": rv.get("from_version", ""), "decided_at": cr.decided_at,
+            "regression": self._regression_view(rv.get("regression")),
             "issues": rv.get("issues") or [], "diff": rv.get("diff") or {}, "gates": gates,
             "measured": {"bind": {k: v for k, v in (m.get("bind") or {}).items() if k != "findings"},
                          "findings": (m.get("bind") or {}).get("findings", [])[:20],
@@ -2637,11 +2641,12 @@ class StudioSession(SpaceMixin, PagesMixin):
         ws = self._ws()
         if not ws.dirty:
             raise ValueError("바뀐 내용이 없어 시험하지 못했습니다. Entity · 속성 · 관계를 수정한 뒤 다시 시험해 주세요.")
-        got = review(self.studio, ws.module, attach=ws.current is None)
+        got = review(self.studio, ws.module, attach=ws.current is None, before=self._standing_measured())
         gates = [{**g, "label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]),
                   "note": UNMEASURED.get(g.get("unmeasured") or "", "")} for g in got.get("gates") or []]
         return plain({"ok": True, "passed": got.get("passed"), "issues": got.get("issues") or [], "gates": gates,
-                      "before": self._standing_gates(), "measured": got.get("measured") or {}, "diff": got.get("diff") or {}})
+                      "before": self._standing_gates(), "measured": got.get("measured") or {}, "diff": got.get("diff") or {},
+                      "regression": self._regression_view(got.get("regression"))})
 
     def element_yaml(self, element: str) -> dict:
         """One object as the pending edits would leave it, in the shape a person writes it back."""
