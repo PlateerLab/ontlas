@@ -415,6 +415,10 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._graph_views: dict | None = None  # saved perspectives of the record graph (pages_api), read once
         self._layouts: dict | None = None  # where the modelling cards stand, by pipeline (pages_api), read once
         self._adopt(studio)
+        # the studio files a deployment offers (serve --library): this one first; each keeps its own pipelines
+        self.libraries: list[dict] = [{"id": "l1", "label": "", "path": "", "origin": dict(self.origin)}]
+        self.library_id = "l1"
+        self._library_held: dict[str, tuple] = {}  # library id -> (its pipelines, the one on screen), to come back to
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
@@ -540,6 +544,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             "repositories": self.repositories.rows(),
             "pipelines": [{"id": p["id"], "label": p["label"]} for p in self.pipelines],
             "pipeline": self.pipeline,
+            "libraries": [{"id": x["id"], "label": x["label"], "modules": x.get("modules", 0), "source": x.get("source", "")}
+                          for x in self.libraries],
+            "library_id": self.library_id,
             "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
                      "kept": self.repositories.persistent,
                      "files": sum(r["files"] for r in self.repositories.rows() if r["id"] == self.repo),
@@ -1288,6 +1295,38 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.origin, self._library_rows, self.log = target["origin"], target["rows"], target["log"]
         self.pipeline, self.pending, self.draft_request, self.workspace, self._ws_sig = pid, None, None, None, ()
         self.event("pipeline", f"{target['label']}(으)로 전환")
+        return {"ok": True}
+
+    # ---- libraries: other studio files the deployment offers, each with its own pipelines ---------------------------
+
+    def library_use(self, lid: str) -> dict:
+        """Switch to another library: its studio is read from its file the first time, and what was applied on the
+        one left (its pipelines) is there again on coming back."""
+        from ontlas.config import load_studio
+
+        target = next((x for x in self.libraries if x["id"] == lid), None)
+        if target is None:
+            raise LookupError(f"라이브러리 {lid}")
+        if lid == self.library_id:
+            return {"ok": True}
+        self._stash()
+        self._library_held[self.library_id] = (self.pipelines, self.pipeline)
+        if lid in self._library_held:
+            self.pipelines, pid = self._library_held.pop(lid)
+        else:
+            studio = load_studio(target["path"])
+            if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
+                studio.library = OverlayLibrary(studio.library, [])
+            self.pipelines = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": dict(target["origin"]),
+                               "rows": studio.library.list() if studio.library is not None else [], "log": []}]
+            pid = "p1"
+        cur = next(p for p in self.pipelines if p["id"] == pid)
+        self._adopt(cur["studio"])
+        self.origin, self._library_rows, self.log = cur["origin"], cur["rows"], cur["log"]
+        self.pipeline, self.library_id = pid, lid
+        self.pending, self.draft_request, self.workspace, self._ws_sig = None, None, None, ()
+        self._measured, self._measured_of, self._watch = {}, None, None
+        self.event("library", f"{target['label']}(으)로 전환")
         return {"ok": True}
 
     def pipeline_delete(self, pid: str) -> dict:

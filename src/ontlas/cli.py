@@ -566,6 +566,8 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--llm-key-env", default="", help="environment variable that holds the API key")
     s.add_argument("--llm-extra", default="", help="JSON merged into each chat request")
     s.add_argument("--samples", default="", help="folder of example files a visitor can load with one click")
+    s.add_argument("--library", action="append", default=[], metavar="STUDIO",
+                   help="another studio file a visitor can switch to (repeat for more); each keeps its own pipelines")
     s.add_argument("--policies", default="", help="folder of example policy texts for drafting rules from policy")
     s.add_argument("--allow-connect", action="store_true",
                    help="let visitors connect a database by address (for a studio inside your own network)")
@@ -752,7 +754,7 @@ def _main(argv: list[str] | None = None) -> int:
         serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
                      quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
                      sync=a.sync, library_write=a.library_write, api=api or None,
-                     journal=Path(a.journal) if a.journal else None)
+                     journal=Path(a.journal) if a.journal else None, libraries=[Path(x) for x in a.library])
         return 0
     if a.cmd == "users":
         from ontlas.web.team import Users

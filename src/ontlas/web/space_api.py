@@ -439,7 +439,7 @@ class SpaceMixin:
         from ontlas.backends.sql import SqliteBackend
 
         root = self._pipelines_root()
-        if root is None:
+        if root is None or self.library_id != self.libraries[0]["id"]:  # kept for the first library, where a restart begins
             return
         root.mkdir(parents=True, exist_ok=True)
         index = []

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.0
+
+- **Libraries to choose from.** `ontlas serve studio.yaml --library other/studio.yaml` (repeat for more) offers other
+  studio files beside the first; each is read once at start, so a broken one fails there. A visitor switches from the
+  space card or the 라이브러리 screen, which lists each library with its modules and source. A library keeps its own
+  definition, data and applied drafts: switching back finds them as they were. `POST /api/library {id}` (editor in a
+  team); `/api/state` carries `libraries` and `library_id`. Applied drafts are kept across a restart for the first
+  library only.
+- A rule card's detail leaves out the sections it has nothing for.
+
 ## 0.18.0
 
 The page is regrouped into the four parts a space is made of, and rules, words and versions get screens of their own.
