@@ -4,11 +4,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import ActionError, Actor, HttpCaller, check_parameters, render
-from xgen_space.compile.base import CompileError, compiler_for
-from xgen_space.expr import ExprError, check_computed, dependencies, parse_expr
-from xgen_space.roles import AccessDenied, mask_value
+from ontlas import Ontology
+from ontlas.actions import ActionError, Actor, HttpCaller, check_parameters, render
+from ontlas.compile.base import CompileError, compiler_for
+from ontlas.expr import ExprError, check_computed, dependencies, parse_expr
+from ontlas.roles import AccessDenied, mask_value
 
 from .conftest import LIB
 
@@ -180,7 +180,7 @@ def hook():
 def _with_call(studio, url: str, undo: bool):
     d = studio.onto.to_dict()
     a = d["actions"]["requestReturn"]
-    a["call"] = {"url": f"{url}/returns/$key", "headers": {"Authorization": "Bearer ${XSPACE_TEST_TOKEN}"},
+    a["call"] = {"url": f"{url}/returns/$key", "headers": {"Authorization": "Bearer ${ONTLAS_TEST_TOKEN}"},
                  "body": {"item": "$key", "reason": "$reason", "status": "$after.item_status"}}
     if undo:
         a["undo"] = {"url": f"{url}/returns/$key/cancel", "body": {"item": "$key"}}
@@ -188,7 +188,7 @@ def _with_call(studio, url: str, undo: bool):
 
 
 def test_an_external_call_is_sent_after_the_change_and_undone_with_it(studio, hook, monkeypatch):
-    monkeypatch.setenv("XSPACE_TEST_TOKEN", "t0ken")
+    monkeypatch.setenv("ONTLAS_TEST_TOKEN", "t0ken")
     _with_call(studio, hook, undo=True)
     p = studio.actions.request("requestReturn", "I1001", {"reason": "사이즈"}, actor=AGENT)
     assert next(c for c in p.checks if c.name == "call").passed is False  # no allowed host yet
@@ -203,7 +203,7 @@ def test_an_external_call_is_sent_after_the_change_and_undone_with_it(studio, ho
 
 
 def test_a_failed_call_reverts_the_change(studio, hook, monkeypatch):
-    monkeypatch.setenv("XSPACE_TEST_TOKEN", "t0ken")
+    monkeypatch.setenv("ONTLAS_TEST_TOKEN", "t0ken")
     _with_call(studio, hook, undo=False)
     studio.actions.caller = HttpCaller(["127.0.0.1"])
     _Hook.fail = True
@@ -217,7 +217,7 @@ def test_a_failed_call_reverts_the_change(studio, hook, monkeypatch):
 def test_identity_joins_customers_and_borrowers_across_systems():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     st = load_studio(LIB / "studio.yaml")
     rep = st.resolve_identity("Person")

@@ -4,14 +4,14 @@ import json
 
 import pytest
 
-from xgen_space import ModelError, Ontology
-from xgen_space.actions import Actor, HttpCaller
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.functions import FunctionError, reads
-from xgen_space.review import FlowSettings, gates, measure, value_accuracy
-from xgen_space.roles import AccessDenied
-from xgen_space.studio import Studio
-from xgen_space.tools import StudioTools
+from ontlas import ModelError, Ontology
+from ontlas.actions import Actor, HttpCaller
+from ontlas.backends.sql import SqliteBackend
+from ontlas.functions import FunctionError, reads
+from ontlas.review import FlowSettings, gates, measure, value_accuracy
+from ontlas.roles import AccessDenied
+from ontlas.studio import Studio
+from ontlas.tools import StudioTools
 
 SEED = """
 CREATE TABLE shops (shop_id TEXT PRIMARY KEY, name TEXT, region TEXT);
@@ -76,7 +76,7 @@ def shop() -> Studio:
 
 def graph(st: Studio) -> Studio:
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     st.add_backend("graph", RdflibBackend())
     st.project(into=["graph"])
@@ -354,7 +354,7 @@ def test_a_limit_that_does_not_hold_is_refused(limit, why):
 
 
 def test_an_action_with_only_an_outside_call_writes_nothing(shop):
-    from xgen_space.actions import SqlWriteback
+    from ontlas.actions import SqlWriteback
 
     assert SqlWriteback(shop.backend()).apply(shop.onto, "Goods", "G1", {}) == 0
 
@@ -422,7 +422,7 @@ def test_a_model_error_names_the_function():
 # ---- what a platform calls
 
 def test_a_platform_runs_a_function_reads_context_and_requests_an_action_in_plain_json(shop):
-    from xgen_space.rest import Rest, openapi, tool_list
+    from ontlas.rest import Rest, openapi, tool_list
 
     rest = Rest(StudioTools(shop, role="clerk", actor_id="api"), "t")
     code, out = rest.answer("POST", "/v1/function", {"name": "withTax", "key": "G1"})

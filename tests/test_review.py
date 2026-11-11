@@ -2,8 +2,8 @@ import copy
 
 import pytest
 
-from xgen_space.modules import Module
-from xgen_space.review import ChangeError, FlowSettings
+from ontlas.modules import Module
+from ontlas.review import ChangeError, FlowSettings
 
 from .conftest import LIB
 
@@ -14,8 +14,8 @@ STUDIO = LIB / "studio.yaml"
 def st():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.library import OverlayLibrary
+    from ontlas.config import load_studio
+    from ontlas.library import OverlayLibrary
 
     s = load_studio(STUDIO)
     s.library = OverlayLibrary(s.library, [])  # approvals are kept in memory, the example folder is never written

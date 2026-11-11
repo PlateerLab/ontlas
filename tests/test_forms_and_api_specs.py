@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from xgen_space.ingest import IngestError, ingest
+from ontlas.ingest import IngestError, ingest
 
 from .conftest import EXAMPLE, LIB
 
@@ -13,8 +13,8 @@ MODULES = ["core", "commerce", "commerce-bindings", "commerce-operations", "comm
 @pytest.fixture
 def ws():
     pytest.importorskip("yaml")
-    from xgen_space.library import Library
-    from xgen_space.manage import Workspace
+    from ontlas.library import Library
+    from ontlas.manage import Workspace
 
     return Workspace(Library(LIB).resolve(MODULES), compose_kw={"namespace": "https://example.org/studio#", "name": "studio"})
 
@@ -24,7 +24,7 @@ def onto(ws):
 
 
 def test_a_named_value_is_added_changed_and_taken_out(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     ws.apply("add_parameter", {"name": "gift_limit", "type": "integer", "value": "3", "label": "선물 포장 한도", "unit": "개", "min": 0, "max": 9})
     p = onto(ws).parameters["gift_limit"]
@@ -40,7 +40,7 @@ def test_a_named_value_is_added_changed_and_taken_out(ws):
 
 
 def test_a_named_value_a_rule_reads_stays(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     with pytest.raises(EditError, match="read by rules"):
         ws.apply("delete_parameter", {"name": "free_shipping_amount"})
@@ -50,7 +50,7 @@ def test_a_named_value_a_rule_reads_stays(ws):
 
 
 def test_a_metric_is_defined_on_the_form_and_answered(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     args = {"name": "cancelRate", "label": "취소율", "owner": "운영팀", "unit": "%", "scale": 100,
             "formula": {"match": {"x": "Order"}, "where": {"eq": ["x.status", "CANCELLED"]}, "value": {"count": "x"}},
@@ -69,8 +69,8 @@ def test_a_metric_is_defined_on_the_form_and_answered(ws):
 
 def test_an_identity_is_defined_on_the_form_and_a_copy_passes_before_its_crosswalk_exists(ws, tmp_path):
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.review import review
+    from ontlas.config import load_studio
+    from ontlas.review import review
 
     ws.apply("add_identity", {"name": "Partner", "label": "거래 상대", "members": {"Customer": {"phone": "phone"}, "Seller": {"phone": "phone"}},
                               "rules": [{"id": "same-phone", "match": ["phone"], "normalize": {"phone": "digits"}}]})
@@ -97,7 +97,7 @@ def test_a_function_is_registered_and_a_standard_one_extended(ws):
 
 
 def test_row_rules_are_written_as_filters_and_read_back(ws):
-    from xgen_space.manage import EditError, row_rule
+    from ontlas.manage import EditError, row_rule
 
     ws.apply("add_role", {"name": "region_desk", "label": "지역 담당", "read": ["Order", "OrderItem"],
                           "rows": [{"type": "Order", "property": "customer_id", "principal": "customer_id"},
@@ -114,7 +114,7 @@ def test_row_rules_are_written_as_filters_and_read_back(ws):
 
 
 def test_a_standard_roles_rows_change_over_it_and_one_the_form_cannot_say_is_kept(ws):
-    from xgen_space.manage import row_rule
+    from ontlas.manage import row_rule
 
     r = onto(ws).roles["customer_agent"]
     rules = [row_rule(t, s) for t, s in r.row_filters.items()]
@@ -209,9 +209,9 @@ def test_a_file_that_is_not_an_api_description_is_refused():
 
 def test_a_draft_turns_writing_operations_into_actions_behind_a_person():
     pytest.importorskip("yaml")
-    from xgen_space.definitions import schema_backend
-    from xgen_space.draft import draft
-    from xgen_space.modules import compose
+    from ontlas.definitions import schema_backend
+    from ontlas.draft import draft
+    from ontlas.modules import compose
 
     d = ingest(json.dumps(SPEC).encode(), "orders.json")
     plan = draft(schema_backend(d), name="orders", definitions=d)

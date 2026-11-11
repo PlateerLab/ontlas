@@ -1,21 +1,21 @@
 """The same studio on live servers. Each part runs when its address is given, and touches only what it creates:
 
-    XSPACE_LIVE_PG=postgresql://user:pw@host:port/db     (works in schema xspace_live, dropped and made again)
-    XSPACE_LIVE_FUSEKI=http://host:3030/ds               (+ XSPACE_LIVE_FUSEKI_AUTH=user:pw; the dataset is cleared)
-    XSPACE_LIVE_NEO4J=bolt://host:7687                   (+ XSPACE_LIVE_NEO4J_AUTH=user:pw; the database is cleared)
-    XSPACE_LIVE_GREMLIN=ws://host:8182/gremlin           (the graph is cleared)
-    XSPACE_LIVE_MYSQL=mysql://user:pw@host:port/db       (tables xspace_ord, xspace_line, xspace_ship are dropped and made again)
-    XSPACE_LIVE_ORACLE=oracle://user:pw@host:port/service (the same tables and the example's, so give it an empty user; also SQL/PGQ)
-    XSPACE_LIVE_MSSQL=mssql://user:pw@host:port/db       (the same tables and the example's, so give it an empty database)
+    ONTLAS_LIVE_PG=postgresql://user:pw@host:port/db     (works in schema ontlas_live, dropped and made again)
+    ONTLAS_LIVE_FUSEKI=http://host:3030/ds               (+ ONTLAS_LIVE_FUSEKI_AUTH=user:pw; the dataset is cleared)
+    ONTLAS_LIVE_NEO4J=bolt://host:7687                   (+ ONTLAS_LIVE_NEO4J_AUTH=user:pw; the database is cleared)
+    ONTLAS_LIVE_GREMLIN=ws://host:8182/gremlin           (the graph is cleared)
+    ONTLAS_LIVE_MYSQL=mysql://user:pw@host:port/db       (tables ontlas_ord, ontlas_line, ontlas_ship are dropped and made again)
+    ONTLAS_LIVE_ORACLE=oracle://user:pw@host:port/service (the same tables and the example's, so give it an empty user; also SQL/PGQ)
+    ONTLAS_LIVE_MSSQL=mssql://user:pw@host:port/db       (the same tables and the example's, so give it an empty database)
 """
 import os
 from datetime import datetime
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.backends.sql import SqliteBackend
+from ontlas.studio import Studio
 
 from .conftest import EXAMPLE, LIB
 
@@ -23,9 +23,9 @@ NOW = datetime(2026, 10, 30, 12, 0)
 SEEDS = [(EXAMPLE / "seed.sql").read_text(encoding="utf-8"), (LIB / "seed_finance.sql").read_text(encoding="utf-8")]
 # the example's columns in each server's own types: what a real schema there has, not SQLite's text for dates
 SERVERS = {
-    "oracle": ("XSPACE_LIVE_ORACLE", "oracledb", {"TEXT": "VARCHAR2(400)", "INTEGER": "NUMBER(10)", "REAL": "NUMBER(14, 4)",
+    "oracle": ("ONTLAS_LIVE_ORACLE", "oracledb", {"TEXT": "VARCHAR2(400)", "INTEGER": "NUMBER(10)", "REAL": "NUMBER(14, 4)",
                                                   "at": "TIMESTAMP", "claimed_at": "DATE"}),
-    "mssql": ("XSPACE_LIVE_MSSQL", "pymssql", {"TEXT": "NVARCHAR(400)", "INTEGER": "INT", "REAL": "DECIMAL(14, 4)",
+    "mssql": ("ONTLAS_LIVE_MSSQL", "pymssql", {"TEXT": "NVARCHAR(400)", "INTEGER": "INT", "REAL": "DECIMAL(14, 4)",
                                                "at": "DATETIME", "claimed_at": "DATETIME2(0)"}),
 }
 ON_SERVERS = pytest.mark.parametrize("kind", list(SERVERS))
@@ -46,8 +46,8 @@ def _server(kind: str):
     pytest.importorskip("sqlglot")
     from pathlib import Path
 
-    from xgen_space.compile.sql import qi
-    from xgen_space.config import open_backend
+    from ontlas.compile.sql import qi
+    from ontlas.config import open_backend
 
     b, lite = open_backend({"kind": kind, "dsn": dsn}, Path(".")), _sqlite()
     held = str.upper if kind == "oracle" else str
@@ -70,16 +70,16 @@ def _server(kind: str):
 
 
 def _pg():
-    dsn = _need("XSPACE_LIVE_PG")  # before the import: without the address the test skips, wherever it runs
+    dsn = _need("ONTLAS_LIVE_PG")  # before the import: without the address the test skips, wherever it runs
     psycopg = pytest.importorskip("psycopg")
 
-    from xgen_space.backends.sql import DbApiBackend
+    from ontlas.backends.sql import DbApiBackend
 
     admin = psycopg.connect(dsn, autocommit=True)
-    admin.execute("DROP SCHEMA IF EXISTS xspace_live CASCADE")
-    admin.execute("CREATE SCHEMA xspace_live")
+    admin.execute("DROP SCHEMA IF EXISTS ontlas_live CASCADE")
+    admin.execute("CREATE SCHEMA ontlas_live")
     admin.close()
-    conn = psycopg.connect(dsn, options="-c search_path=xspace_live")
+    conn = psycopg.connect(dsn, options="-c search_path=ontlas_live")
     b = DbApiBackend(conn, "postgres", paramstyle="format")
     for seed in SEEDS:
         for stmt in [s for s in seed.split(";") if s.strip()]:
@@ -102,7 +102,7 @@ def _sqlite():
 
 def test_postgres_answers_like_sqlite_including_computed_properties_and_decisions():
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     pg = _pg()
     st = _commerce(pg)
@@ -118,7 +118,7 @@ def test_postgres_answers_like_sqlite_including_computed_properties_and_decision
 
 
 def test_postgres_takes_writes_in_one_transaction_and_rolls_back_a_failed_one():
-    from xgen_space.actions import Actor
+    from ontlas.actions import Actor
 
     pg = _pg()
     st = _commerce(pg)
@@ -139,8 +139,8 @@ def test_postgres_takes_writes_in_one_transaction_and_rolls_back_a_failed_one():
 def test_postgres_drafts_the_relations_from_its_catalog_and_resolves_identities():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.draft import draft
+    from ontlas.config import load_studio
+    from ontlas.draft import draft
 
     pg = _pg()
     d = draft(pg, name="shop", tables=["customers", "orders", "order_items", "skus", "products", "categories",
@@ -161,7 +161,7 @@ def test_postgres_drafts_the_relations_from_its_catalog_and_resolves_identities(
 @ON_SERVERS
 def test_a_server_answers_like_sqlite_including_computed_properties_and_decisions(kind):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     b = _server(kind)
     st = _commerce(b)
@@ -213,7 +213,7 @@ def _every_function() -> Ontology:
 
 @ON_SERVERS
 def test_every_function_and_clause_answers_like_sqlite(kind):
-    from xgen_space.ir import Query
+    from ontlas.ir import Query
 
     skus = "cents whole down up gap none tag letters cased scarce wanted word mark".split()
     more = {
@@ -291,7 +291,7 @@ def test_every_function_and_clause_answers_like_sqlite(kind):
 
 @ON_SERVERS
 def test_a_server_takes_writes_in_one_transaction_and_rolls_back_a_failed_one(kind):
-    from xgen_space.actions import Actor
+    from ontlas.actions import Actor
 
     b = _server(kind)
     st = _commerce(b)
@@ -312,7 +312,7 @@ def test_a_server_takes_writes_in_one_transaction_and_rolls_back_a_failed_one(ki
 @ON_SERVERS
 def test_a_draft_from_a_server_runs_its_queries_like_sqlite(kind):
     pytest.importorskip("yaml")
-    from xgen_space.draft import _catalog, draft, studio_from
+    from ontlas.draft import _catalog, draft, studio_from
 
     b = _server(kind)
     shop = ("customers", "orders", "order_items", "skus", "products", "categories", "claims", "wishlists", "price_changes")
@@ -333,19 +333,19 @@ def test_a_draft_from_a_server_runs_its_queries_like_sqlite(kind):
 
 
 @ON_SERVERS
-def test_xspace_draft_dsn_makes_a_space_that_opens_and_keeps_the_password_out(kind, tmp_path, monkeypatch):
+def test_ontlas_draft_dsn_makes_a_space_that_opens_and_keeps_the_password_out(kind, tmp_path, monkeypatch):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.cli import main
-    from xgen_space.config import load_studio
+    from ontlas.cli import main
+    from ontlas.config import load_studio
 
     _server(kind)
     dsn = os.environ[SERVERS[kind][0]]
     out = tmp_path / "space"
     assert main(["draft", "--dsn", dsn, "--out", str(out), "--name", "shop"]) == 0
     written = "\n".join(p.read_text(encoding="utf-8") for p in out.rglob("*.yaml"))
-    assert dsn not in written and f"kind: {kind}" in written and "${XSPACE_DSN}" in written
-    monkeypatch.setenv("XSPACE_DSN", dsn)
+    assert dsn not in written and f"kind: {kind}" in written and "${ONTLAS_DSN}" in written
+    monkeypatch.setenv("ONTLAS_DSN", dsn)
     st = load_studio(out / "studio.yaml")
     assert st.check_bindings().ok
     rep = st.conformance()
@@ -354,7 +354,7 @@ def test_xspace_draft_dsn_makes_a_space_that_opens_and_keeps_the_password_out(ki
 
 def _page():
     pytest.importorskip("yaml")
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(_commerce(_sqlite()), data=DataOptions(allow_connect=True))
 
@@ -389,7 +389,7 @@ def test_a_driver_that_repeats_the_address_does_not_repeat_the_password(monkeypa
     def fails(spec, base):
         raise OSError(f"cannot reach {spec['dsn']} as se/cret")
 
-    monkeypatch.setattr("xgen_space.config.open_backend", fails)
+    monkeypatch.setattr("ontlas.config.open_backend", fails)
     with pytest.raises(Exception) as refused:
         page.connect("mssql://me:se%2Fcret@host/db")
     assert "cret" not in str(refused.value)
@@ -399,7 +399,7 @@ def test_oracle_and_sql_server_get_the_text_their_servers_took():
     """What the live parts proved on real servers, held here for runs without one."""
     pytest.importorskip("sqlglot")
     pytest.importorskip("yaml")
-    from xgen_space.compile.base import compiler_for
+    from ontlas.compile.base import compiler_for
 
     onto = _every_function()
 
@@ -436,33 +436,33 @@ def test_sql_server_leaves_percent_signs_and_quotes_as_they_are():
 
 def test_oracle_keeps_a_name_really_made_in_small_letters():
     pytest.importorskip("yaml")
-    from xgen_space.draft import _catalog, draft, studio_from
+    from ontlas.draft import _catalog, draft, studio_from
 
     b = _server("oracle")
     cur = b.conn.cursor()  # the backend would fold these to capitals, as it does any name it does not find
-    for stmt in ('DROP TABLE "xspace_small"', 'DROP TABLE XSPACE_BOTH', 'DROP TABLE "xspace_both"'):
+    for stmt in ('DROP TABLE "ontlas_small"', 'DROP TABLE ONTLAS_BOTH', 'DROP TABLE "ontlas_both"'):
         try:
             cur.execute(stmt)
         except Exception:  # not there yet
             pass
-    cur.execute('CREATE TABLE "xspace_small" ("id" VARCHAR2(20) PRIMARY KEY, "Label" VARCHAR2(20), PLAIN NUMBER(4))')
-    cur.execute("""INSERT INTO "xspace_small" VALUES ('a', 'x', 1)""")
+    cur.execute('CREATE TABLE "ontlas_small" ("id" VARCHAR2(20) PRIMARY KEY, "Label" VARCHAR2(20), PLAIN NUMBER(4))')
+    cur.execute("""INSERT INTO "ontlas_small" VALUES ('a', 'x', 1)""")
     b.conn.commit()
-    b.run("CREATE TABLE xspace_note (note_id VARCHAR2(20) PRIMARY KEY)")  # the backend looks at the catalog again
-    d = draft(b, name="small", tables=[t[0] for t in _catalog(b) if t[0].lower() == "xspace_small"])
-    assert [o.table for o in d.objects] == ["xspace_small"]
+    b.run("CREATE TABLE ontlas_note (note_id VARCHAR2(20) PRIMARY KEY)")  # the backend looks at the catalog again
+    d = draft(b, name="small", tables=[t[0] for t in _catalog(b) if t[0].lower() == "ontlas_small"])
+    assert [o.table for o in d.objects] == ["ontlas_small"]
     st = studio_from(d, b, graph=False)
     o = d.objects[0]
     assert st.fetch(o.name, "a")[o.key] == "a" and st.check_bindings().ok
-    b.run("DROP TABLE xspace_note")
-    cur.execute('DROP TABLE "xspace_small"')
+    b.run("DROP TABLE ontlas_note")
+    cur.execute('DROP TABLE "ontlas_small"')
 
 
 def test_fuseki_answers_like_sqlite():
-    from xgen_space.backends.rdf import SparqlEndpointBackend
+    from ontlas.backends.rdf import SparqlEndpointBackend
 
-    url = _need("XSPACE_LIVE_FUSEKI").rstrip("/")
-    user, _, pw = os.environ.get("XSPACE_LIVE_FUSEKI_AUTH", ":").partition(":")
+    url = _need("ONTLAS_LIVE_FUSEKI").rstrip("/")
+    user, _, pw = os.environ.get("ONTLAS_LIVE_FUSEKI_AUTH", ":").partition(":")
     st = _commerce(_sqlite())
     st.add_backend("fuseki", SparqlEndpointBackend(f"{url}/query", update_url=f"{url}/update", gsp_url=f"{url}/data",
                                                    user=user, password=pw))
@@ -479,10 +479,10 @@ def test_neo4j_answers_like_sqlite_including_computed_properties():
     pytest.importorskip("neo4j")
     import neo4j
 
-    from xgen_space.backends.graph import Neo4jBackend
+    from ontlas.backends.graph import Neo4jBackend
 
-    uri = _need("XSPACE_LIVE_NEO4J")
-    user, _, pw = os.environ.get("XSPACE_LIVE_NEO4J_AUTH", "neo4j:").partition(":")
+    uri = _need("ONTLAS_LIVE_NEO4J")
+    user, _, pw = os.environ.get("ONTLAS_LIVE_NEO4J_AUTH", "neo4j:").partition(":")
     driver = neo4j.GraphDatabase.driver(uri, auth=(user, pw))
     try:
         st = _commerce(_sqlite())
@@ -499,9 +499,9 @@ def test_neo4j_answers_like_sqlite_including_computed_properties():
 
 def test_gremlin_server_answers_like_sqlite():
     pytest.importorskip("gremlin_python")
-    from xgen_space.backends.gremlin import GremlinBackend
+    from ontlas.backends.gremlin import GremlinBackend
 
-    g = GremlinBackend(_need("XSPACE_LIVE_GREMLIN"))
+    g = GremlinBackend(_need("ONTLAS_LIVE_GREMLIN"))
     try:
         st = _commerce(_sqlite())
         st.add_backend("gremlin", g)
@@ -511,7 +511,7 @@ def test_gremlin_server_answers_like_sqlite():
         assert all(q.outcomes["gremlin"].rows is not None for q in rep.queries)  # optional and computed included
         assert st.run("orderTotals", backend="gremlin").rows == st.run("orderTotals").rows
         assert st.run("categoryAncestors", {"category": "K3"}, backend="gremlin").rows == [("상의",), ("의류",)]
-        from xgen_space.ir import Query
+        from ontlas.ir import Query
 
         more = {
             "twoUp": {"match": {"k": "Category", "a": "Category"},
@@ -536,7 +536,7 @@ def test_gremlin_server_answers_like_sqlite():
 
 def _agrees_on_every_case(backend, name: str) -> None:
     """The cases with their null values and missing objects, on this server beside SQLite."""
-    from xgen_space.ir import Query
+    from ontlas.ir import Query
 
     from .compile_cases import all_cases, studio_with_cases
 
@@ -550,9 +550,9 @@ def _agrees_on_every_case(backend, name: str) -> None:
 
 def test_gremlin_server_agrees_on_optional_links_and_computed_properties():
     pytest.importorskip("gremlin_python")
-    from xgen_space.backends.gremlin import GremlinBackend
+    from ontlas.backends.gremlin import GremlinBackend
 
-    g = GremlinBackend(_need("XSPACE_LIVE_GREMLIN"))
+    g = GremlinBackend(_need("ONTLAS_LIVE_GREMLIN"))
     try:
         _agrees_on_every_case(g, "gremlin")
     finally:
@@ -563,10 +563,10 @@ def test_neo4j_agrees_on_conditional_aggregates():
     pytest.importorskip("neo4j")
     import neo4j
 
-    from xgen_space.backends.graph import Neo4jBackend
+    from ontlas.backends.graph import Neo4jBackend
 
-    uri = _need("XSPACE_LIVE_NEO4J")
-    user, _, pw = os.environ.get("XSPACE_LIVE_NEO4J_AUTH", "neo4j:").partition(":")
+    uri = _need("ONTLAS_LIVE_NEO4J")
+    user, _, pw = os.environ.get("ONTLAS_LIVE_NEO4J_AUTH", "neo4j:").partition(":")
     driver = neo4j.GraphDatabase.driver(uri, auth=(user, pw))
     try:
         _agrees_on_every_case(Neo4jBackend(driver), "neo")
@@ -575,10 +575,10 @@ def test_neo4j_agrees_on_conditional_aggregates():
 
 
 def test_fuseki_agrees_on_conditional_aggregates():
-    from xgen_space.backends.rdf import SparqlEndpointBackend
+    from ontlas.backends.rdf import SparqlEndpointBackend
 
-    url = _need("XSPACE_LIVE_FUSEKI").rstrip("/")
-    user, _, pw = os.environ.get("XSPACE_LIVE_FUSEKI_AUTH", ":").partition(":")
+    url = _need("ONTLAS_LIVE_FUSEKI").rstrip("/")
+    user, _, pw = os.environ.get("ONTLAS_LIVE_FUSEKI_AUTH", ":").partition(":")
     _agrees_on_every_case(SparqlEndpointBackend(f"{url}/query", update_url=f"{url}/update", gsp_url=f"{url}/data",
                                                 user=user, password=pw), "fuseki")
 
@@ -590,13 +590,13 @@ def test_oracle_runs_sql_pgq_like_sqlite():
     from datetime import datetime as dt
     from urllib.parse import urlsplit
 
-    u = urlsplit(_need("XSPACE_LIVE_ORACLE"))
+    u = urlsplit(_need("ONTLAS_LIVE_ORACLE"))
     oracledb = pytest.importorskip("oracledb")
 
-    from xgen_space.compile.base import CompileError, compiler_for
-    from xgen_space.compile.pgq import graph_ddl
-    from xgen_space.conformance import normalize_rows
-    from xgen_space.ir import Query
+    from ontlas.compile.base import CompileError, compiler_for
+    from ontlas.compile.pgq import graph_ddl
+    from ontlas.conformance import normalize_rows
+    from ontlas.ir import Query
 
     from .compile_cases import OPTIONALS, all_cases, studio_with_cases
 
@@ -646,24 +646,24 @@ def test_oracle_runs_sql_pgq_like_sqlite():
         conn.close()
 
 
-@pytest.mark.parametrize(("kind", "var", "driver"), [("postgres", "XSPACE_LIVE_PG", "psycopg"),
-                                                     ("mysql", "XSPACE_LIVE_MYSQL", "pymysql"),
-                                                     ("oracle", "XSPACE_LIVE_ORACLE", "oracledb"),
-                                                     ("mssql", "XSPACE_LIVE_MSSQL", "pymssql")])
+@pytest.mark.parametrize(("kind", "var", "driver"), [("postgres", "ONTLAS_LIVE_PG", "psycopg"),
+                                                     ("mysql", "ONTLAS_LIVE_MYSQL", "pymysql"),
+                                                     ("oracle", "ONTLAS_LIVE_ORACLE", "oracledb"),
+                                                     ("mssql", "ONTLAS_LIVE_MSSQL", "pymssql")])
 def test_a_studio_is_drafted_from_the_catalog_and_runs(kind, var, driver):
     dsn = _need(var)
     pytest.importorskip(driver)
     pytest.importorskip("sqlglot")
     from pathlib import Path
 
-    from xgen_space.actions import SqlWriteback
-    from xgen_space.bindings import check_bindings
-    from xgen_space.config import open_backend
-    from xgen_space.draft import _catalog, draft, studio_from
-    from xgen_space.ir import Column, Edge, Query, Ref
+    from ontlas.actions import SqlWriteback
+    from ontlas.bindings import check_bindings
+    from ontlas.config import open_backend
+    from ontlas.draft import _catalog, draft, studio_from
+    from ontlas.ir import Column, Edge, Query, Ref
 
     b = open_backend({"kind": kind, "dsn": dsn}, Path("."))
-    for t in ("xspace_ship", "xspace_line", "xspace_ord"):
+    for t in ("ontlas_ship", "ontlas_line", "ontlas_ord"):
         try:
             b.run(f"DROP TABLE {t}")
         except Exception:  # not there yet
@@ -671,21 +671,21 @@ def test_a_studio_is_drafted_from_the_catalog_and_runs(kind, var, driver):
     text, big = {"oracle": ("VARCHAR2(20)", "CLOB"), "postgres": ("VARCHAR(20)", "JSON"),
                  "mssql": ("NVARCHAR(20)", "NVARCHAR(MAX)")}.get(kind, ("VARCHAR(20)", "TEXT"))
     for stmt in [
-        f"CREATE TABLE xspace_ord (ord_no {text} PRIMARY KEY, memo {big}, status {text})",
-        f"CREATE TABLE xspace_line (ord_no {text} NOT NULL, line_seq INTEGER NOT NULL, proc_seq INTEGER NOT NULL, "
-        "qty INTEGER, PRIMARY KEY (ord_no, line_seq, proc_seq), FOREIGN KEY (ord_no) REFERENCES xspace_ord (ord_no))",
-        f"CREATE TABLE xspace_ship (ship_no {text} PRIMARY KEY, ord_no {text}, line_seq INTEGER, proc_seq INTEGER, "
-        "FOREIGN KEY (ord_no, line_seq, proc_seq) REFERENCES xspace_line (ord_no, line_seq, proc_seq))",
-        "INSERT INTO xspace_ord VALUES ('O1', '{}', 'NEW')", "INSERT INTO xspace_ord VALUES ('O2', '{}', 'NEW')",
-        "INSERT INTO xspace_line VALUES ('O1', 1, 0, 2)", "INSERT INTO xspace_line VALUES ('O1', 1, 1, 3)",
-        "INSERT INTO xspace_ship VALUES ('S1', 'O1', 1, 1)",
+        f"CREATE TABLE ontlas_ord (ord_no {text} PRIMARY KEY, memo {big}, status {text})",
+        f"CREATE TABLE ontlas_line (ord_no {text} NOT NULL, line_seq INTEGER NOT NULL, proc_seq INTEGER NOT NULL, "
+        "qty INTEGER, PRIMARY KEY (ord_no, line_seq, proc_seq), FOREIGN KEY (ord_no) REFERENCES ontlas_ord (ord_no))",
+        f"CREATE TABLE ontlas_ship (ship_no {text} PRIMARY KEY, ord_no {text}, line_seq INTEGER, proc_seq INTEGER, "
+        "FOREIGN KEY (ord_no, line_seq, proc_seq) REFERENCES ontlas_line (ord_no, line_seq, proc_seq))",
+        "INSERT INTO ontlas_ord VALUES ('O1', '{}', 'NEW')", "INSERT INTO ontlas_ord VALUES ('O2', '{}', 'NEW')",
+        "INSERT INTO ontlas_line VALUES ('O1', 1, 0, 2)", "INSERT INTO ontlas_line VALUES ('O1', 1, 1, 3)",
+        "INSERT INTO ontlas_ship VALUES ('S1', 'O1', 1, 1)",
     ]:
         b.run(stmt)
-    d = draft(b, name="live", lang="ko", tables=[t[0] for t in _catalog(b) if t[0].lower().startswith("xspace_")])
+    d = draft(b, name="live", lang="ko", tables=[t[0] for t in _catalog(b) if t[0].lower().startswith("ontlas_")])
     assert d.skipped == []
     st = studio_from(d, b, graph=False)
     objs = {o.table.lower(): o for o in st.onto.objects.values()}
-    line, ship = objs["xspace_line"], objs["xspace_ship"]
+    line, ship = objs["ontlas_line"], objs["ontlas_ship"]
     assert [c.lower() for c in line.key_prop.cols] == ["ord_no", "line_seq", "proc_seq"]
     assert check_bindings(st.onto, b).ok
     assert st.fetch(line.name, "O1|1|1")[line.key] == "O1|1|1"
@@ -696,5 +696,5 @@ def test_a_studio_is_drafted_from_the_catalog_and_runs(kind, var, driver):
     qty = next(p.name for p in line.properties.values() if p.col.lower() == "qty")
     assert SqlWriteback(b).apply(st.onto, line.name, "O1|1|1", {qty: 9}) == 1
     assert st.questions().accuracy == 1.0
-    for t in ("xspace_ship", "xspace_line", "xspace_ord"):
+    for t in ("ontlas_ship", "ontlas_line", "ontlas_ord"):
         b.run(f"DROP TABLE {t}")

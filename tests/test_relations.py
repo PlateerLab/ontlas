@@ -5,9 +5,9 @@ import re
 
 import pytest
 
-from xgen_space.embed import HashEmbedder
-from xgen_space.relations import BasicReader, Busy, mentions_in, open_reader, parse_rows, units_of
-from xgen_space.space import Space
+from ontlas.embed import HashEmbedder
+from ontlas.relations import BasicReader, Busy, mentions_in, open_reader, parse_rows, units_of
+from ontlas.space import Space
 
 DOCS = [{"name": "반품정책", "kind": "md", "text": "", "path": "정책/반품정책.md", "sections": [
             {"title": "반품 기간", "text": "주문상품의 반품은 배송 완료 후 7일 이내에 신청합니다. 반품 승인은 고객센터가 합니다."},
@@ -73,7 +73,7 @@ def approved_by(u, n):
 
 
 def test_an_ending_on_its_own_is_no_concept():
-    from xgen_space.space import Chunk, keywords
+    from ontlas.space import Chunk, keywords
 
     chunks = [Chunk(str(i), "d", f"s{i}", i, "검토하는 담당자가 하는 일은 확인하는 것입니다. 하는 일 하는 일") for i in range(3)]
     assert "하는" not in keywords(chunks, {}) and "담당자" in keywords(chunks, {})
@@ -190,7 +190,7 @@ def test_what_was_read_outlives_the_space():
 
 
 def test_a_relation_is_said_beside_the_passage_that_states_it():
-    from xgen_space.knowledge import WordsRetriever, build
+    from ontlas.knowledge import WordsRetriever, build
 
     s = _space()
     s.read_relations(BasicReader(answering(approved_by)), _Onto, TERMS)
@@ -207,7 +207,7 @@ def test_a_relation_is_said_beside_the_passage_that_states_it():
 
 
 def test_a_relation_says_a_property_by_its_name():
-    from xgen_space.knowledge import build
+    from ontlas.knowledge import build
 
     class Onto(_Onto):
         objects = {**_Onto.objects, "Desk": _Obj("Desk", "창구", [_Field("team", "고객센터")])}

@@ -13,8 +13,8 @@ CHILD = r"""
 import sys, threading
 sys.path.insert(0, sys.argv[1])
 import rdflib
-from xgen_space.backends.rdf import RdflibBackend, prepare_query
-from xgen_space.compile.base import Compiled
+from ontlas.backends.rdf import RdflibBackend, prepare_query
+from ontlas.compile.base import Compiled
 
 g = rdflib.Graph()
 g.add((rdflib.URIRef("https://example.org/c1"), rdflib.RDF.type, rdflib.URIRef("https://example.org/Customer")))

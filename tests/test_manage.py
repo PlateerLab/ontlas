@@ -12,15 +12,15 @@ MODULES = ["core", "commerce", "commerce-bindings", "fashion", "acme-overlay", "
 @pytest.fixture
 def ws():
     pytest.importorskip("yaml")
-    from xgen_space.library import Library
-    from xgen_space.manage import Workspace
+    from ontlas.library import Library
+    from ontlas.manage import Workspace
 
     lib = Library(LIB)
     return Workspace(lib.resolve(MODULES), compose_kw={"namespace": "https://example.org/studio#", "name": "studio"})
 
 
 def test_an_edit_on_a_standard_extends_it_and_leaves_the_standard_alone(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     e = ws.apply("update_property", {"object": "Customer", "name": "grade", "label": "회원 등급"})
     assert e.target == "property:Customer.grade" and e.took_out == []
@@ -50,7 +50,7 @@ def test_a_removal_takes_out_what_it_leaves_broken_and_says_so(ws):
 
 
 def test_new_objects_links_and_questions_are_the_modules_own(ws):
-    from xgen_space.manage import EditError
+    from ontlas.manage import EditError
 
     ws.apply("add_object", {"name": "Coupon", "label": "쿠폰", "table": "coupons", "key": "coupon_id",
                             "properties": {"coupon_id": {"type": "string", "label": "쿠폰 번호"}}})
@@ -74,8 +74,8 @@ def test_new_objects_links_and_questions_are_the_modules_own(ws):
 
 def test_settle_prunes_what_removals_break_but_not_what_the_module_defines():
     pytest.importorskip("yaml")
-    from xgen_space.library import Library
-    from xgen_space.modules import Module, compose, settle
+    from ontlas.library import Library
+    from ontlas.modules import Module, compose, settle
 
     base = Library(LIB).resolve(["core", "commerce", "commerce-bindings"])
     m = Module.from_dict({"module": "cut", "version": "0.1.0", "kind": "customer", "requires": ["commerce"],
@@ -92,8 +92,8 @@ def test_settle_prunes_what_removals_break_but_not_what_the_module_defines():
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(LIB / "studio.yaml"))
 
@@ -156,6 +156,6 @@ def test_a_change_the_trial_stops_comes_back_with_its_review(session):
 
 
 def test_management_routes_need_an_editor():
-    from xgen_space.web.team import NEEDS
+    from ontlas.web.team import NEEDS
 
     assert {NEEDS[r] for r in ("manage/edit", "manage/questions", "manage/discard", "manage/propose")} == {"editor"}

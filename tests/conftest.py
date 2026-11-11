@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.backends.sql import SqliteBackend
+from ontlas.studio import Studio
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "commerce"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -19,7 +19,7 @@ NOW = datetime(2026, 10, 30, 12, 0)
 def _two_domains() -> Path:
     """The example library with a second domain on it: what only two domains together can show stays tested, while the
     library people get holds commerce alone."""
-    root = Path(tempfile.mkdtemp(prefix="xspace-tests-"))
+    root = Path(tempfile.mkdtemp(prefix="ontlas-tests-"))
     atexit.register(shutil.rmtree, root, ignore_errors=True)
     shutil.copytree(EXAMPLE, root / "commerce")
     shutil.copytree(EXAMPLE.parent / "library", root / "library")
@@ -52,7 +52,7 @@ def studio(onto, source) -> Studio:
 @pytest.fixture
 def graph_studio(studio) -> Studio:
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     studio.project()

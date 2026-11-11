@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from xgen_space.repository import Repositories, clean_path, is_litter
+from ontlas.repository import Repositories, clean_path, is_litter
 
 from .conftest import LIB
 
@@ -16,8 +16,8 @@ EXAMPLE = LIB / "studio.yaml"
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(EXAMPLE), data=DataOptions())
 
@@ -215,7 +215,7 @@ def test_a_repository_is_a_set_of_files_of_its_own(session):
 
 
 def test_the_limits_count_every_repository(session):
-    from xgen_space.web import DataOptions
+    from ontlas.web import DataOptions
 
     session.data = DataOptions(files=2, total_bytes=100)
     session.catalog_upload("a.csv", CSV)
@@ -258,7 +258,7 @@ def test_everything_rolls_up_into_one_json(session):
 
 
 def test_a_server_folder_comes_in_only_where_the_install_allows_it(session, tmp_path):
-    from xgen_space.web import DataOptions
+    from ontlas.web import DataOptions
 
     (tmp_path / "자료" / "하위").mkdir(parents=True)
     (tmp_path / "자료" / "하위" / "회원.csv").write_bytes(CSV)
@@ -277,8 +277,8 @@ def test_a_server_folder_comes_in_only_where_the_install_allows_it(session, tmp_
 def test_visitors_share_a_kept_folder_and_each_reads_it(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     kept = Repositories(tmp_path)
     first = StudioSession(load_studio(EXAMPLE), data=DataOptions(), repositories=kept)

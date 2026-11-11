@@ -17,8 +17,8 @@ FILES = ROOT / "examples" / "files"
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(CFG), data=DataOptions(samples=FILES))
 
@@ -55,7 +55,7 @@ def test_patterns_walk_along_what_is_bound():
     pytest.importorskip("rdflib")
     from rdflib import RDF, URIRef, Variable
 
-    from xgen_space.backends.rdf import connected
+    from ontlas.backends.rdf import connected
 
     o, i, s = Variable("o"), Variable("i"), Variable("s")
     has, of, cls = URIRef("urn:has"), URIRef("urn:of"), URIRef("urn:Class")
@@ -79,9 +79,9 @@ def test_the_sample_files_draft_into_a_shop(session):
 def test_the_graph_engine_is_served_apart_from_the_page():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
-    from xgen_space.web.server import STATIC, kit_version, page, serve
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
+    from ontlas.web.server import STATIC, kit_version, page, serve
 
     html = page().decode("utf-8")
     assert f"/graph-kit.js?v={kit_version()}" in html and "window.SpaceGraph" in html
@@ -107,9 +107,9 @@ def test_the_graph_engine_is_served_apart_from_the_page():
 
 
 def test_an_integer_key_is_fetched_as_the_number_it_is():
-    from xgen_space.backends.sql import SqliteBackend
-    from xgen_space.modules import Module
-    from xgen_space.studio import Studio
+    from ontlas.backends.sql import SqliteBackend
+    from ontlas.modules import Module
+    from ontlas.studio import Studio
 
     m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
         "Thing": {"key": "id", "table": "t", "properties": {"id": {"type": "integer"}, "name": {"type": "string"}}}}})
@@ -123,10 +123,10 @@ def test_an_integer_key_is_fetched_as_the_number_it_is():
 
 def test_a_column_named_like_its_alias_is_valid_sparql():
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
-    from xgen_space.backends.sql import SqliteBackend
-    from xgen_space.modules import Module
-    from xgen_space.studio import Studio
+    from ontlas.backends.rdf import RdflibBackend
+    from ontlas.backends.sql import SqliteBackend
+    from ontlas.modules import Module
+    from ontlas.studio import Studio
 
     m = Module.from_dict({"module": "m", "version": "1.0.0", "kind": "domain", "namespace": "urn:m#", "objects": {
         "X": {"key": "id", "table": "t", "properties": {"id": {"type": "string"}, "x": {"type": "string"}}}},

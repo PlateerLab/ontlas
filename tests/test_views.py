@@ -3,13 +3,13 @@ import json
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import Actor
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.cli import main
-from xgen_space.decide.views import behind, create_views, in_order, through_view, view_statements
-from xgen_space.modules import Module, compose
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.actions import Actor
+from ontlas.backends.sql import SqliteBackend
+from ontlas.cli import main
+from ontlas.decide.views import behind, create_views, in_order, through_view, view_statements
+from ontlas.modules import Module, compose
+from ontlas.studio import Studio
 
 CLERK = Actor("clerk", "human", ["clerk"])
 
@@ -130,7 +130,7 @@ def test_a_scoped_role_reads_a_view(studio):
 
 def test_the_graph_answers_the_same(studio):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     studio.project()
@@ -292,7 +292,7 @@ def test_removing_what_a_view_reads_is_named():
 
 def test_a_graph_backend_makes_no_views(studio):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     studio.add_backend("graph", RdflibBackend())
     with pytest.raises(ValueError, match="is not a SQL source"):

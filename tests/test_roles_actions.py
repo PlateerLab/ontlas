@@ -1,7 +1,7 @@
 import pytest
 
-from xgen_space.actions import Actor
-from xgen_space.roles import AccessDenied
+from ontlas.actions import Actor
+from ontlas.roles import AccessDenied
 
 ME = {"customer_id": "C001"}
 AGENT = Actor("agent-1", "agent", ["customer_agent"])

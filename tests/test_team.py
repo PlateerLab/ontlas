@@ -7,7 +7,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from xgen_space.web.team import Users, check_password, hash_password
+from ontlas.web.team import Users, check_password, hash_password
 
 from .conftest import EXAMPLE, LIB
 
@@ -22,11 +22,11 @@ def test_passwords_are_salted_and_checked_in_constant_form():
 def team(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.library import Library
-    from xgen_space.web.api import StudioSession
-    from xgen_space.web.server import RateLimit, make_handler
-    from xgen_space.web.team import Logins, TeamSessions
+    from ontlas.config import load_studio
+    from ontlas.library import Library
+    from ontlas.web.api import StudioSession
+    from ontlas.web.server import RateLimit, make_handler
+    from ontlas.web.team import Logins, TeamSessions
 
     root = tmp_path / "examples"
     shutil.copytree(EXAMPLE, root / "commerce")
@@ -56,7 +56,7 @@ def _call(base, path, body=None, cookie="", header=True):
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json"}
     if header and data is not None:
-        headers["X-XSPACE-Request"] = "1"
+        headers["X-Ontlas-Request"] = "1"
     if cookie:
         headers["Cookie"] = cookie
     req = urllib.request.Request(base + path, data=data, headers=headers, method="POST" if data is not None else "GET")
@@ -104,8 +104,8 @@ def test_a_team_signs_in_and_works_in_one_studio_by_role(team):
 
 
 def test_a_teams_api_answers_from_the_studio_the_team_works_in(team):
-    from xgen_space.rest import Rest
-    from xgen_space.tools import StudioTools
+    from ontlas.rest import Rest
+    from ontlas.tools import StudioTools
 
     base, _, sessions = team
     shared = sessions.shared
@@ -121,8 +121,8 @@ def test_a_teams_api_answers_from_the_studio_the_team_works_in(team):
 
 
 def test_a_request_from_outside_waits_where_a_person_finds_it(team):
-    from xgen_space.rest import Rest
-    from xgen_space.tools import StudioTools
+    from ontlas.rest import Rest
+    from ontlas.tools import StudioTools
 
     base, _, sessions = team
     shared = sessions.shared
@@ -138,7 +138,7 @@ def test_a_request_from_outside_waits_where_a_person_finds_it(team):
 
 
 def test_what_the_management_screens_approved_comes_back_with_the_studio(team):
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     _, root, _ = team
     home = root / "library" / "workspace"
@@ -159,9 +159,9 @@ extend:
 
 def test_a_running_agent_goes_by_a_change_once_it_reaches_the_library(team):
     pytest.importorskip("mcp")
-    from xgen_space.config import load_studio
-    from xgen_space.mcp_server import following
-    from xgen_space.tools import StudioTools
+    from ontlas.config import load_studio
+    from ontlas.mcp_server import following
+    from ontlas.tools import StudioTools
 
     _, root, _ = team
     config = root / "library" / "studio.yaml"
@@ -178,7 +178,7 @@ def test_a_running_agent_goes_by_a_change_once_it_reaches_the_library(team):
 
 
 def test_what_is_switched_on_stays_on_across_a_restart(team):
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     base, root, _ = team
     kim = _login(base, "kim", "kim-password-1")
@@ -190,8 +190,8 @@ def test_what_is_switched_on_stays_on_across_a_restart(team):
 
 
 def test_a_module_that_stopped_fitting_cannot_keep_a_studio_from_starting(team):
-    from xgen_space.config import load_studio
-    from xgen_space.library import Library
+    from ontlas.config import load_studio
+    from ontlas.library import Library
 
     _, root, _ = team
     config = root / "library" / "studio.yaml"

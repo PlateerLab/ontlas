@@ -9,8 +9,8 @@ from .conftest import LIB
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(LIB / "studio.yaml"))
 

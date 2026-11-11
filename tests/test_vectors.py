@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.embed import (
+from ontlas.embed import (
     CachedEmbedder,
     Embedder,
     EmbedError,
@@ -17,8 +17,8 @@ from xgen_space.embed import (
     open_embedder,
     register_embedder,
 )
-from xgen_space.space import Space, dictionary, keywords, open_space, split
-from xgen_space.vectors import (
+from ontlas.space import Space, dictionary, keywords, open_space, split
+from ontlas.vectors import (
     MemoryStore,
     Point,
     QdrantStore,
@@ -287,8 +287,8 @@ def test_a_space_comes_from_the_studio_file():
     assert s.state()["chunks"] > 10 and open_space(None).state()["documents"] == 0
 
 
-LIVE = [("XSPACE_LIVE_QDRANT", lambda v: {"kind": "qdrant", "url": v, "prefix": "xspace_test_"}),
-        ("XSPACE_LIVE_PGVECTOR", lambda v: {"kind": "pgvector", "dsn": v, "prefix": "xspace_test_"})]
+LIVE = [("ONTLAS_LIVE_QDRANT", lambda v: {"kind": "qdrant", "url": v, "prefix": "ontlas_test_"}),
+        ("ONTLAS_LIVE_PGVECTOR", lambda v: {"kind": "pgvector", "dsn": v, "prefix": "ontlas_test_"})]
 
 
 @pytest.mark.parametrize("env,spec", LIVE, ids=["qdrant", "pgvector"])
@@ -318,10 +318,10 @@ def test_live_store_agrees_with_exact_search(env, spec):
 
 
 def test_live_space_on_a_real_store():
-    value = os.environ.get("XSPACE_LIVE_QDRANT")
+    value = os.environ.get("ONTLAS_LIVE_QDRANT")
     if not value:
-        pytest.skip("XSPACE_LIVE_QDRANT not set")
-    s = _space(stores={"memory": MemoryStore(), "qdrant": open_vector_store({"kind": "qdrant", "url": value, "prefix": "xspace_space_"})})
+        pytest.skip("ONTLAS_LIVE_QDRANT not set")
+    s = _space(stores={"memory": MemoryStore(), "qdrant": open_vector_store({"kind": "qdrant", "url": value, "prefix": "ontlas_space_"})})
     assert s.index()["errors"] == {}
     assert s.compare("운송장 번호", 3)["same"]
     s.stores["qdrant"].drop(s.collection)

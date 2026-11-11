@@ -2,9 +2,9 @@ import io
 
 import pytest
 
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.draft import ReadError, draft, infer_type, load_sqlite, read_csv, read_file, romanize, studio_from
-from xgen_space.modules import compose
+from ontlas.backends.sql import SqliteBackend
+from ontlas.draft import ReadError, draft, infer_type, load_sqlite, read_csv, read_file, romanize, studio_from
+from ontlas.modules import compose
 
 from .conftest import BOOKS
 
@@ -119,8 +119,8 @@ def test_a_table_with_no_key_is_left_out_of_a_database_it_cannot_change():
 def test_the_command_writes_a_studio_folder_that_serves_as_it_is(tmp_path):
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.cli import main
-    from xgen_space.config import load_studio
+    from ontlas.cli import main
+    from ontlas.config import load_studio
 
     files = [str(p) for p in sorted(FILES.iterdir())]
     assert main(["draft", *files, "--name", "lib", "--drop", "object:Jeoja", "-o", str(tmp_path)]) == 0
@@ -134,7 +134,7 @@ def test_the_command_writes_a_studio_folder_that_serves_as_it_is(tmp_path):
 
 
 def test_the_rules_are_settings_a_person_can_change():
-    from xgen_space.draft import DraftRules
+    from ontlas.draft import DraftRules
 
     def run(**rules):
         b = SqliteBackend()

@@ -5,7 +5,7 @@ from .test_web import _build
 
 def test_a_question_tries_again_only_while_the_page_can_still_wait(monkeypatch):
     pytest.importorskip("rdflib")
-    from xgen_space.web import api
+    from ontlas.web import api
 
     calls = []
     s = _build()
@@ -21,7 +21,7 @@ def test_a_question_tries_again_only_while_the_page_can_still_wait(monkeypatch):
 
 def test_a_column_named_after_another_property_is_sent_back():
     pytest.importorskip("rdflib")
-    from xgen_space.nl import IRGenerator
+    from ontlas.nl import IRGenerator
 
     s = _build()
     answers = iter(['{"match": {"c": "Customer"}, "where": {"eq": ["c.grade", "VIP"]}, '

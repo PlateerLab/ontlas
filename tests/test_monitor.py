@@ -12,8 +12,8 @@ EXAMPLE = LIB / "studio.yaml"
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(EXAMPLE), data=DataOptions())
 
@@ -52,7 +52,7 @@ def test_a_module_that_breaks_the_source_shows_as_a_chain_across_floors(session)
 
 
 def test_it_measures_when_something_changed_or_a_while_has_passed(session, monkeypatch):
-    import xgen_space.web.api as api
+    import ontlas.web.api as api
 
     assert session.monitor()["measured"]
     assert not session.monitor()["measured"]
@@ -90,8 +90,8 @@ def test_a_shape_changes_only_with_what_is_drawn(session):
 def test_a_studio_without_a_library_has_a_board_too():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import StudioSession
 
     s = StudioSession(load_studio(Path(__file__).parent.parent / "examples" / "commerce" / "studio.yaml"))
     b = s.monitor()
@@ -139,7 +139,7 @@ def test_a_draft_applied_again_under_its_name_takes_its_place(session):
 
 
 def test_pipelines_keep_to_their_limit_and_the_first_stays(session):
-    from xgen_space.web.api import PIPELINES_MAX
+    from ontlas.web.api import PIPELINES_MAX
 
     for i in range(PIPELINES_MAX - 1):
         applied(session, f"초안{i}")
@@ -177,8 +177,8 @@ def test_a_module_with_a_field_missing_says_which(session, text):
 
 
 def test_a_database_that_does_not_answer_is_told_plainly(session, monkeypatch):
-    import xgen_space.config as config
-    from xgen_space.web import DataOptions
+    import ontlas.config as config
+    from ontlas.web import DataOptions
 
     session.data = DataOptions(allow_connect=True)
 

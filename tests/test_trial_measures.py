@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(ROOT / "examples" / "library" / "studio.yaml"), data=DataOptions(samples=ROOT / "examples" / "files"))
 
@@ -40,8 +40,8 @@ def test_a_trial_compares_the_document_search_with_itself(session):
 def test_a_studio_from_one_ontology_file_still_tries_its_tables():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import StudioSession
 
     s = StudioSession(load_studio(ROOT / "examples" / "commerce" / "studio.yaml"))
     assert s.studio.composition is None
@@ -51,7 +51,7 @@ def test_a_studio_from_one_ontology_file_still_tries_its_tables():
 
 
 def test_the_list_of_what_waits_never_measures(session, monkeypatch):
-    import xgen_space.review as rv
+    import ontlas.review as rv
 
     calls = []
     real = rv.measure
@@ -63,7 +63,7 @@ def test_the_list_of_what_waits_never_measures(session, monkeypatch):
 
 
 def test_a_wrong_answer_is_not_put_down_to_a_column_its_result_names(session):
-    from xgen_space.web import issues
+    from ontlas.web import issues
 
     session.attach("food")
     w, _ = session._watched()

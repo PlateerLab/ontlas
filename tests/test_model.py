@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from xgen_space import ModelError, Ontology
+from ontlas import ModelError, Ontology
 
 
 def test_example_is_consistent(onto):

@@ -1,11 +1,11 @@
 """Render the README images: the studio screens from the example studio, and the architecture figure.
 
     python tools/render_screens.py            # needs playwright with chromium installed, and the [all] and [embed] extras
-    XSPACE_BASE=http://127.0.0.1:7711 python tools/render_screens.py   # shoot a server already running with the example
+    ONTLAS_BASE=http://127.0.0.1:7711 python tools/render_screens.py   # shoot a server already running with the example
 
-Writes assets/screens/{library,query,decision,map}.png from `xspace preview`,
+Writes assets/screens/{library,query,decision,map}.png from `ontlas preview`,
 assets/screens/{home,monitor,ontology,catalog,draft,workspace,rules,changes,record,graph,space-map,documents,search,
-adapters,explorer}.png from `xspace serve` with the example files, and assets/architecture.png, all at 2x.
+adapters,explorer}.png from `ontlas serve` with the example files, and assets/architecture.png, all at 2x.
 """
 from __future__ import annotations
 
@@ -23,10 +23,10 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from xgen_space.config import load_studio  # noqa: E402
-from xgen_space.preview import render  # noqa: E402
-from xgen_space.web import DataOptions, StudioSession  # noqa: E402
-from xgen_space.web.server import serve  # noqa: E402
+from ontlas.config import load_studio  # noqa: E402
+from ontlas.preview import render  # noqa: E402
+from ontlas.web import DataOptions, StudioSession  # noqa: E402
+from ontlas.web.server import serve  # noqa: E402
 
 
 def _serve(config: Path, samples: Path, policies: Path) -> str:
@@ -202,9 +202,9 @@ def main() -> None:
             for sid in ("library", "query", "decision", "map"):
                 page.locator(f"#{sid}").screenshot(path=str(out / "screens" / f"{sid}.png"))
             page.set_viewport_size({"width": 1500, "height": 900})
-            # XSPACE_BASE names a running `xspace serve` to shoot instead of starting one here (the Playwright
+            # ONTLAS_BASE names a running `ontlas serve` to shoot instead of starting one here (the Playwright
             # interpreter need not have the [embed] extra then)
-            base = os.environ.get("XSPACE_BASE") or _serve(ROOT / "examples" / "library" / "studio.yaml",
+            base = os.environ.get("ONTLAS_BASE") or _serve(ROOT / "examples" / "library" / "studio.yaml",
                                                             ROOT / "examples" / "files", ROOT / "examples" / "policies")
             live_screens(page, base, out / "screens")
             arch = ROOT / "tools" / "architecture.html"

@@ -11,15 +11,15 @@ ROOT = Path(__file__).resolve().parent.parent
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     return StudioSession(load_studio(ROOT / "examples" / "library" / "studio.yaml"), data=DataOptions(samples=ROOT / "examples" / "files"))
 
 
 def built(session, findings=(), **measured):
     """The issues for a measurement written by hand, on the flow as it stands."""
-    from xgen_space.web import issues
+    from ontlas.web import issues
 
     w, _ = session._watched()
     return issues.build(session, {"flow": w["flow"], "measured": {"bind": {"findings": list(findings)}, **measured}})
@@ -65,8 +65,8 @@ def test_taking_the_module_off_is_tried_first_and_closes_the_issue(session):
 
 
 def test_when_an_issue_opened_outlives_a_restart(session, tmp_path):
-    from xgen_space.journal import Journal
-    from xgen_space.web import StudioSession
+    from ontlas.journal import Journal
+    from ontlas.web import StudioSession
 
     session.studio.changes.journal = Journal(tmp_path / "j.jsonl")
     session.attach("food")
@@ -100,7 +100,7 @@ def test_each_kind_of_finding_opens_the_field_that_mends_it(session):
 
 
 def test_a_failure_that_does_not_read_the_broken_column_stands_alone(session):
-    from xgen_space.web import issues
+    from ontlas.web import issues
 
     w, _ = session._watched()
     flow = {**w["flow"], "steps": [{**s, "gates": [{"stage": "query", "condition": "min_agree", "label": "x", "limit": 1, "value": 0.9, "passed": False}] if s["id"] == "query" else s["gates"]} for s in w["flow"]["steps"]]}

@@ -1,7 +1,7 @@
 import json
 
-from xgen_space.catalog import from_ontology
-from xgen_space.nl import IRGenerator, answer, extract_json, schema_card
+from ontlas.catalog import from_ontology
+from ontlas.nl import IRGenerator, answer, extract_json, schema_card
 
 
 def _catalog(onto):

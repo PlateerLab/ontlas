@@ -3,7 +3,7 @@
     python tools/run_live.py                 # all of them
     python tools/run_live.py pgvector qdrant # some of them
 
-Needs Docker. Containers are named xspace-live-<name>, take an unusual port, have a memory limit and are always removed.
+Needs Docker. Containers are named ontlas-live-<name>, take an unusual port, have a memory limit and are always removed.
 The run stops before starting a server when free memory is under the floor.
 """
 from __future__ import annotations
@@ -18,8 +18,8 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-FLOOR_GB = float(os.environ.get("XSPACE_LIVE_FLOOR_GB", "6"))
-PW = "xspace-Live-1"
+FLOOR_GB = float(os.environ.get("ONTLAS_LIVE_FLOOR_GB", "6"))
+PW = "ontlas-Live-1"
 
 
 def free_gb() -> float:
@@ -72,44 +72,44 @@ def _fuseki_ready(name: str, port: int) -> bool:
 
 def _mssql_setup(name: str) -> None:
     base = ["docker", "exec", name, "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", PW, "-Q"]
-    run(*base, f"CREATE DATABASE xspace; CREATE LOGIN xspace WITH PASSWORD = '{PW}', CHECK_POLICY = OFF;")
-    run(*base, "USE xspace; CREATE USER xspace FOR LOGIN xspace; ALTER ROLE db_owner ADD MEMBER xspace;")  # USE needs the database made
+    run(*base, f"CREATE DATABASE ontlas; CREATE LOGIN ontlas WITH PASSWORD = '{PW}', CHECK_POLICY = OFF;")
+    run(*base, "USE ontlas; CREATE USER ontlas FOR LOGIN ontlas; ALTER ROLE db_owner ADD MEMBER ontlas;")  # USE needs the database made
 
 
 SERVERS = {
-    "postgres": {"image": "postgres:16-alpine", "port": (15432, 5432), "mem": "512m", "env": {"POSTGRES_PASSWORD": PW, "POSTGRES_DB": "xspace"},
+    "postgres": {"image": "postgres:16-alpine", "port": (15432, 5432), "mem": "512m", "env": {"POSTGRES_PASSWORD": PW, "POSTGRES_DB": "ontlas"},
                  "ready": lambda n, p: logs_have(n, "database system is ready to accept connections") and port_open(p),
-                 "vars": {"XSPACE_LIVE_PG": f"postgresql://postgres:{PW}@127.0.0.1:15432/xspace"}, "tests": ["tests/test_live.py", "tests/test_ports.py"]},
-    "mysql": {"image": "mysql:8.4", "port": (13306, 3306), "mem": "768m", "env": {"MYSQL_ROOT_PASSWORD": PW, "MYSQL_DATABASE": "xspace"},
+                 "vars": {"ONTLAS_LIVE_PG": f"postgresql://postgres:{PW}@127.0.0.1:15432/ontlas"}, "tests": ["tests/test_live.py", "tests/test_ports.py"]},
+    "mysql": {"image": "mysql:8.4", "port": (13306, 3306), "mem": "768m", "env": {"MYSQL_ROOT_PASSWORD": PW, "MYSQL_DATABASE": "ontlas"},
               "ready": lambda n, p: logs_have(n, "ready for connections. Version") and port_open(p),
-              "vars": {"XSPACE_LIVE_MYSQL": f"mysql://root:{PW}@127.0.0.1:13306/xspace"}, "tests": ["tests/test_live.py"]},
+              "vars": {"ONTLAS_LIVE_MYSQL": f"mysql://root:{PW}@127.0.0.1:13306/ontlas"}, "tests": ["tests/test_live.py"]},
     "fuseki": {"image": "stain/jena-fuseki", "port": (13030, 3030), "mem": "768m", "env": {"ADMIN_PASSWORD": PW},
                "ready": lambda n, p: _fuseki_ready(n, p),
-               "vars": {"XSPACE_LIVE_FUSEKI": "http://127.0.0.1:13030/ds", "XSPACE_LIVE_FUSEKI_AUTH": f"admin:{PW}"}, "tests": ["tests/test_live.py"]},
+               "vars": {"ONTLAS_LIVE_FUSEKI": "http://127.0.0.1:13030/ds", "ONTLAS_LIVE_FUSEKI_AUTH": f"admin:{PW}"}, "tests": ["tests/test_live.py"]},
     "neo4j": {"image": "neo4j:5.26", "port": (17687, 7687), "mem": "1500m", "env": {"NEO4J_AUTH": f"neo4j/{PW}"},
               "ready": lambda n, p: logs_have(n, "Started.") and port_open(p),
-              "vars": {"XSPACE_LIVE_NEO4J": "bolt://127.0.0.1:17687", "XSPACE_LIVE_NEO4J_AUTH": f"neo4j:{PW}"}, "tests": ["tests/test_live.py"]},
+              "vars": {"ONTLAS_LIVE_NEO4J": "bolt://127.0.0.1:17687", "ONTLAS_LIVE_NEO4J_AUTH": f"neo4j:{PW}"}, "tests": ["tests/test_live.py"]},
     "gremlin": {"image": "tinkerpop/gremlin-server:3.8.2", "port": (18182, 8182), "mem": "1g", "env": {},
                 "ready": lambda n, p: logs_have(n, "Channel started at port 8182") and port_open(p),
-                "vars": {"XSPACE_LIVE_GREMLIN": "ws://127.0.0.1:18182/gremlin"}, "tests": ["tests/test_live.py"]},
+                "vars": {"ONTLAS_LIVE_GREMLIN": "ws://127.0.0.1:18182/gremlin"}, "tests": ["tests/test_live.py"]},
     "oracle": {"image": "gvenzl/oracle-free:23-slim", "port": (15210, 1521), "mem": "2g",
-               "env": {"ORACLE_PASSWORD": PW, "APP_USER": "xspace", "APP_USER_PASSWORD": PW},
+               "env": {"ORACLE_PASSWORD": PW, "APP_USER": "ontlas", "APP_USER_PASSWORD": PW},
                "ready": lambda n, p: logs_have(n, "DATABASE IS READY TO USE"), "wait": 300,
-               "vars": {"XSPACE_LIVE_ORACLE": f"oracle://xspace:{PW}@127.0.0.1:15210/FREEPDB1"}, "tests": ["tests/test_live.py"]},
+               "vars": {"ONTLAS_LIVE_ORACLE": f"oracle://ontlas:{PW}@127.0.0.1:15210/FREEPDB1"}, "tests": ["tests/test_live.py"]},
     "mssql": {"image": "mcr.microsoft.com/mssql/server:2022-latest", "port": (14330, 1433), "mem": "2g",
               "env": {"ACCEPT_EULA": "Y", "MSSQL_SA_PASSWORD": PW, "MSSQL_PID": "Developer"},
               "ready": lambda n, p: logs_have(n, "SQL Server is now ready for client connections") and port_open(p), "wait": 240, "setup": _mssql_setup,
-              "vars": {"XSPACE_LIVE_MSSQL": f"mssql://xspace:{PW}@127.0.0.1:14330/xspace"}, "tests": ["tests/test_live.py"]},
+              "vars": {"ONTLAS_LIVE_MSSQL": f"mssql://ontlas:{PW}@127.0.0.1:14330/ontlas"}, "tests": ["tests/test_live.py"]},
     "qdrant": {"image": "qdrant/qdrant:v1.15.5", "port": (16333, 6333), "mem": "512m", "env": {},
-               "ready": lambda n, p: port_open(p), "vars": {"XSPACE_LIVE_QDRANT": "http://127.0.0.1:16333"}, "tests": ["tests/test_vectors.py"]},
-    "pgvector": {"image": "pgvector/pgvector:pg16", "port": (15433, 5432), "mem": "512m", "env": {"POSTGRES_PASSWORD": PW, "POSTGRES_DB": "xspace"},
+               "ready": lambda n, p: port_open(p), "vars": {"ONTLAS_LIVE_QDRANT": "http://127.0.0.1:16333"}, "tests": ["tests/test_vectors.py"]},
+    "pgvector": {"image": "pgvector/pgvector:pg16", "port": (15433, 5432), "mem": "512m", "env": {"POSTGRES_PASSWORD": PW, "POSTGRES_DB": "ontlas"},
                  "ready": lambda n, p: logs_have(n, "database system is ready to accept connections") and port_open(p),
-                 "vars": {"XSPACE_LIVE_PGVECTOR": f"postgresql://postgres:{PW}@127.0.0.1:15433/xspace"}, "tests": ["tests/test_vectors.py"]},
+                 "vars": {"ONTLAS_LIVE_PGVECTOR": f"postgresql://postgres:{PW}@127.0.0.1:15433/ontlas"}, "tests": ["tests/test_vectors.py"]},
 }
 
 
 def one(key: str, s: dict) -> dict:
-    name = f"xspace-live-{key}"
+    name = f"ontlas-live-{key}"
     if free_gb() < FLOOR_GB:
         return {"server": key, "skipped": f"free memory {free_gb():.1f} GB is under {FLOOR_GB} GB"}
     run("docker", "rm", "-f", name)

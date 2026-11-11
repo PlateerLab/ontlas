@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.0
+
+- **The product is Ontlas now** (ontology and atlas). The repository is `PlateerLab/ontlas` (GitHub forwards the old
+  address), the package `ontlas` (it was `xgen_space`), the command `ontlas` (it was `xspace`) and environment variables
+  `ONTLAS_*` (they were `XSPACE_*`). The page, its title and logo, the OpenAPI title, the MCP server name and the server's
+  own name say Ontlas. The README names the five modules the product is made of: Studio, Map, Rule, Query and Guard.
+- Names that a running deployment carries changed with it, each with what that means:
+  - The page's session cookies are `ontlas_session` and `ontlas_login`, and its request header is `X-Ontlas-Request`:
+    a visitor's session from before starts again.
+  - The page's own settings in the browser (`ontlas-*`: folded menu sections, the role, notes shown) start again.
+  - OWL exports name modules `urn:ontlas:module:<name>`. Importing reads no module from that address, so files exported
+    before still import.
+  - pgvector tables default to the prefix `ontlas_vec_`; the index is built again from the documents. To keep reading
+    tables made before, pass `prefix="xspace_vec_"`.
+- Nothing in a studio file, a module or the `/v1` API changed: definitions, modules, journals and tokens carry over as
+  they are.
+
 ## 0.16.0
 
 The page is rebuilt around how a space is built and used, with less to read on it, and a definition no longer needs data.

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.actions import Actor
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.rest import Rest
-from xgen_space.studio import Studio
-from xgen_space.tools import StudioTools
+from ontlas import Ontology
+from ontlas.actions import Actor
+from ontlas.backends.sql import SqliteBackend
+from ontlas.rest import Rest
+from ontlas.studio import Studio
+from ontlas.tools import StudioTools
 
 SEED = """
 CREATE TABLE goods (goods_id TEXT PRIMARY KEY, name TEXT, price INTEGER, shop_id TEXT, stock INTEGER);
@@ -89,9 +89,9 @@ def test_a_change_request_survives_a_restart(tmp_path):
     pytest.importorskip("rdflib")
     import copy
 
-    from xgen_space.config import load_studio
-    from xgen_space.library import OverlayLibrary
-    from xgen_space.modules import Module
+    from ontlas.config import load_studio
+    from ontlas.library import OverlayLibrary
+    from ontlas.modules import Module
 
     cfg = Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml"
     kept = tmp_path / "journal.jsonl"
@@ -197,7 +197,7 @@ def test_each_token_is_one_agent_in_the_audit(tmp_path):
 
 def test_a_role_reads_only_its_documents():
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
+    from ontlas.config import load_studio
 
     st = load_studio(Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml")
     agent = StudioTools(st, role="customer_agent", principal={"customer_id": "C001"})
@@ -213,7 +213,7 @@ def test_a_role_reads_only_its_documents():
 
 def test_a_document_list_survives_a_module_round_trip():
     onto = Ontology.from_dict({**SPEC, "roles": {"none": {"read": ["Goods"], "documents": []}, "all": {"read": ["Goods"]}}})
-    from xgen_space.model import _to_dict
+    from ontlas.model import _to_dict
 
     back = Ontology.from_dict(json.loads(json.dumps(_to_dict(onto))))
     assert back.roles["none"].documents == [] and not back.roles["none"].can_read_document("안내문")
@@ -224,8 +224,8 @@ def test_a_document_list_survives_a_module_round_trip():
 
 def test_a_person_on_the_page_runs_a_change_inside_its_limit_and_an_agent_waits():
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     s = StudioSession(load_studio(Path(__file__).resolve().parents[1] / "examples" / "library" / "studio.yaml"))
     small = s.request("changePrice", "S1", {"price": 62000}, "operator", kind="human")["proposal"]

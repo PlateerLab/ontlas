@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from xgen_space.library import Library
-from xgen_space.policy import PolicyDrafter, cites
+from ontlas.library import Library
+from ontlas.policy import PolicyDrafter, cites
 
 from .conftest import EXAMPLE, LIB
 from .test_web import _build
@@ -81,7 +81,7 @@ def test_a_table_that_cannot_be_a_module_says_why():
 
 def test_the_page_drafts_from_the_sample_policy_and_opens_a_module_that_decides():
     pytest.importorskip("rdflib")
-    from xgen_space.web import DataOptions
+    from ontlas.web import DataOptions
 
     s = _build()
     assert not s.policy_draft("제1조 ...")["ok"]  # no language model
@@ -99,7 +99,7 @@ def test_the_page_drafts_from_the_sample_policy_and_opens_a_module_that_decides(
 
 
 def test_policy_drafts_need_an_editor_in_a_team_studio():
-    from xgen_space.web.team import NEEDS
+    from ontlas.web.team import NEEDS
 
     assert NEEDS["policy/draft"] == "editor"
 
@@ -114,7 +114,7 @@ def test_an_answer_cut_off_by_the_token_budget_is_told_apart_and_a_draft_gets_a_
     import io
     import urllib.request
 
-    from xgen_space.nl import AnswerCutOff, openai_chat
+    from ontlas.nl import AnswerCutOff, openai_chat
 
     seen = []
 
@@ -164,7 +164,7 @@ def test_a_draft_runs_apart_from_the_page_request_and_the_page_collects_it():
 
 def test_a_draft_that_cannot_finish_ends_the_wait_with_a_reason_in_plain_words():
     pytest.importorskip("rdflib")
-    from xgen_space.nl import AnswerCutOff
+    from ontlas.nl import AnswerCutOff
 
     s = _build()
 

@@ -16,8 +16,8 @@ CFG = LIB / "studio.yaml"
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web.api import StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
 
     return StudioSession(load_studio(CFG))
 
@@ -25,7 +25,7 @@ def session():
 @pytest.fixture
 def drafted(session):
     """The session with the example shop's files drafted and waiting to be applied."""
-    from xgen_space.web.api import DataOptions
+    from ontlas.web.api import DataOptions
 
     session.data = DataOptions(samples=ROOT / "examples" / "files")
     session.use_samples()
@@ -35,8 +35,8 @@ def drafted(session):
 
 def test_an_element_has_a_status_that_survives_the_file_and_the_modules():
     pytest.importorskip("yaml")
-    from xgen_space.model import Ontology
-    from xgen_space.modules import Module, compose
+    from ontlas.model import Ontology
+    from ontlas.modules import Module, compose
 
     o = Ontology.from_dict({"name": "t", "namespace": "https://example.org/t#", "objects": {
         "Order": {"key": "id", "status": "deprecated", "properties": {"id": {"type": "string"}, "memo": {"type": "string", "status": "draft"}}},
@@ -92,8 +92,8 @@ def test_an_unknown_answer_says_what_it_understood_and_whom_to_ask(session):
 
 
 def test_an_unknown_answer_says_how_a_metric_is_not_split_and_how_to_ask_again(session):
-    from xgen_space.answer import _unknown
-    from xgen_space.tools import StudioTools
+    from ontlas.answer import _unknown
+    from ontlas.tools import StudioTools
 
     if "returnRate" not in session.studio.onto.metrics:
         session.attach("commerce-operations")
@@ -162,7 +162,7 @@ def test_past_cases_are_decided_by_the_edited_tables_when_asked(session):
 
 
 def test_in_a_team_an_approver_applies_a_draft_and_a_viewer_moves_nothing():
-    from xgen_space.web.team import NEEDS
+    from ontlas.web.team import NEEDS
 
     assert NEEDS["draft/apply"] == NEEDS["draft/review/apply"] == NEEDS["draft/map/apply"] == "approver"
     assert NEEDS["draft/review/preview"] == NEEDS["draft/table"] == "editor"
@@ -171,7 +171,7 @@ def test_in_a_team_an_approver_applies_a_draft_and_a_viewer_moves_nothing():
 
 
 def test_in_a_team_an_editor_files_an_apply_request_and_only_an_approver_applies_it():
-    from xgen_space.web.team import NEEDS
+    from ontlas.web.team import NEEDS
 
     assert NEEDS["draft/request"] == NEEDS["draft/request/drop"] == "editor"
     assert NEEDS["draft/request/apply"] == "approver"

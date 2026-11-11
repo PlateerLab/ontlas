@@ -1,15 +1,15 @@
 """Named parameters: one value in a module, read by rules and computed properties, changed by a customer module."""
 import pytest
 
-from xgen_space import Ontology
-from xgen_space.backends.sql import SqliteBackend
-from xgen_space.compile.base import compiler_for
-from xgen_space.decide.cells import CellError, Compare, OneOf, Range, parse_test
-from xgen_space.decide.table import evaluate_table
-from xgen_space.decide.zen import to_jdm
-from xgen_space.expr import ExprError, check_computed, parse_expr
-from xgen_space.modules import Module, ModuleError, compose, removal_impact, settle
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.backends.sql import SqliteBackend
+from ontlas.compile.base import compiler_for
+from ontlas.decide.cells import CellError, Compare, OneOf, Range, parse_test
+from ontlas.decide.table import evaluate_table
+from ontlas.decide.zen import to_jdm
+from ontlas.expr import ExprError, check_computed, parse_expr
+from ontlas.modules import Module, ModuleError, compose, removal_impact, settle
+from ontlas.studio import Studio
 
 
 def _shop(**more) -> dict:
@@ -114,7 +114,7 @@ def test_computed_properties_read_the_value_in_every_language(source):
 
 def test_the_graph_answers_the_same(source):
     pytest.importorskip("rdflib")
-    from xgen_space.backends.rdf import RdflibBackend
+    from ontlas.backends.rdf import RdflibBackend
 
     st = _studio([Module.from_dict(_shop())], source)
     st.add_backend("graph", RdflibBackend())

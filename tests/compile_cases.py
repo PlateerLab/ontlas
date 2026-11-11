@@ -1,7 +1,7 @@
 """Computed properties, conditional aggregates and optional links to run on every engine at hand, over rows that hold
 what is easy to get wrong: a customer with no orders, an order with no items, null values and null group keys."""
-from xgen_space import Ontology
-from xgen_space.studio import Studio
+from ontlas import Ontology
+from ontlas.studio import Studio
 
 COMPUTED = {
     "Order": {

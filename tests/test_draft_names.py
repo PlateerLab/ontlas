@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def session():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.web import DataOptions, StudioSession
 
     s = StudioSession(load_studio(ROOT / "examples" / "library" / "studio.yaml"), data=DataOptions(samples=ROOT / "examples" / "files"))
     s.use_samples()
@@ -38,8 +38,8 @@ def test_renamed_objects_keep_their_queries_answers_and_drops(session):
 
 
 def test_a_name_two_tables_would_share_is_offered_to_neither(tmp_path, session):
-    from xgen_space.config import open_backend
-    from xgen_space.draft import draft
+    from ontlas.config import open_backend
+    from ontlas.draft import draft
 
     db = tmp_path / "shop.db"
     con = sqlite3.connect(db)
@@ -58,9 +58,9 @@ def test_a_name_two_tables_would_share_is_offered_to_neither(tmp_path, session):
 def test_a_decision_is_drawn_from_history_on_a_draft_with_english_names():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")
-    from xgen_space.config import load_studio
-    from xgen_space.modules import compose
-    from xgen_space.web import DataOptions, StudioSession
+    from ontlas.config import load_studio
+    from ontlas.modules import compose
+    from ontlas.web import DataOptions, StudioSession
 
     s = StudioSession(load_studio(ROOT / "examples" / "library" / "studio.yaml"), data=DataOptions())
     rows = ["사건번호,등급,구매금액,반품사유,처리결과"]
