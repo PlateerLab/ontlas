@@ -414,6 +414,8 @@ def test_the_command_line_shows_the_checks_and_the_layers(capsys):
 
 
 def test_a_rule_sentence_says_the_value_in_force_not_its_placeholder():
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     from ontlas.config import load_studio
     from ontlas.decide.words import rule_sentence
 
