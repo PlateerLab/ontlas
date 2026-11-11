@@ -3362,7 +3362,7 @@
         <table class="tight" style="margin-top:10px"><tr><th>규칙</th><th>조건</th><th>결과</th><th>출처 조항</th></tr>${rows}</table>${issues}
         <div class="hint" style="margin-top:8px">아래 편집기에 모듈 초안을 열었습니다. 규칙과 출처 조항을 확인하고 수정한 뒤 [적용 변경 요청]을 선택하면 사본 스페이스에서 검토하고 승인 대기로 등록됩니다.</div>`;
     }
-    return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right"><button class="btn sm ghost" data-act="pclose">닫기</button></div></div><div class="cb">
+    return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right">${S.tab === 'ruleagent' ? '' : '<button class="btn sm ghost" data-act="pclose">닫기</button>'}</div></div><div class="cb">
       <div class="hint xp" style="margin-bottom:8px">정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고, 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 사람이 확인하고 승인해야 반영됩니다.</div>
       ${docs.length ? `<div class="rgrid two" style="margin-bottom:8px"><label class="field" style="margin:0"><span>업로드한 문서</span><select data-in="pdoc"><option value="">선택</option>${docs.map((d) => `<option value="${esc(d.name)}"${d.name === p.doc ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
         ${(p.sections || []).length ? `<label class="field" style="margin:0"><span>절</span><select data-in="psec"><option value="">전체</option>${p.sections.map((x) => `<option value="${esc(x)}"${x === p.section ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}</div>` : ''}
