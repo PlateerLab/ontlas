@@ -1133,28 +1133,14 @@ button.ihint span { font-weight:700; white-space:nowrap; }
 
 /* the order a space is built in, on the home: five steps on one line, the next one said in words under them */
 .bsteps { margin:14px 0 0; }
-.bsteps > .ch .chip { margin-left:8px; }
 .bsteps > .cb { padding:12px 16px 14px; display:flex; flex-direction:column; gap:10px; }
-.bstrip { display:flex; align-items:center; gap:0; overflow-x:auto; }
-.bstep { display:flex; align-items:center; gap:8px; padding:6px 10px 6px 6px; border-radius:999px; color:var(--ink); text-decoration:none; white-space:nowrap; flex:none; }
-.bstep:hover { background:var(--panel); }
-.bstep .bno { width:24px; height:24px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:var(--muted); background:#fff; flex:none; }
-.bstep.done .bno { background:#12805c; border-color:#12805c; color:#fff; }
-.bstep.next .bno { border-color:var(--blue); color:var(--blue); }
-.bstep .bttl { font-weight:700; font-size:13px; }
-.bstep.done .bttl { color:#475467; font-weight:600; }
-.bstep.next .bttl { color:var(--blue); }
-.bline { flex:1 1 14px; min-width:10px; max-width:48px; height:2px; background:var(--line); }
 .bnext { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
 .bnext span { color:var(--muted); }
-.bnext .btn { margin-left:auto; }
 .bways { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; }
 .bway { display:flex; flex-direction:column; gap:3px; text-align:left; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; font:inherit; cursor:pointer; }
 .bway:hover { border-color:var(--blue-line); background:#f8fbff; }
 .bway b { font-size:13.5px; }
 .bway span { font-size:12px; color:var(--muted); line-height:1.45; }
-@media (max-width: 900px) { .bstrip { flex-wrap:wrap; row-gap:4px; } .bline { display:none; } }
-
 /* the shell: notes that fold behind an (i), sidebar sections and the connection card that fold to a line, the pipeline pill */
 #main .xp { display:none; }
 #main .xpo .xp, #main.pgo .xp.pg, body.explain #main .xp { display:block; }
@@ -1193,10 +1179,6 @@ tr:hover .libacts, tr:focus-within .libacts, tr.sel .libacts { opacity:1; }
 #main[data-sec="use"] .cn { display:none; }  /* an element's code name, beside its name for people */
 .qdetail { display:flex; flex-direction:column; gap:2px; margin-top:4px; font-size:12px; color:#475467; }
 .qdetail i { font-style:normal; font-weight:700; color:#98a2b3; margin-right:6px; }
-.bmade { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); text-decoration:none; }
-.bmade b { color:var(--ink); font-size:12px; }
-.bmade:hover { color:var(--blue); }
-.bmade .bmgo { margin-left:auto; color:var(--blue); font-weight:600; }
 .stalebar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
 /* the workspace tree by Object: each Object's head opens it; the switch between Object and module grouping */
 .mdgroupby { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 10px 6px; font-size:12px; }
@@ -1236,6 +1218,8 @@ tr.unasked td { color:#98a2b3; }
 .snav .nav.sub { height:32px; font-size:13px; padding:0 10px; color:#475467; font-weight:500; }
 .snav .nav.sub.on { background:var(--blue-soft); color:var(--blue); font-weight:700; }
 .snav .nav.sub.on .nbadge { background:#d92d20; color:#fff; }
+.snav .nav.top.on { background:var(--blue-soft); color:var(--blue); font-weight:700; }
+.snav .nav.top.on .nbadge { background:#d92d20; color:#fff; }
 .smat { display:flex; flex-direction:column; gap:6px; margin:0 10px 8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; text-decoration:none; color:var(--ink); font-size:12px; }
 .smat:hover { border-color:var(--blue-line); }
 .smat .mh { display:flex; justify-content:space-between; align-items:baseline; }
@@ -1277,3 +1261,47 @@ tr.unasked td { color:#98a2b3; }
 .odrow + .odrow { border-top:1px dashed var(--line); }
 .odrow > span { color:var(--muted); flex:none; }
 .odrow > b { font-weight:600; text-align:right; }
+
+/* the home: the space's version, maturity and milestones, its four parts, its Objects */
+.hov { margin-top:14px; }
+.hovtop { display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+.hmat { flex:1 1 360px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.lvbar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#eef0f3; min-width:60px; }
+.lvbar i { display:block; height:100%; }
+.lv0 { background:#cbd5e1; } .lv1 { background:#93b4f5; } .lv2 { background:#4f7ff0; } .lv3 { background:var(--blue); }
+.lvkeys { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.lvk { display:inline-flex; align-items:center; gap:5px; }
+.lvk i { width:9px; height:9px; border-radius:3px; display:inline-block; }
+.lvk b { color:var(--ink); }
+.hstones { flex:1 1 300px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.mstrip { display:flex; gap:6px; flex-wrap:wrap; }
+.mst { display:inline-flex; flex-direction:column; gap:1px; padding:5px 10px; border:1px solid var(--line); border-radius:8px; font-size:11.5px; color:var(--muted); }
+.mst b { color:var(--ink); font-size:12.5px; }
+.mst.past { opacity:.6; }
+.mst.next { border-color:var(--accent); background:#fff7ed; }
+.mst.next span { color:var(--accent); font-weight:700; }
+.hcomps { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); border-top:1px solid var(--line); }
+.hcomp { display:flex; flex-direction:column; gap:6px; padding:12px 16px 14px; color:var(--ink); text-decoration:none; min-width:0; }
+.hcomp + .hcomp { border-left:1px solid var(--line); }
+.hcomp:hover { background:var(--panel); }
+.hch { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.hch b { font-size:13.5px; }
+.hcl { display:flex; flex-wrap:wrap; gap:2px 10px; font-size:12px; color:var(--muted); }
+.hcx { font-size:12px; color:#b45309; font-weight:600; }
+.omrow { display:grid; grid-template-columns:minmax(0, 150px) minmax(0, 1fr) 32px; align-items:center; gap:12px; width:100%; padding:7px 8px; border:0; background:none; border-radius:7px; cursor:pointer; font:inherit; text-align:left; color:var(--ink); }
+.omrow:hover { background:var(--panel); }
+.omn { display:flex; gap:6px; align-items:baseline; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+.omn .muted { font-size:11px; }
+.omc { text-align:right; font-size:12px; }
+@media (max-width: 1100px) { .hcomps { grid-template-columns:repeat(2, minmax(0, 1fr)); } .hcomp:nth-child(3) { border-left:0; } .hcomp:nth-child(n+3) { border-top:1px solid var(--line); } }
+
+/* 판본 이력 and the regression review */
+.vstack { display:flex; flex-direction:column; gap:14px; }
+.rgbox { border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:12px; font-size:12.5px; }
+.rgbox.worse { border-color:#f2d9a8; background:var(--warn-soft); }
+.rgbox.better { border-color:#bfe3cd; background:var(--ok-soft); }
+.rghead { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.rgnums { display:flex; gap:14px; flex-wrap:wrap; margin-top:6px; color:var(--muted); }
+.rgnums b { color:var(--ink); }
+.rgq { margin-top:4px; }
+.rgq .muted { font-size:11.5px; }
