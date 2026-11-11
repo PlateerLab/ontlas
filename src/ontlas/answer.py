@@ -284,29 +284,49 @@ def _picked(tools, pick: dict) -> tuple[str, str, Any]:
     return type_name, key, at
 
 
+def _lexicon(tools, text: str) -> dict | None:
+    """The lexicon's words in a question: the question in their preferred words, the terms it used by any label, and the
+    terms each must not be taken for. None when it uses none."""
+    from ontlas.lexicon import concept_of, read
+
+    st = tools.studio
+    terms = tools.terms if tools.terms is not None else (st.composition.terms if st.composition is not None else [])
+    said = read(text, terms) if terms else None
+    if not said or not said["matched"]:
+        return None
+    for m in said["matched"]:
+        c = concept_of(st.onto, m["concept"]) if m["concept"] else None
+        m["concept_label"] = c["label"] if c else ""
+    return said
+
+
 def answer_question(tools, text: str, *, k: int = 6, pick: dict | None = None, folder: str = "") -> dict[str, Any]:
     """`pick` replaces what the question was taken to be: {type, key, decision, at}, any decision of the type or none.
     `folder` keeps the documents to one folder and the folders under it."""
     text = " ".join(str(text or "").split())[:300]
     if not text:
         raise ValueError("질문이 없어 답변하지 못했습니다. 질문을 입력해 주세요.")
+    words = _lexicon(tools, text)
+    asked = words["text"] if words else text  # the question in the lexicon's preferred words, which is what is looked up
     know = tools.knowledge(folder) if folder else tools.knowledge()
-    found = know.find(text, max(k * 4, 24))
+    found = know.find(asked, max(k * 4, 24))
     out: dict[str, Any] = {"ok": True, "question": text, "route": "documents", "answer": "", "engine": know.retriever.kind,
-                           "sources": _sources(found, k), "definitions": _definitions(found, tools.studio.onto, text),
+                           "sources": _sources(found, k), "definitions": _definitions(found, tools.studio.onto, asked),
                            "relations": know.relations(text, [f["id"] for f in found[:k]])}
+    if words:
+        out["lexicon"] = {k_: words[k_] for k_ in ("text", "matched", "confusables")}
     at = None
     if pick:
         type_name, key, at = _picked(tools, pick)
         hit = type_name, key
     else:
-        hit = find_record(tools, text)
+        hit = find_record(tools, asked)
     if hit:
         type_name, key = hit
         allowed = tools.describe()["decisions"]
         out["choices"] = [{"name": n, "label": d.label or n} for n, d in tools.studio.onto.decisions.items()
                           if d.target == type_name and n in allowed]  # what else the record could be asked
-        names = ([pick["decision"]] if pick.get("decision") else []) if pick else decisions_for(tools, text, type_name)
+        names = ([pick["decision"]] if pick.get("decision") else []) if pick else decisions_for(tools, asked, type_name)
         if pick and names and names[0] not in allowed:
             raise PermissionError(f"decision {names[0]} is outside this role")
         names = [n for n in names if n in allowed]
@@ -322,7 +342,7 @@ def answer_question(tools, text: str, *, k: int = 6, pick: dict | None = None, f
         out["route"], out["record"] = "record", tools.record(type_name, key)
         out["answer"] = f"{out['record']['label']} {key}의 값입니다."
         return out
-    q = _query(tools, text, found)
+    q = _query(tools, asked, found)
     if q is not None:
         out["route"], out["query"] = "query", q
         out["answer"] = f"{q['label']} 결과 {q['total']}건입니다."
@@ -331,7 +351,7 @@ def answer_question(tools, text: str, *, k: int = 6, pick: dict | None = None, f
     out["needs_model"] = True
     if top is None:
         out["route"], out["answer"] = "none", "관련 정의와 문서를 찾지 못했습니다."
-        out["reason"], out["ask"] = _unknown(tools, text, found)
+        out["reason"], out["ask"] = _unknown(tools, asked, found)
     else:
         out["answer"] = top["text"].split("\n")[0][:220]
     return out

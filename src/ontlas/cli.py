@@ -192,6 +192,53 @@ def _new(a) -> int:
     return 0
 
 
+def _lexicon(a) -> int:
+    """Show a studio's lexicon, or bring a glossary in as the terms of a dictionary module."""
+    import re
+
+    import yaml
+
+    from ontlas.config import load_studio
+    from ontlas.lexicon import merge, read_glossary, term_id, view
+    from ontlas.modules import Module, Requirement
+
+    st = load_studio(a.config) if a.config else None
+    comp = st.composition if st is not None else None
+    if a.lex_cmd == "show":
+        _out(view(list(comp.terms) if comp else [], st.onto, origin=comp.term_origin if comp else {}))
+        return 0
+    src = Path(a.file)
+    try:
+        glossary = read_glossary(src.read_bytes(), src.name)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
+    out = Path(a.output) if a.output else None
+    if out is not None and out.exists():
+        module = Module.load(out)
+    else:
+        name = a.name or re.sub(r"[^A-Za-z0-9_.-]+", "-", src.stem).strip("-").lower() or "glossary"
+        module = Module(name=name if a.name else f"{name}-dictionary", kind="dictionary", label=f"{src.stem} 용어 사전",
+                        description=f"{src.name}에서 가져온 용어입니다.")
+    attached = comp is not None and any(m.name == module.name for m in comp.modules)
+    current = list(comp.terms if comp else []) + ([] if attached else list(module.terms))
+    entries, report = merge(glossary, current, st.onto if st is not None else None, source=src.name)
+    for e in entries:  # each is added, or written over the entry with its id
+        at = next((i for i, t in enumerate(module.terms) if term_id(t) == term_id(e)), None)
+        if at is None:
+            module.terms.append(e)
+        else:
+            module.terms[at] = e
+    owners = {comp.term_origin.get(term_id(e), "") for e in entries} if comp else set()
+    module.requires += [Requirement(o) for o in sorted(owners - {"", module.name} - {r.name for r in module.requires})]
+    if out is not None:
+        module.dump(out)
+        _out({**report, "written": str(out), "terms": len(module.terms)})
+    else:
+        _out(yaml.safe_dump(module.to_dict(), allow_unicode=True, sort_keys=False))
+        print(json.dumps(report, ensure_ascii=False), file=sys.stderr)
+    return 0
+
+
 def _embedder(a) -> dict | None:
     if not a.embedder:
         return None
@@ -463,6 +510,17 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--tables", default="", help="with --definitions alone: the tables to draft, e.g. 'TB_*,ORDERS'")
     s.add_argument("-o", "--out", default="", help="write library/, studio.yaml (and data.sqlite for files) here")
 
+    s = sub.add_parser("lexicon", help="the terms the definitions go by: show them, or bring a glossary in as terms")
+    lx = s.add_subparsers(dest="lex_cmd", required=True)
+    x = lx.add_parser("show", help="every term with its labels and the definition it names, and what it says two ways")
+    x.add_argument("config")
+    x = lx.add_parser("import", help="a glossary (a term list or a term-pair table; CSV, XLSX, YAML or JSON) as the "
+                                     "terms of a dictionary module")
+    x.add_argument("file")
+    x.add_argument("--config", default="", help="a studio: terms are tied to its definitions and checked against its lexicon")
+    x.add_argument("-o", "--output", default="", help="the module file to write; one already there keeps its other terms")
+    x.add_argument("--name", default="", help="the name of a new module (default: the glossary's file name + -dictionary)")
+
     s = sub.add_parser("ingest", help="read definitions and documents of any format into one JSON")
     s.add_argument("files", nargs="+", help="SQL, DBML, PowerDesigner, MySQL Workbench, Office, HWPX, HTML, text, PDF, "
                                             "CSV, Excel or JSON files")
@@ -647,6 +705,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "ingest":
         return _ingest(a)
+
+    if a.cmd == "lexicon":
+        return _lexicon(a)
 
     if a.cmd == "openapi":
         from ontlas import __version__

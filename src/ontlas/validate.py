@@ -3,7 +3,17 @@ from __future__ import annotations
 
 import re
 
-from ontlas.model import CARDINALITIES, RAW_SUFFIX, STATUSES, TEXT_SUFFIX, TYPES, Ontology, valid_name
+from ontlas.model import (
+    CARDINALITIES,
+    GRADINGS,
+    QUESTION_TYPES,
+    RAW_SUFFIX,
+    STATUSES,
+    TEXT_SUFFIX,
+    TYPES,
+    Ontology,
+    valid_name,
+)
 
 
 def validate_ontology(o: Ontology) -> list[str]:
@@ -17,6 +27,8 @@ def validate_ontology(o: Ontology) -> list[str]:
             add(f"area name '{a.name}' is not an identifier")
         if a.status not in STATUSES:
             add(f"area {a.name}: status '{a.status}' is not one of {STATUSES}")
+        if a.tier is not None and not (isinstance(a.tier, int) and not isinstance(a.tier, bool) and a.tier >= 1):
+            add(f"area {a.name}: tier '{a.tier}' is not a whole number from 1")
 
     prop_types: dict[str, tuple[str, str]] = {}
     for t in o.objects.values():
@@ -247,8 +259,16 @@ def validate_ontology(o: Ontology) -> list[str]:
         for c in o.conflicts.values():
             issues.extend(f"conflict {c.id}: {e}" for e in conflict_issues(o, c))
     for qs in o.questions:
-        if bool(qs.query) == bool(qs.decision):
+        if (qs.query and qs.decision) or not (qs.query or qs.decision or qs.kind == "definition"):
             add(f"question {qs.id}: give either a query or a decision")
+        if qs.type and qs.type not in QUESTION_TYPES:
+            add(f"question {qs.id}: type '{qs.type}' is not one of {QUESTION_TYPES}")
+        if qs.grading and qs.grading not in GRADINGS:
+            add(f"question {qs.id}: grading '{qs.grading}' is not one of {GRADINGS}")
+        if qs.graded_by == "keywords" and not qs.keywords:
+            add(f"question {qs.id}: grading by keywords needs keywords")
+        if not (qs.query or qs.decision) and qs.graded_by == "match" and qs.expect in (None, "", [], {}):
+            add(f"question {qs.id}: give the words a right answer has (keywords) or what it is expected to say (expect)")
         if qs.query and qs.query not in o.queries:
             add(f"question {qs.id}: unknown query '{qs.query}'")
         if qs.decision and qs.decision not in o.decisions:

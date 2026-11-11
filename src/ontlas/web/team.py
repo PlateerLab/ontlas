@@ -36,7 +36,7 @@ NEEDS = {
     "manage/undo": "editor", "manage/trial": "editor", "manage/yaml": "editor", "element/comment": "editor",
     "graph/view": "editor", "graph/view/forget": "editor", "workspace/layout": "editor",
     "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
-    "manage/redo": "editor", "manage/revert": "editor",
+    "manage/redo": "editor", "manage/revert": "editor", "lexicon/edit": "editor", "lexicon/import": "editor",
     "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
 }
