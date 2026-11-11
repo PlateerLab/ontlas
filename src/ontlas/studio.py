@@ -316,7 +316,14 @@ class Studio:
         else:
             outputs, matched, notes = evaluate_table(table, values)
             engine = "native"
-        also = [r.id for r in holding(table, values) if r.id not in matched] if engine == "native" else []
+        held = [r.id for r in holding(table, values)] if engine == "native" else []
+        also = [i for i in held if i not in matched]
+        path = {}
+        if engine == "native":
+            from ontlas.semantic import decision_path
+
+            comp = self.composition
+            path = decision_path(table, matched, held, {m.name: m.label or m.name for m in comp.modules} if comp else {})
         shown = dict(values)
         if role:  # the verdict uses the real values; what the role is shown of them follows its masks
             r = self.onto.roles[role]
@@ -326,7 +333,7 @@ class Studio:
                     ev.value = mask_value(ev.value, style)
                     shown[ev.input] = ev.value
         return DecisionResult(name, outputs, matched, shown, evidence, notes, engine, table.target,
-                              "" if key is None else str(key), also=also)
+                              "" if key is None else str(key), also=also, path=path)
 
     def project(self, *, into: list[str] | None = None, source: str | None = None) -> dict[str, Any]:
         """Re-read the source and bring each graph backend up to date with a change set."""

@@ -522,6 +522,39 @@ class SpaceMixin:
         return plain({"parameters": params, "metrics": dictionary(o), "findings": findings,
                       "conflicts": [conflict_view(c) for c in o.source_conflicts()], "periods": periods, "due": due, "views": views})
 
+    def semantic_state(self) -> dict:
+        """The rule layers (AXIOM › Custom › Standard), every rule card (stated, and one per decision row), the named
+        values with the AXIOM bounds on them, and how the checks came out. Pending edits are in it and marked, as the
+        rules screen shows them; Custom cards are edited with the manage/edit ops add_rule_card, update_rule_card and
+        delete_rule_card."""
+        from ontlas.manage import NAME
+        from ontlas.semantic import semantic_view
+        from ontlas.web.api import plain
+
+        st = self.studio
+        applied = comp = st.composition
+        ws = self._ws() if applied is not None else None
+        pending = False
+        if ws is not None and ws.dirty:
+            try:
+                comp, pending = ws.composed(), True
+            except Exception:  # edits that no longer compose: the definition as applied
+                comp = applied
+        view = semantic_view(comp.ontology if comp is not None else st.onto, comp)
+        before = {c["id"]: c for c in semantic_view(st.onto, applied)["cards"]} if pending else {}
+
+        def same(a: dict, b: dict) -> bool:  # a row moved down by a rule added above it is not itself changed
+            return {k: v for k, v in a.items() if k != "position"} == {k: v for k, v in b.items() if k != "position"}
+
+        for c in view["cards"]:
+            new = pending and c["id"] not in before
+            c["pending"] = pending and (new or not same(before[c["id"]], c))
+            c["new"] = new
+        view["removed"] = sorted(set(before) - {c["id"] for c in view["cards"]})
+        view["workspace"] = {"dirty": pending, "module": NAME, "label": ws.module.label if ws is not None else "",
+                             "editable": ws is not None, "ops": ["add_rule_card", "update_rule_card", "delete_rule_card"]}
+        return plain(view)
+
     def metric_run(self, name: str, since: str | None = None, until: str | None = None) -> dict:
         from ontlas.decide.metrics import MetricError, answer_metric
         from ontlas.web.api import plain

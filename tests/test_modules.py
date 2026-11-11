@@ -33,7 +33,7 @@ def composed(lib) -> Studio:
 def test_library_lists_every_package(lib):
     rows = {r["name"]: r for r in lib.list()}
     assert set(rows) == {*ALL, "food", "party-identity", "return-quality", "build-rules", "commerce-operations",
-                         "commerce-operations-bindings"}
+                         "commerce-operations-bindings", "commerce-law"}
     assert rows["finance"]["kind"] == "domain" and rows["acme-overlay"]["kind"] == "customer"
     assert rows["commerce-bindings"]["requires"] == ["commerce"]
 

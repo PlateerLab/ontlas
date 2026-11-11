@@ -561,6 +561,7 @@ NAMED = re.compile(r"@[A-Za-z_][A-Za-z0-9_]*")
 def _decisions(o: Ontology) -> list[str]:
     from ontlas.decide.cells import CellError, parse_test, resolve
     from ontlas.decide.checks import table_findings
+    from ontlas.semantic import CARD_STATUS, LAYERS
 
     issues = []
     for d in o.decisions.values():
@@ -610,6 +611,12 @@ def _decisions(o: Ontology) -> list[str]:
                                  else "priority is read only under hit policy priority"))
             elif r.priority is not None and (isinstance(r.priority, bool) or not isinstance(r.priority, int)):
                 issues.append(f"decision {d.name} rule {r.id}: priority must be a whole number")
+            if r.layer not in LAYERS:
+                issues.append(f"decision {d.name} rule {r.id}: layer '{r.layer}' is not one of {LAYERS}")
+            if r.status and r.status not in CARD_STATUS:
+                issues.append(f"decision {d.name} rule {r.id}: status '{r.status}' is not one of {tuple(CARD_STATUS)}")
+        if d.status and d.status not in CARD_STATUS:
+            issues.append(f"decision {d.name}: status '{d.status}' is not one of {tuple(CARD_STATUS)}")
         if d.hit_policy == "priority" and all(isinstance(r.priority, int) for r in d.rules):
             issues += [str(f) for f in table_findings(d, o) if f.kind == "tie"]
     return issues
