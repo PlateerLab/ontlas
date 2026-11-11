@@ -214,7 +214,7 @@ any screen, Object definition, decision table or query, or asks the words as a q
 | | 문서 | | See documents as sections and concepts, and the relations a model finds between concepts |
 | | 질의 | | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 변경 · 버전 | 변경 요청 · 버전 이력 | Review changes element by element with their regression, and see every version of the space (see step 6) |
-| | 라이브러리 | | Apply or remove modules, see each module's kind, versions and what it holds, and draft rules from policy text |
+| | 라이브러리 | | Switch between the libraries the server offers (`--library`), each with its own definition, data and applied drafts; apply or remove modules, see each module's kind, versions and what it holds |
 | Data Binding | 데이터 가져오기 | 재료 카탈로그 · DB 연결 · 초안 생성 · 변환 결과 | Bring files and databases in and draft from them (see step 4) |
 | | Mapping | 데이터 소스 · DB 대조 | See the source's tables, keys and references, and check the definition against them |
 | | 액션 | 액션 정의 · 처리 요청 | Define actions; decide a case with its grounds and the path it took through the layers, request an action, approve it, roll it back |
@@ -1224,6 +1224,7 @@ ontlas conformance examples/commerce/studio.yaml                  # every regist
 ontlas preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
 ontlas serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
 ontlas serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
+ontlas serve examples/library/studio.yaml --library other/studio.yaml  # + another library a visitor can switch to
 ontlas serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
 ontlas serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
 ontlas serve examples/library/studio.yaml --repositories ./repositories --max-files 2000 --total-mb 4096  # files kept across restarts

@@ -23,9 +23,20 @@ def config_origin(config: str | Path) -> dict:
             "backends": {n: b.get("kind", "") for n, b in backends.items()}, "seeds": seeds}
 
 
+def library_entry(lid: str, config: str | Path, studio) -> dict:
+    """A studio file as a library to choose: its name (the domain modules it applies, else the studio's own name), how
+    many modules it applies and what it reads."""
+    comp = studio.composition
+    domains = [m.label or m.name for m in comp.modules if m.kind == "domain"] if comp else []
+    origin = config_origin(config)
+    return {"id": lid, "label": " · ".join(domains) or studio.onto.label or studio.onto.name, "path": str(config),
+            "origin": origin, "modules": len(comp.modules) if comp else 0,
+            "source": origin["backends"].get(studio.source, "") if studio.source else ""}
+
+
 def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = None,
                  data: DataOptions | None = None, library_write: bool = False, journal: Path | None = None,
-                 **kw) -> None:
+                 libraries: list[str | Path] | None = None, **kw) -> None:
     """Serve a studio file; every visitor gets a studio of their own, built from the same file (or, with
     `users`, one studio a team shares). With `library_write`, approved changes are saved to the library folder;
     with `journal`, requests, approvals and the audit trail are kept in that file across restarts."""
@@ -37,6 +48,8 @@ def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = 
 
     first = load_studio(config)  # fail at start, not on the first visitor
     origin = config_origin(config)
+    # the other studio files a visitor may switch to, each read once here so a broken one fails at start
+    offered = [library_entry("l1", config, first)] + [library_entry(f"l{i + 2}", p, load_studio(p)) for i, p in enumerate(libraries or [])]
     kept = Repositories(data.repositories) if data is not None and data.repositories else None
     store = None
     if library_write:
@@ -49,6 +62,7 @@ def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = 
         if journal is not None:
             studio.keep_journal(journal)
         s = StudioSession(studio, llm=llm, data=data, origin=dict(origin), repositories=kept)
+        s.libraries = [dict(x) for x in offered]
         if store is not None:
             s.store = store
             s._adopt(s.studio)

@@ -639,6 +639,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.catalog_upload(str(a["path"]), a["data"])
             if route == "files/sample":
                 return s.use_samples()
+            if route == "library":
+                return s.library_use(str(a.get("id", "")))
             if route == "pipeline":
                 if a.get("op") == "delete":
                     return s.pipeline_delete(str(a.get("id", "")))

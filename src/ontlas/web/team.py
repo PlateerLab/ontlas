@@ -24,7 +24,7 @@ LEVELS = ("viewer", "editor", "approver", "admin")
 NEEDS = {
     "attach": "editor", "detach": "editor", "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
     "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor", "catalog/use": "editor",
-    "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "catalog/move": "editor", "catalog/trash": "editor",
+    "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "library": "editor", "catalog/move": "editor", "catalog/trash": "editor",
     "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "editor",
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",

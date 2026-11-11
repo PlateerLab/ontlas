@@ -715,8 +715,9 @@
   function sideSpace() {
     const st = S.st, src = st.source || {};
     const where = noSource() ? '원천 미연결' : `원천 ${BACKEND_KIND[(src.kind || '').toLowerCase()] || src.kind || src.name || ''}`;
+    const libs = (st.libraries || []).length > 1 ? `<select class="pipesel" data-top="lib" aria-label="라이브러리 선택" title="라이브러리">${st.libraries.map((x) => `<option value="${esc(x.id)}"${x.id === st.library_id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>` : '';
     const pipes = st.pipelines.length > 1 ? `<select class="pipesel" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select>` : '';
-    return `<div class="sspace"><b title="${esc(st.title || '')}">${esc(st.title || '스페이스')}</b><span>모듈 ${count(st.modules_on)} · ${esc(where)}</span>${originChip(st.origin)}${pipes}</div>`;
+    return `<div class="sspace"><b title="${esc(st.title || '')}">${esc(st.title || '스페이스')}</b><span>모듈 ${count(st.modules_on)} · ${esc(where)}</span>${originChip(st.origin)}${libs}${pipes}</div>`;
   }
 
   function renderSide() {
@@ -3170,12 +3171,13 @@
     const list = (xs) => (xs || []).map((s) => `<div>${esc(s)}</div>`).join('');
     const ref = (r) => `<span class="chip sm${r.found ? '' : ' warn'}">${esc(r.label || r.ref)}</span>`;
     const params = Object.entries(c.params || {}).map(([k, v]) => `${esc(k)} ${esc(String(v))}`).join(', ');
+    const sect = (html) => (html.trim() ? `<div class="cb" style="border-top:1px solid var(--line)">${html}</div>` : '');  // a section with nothing in it is left out
     return `<div class="card odetail"><div class="cb"><div class="chips">${layerChip(c.layer) || '<span class="chip sm">Standard</span>'}<span class="chip sm">${esc(c.type_label || c.type)}</span><span class="chip sm ${CARD_TONE[c.status] || ''}">${esc(c.status_label || c.status)}</span>${c.legal_review && c.legal_review !== 'none' ? `<span class="chip sm">법무 검토 ${esc(c.legal_review_label || c.legal_review)}</span>` : ''}</div>
       <h2><span class="mono" style="font-size:15px;color:var(--ink)">${esc(c.id)}</span></h2><div>${esc(c.statement || '')}</div></div>
-      <div class="cb" style="border-top:1px solid var(--line)">${row('적용 대상', (c.applies_to_labels || c.applies_to || []).map(esc).join(', '))}${row('조건', list(c.conditions))}${row('결과', esc(c.result || ''))}${row('예외', list(c.exceptions))}${row('기준값', params)}</div>
-      <div class="cb" style="border-top:1px solid var(--line)">${(c.implements || []).length ? `<div class="label">실행 위치</div><div class="chips" style="margin:4px 0 8px">${c.implements.map(ref).join('')}</div>` : ''}${(c.used_by || []).length ? `<div class="label">사용처</div><div class="chips" style="margin-top:4px">${c.used_by.map(ref).join('')}</div>` : ''}
+      ${sect(`${row('적용 대상', (c.applies_to_labels || c.applies_to || []).map(esc).join(', '))}${row('조건', list(c.conditions))}${row('결과', esc(c.result || ''))}${row('예외', list(c.exceptions))}${row('기준값', params)}`)}
+      ${sect(`${(c.implements || []).length ? `<div class="label">실행 위치</div><div class="chips" style="margin:4px 0 8px">${c.implements.map(ref).join('')}</div>` : ''}${(c.used_by || []).length ? `<div class="label">사용처</div><div class="chips" style="margin-top:4px">${c.used_by.map(ref).join('')}</div>` : ''}
         ${c.check ? row('AXIOM 검사', `${esc(c.check.parameter)}${c.check.min !== undefined ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined ? ` ${esc(String(c.check.max))} 이하` : ''}`) : ''}
-        ${c.decision ? `<a class="btn sm" href="#mgrules?decision=${encodeURIComponent(c.decision)}" style="margin-top:6px">결정표 ${esc(c.decision_label || c.decision)}에서 열기</a>` : ''}</div>
+        ${c.decision ? `<a class="btn sm" href="#mgrules?decision=${encodeURIComponent(c.decision)}" style="margin-top:6px">결정표 ${esc(c.decision_label || c.decision)}에서 열기</a>` : ''}`)}
       <div class="cb" style="border-top:1px solid var(--line)">${row('근거', esc(c.source || '-'))}${row('소유자 · 버전', `${esc(c.owner || '-')} · ${esc(c.module_label || c.module || '-')} ${esc(c.version || '')}`)}${(c.extended_by || []).length ? row('확장 모듈', c.extended_by.map(esc).join(', ')) : ''}</div></div>`;
   }
 
@@ -3338,6 +3340,15 @@
   const counts = (c) => [['objects', 'Entity'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
     .filter(([k]) => c[k]).map(([k, l]) => `${l} ${c[k]}`).join(' · ') || '-';
 
+  function librariesCard() {
+    const libs = S.st.libraries || [];
+    if (libs.length < 2) return '';
+    const row = (x) => `<tr class="${x.id === S.st.library_id ? 'sel' : ''}"><td><b>${esc(x.label)}</b></td><td style="text-align:right">${count(x.modules)}</td><td>${esc(x.source ? (BACKEND_KIND[x.source] || x.source) : '원천 미연결')}</td>
+      <td style="text-align:right">${x.id === S.st.library_id ? '<span class="chip sm ok">사용 중</span>' : `<button class="btn sm" data-act="libuse" data-id="${esc(x.id)}">열기</button>`}</td></tr>`;
+    return `<div class="card" style="margin-bottom:14px"><div class="ch">라이브러리 <span class="chip sm">${libs.length}</span><div class="right"><span class="muted" style="font-size:12px">라이브러리마다 정의, 데이터, 적용 내역을 따로 유지합니다</span></div></div>
+      <div class="cb scroll" style="padding:0"><table class="tight"><tr><th>라이브러리</th><th style="text-align:right">모듈</th><th>원천</th><th></th></tr>${libs.map(row).join('')}</table></div></div>`;
+  }
+
   function viewLibrary() {
     const st = S.st;
     const kinds = [...new Set(st.library.map((r) => r.kind))];
@@ -3374,7 +3385,7 @@
     return `
 <div class="head"><div><h1>온톨로지 라이브러리</h1><div class="sub">도메인별 온톨로지 모듈과 버전을 관리하고 스페이스 적용 여부를 설정합니다</div></div>
   <div class="right">${st.ask ? '<button class="btn" data-act="popen">정책서로 규칙 초안</button>' : ''}<button class="btn" data-act="mnew">새 모듈</button><a class="btn ghost" href="/api/export/owl" download>OWL 내보내기</a></div></div>
-<div class="tabs">${tabs.join('')}</div>${policyCard()}${editorCard()}
+${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${editorCard()}
 <div class="grid libgrid">
   <div class="card"><div class="ch">모듈<div class="right muted" style="font-weight:600;font-size:12px">적용 ${st.modules_on}개</div></div>
     <div class="cb scroll" style="padding:0"><table><tr><th>온톨로지</th><th>종류</th><th>의존 모듈</th><th>구성</th><th style="text-align:center" title="스위치를 끄면 함께 제거되는 항목을 먼저 표시합니다">적용</th></tr>${rows}</table></div></div>
@@ -7523,6 +7534,17 @@ ${controls}${body}`;
     S.ind = { target: '', inputs: {} };
   }
 
+  async function libraryUse(id) {  // another library: its own definition, data and pipelines
+    try {
+      await api('library', { id });
+      clearViews();
+      Object.assign(S.home, { box: null, ov: null });
+      S.mg.st = null; S.ver = null; S.lx.st = null; S.sem.st = null;
+      await load();
+      toast(`${(S.st.libraries.find((x) => x.id === id) || {}).label || '라이브러리'}(으)로 전환했습니다.`);
+    } catch (e) { fail(e); }
+  }
+
   async function pipelineCall(body) {
     try {
       await api('pipeline', body);
@@ -7648,6 +7670,7 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast(`정답 변경을 대기 중인 변경에 기록했습니다. ${fileAsk()}`); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    libuse: (t) => libraryUse(t.dataset.id),
     semlayer: (t) => { S.sem.layer = S.sem.layer === t.dataset.k ? 'all' : t.dataset.k; render(); },
     sempick: (t) => { S.sem.sel = t.dataset.ref; render(); },
     lxpick: (t) => { S.lx.sel = t.dataset.id; S.lx.form = null; S.lx.imp = null; render(); },
@@ -8903,7 +8926,10 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && items[S.pal.i]) { ev.preventDefault(); const k = items[S.pal.i][0]; closeFloats(); location.hash = '#' + k; }
     });
     $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
-    $('#side').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
+    $('#side').addEventListener('change', (ev) => {
+      if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value });
+      if (ev.target.dataset.top === 'lib') libraryUse(ev.target.value);
+    });
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('dragstart', (ev) => {
       const c = ev.target.closest && ev.target.closest('[data-col]');
