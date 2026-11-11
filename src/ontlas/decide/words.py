@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from ontlas.check import _find_prop
-from ontlas.decide.cells import Any_, CellError, Compare, IsNull, OneOf, Range, parse_test
+from ontlas.decide.cells import Any_, CellError, Compare, IsNull, OneOf, Range, parse_test, resolve
 from ontlas.model import DecisionRule, DecisionTable, Ontology
 
 OPS = {"<=": "{} 이하", ">=": "{} 이상", "<": "{} 미만", ">": "{} 초과", "==": "{}", "!=": "{} 제외"}
@@ -151,8 +151,9 @@ def rule_sentence(onto: Ontology, table: DecisionTable, rule: DecisionRule) -> s
         said = cell_words(cell, named, unit=unit_of(onto, table, name), labels=labels_of(onto, table, name))
         if said != "-":
             conditions.append(f"{input_label(onto, table, name)} {said}")
-    outcome = " ".join(str(v) for v in rule.then.values() if isinstance(v, str)) or \
-        ", ".join(f"{k} {_value(v, '', {})}" for k, v in rule.then.items())
+    gives = {k: resolve(v, named) for k, v in rule.then.items()}  # a reason says the value in force (`{@name}`)
+    outcome = " ".join(str(v) for v in gives.values() if isinstance(v, str)) or \
+        ", ".join(f"{k} {_value(v, '', {})}" for k, v in gives.items())
     head = table.label or table.name
     return f"{head}: {', '.join(conditions)}인 경우 {outcome}" if conditions else f"{head}: {outcome}"
 
