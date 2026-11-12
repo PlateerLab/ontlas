@@ -185,10 +185,10 @@ DOCUMENT_MODULE = {
     "objects": {
         "Document": {"label": "문서", "key": "doc_id", "title": "title", "table": "documents", "properties": {
             "doc_id": {"type": "string", "label": "문서 번호", "required": True}, "title": {"type": "string", "label": "제목"},
-            "kind": {"type": "string", "label": "유형"}, "sections": {"type": "integer", "label": "절 수"},
+            "kind": {"type": "string", "label": "유형"}, "sections": {"type": "integer", "label": "항목 수"},
             "chars": {"type": "integer", "label": "글자 수"}}},
-        "Section": {"label": "절", "key": "section_id", "title": "title", "table": "sections", "properties": {
-            "section_id": {"type": "string", "label": "절 번호", "required": True}, "doc_id": {"type": "string", "label": "문서 번호"},
+        "Section": {"label": "항목", "key": "section_id", "title": "title", "table": "sections", "properties": {
+            "section_id": {"type": "string", "label": "항목 번호", "required": True}, "doc_id": {"type": "string", "label": "문서 번호"},
             "ordinal": {"type": "integer", "label": "순서"}, "title": {"type": "string", "label": "제목"},
             "excerpt": {"type": "string", "label": "발췌"}}},
         "Concept": {"label": "개념", "key": "concept_id", "title": "label", "table": "concepts", "properties": {
@@ -198,10 +198,10 @@ DOCUMENT_MODULE = {
             "relation_id": {"type": "string", "label": "관계 번호", "required": True},
             "source_id": {"type": "string", "label": "주어 개념"}, "target_id": {"type": "string", "label": "목적어 개념"},
             "predicate": {"type": "string", "label": "관계 이름"}, "label": {"type": "string", "label": "표시 이름"},
-            "section_id": {"type": "string", "label": "근거 절"}, "evidence": {"type": "string", "label": "근거 문장"}}},
+            "section_id": {"type": "string", "label": "근거 항목"}, "evidence": {"type": "string", "label": "근거 문장"}}},
     },
     "links": {
-        "hasSection": {"from": "Document", "to": "Section", "cardinality": "one_to_many", "inverse": "sectionOf", "label": "절",
+        "hasSection": {"from": "Document", "to": "Section", "cardinality": "one_to_many", "inverse": "sectionOf", "label": "항목",
                        "on": {"doc_id": "doc_id"}},
         "mentions": {"from": "Section", "to": "Concept", "inverse": "mentionedIn", "label": "언급",
                      "via": {"table": "section_concepts", "source": "section_id", "target": "concept_id"}},
@@ -211,13 +211,13 @@ DOCUMENT_MODULE = {
                          "on": {"source_id": "concept_id"}},
         "relationTo": {"from": "Relation", "to": "Concept", "cardinality": "many_to_one", "label": "목적어",
                        "on": {"target_id": "concept_id"}},
-        "statedIn": {"from": "Relation", "to": "Section", "cardinality": "many_to_one", "label": "근거 절",
+        "statedIn": {"from": "Relation", "to": "Section", "cardinality": "many_to_one", "label": "근거 항목",
                      "on": {"section_id": "section_id"}},
     },
     "queries": {
         "allDocuments": {"label": "문서 목록", "query": {"match": {"d": "Document"}, "return": ["d.title", "d.kind", "d.sections", "d.chars"],
                                                      "order": ["title"]}},
-        "sectionsAbout": {"label": "개념을 언급한 절", "params": {"concept": "string"}, "example": {"concept": "주문"}, "query": {
+        "sectionsAbout": {"label": "개념을 언급한 항목", "params": {"concept": "string"}, "example": {"concept": "주문"}, "query": {
             "match": {"d": "Document", "s": "Section", "c": "Concept"}, "edges": [["d", "hasSection", "s"], ["s", "mentions", "c"]],
             "where": {"eq": ["c.label", {"param": "concept"}]},
             "return": [{"col": "d.title", "as": "document"}, {"col": "s.title", "as": "section"}], "order": ["document", "section"]}},
@@ -706,7 +706,7 @@ CREATE TABLE relations (relation_id TEXT PRIMARY KEY, source_id TEXT, target_id 
         parent = {r[0]: r[1] for r in rows["sections"]}
         if with_sections:
             nodes += [{"id": r[0], "label": r[3], "module": "section", "abstract": False, "table": "", "key": ""} for r in rows["sections"]]
-            edges += [{"source": r[1], "target": r[0], "label": "절", "subtype": False} for r in rows["sections"]]
+            edges += [{"source": r[1], "target": r[0], "label": "항목", "subtype": False} for r in rows["sections"]]
         for cid, label, kind, element in rows["concepts"]:
             nodes.append({"id": cid, "label": label, "module": "ontology" if element else kind, "abstract": False, "table": element, "key": ""})
         seen = set()
@@ -719,7 +719,7 @@ CREATE TABLE relations (relation_id TEXT PRIMARY KEY, source_id TEXT, target_id 
         edges += [{"source": r[1], "target": r[2], "label": r[4], "subtype": False, "relation": r[3], "evidence": r[6]}
                   for r in rows["relations"]]
         kinds = {n["module"] for n in nodes}
-        words = {"document": "문서", "section": "절", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드"}
+        words = {"document": "문서", "section": "항목", "ontology": "온톨로지 요소", "term": "용어", "keyword": "키워드"}
         return {"nodes": nodes, "edges": edges, "clusters": [{"id": k, "label": v} for k, v in words.items() if k in kinds],
                 "sections_shown": with_sections, "titles": title, "relations": len(rows["relations"]), "folder": folder}
 

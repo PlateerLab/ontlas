@@ -829,7 +829,7 @@ class SpaceMixin:
             f = files.get(path, {})
             fx = f.get("facts") or {}
             out.update(path=path, manage=True, bytes=f.get("bytes", 0))
-            say({"data": f"표 {fx.get('tables', 0)}개 · {fx.get('rows', 0):,}행", "document": f"문서 · 절 {fx.get('sections', 0)}개",
+            say({"data": f"표 {fx.get('tables', 0)}개 · {fx.get('rows', 0):,}행", "document": f"문서 · 항목 {fx.get('sections', 0)}개",
                  "definition": "정의서", "raw": "원본 보관", "empty": "내용 없음"}.get(fx.get("kind"), "-"))
             if f.get("error"):
                 mark({"text": "읽기 실패", "tone": "bad", "why": f["error"]})

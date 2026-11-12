@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.3
+
+- **Every node of the document graph shows what it holds.** An item shows its text and the concepts it names; a
+  document its items and the concepts they name; a concept its definition (an Entity, a property, a value, a decision
+  table by its label) with the items and documents that name it and the concepts named beside it; a keyword where it is
+  named. Each one listed is pressed to move there, and an Entity opens from its concept.
+- A document's parts are 항목, not 절, across the page and the document ontology (`Section`, its relation and query).
+  The catalog tab is 데이터 카탈로그 again, and the graphs' notes say 레코드 · 문서 · 개념, not 노드.
+
 ## 0.19.2
 
 - **A narrow window has a drawer.** Below 1100px the sidebar no longer becomes a strip above the page: a menu button in
