@@ -10,6 +10,7 @@ import threading
 from typing import Any, Callable
 
 from ontlas.backends.base import NoSource
+from ontlas.decide.table import MissingValues
 from ontlas.tools import StudioTools
 
 Handler = Callable[[StudioTools, dict], Any]
@@ -18,6 +19,12 @@ ANY = {"type": "string", "description": "The name of a registered query, or an I
 STRING = {"type": "string"}
 OBJECT = {"type": "object"}
 INT = {"type": "integer"}
+VALUES = {"type": "object", "description": "Decide on these values instead of reading a record: each by the decision's "
+          "input name or by the target property it reads (a date for an elapsed-days input). null is a value (none yet); "
+          "an input not given at all is reported back as missing (422), never taken as null."}
+LIBRARY = {"type": "string", "description": "Which library answers: an id or a label from /v1/libraries. Default: the first."}
+STAGE = {"type": "string", "enum": ["", "values", "record"],
+         "description": "values: measured on each question's own values, no source needed. record: on the record its key reads."}
 
 # path, method, tool name, what it does, the body it takes, the required fields, the handler
 ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
@@ -46,8 +53,21 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      {"text": STRING, "backend": STRING}, ["text"], lambda t, b: t.run_sparql(b["text"], b.get("backend"))),
     ("/v1/cypher", "POST", "run_cypher", "Run a Cypher read query written against the ontology, on any backend, SQL ones included.",
      {"text": STRING, "params": OBJECT, "backend": STRING}, ["text"], lambda t, b: t.run_cypher(b["text"], b.get("params"), b.get("backend"))),
-    ("/v1/decide", "POST", "decide", "Evaluate a decision table for one object: outputs, the rule that matched, the evidence.",
-     {"decision": STRING, "key": STRING, "params": OBJECT}, ["decision", "key"], lambda t, b: t.decide(b["decision"], b["key"], b.get("params"))),
+    ("/v1/decide", "POST", "decide", "Evaluate a decision on one object's record (key) or on values the caller gives (values, "
+     "no source needed): outputs, the verdict, the rule that matched, the path through AXIOM, Custom and Standard, the "
+     "evidence and the module versions that decided.",
+     {"decision": STRING, "key": STRING, "values": VALUES, "params": OBJECT, "at": STRING}, ["decision"],
+     lambda t, b: t.decide(b["decision"], b.get("key", ""), b.get("params"), _at(b.get("at")), b.get("values"))),
+    ("/v1/rules", "POST", "find_rules", "The rule cards, AXIOM first, or those a text, a layer or a decision names: each "
+     "rule's statement, conditions, result, exceptions, source, owner, status and what carries it out.",
+     {"text": STRING, "layer": {"type": "string", "enum": ["", "axiom", "custom", "standard"]}, "decision": STRING, "k": INT},
+     [], lambda t, b: t.find_rules(b.get("text", ""), b.get("layer", ""), b.get("decision", ""), b.get("k", 0))),
+    ("/v1/terms", "POST", "read_terms", "The glossary: with text, the terms it uses in their preferred words and the terms "
+     "each must not be confused with; without, every term.",
+     {"text": STRING}, [], lambda t, b: t.read_terms(b.get("text", ""))),
+    ("/v1/questions", "POST", "run_questions", "Run the validation questions in two stages, on each question's own values "
+     "(no source needed) and on the records they name, and say where a wrong answer comes from: the rule or the mapping.",
+     {"stage": STAGE}, [], lambda t, b: t.run_questions(b.get("stage", ""))),
     ("/v1/functions", "GET", "list_functions", "The functions this token may run, with what they take and give, their versions and owners.",
      {}, [], lambda t, b: t.list_functions()),
     ("/v1/function", "POST", "run_function", "Run a registered function on one object, or on its inputs alone.",
@@ -61,9 +81,22 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
 ]
 
 
+def _at(text: Any):
+    """The moment an elapsed-days input is counted to, when a caller sets one (ISO 8601)."""
+    if not text:
+        return None
+    from ontlas.values import parse_datetime
+
+    return parse_datetime(str(text))
+
+
+LIBRARIES = ("/v1/libraries", "GET", "list_libraries", "The libraries this server offers, each with its modules and "
+             "versions. Pass one's id as `library` to ask it instead of the first.", {}, [], None)
+
+
 def openapi(version: str, server: str = "") -> dict:
     paths: dict[str, dict] = {}
-    for path, method, name, summary, props, required, _ in ROUTES:
+    for path, method, name, summary, props, required, _ in [*ROUTES, LIBRARIES]:
         op: dict[str, Any] = {"operationId": name, "summary": summary, "security": [{"bearer": []}],
                               "responses": {"200": {"description": "The answer", "content": {"application/json": {"schema": {"type": "object"}}}},
                                             "400": {"description": "The request cannot be answered; `error` says why"},
@@ -71,7 +104,11 @@ def openapi(version: str, server: str = "") -> dict:
                                             "401": {"description": "No valid token"}, "403": {"description": "Outside this token's role"}}}
         if method == "POST":
             op["requestBody"] = {"required": True, "content": {"application/json": {"schema": {
-                "type": "object", "properties": props, "required": required}}}}
+                "type": "object", "properties": {**props, "library": LIBRARY}, "required": required}}}}
+        elif path != LIBRARIES[0]:
+            op["parameters"] = [{"name": "library", "in": "query", "required": False, "schema": LIBRARY}]
+        if name == "decide":
+            op["responses"]["422"] = {"description": "Decided on values, some inputs were not given: `missing` lists them"}
         paths[path] = {method.lower(): op}
     spec: dict[str, Any] = {"openapi": "3.1.0", "info": {"title": "Ontlas", "version": version,
                                                         "description": "Documents, vectors, graphs and ontologies behind one API."},
@@ -85,7 +122,7 @@ def tool_list() -> list[dict]:
     """The same operations as function definitions, for an agent framework that takes tools rather than OpenAPI."""
     return [{"name": name, "description": summary, "method": method, "path": path,
              "parameters": {"type": "object", "properties": props, "required": required}}
-            for path, method, name, summary, props, required, _ in ROUTES]
+            for path, method, name, summary, props, required, _ in [*ROUTES, LIBRARIES]]
 
 
 class Rest:
@@ -96,10 +133,44 @@ class Rest:
     requests are not another's to read."""
 
     def __init__(self, clients: list[tuple[str, StudioTools]] | StudioTools, token: str = "", *,
-                 source: Callable[[], Any] | None = None, lock: Any = None):
+                 source: Callable[[], Any] | None = None, lock: Any = None, libraries: list[dict] | None = None):
         self.clients = [(token, clients)] if isinstance(clients, StudioTools) else list(clients)
         self.source = source
         self.lock = lock or threading.Lock()
+        # the libraries a caller may ask instead of the first: {id, label, ..., load}; each studio is built once, and
+        # each caller gets its own tools on it, with the same name, role and rows as on the first
+        self.libraries = list(libraries or [])
+        self._studios: dict[str, Any] = {}
+        self._tools: dict[tuple[int, str], StudioTools] = {}
+
+    def library_list(self) -> dict:
+        out = []
+        for i, lib in enumerate(self.libraries):
+            row = {k: v for k, v in lib.items() if k in ("id", "label", "modules", "source")}
+            row["default"] = i == 0
+            out.append(row)
+        return {"libraries": out}
+
+    def tools_for(self, tools: StudioTools, library: Any) -> StudioTools:
+        """The caller's tools on the library it names; the first library (or none named) is the one it holds."""
+        name = str(library or "").strip()
+        if not name or not self.libraries:
+            return tools
+        lib = next((x for x in self.libraries if name in (x.get("id"), x.get("label"))), None)
+        if lib is None:
+            raise LookupError(f"no library '{name}'; see /v1/libraries")
+        if lib is self.libraries[0]:
+            return tools
+        if lib["id"] not in self._studios:
+            self._studios[lib["id"]] = lib["load"]()
+        studio = self._studios[lib["id"]]
+        if tools.role and tools.role not in studio.onto.roles:
+            raise PermissionError(f"role {tools.role} is not defined in library '{lib.get('label') or lib['id']}'")
+        key = (id(tools), lib["id"])
+        if key not in self._tools:
+            self._tools[key] = StudioTools(studio, role=tools.role, principal=tools.principal, actor_id=tools.actor.id,
+                                           read_only=tools.read_only, audit=tools.audit)
+        return self._tools[key]
 
     @property
     def tools(self) -> StudioTools:
@@ -120,6 +191,14 @@ class Rest:
         tools = tools or self.tools
         if self.source is not None:
             tools.studio = self.source()
+        if path == LIBRARIES[0]:
+            return (200, self.library_list()) if method == "GET" else (405, {"error": f"{path} takes GET"})
+        try:
+            tools = self.tools_for(tools, body.get("library"))
+        except PermissionError as e:
+            return 403, {"error": str(e)}
+        except LookupError as e:
+            return 404, {"error": str(e)}
         for p, m, _, _, _, required, handler in ROUTES:
             if p != path:
                 continue
@@ -134,6 +213,8 @@ class Rest:
                 return 403, {"error": str(e)}
             except NoSource as e:  # the space holds its definition only: a caller tells this from a bad request
                 return 409, {"error": str(e), "no_source": True}
+            except MissingValues as e:  # asked on values, some were not given: what to give, not a guess on null
+                return 422, {"error": str(e), "needs_values": True, "decision": e.decision, "missing": e.missing}
             except (ValueError, LookupError, KeyError, TypeError, RuntimeError) as e:
                 return 400, {"error": f"{type(e).__name__}: {e}"}
         return 404, {"error": "no such path"}

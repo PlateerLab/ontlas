@@ -277,7 +277,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if url.path == "/healthz":
                 return self._send(200, b"ok", "text/plain; charset=utf-8")
             if url.path.startswith("/v1/"):
-                return self._rest("GET", url.path, {})
+                return self._rest("GET", url.path, {k: v[0] for k, v in parse_qs(url.query).items()})
             if url.path in ("/", "/index.html"):
                 sid, _, new = self._session()
                 return self._send(200, body_html, "text/html; charset=utf-8", sid=sid, new=new,
@@ -739,6 +739,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.change_mark(str(a.get("id", "")), str(a.get("element", "")), str(a.get("mark", "")))
             if route == "change/comment":
                 return s.change_comment(str(a.get("id", "")), str(a.get("element", "")), str(a.get("text", "")))
+            if route == "rest/try":
+                return s.rest_try(str(a.get("path", "")), a.get("body") if isinstance(a.get("body"), dict) else {})
             if route == "decide/simulate":
                 return s.simulate(str(a.get("name", "")), str(a.get("key", "") or ""),
                                   a.get("inputs") if isinstance(a.get("inputs"), dict) else {})
@@ -763,7 +765,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
 def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: int = 7710, limit: int = 24,
           idle: float = 3600, ask_per_minute: int = 20, quiet: bool = False, data: DataOptions | None = None,
           video: Path | None = None, users: Path | None = None, sync: float = 0,
-          api: dict | list[dict] | None = None) -> None:
+          api: dict | list[dict] | None = None, libraries: list[dict] | None = None) -> None:
     """Serve the page: a studio per visitor, or with `users` one shared studio for a team that signs in.
     `api` turns /v1 on: one client, or a list of them, each {name, token, role, principal, write}."""
     from ontlas.web.team import Logins, Syncer, TeamSessions, Users
@@ -781,7 +783,7 @@ def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: 
         rest = Rest([(c["token"], StudioTools(studio, role=c.get("role") or None, principal=c.get("principal"),
                                               actor_id=c.get("name") or "api", read_only=not c.get("write"), audit=True))
                      for c in clients], source=(lambda: shared.studio) if shared else None,
-                    lock=shared.lock if shared else None)
+                    lock=shared.lock if shared else None, libraries=libraries)
     httpd = ThreadingHTTPServer((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
                                                            quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
                                                            video=video, logins=logins, rest=rest))

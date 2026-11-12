@@ -97,9 +97,17 @@ def test_what_reads_rows_gives_the_typed_empty_answer(session):
                 session.agreement(), session.bindings(), session.function_run("refundEstimate", "I1001", {})):
         assert out["ok"] is False and out["no_source"] is True and "원천" in out["error"]
     q = session.questions()
-    rows = [r for r in q["results"] if r["type"] != "definition"]  # what a word means is answered from the definition
-    assert q["accuracy"] == 1 and q["measured"] == 1 and q["unmeasured"] == len(rows) > 0 and q["no_source"]
+    # what a word means is answered from the definition, and a decision question that states its values is decided on
+    # them (stage 1): both are measured with no source; one that only names a record waits for a source (stage 2)
+    stated = [r for r in q["results"] if r["type"] == "definition" or "values" in r["stages"]]
+    rows = [r for r in q["results"] if r not in stated]
+    assert stated and all(r["passed"] is True for r in stated)
+    assert q["accuracy"] == 1 and q["measured"] == len(stated) and q["unmeasured"] == len(rows) > 0 and q["no_source"]
     assert all(r["passed"] is None and r["note"] == "측정 대상 아님 (원천 미연결)" for r in rows)
+    st = q["stages"]
+    assert st["values"]["measured"] == st["values"]["passed"] == len(stated)
+    assert st["record"]["measured"] == 0 and st["record"]["questions"] > 0  # every record question waits
+    assert all(r["stages"]["record"]["unmeasured"] == "no_source" for r in q["results"] if "record" in r["stages"])
     assert session.identities()["no_source"]
     for call in (lambda: session.record_page("Order", "O1"), lambda: session.decide("returnEligibility", "I1001"),
                  lambda: session.sync(), lambda: session.transitions_advance(),
@@ -171,7 +179,9 @@ def test_the_page_routes_answer_without_a_source(cfg):
         code, out = call("/api/decide/simulate", {"name": "returnEligibility", "inputs": IN_WINDOW})
         assert code == 200 and out["outputs"]["eligible"] is True
         code, out = call("/api/questions", {})
-        assert code == 200 and out["measured"] == 1 and out["sets"]["dev"]["measured"] == 1 and out["no_source"]
+        # measured with no source: the definition question and the decision questions that state their values
+        assert code == 200 and out["measured"] == out["stages"]["values"]["measured"] > 1 and out["no_source"]
+        assert out["stages"]["record"]["measured"] == 0 and out["accuracy"] == 1
         code, out = call("/api/flow")
         assert code == 200 and out["passed"] is True
     finally:

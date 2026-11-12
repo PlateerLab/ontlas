@@ -35,6 +35,16 @@ class QuestionResult:
     type: str = ""  # definition | decision | value: what it checks (Question.kind)
     holdout: bool = False  # of the held-out set: reported apart from the questions things are tuned on
     grading: str = "match"  # how it was held right (Question.graded_by)
+    # measured in two stages: `values` without a source (on the values the question gives, or a definition), `record`
+    # on the record its key reads once a source is connected. Each is {measured, passed, got, inputs, unmeasured}.
+    stages: dict = field(default_factory=dict)
+    # what a wrong answer points at: rule (wrong on the given values too) | mapping (right on them, wrong on the record)
+    # | data (right on them, and the record could not be read)
+    diagnosis: str = ""
+    differs: list[dict] = field(default_factory=list)  # mapping: {input, given, read}, the values the record reads otherwise
+
+
+STAGES = ("values", "record")
 
 
 @dataclass
@@ -72,10 +82,21 @@ class QuestionReport:
                          "grounded": sum(r.grounded for r in got) / len(got) if got else None}
         return out
 
+    def stages(self) -> dict[str, dict]:
+        """Each stage on its own: how many questions it applies to, how many it could measure and how many passed."""
+        out = {}
+        for s in STAGES:
+            rs = [r.stages[s] for r in self.results if s in r.stages]
+            got = [x for x in rs if x["measured"]]
+            out[s] = {"questions": len(rs), "measured": len(got), "passed": sum(bool(x["passed"]) for x in got),
+                      "accuracy": sum(bool(x["passed"]) for x in got) / len(got) if got else None}
+        out["diagnosis"] = {d: sum(r.diagnosis == d for r in self.results) for d in ("rule", "mapping", "data")}
+        return out
+
     def to_dict(self) -> dict:
         return {"accuracy": self.accuracy, "grounded": self.grounded, "measured": len(self.measured),
                 "unmeasured": len(self.results) - len(self.measured), "sets": self.split(), "types": self.split("type"),
-                "results": [asdict(r) for r in self.results]}
+                "stages": self.stages(), "results": [asdict(r) for r in self.results]}
 
 
 class Studio:
@@ -282,22 +303,68 @@ class Studio:
                   columns=[Column(Ref(last, self.onto.obj(here).key), "k")], distinct=True)
         return here, [str(r[0]) for r in self.run(q).rows]
 
+    def given(self, name: str, values: dict, params: dict | None = None, at: datetime | None = None
+              ) -> tuple[dict[str, Any], list[Evidence]]:
+        """A decision's inputs from values a caller gives instead of a record: each input by its own name, or by the
+        property of the target it reads (a date for `days_since`), or by its parameter. With no source connected this
+        is how a workflow decides. An input given none of these ways is missing (MissingValues), never taken as null."""
+        from ontlas.decide.table import MissingValues
+        from ontlas.decide.words import input_label
+        from ontlas.values import coerce
+
+        table = self.onto.decisions[name]
+        params = dict(params or {})
+        out: dict[str, Any] = {}
+        evidence: list[Evidence] = []
+        missing: list[dict] = []
+        for inp in table.inputs.values():
+            src = inp.source
+            prop = src.get("property") or src.get("days_since") or ""
+            own = table.target and prop and not src.get("path")  # a property of the target itself, not one a link reaches
+            if inp.name in values:
+                raw, said = values[inp.name], inp.name
+            elif own and prop in values:
+                raw, said = values[prop], prop
+                if "days_since" in src and raw is not None:
+                    raw = ((at or self.now()) - parse_datetime(raw)).days
+            elif "param" in src and (src["param"] in params or src["param"] in values):
+                raw = params.get(src["param"], values.get(src["param"]))
+                said = src["param"]
+            else:
+                missing.append({"input": inp.name, "label": input_label(self.onto, table, inp.name), "type": inp.type,
+                                "property": prop if own else "", "param": src.get("param", "")})
+                continue
+            try:
+                out[inp.name] = coerce(raw, inp.type)
+            except (TypeError, ValueError):
+                raise DecisionError(f"{name}.{inp.name}: '{raw}' is not {inp.type}") from None
+            # what it stands on: the caller's value, for the property of the target it would otherwise be read from
+            evidence.append(Evidence(inp.name, out[inp.name], table.target if own else "", "", prop if own else said, "given"))
+        if missing:
+            raise MissingValues(name, missing)
+        return out, evidence
+
     def decide(self, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
-               inputs: dict | None = None, at: datetime | None = None) -> DecisionResult:
+               inputs: dict | None = None, at: datetime | None = None, values: dict | None = None) -> DecisionResult:
+        """`key` reads the target's record from the source; `values` decides on what the caller gives (see `given`);
+        `inputs` are the table's inputs as they are, for a simulation."""
         table = self.onto.decisions.get(name)
         if table is None:
             raise KeyError(f"unknown decision '{name}'")
         if role and not self.onto.roles[role].can("run", name):
             raise AccessDenied(f"role {role} may not run decision '{name}'")
         params = dict(params or {})
-        values: dict[str, Any] = dict(inputs or {})
         evidence: list[Evidence] = []
+        if values is not None:
+            inputs, evidence = self.given(name, values, params, at)
+        stated = bool(inputs) or values is not None  # decided on what it was given: no record is read
+        values = dict(inputs or {})
         row = None
-        if table.target and not inputs:
+        if table.target and not stated:
             row = self.fetch(table.target, key)
             if row is None:
                 raise DecisionError(f"{table.target} {key} not found")
-        for inp in ([] if inputs else table.inputs.values()):
+        for inp in ([] if stated else table.inputs.values()):
             src = inp.source
             if "param" in src:
                 values[inp.name] = params.get(src["param"])
@@ -394,34 +461,88 @@ class Studio:
             if qs.graded_by == "llm":  # a model holds it right or wrong, and the check has none: not asked
                 report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="needs_model", **meta))
                 continue
+            if qs.decision:
+                report.results.append(self._decision_question(qs, meta))
+                continue
+            stage = "record" if qs.query else "values"  # a query reads rows; what a word means needs none
             try:
-                if qs.decision:
-                    res = self.decide(qs.decision, qs.key, qs.params)
-                    got = res.outputs
-                    passed = isinstance(got, dict) and all(got.get(k) == v for k, v in qs.expect.items())
-                    gaps = self._decision_gaps(res)
-                    said, grounds = self._decision_words(res)
-                elif qs.query:
+                if qs.query:
                     res = self.run(qs.query, qs.params, backend=backend)
                     got, passed = _judge(qs.expect, res, check(self.query(qs.query), self.onto).column_types)
                     gaps = []  # a registered query answers with its own definition and the source columns it reads
                     rq = self.onto.queries[qs.query]
                     said = " ".join(str(normalize(v)) for row in res.rows for v in row)
                     grounds = f"{qs.query} {rq.label} {rq.description} {res.compiled.text}"
+                    if not self.version_of(f"query:{qs.query}"):
+                        gaps.append("no version")
                 else:  # what a word means: answered as the page answers a question, from definitions and documents
                     asker = asker or self._asker()
                     got, passed, gaps, said, grounds = _defined(asker, qs)
-                if (qs.decision or qs.query) and not self.version_of(
-                        f"{'decision' if qs.decision else 'query'}:{qs.decision or qs.query}"):
-                    gaps.append("no version")
                 passed = _graded(qs, passed, said, grounds, gaps)
-                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps, **meta))
+                report.results.append(QuestionResult(qs.id, qs.text, passed, qs.expect, got, "", not gaps, gaps, **meta,
+                                                     stages={stage: {"measured": True, "passed": passed, "got": got}}))
             except NoSource:  # it reads rows and there are none to read: not asked, rather than answered wrong
-                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source", **meta))
+                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source", **meta,
+                                                     stages={stage: {"measured": False, "passed": None, "unmeasured": "no_source"}}))
             except Exception as e:
-                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None,
-                                                     f"{type(e).__name__}: {e}", False, ["no answer"], **meta))
+                said = f"{type(e).__name__}: {e}"
+                report.results.append(QuestionResult(qs.id, qs.text, False, qs.expect, None, said, False, ["no answer"], **meta,
+                                                     stages={stage: {"measured": True, "passed": False, "error": said}}))
         return report
+
+    def _decision_question(self, qs, meta: dict) -> QuestionResult:
+        """A decision question in its two stages: on the values it gives (no source needed) and on the record its key
+        reads. When both are measured and only the record is wrong, the rule held and the record reads other values
+        than the question gives: the mapping is the thing to look at, and `differs` says which values."""
+        from ontlas.decide.table import MissingValues
+
+        stages: dict[str, dict] = {}
+        done: dict[str, tuple] = {}  # stage -> (result or None, passed, gaps, error)
+        for stage, how in (("values", {"values": qs.values} if qs.values else None),
+                           ("record", {"key": qs.key} if qs.key else None)):
+            if how is None:
+                continue
+            try:
+                res = self.decide(qs.decision, params=qs.params, **how)
+                got = res.outputs
+                passed = isinstance(got, dict) and all(got.get(k) == v for k, v in qs.expect.items())
+                gaps = self._decision_gaps(res)
+                if not self.version_of(f"decision:{qs.decision}"):
+                    gaps.append("no version")
+                said, grounds = self._decision_words(res)
+                passed = _graded(qs, passed, said, grounds, gaps)
+                stages[stage] = {"measured": True, "passed": passed, "got": got, "inputs": dict(res.inputs)}
+                done[stage] = (res, passed, gaps, "")
+            except NoSource:  # its record is in a source that is not connected: measured once one is
+                stages[stage] = {"measured": False, "passed": None, "unmeasured": "no_source"}
+            except MissingValues as e:  # the question gives too few values: the question is what to fix
+                stages[stage] = {"measured": True, "passed": False, "error": str(e), "missing": e.missing}
+                done[stage] = (None, False, ["no answer"], f"MissingValues: {e}")
+            except Exception as e:
+                said = f"{type(e).__name__}: {e}"
+                stages[stage] = {"measured": True, "passed": False, "error": said}
+                done[stage] = (None, False, ["no answer"], said)
+        pick = "record" if "record" in done else "values" if "values" in done else ""
+        if not pick:
+            return QuestionResult(qs.id, qs.text, False, qs.expect, None, unmeasured="no_source", **meta, stages=stages)
+        res, passed, gaps, error = done[pick]
+        diagnosis, differs = "", []
+        if "values" in done and not done["values"][1]:
+            diagnosis = "rule"  # wrong on the values the question states: the rule (or what the question expects)
+        elif "values" in done and "record" in done and done["record"][0] is None:
+            diagnosis = "data"  # right on its values, and its record could not be read (not found, a value it lacks)
+        elif "values" in done and "record" in done and not done["record"][1]:
+            diagnosis = "mapping"
+            given, read = done["values"][0], done["record"][0]
+            if given is not None and read is not None:
+                from ontlas.decide.words import input_label
+
+                table = self.onto.decisions[qs.decision]
+                differs = [{"input": k, "label": input_label(self.onto, table, k), "given": given.inputs.get(k),
+                            "read": read.inputs.get(k)} for k in given.inputs
+                           if normalize(given.inputs.get(k)) != normalize(read.inputs.get(k))]
+        return QuestionResult(qs.id, qs.text, passed, qs.expect, None if res is None else res.outputs, error,
+                              not gaps, gaps, **meta, stages=stages, diagnosis=diagnosis, differs=differs)
 
     def _asker(self):
         """The tools a definition question is answered through: the page's answer, with the lexicon's words."""

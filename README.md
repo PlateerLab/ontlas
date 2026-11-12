@@ -1152,6 +1152,45 @@ agents:
 `/v1/proposals` gives a token the requests it made and how each stands, and `/v1/record` one object by its key, inside the
 token's rows and masks.
 
+### Deciding with no source
+
+A workflow that only goes through the API decides on the values it already has, before any source is connected:
+
+```bash
+curl localhost:7710/v1/decide -H "Authorization: Bearer $ONTLAS_API_TOKEN" -H "Content-Type: application/json" \
+     -d '{"decision": "returnEligibility", "values": {"delivered_at": "2026-10-26", "item_status": "NORMAL",
+          "category_returnable": true, "customer_grade": "VIP"}}'
+```
+
+Each value goes by the decision's input name, or by the property of the target the input reads (a date stands for an
+elapsed-days input, counted to `at` or now), or by its parameter. `null` is a value (no delivery date yet); an input not
+given at all is never read as null: the answer is `422` with `missing`, each input with its label and type, so an agent
+can ask for it. With `key` instead, the record is read from the source. Either way the answer has `verdict`,
+`decided_by` (the one rule that gave it, with its layer, module and version), `path` (AXIOM › Custom › Standard),
+`evidence`, the `modules` and versions that decided and a `decision_id` the audit trail keeps.
+
+`/v1/rules` gives the rule cards, AXIOM first, or those a text, a layer or a decision names, each with what carries it out.
+`/v1/terms` reads a sentence in the glossary's preferred words and names the terms it must not be confused with.
+`/v1/questions` runs the validation questions in two stages (below). Served with `--library`, `/v1/libraries` lists the
+libraries and any call takes `library` to ask one of them; the first answers otherwise.
+
+### Validating in two stages
+
+A decision question can state its values as well as, or instead of, a record:
+
+```yaml
+questions:
+  - {id: OP4, text: "9만 7천원 주문 O1 의 배송비는 얼마인가요?", decision: shippingFee, key: O1,
+     values: {order_total: 97000, order_status: DELIVERED}, expect: {fee: 0}}
+```
+
+On its values it is measured with no source (stage 1, 값 기준); on its key, once a source is connected (stage 2, 레코드
+기준). Where they disagree the question says what to look at: `rule` when it is wrong on its own values too, `mapping`
+when only the record is wrong (with the inputs the record reads otherwise, `differs`), `data` when the record could not
+be read. The page's 검증 screen shows both stages and the cause; a question written on the page takes its values in typed
+fields. 외부 연동 tries `/v1/decide` on the page, through the same code a platform's call takes, shows the request body,
+the cURL and the XGEN HTTP node settings, and keeps a call as a validation question.
+
 The other direction: a platform that manages database connections can lend one. `kind: gateway` sends SQL as text to its query
 service and reads the rows back, so the password never reaches the space and the platform's read-only rule and table allow-list
 stay in force. A space reads through it and never writes. An answer that comes back full is marked as possibly cut.

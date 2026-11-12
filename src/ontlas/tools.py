@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -144,14 +145,83 @@ class StudioTools:
         if not self.studio.run(q, role=self.role, principal=self.principal).rows:
             raise PermissionError(f"{type_name} {key} is outside this role's rows")
 
-    def decide(self, decision: str, key: str, params: dict | None = None, at: datetime | None = None) -> dict:
-        target = self.studio.onto.decisions[decision].target
-        if target:
+    def decide(self, decision: str, key: str = "", params: dict | None = None, at: datetime | None = None,
+               values: dict | None = None) -> dict:
+        """On the record `key` reads from the source, or on the `values` a caller gives (no source needed): an input
+        given as null is a value (no delivery date yet), one not given at all comes back in MissingValues."""
+        from ontlas.decide.words import verdict
+
+        if decision not in self.studio.onto.decisions:
+            raise KeyError(f"unknown decision '{decision}'")
+        table = self.studio.onto.decisions[decision]
+        target = table.target
+        if values is None and not str(key or ""):
+            raise ValueError("give the record it is about (key) or the values it decides on (values)")
+        if values is not None and not isinstance(values, dict):
+            raise ValueError("values is an object of input or property names to values")
+        if target and values is None:
             self._visible(target, key)
-        out = _plain(self.studio.decide(decision, key, params, role=self.role, at=at).to_dict())
-        self._note("decided", target or "", key, decision, outputs=out.get("outputs"),
+        res = self.studio.decide(decision, None if values is not None else key, params, role=self.role, at=at, values=values)
+        out = _plain(res.to_dict())
+        outs = res.outputs if isinstance(res.outputs, dict) else {"result": res.outputs}
+        out["verdict"] = verdict(table, outs)[0]
+        out["mode"] = "values" if values is not None else "record"
+        out["decided_by"] = (out.get("path") or {}).get("source")  # the one rule that gave the answer, its layer and version
+        out["decision_id"] = uuid.uuid4().hex  # the key this decision is found by in the audit trail
+        out["modules"] = [{k: m[k] for k in ("module", "version", "kind")} for m in self.list_modules()]  # what decided it
+        self._note("decided", target or "", key, decision, outputs=out.get("outputs"), mode=out["mode"], id=out["decision_id"],
                    rules=[f"{decision}.{r}" for r in out.get("matched") or []])
         return out
+
+    def find_rules(self, text: str = "", layer: str = "", decision: str = "", k: int = 0) -> dict:
+        """The rule cards, AXIOM first: what each says, its conditions, result and exceptions, the source it stands on,
+        its owner and status, and the decision, value or function that carries it out (none: written down only)."""
+        from ontlas.semantic import semantic_view
+
+        view = semantic_view(self.studio.onto, self.studio.composition)
+        cards = [c for c in view["cards"] if c.get("kind") == "stated"]
+        order = {x["layer"]: i for i, x in enumerate(view["layers"])}
+        if layer:
+            cards = [c for c in cards if c["layer"] == layer]
+        if decision:
+            cards = [c for c in cards if any(r.get("ref", "").startswith(f"decision:{decision}") for r in c["implements"])]
+        if text:
+            words = [w for w in str(text).split() if len(w) >= 2]
+            scored = [(sum(w in " ".join(map(str, (c["statement"], c["result"], *c["conditions"], c["source"], c["id"])))
+                           for w in words), c) for c in cards]
+            cards = [c for s, c in sorted(scored, key=lambda x: -x[0]) if s] if words else cards
+        cards = sorted(cards, key=lambda c: order.get(c["layer"], 9)) if not text else cards
+        if k:
+            cards = cards[:max(1, min(int(k), 200))]
+        keep = ("id", "layer", "layer_label", "type", "type_label", "statement", "conditions", "result", "exceptions",
+                "params", "source", "owner", "status", "status_label", "legal_review", "legal_review_label", "check",
+                "module", "module_label", "version")
+        return {"layers": [{"layer": x["layer"], "label": x["label"], "order": x["order"], "cards": x["cards"]} for x in view["layers"]],
+                "rules": [{**{f: c.get(f) for f in keep},
+                           "runs": [{"ref": r.get("ref"), "label": r.get("label")} for r in c["implements"]]} for c in cards]}
+
+    def read_terms(self, text: str = "") -> dict:
+        """With text: the terms it uses in their preferred words, what each stands for and the terms it must not be
+        taken for. Without: the whole lexicon."""
+        from ontlas.lexicon import entry, read
+
+        terms = list(self.studio.composition.terms) if self.studio.composition is not None else []
+        if text:
+            return read(str(text), terms)
+        return {"terms": [entry(t) for t in terms]}
+
+    def run_questions(self, stage: str = "") -> dict:
+        """The validation questions, measured in two stages: `values` on the values each question gives (no source
+        needed) and `record` on the record its key reads. Where only the record is wrong, the mapping is to look at."""
+        rep = self.studio.questions().to_dict()
+        rows = []
+        for r in rep["results"]:
+            if stage and stage not in r["stages"]:
+                continue
+            rows.append({k: r[k] for k in ("id", "text", "type", "holdout", "passed", "unmeasured", "expected", "got",
+                                          "stages", "diagnosis", "differs", "error")})
+        return _plain({"stages": rep["stages"], "accuracy": rep["accuracy"] if rep["measured"] else None,
+                       "measured": rep["measured"], "unmeasured": rep["unmeasured"], "results": rows})
 
     def list_functions(self) -> dict:
         """The functions this role may run, with their contracts, owners and versions."""

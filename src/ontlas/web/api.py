@@ -32,12 +32,13 @@ from ontlas.studio import Studio
 from ontlas.web.home_api import HomeMixin
 from ontlas.web.lexicon_api import LexiconMixin
 from ontlas.web.pages_api import PagesMixin
-from ontlas.web.space_api import SpaceMixin, attach
+from ontlas.web.space_api import SpaceMixin, attach, decision_fields
 
 KIND_ORDER = list(MODULE_KIND)
 CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이",
                "states": "허용 상태", "call": "외부 호출"}
 _NO_COLUMN = re.compile(r"no such column: (\S+)|column \W?([\w.]+)\W? does not exist|Unknown column '([^']+)'", re.I)
+_NEEDS = re.compile(r"MissingValues: decision '[^']+' needs (.+)$")
 _NO_TABLE = re.compile(r"no such table: (\S+)|relation \W?([\w.]+)\W? does not exist|Table '([^']+)' doesn't exist", re.I)
 
 
@@ -47,6 +48,9 @@ def said(e: Exception | str) -> str:
     if isinstance(e, NoSource):
         return NO_SOURCE
     text = str(e) if isinstance(e, str) else f"{type(e).__name__}: {e}"
+    m = _NEEDS.search(text)
+    if m:
+        return f"판정에 필요한 값({m.group(1)})이 없어 판정하지 못했습니다. 판정 값에 이 항목을 추가해 주세요."
     m = _NO_COLUMN.search(text)
     if m:
         name = next(g for g in m.groups() if g)
@@ -530,7 +534,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             "questions": [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
                            "params": q.params, "type": q.kind, "holdout": q.holdout} for q in o.questions],
             "decisions": [{"name": d.name, "label": d.label or d.name, "target": d.target,
-                           "target_label": self._obj_label(d.target)} for d in o.decisions.values()],
+                           "target_label": self._obj_label(d.target), **decision_fields(o, d)} for d in o.decisions.values()],
             "actions": [{"name": a.name, "label": a.label or a.name, "target": a.target, "parameters": a.parameters,
                          "decisions": [c.decision for c in a.criteria if c.decision], "approval": a.approval}
                         for a in o.actions.values()],
@@ -2531,7 +2535,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                  for lk in o.links.values()]
         questions = [{"id": q.id, "text": q.text, "decision": q.decision, "key": q.key, "query": q.query,
                       "params": q.params, "expect": q.expect, "type": q.kind, "holdout": q.holdout, "grading": q.graded_by,
-                      "keywords": q.keywords, "owner": q.owner, "pending": f"question:{q.id}" in diff["added"],
+                      "keywords": q.keywords, "owner": q.owner, "values": q.values, "pending": f"question:{q.id}" in diff["added"],
                       **owner(f"question:{q.id}")} for q in o.questions]
         via: dict[str, list[str]] = {}
         for lk in o.links.values():
@@ -3119,6 +3123,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return plain({"accuracy": None if none else rep.accuracy, "grounded": None if none else rep.grounded,
                       "measured": len(asked), "unmeasured": len(rep.results) - len(asked),
                       "sets": rep.split(), "types": rep.split("type"),  # dev and holdout apart; each type
+                      "stages": rep.stages(),  # on the questions' own values (no source), then on the records they name
                       "results": [{**r.__dict__, "passed": None if r.unmeasured else r.passed,
                                    "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps],
                                    "note": UNMEASURED.get(r.unmeasured, "")} for r in rep.results],

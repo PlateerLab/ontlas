@@ -422,6 +422,9 @@ class Question:
     grading: str = ""  # match | keywords | evidence | llm (GRADINGS); unset, `graded_by` says it
     keywords: list[str] = field(default_factory=list)  # the words a keywords or evidence grading looks for
     owner: str = ""
+    # a decision question's own values, so it is measured with no source connected (Studio.given): each by the
+    # decision's input name or the target property it reads; with `key` as well, the record is measured beside them
+    values: dict[str, Any] = field(default_factory=dict)
 
     @property
     def kind(self) -> str:
@@ -865,7 +868,8 @@ def _from_dict(d: dict) -> Ontology:
                             decision=q.get("decision", ""), key=str(q.get("key", "")),
                             params=dict(q.get("params", {})), type=str(q.get("type") or ""), holdout=bool(q.get("holdout")),
                             grading=str(q.get("grading") or ""), keywords=[str(x) for x in q.get("keywords") or []],
-                            owner=str(q.get("owner") or "")) for q in d.get("questions", [])],
+                            owner=str(q.get("owner") or ""), values=dict(q.get("values") or {}))
+                   for q in d.get("questions", [])],
         exclusive=[tuple(x) for x in d.get("exclusive", [])],
         identities=identities,
         parameters=parameters,
@@ -967,7 +971,7 @@ def _to_dict(o: Ontology) -> dict:
                                "example": q.example, "query": q.query}) for q in o.queries.values()}
     questions = [_clean({"id": q.id, "text": q.text, "query": q.query, "decision": q.decision, "key": q.key,
                          "params": q.params, "type": q.type, "holdout": q.holdout, "grading": q.grading,
-                         "keywords": q.keywords, "owner": q.owner}) | {"expect": q.expect} for q in o.questions]
+                         "keywords": q.keywords, "owner": q.owner, "values": q.values}) | {"expect": q.expect} for q in o.questions]
     areas = {a.name: _clean({"label": a.label, "description": a.description, "cite": a.cite, "aligned": a.aligned,
                              "status": None if a.status == "active" else a.status, "owner": a.owner, "tier": a.tier})
              for a in o.areas.values()}

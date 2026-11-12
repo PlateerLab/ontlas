@@ -4414,17 +4414,123 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     answer_question: '질문 하나에 결정, 데이터, 문서로 답하고 적용 규칙, 원천 값, 조항을 함께 반환', agent_context: '질문과 관련된 정의와 규칙을 Agent 프롬프트에 넣을 글로 반환',
     find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 항목, 언급한 개념',
     search_documents: '문서를 의미로 검색하고 문서, 항목, 관련 온톨로지 요소를 반환', run_query: '등록 질의 또는 질의 IR을 저장소에서 실행', translate_query: '질의를 저장소 언어의 쿼리문으로 변환',
-    run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: 'Entity 하나에 결정표를 실행해 결과, 적용 규칙, 근거를 반환',
+    run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: '레코드 키 또는 판정 값으로 결정표를 실행해 결과, 적용 규칙, 판정 경로, 근거, 모듈 버전을 반환',
+    find_rules: '규칙 카드를 AXIOM부터 조회하고 조건, 결과, 예외, 근거, 소유자, 실행 연결을 반환', read_terms: '문장의 용어를 대표어로 바꾸고 혼동 주의 용어를 함께 반환',
+    run_questions: '검증 질문을 값 기준과 레코드 기준으로 측정하고 오답의 원인을 규칙과 매핑으로 구분', list_libraries: '이 서버의 라이브러리와 모듈 버전',
     list_functions: '이 토큰이 실행할 수 있는 함수와 입출력, 버전, 담당', run_function: '등록 함수를 Entity 하나 또는 입력값으로 실행',
     request_action: '액션을 요청합니다. 검사를 통과하면 승인 대기로 접수하고, 자동 승인 기준 안이면 바로 실행', list_proposals: '이 토큰이 요청한 처리와 상태', get_record: 'Entity 하나의 값을 행 범위와 가림 안에서 반환' };
 
+  // ---- calling the library as a workflow or an agent does: one /v1 call tried on this page, and how XGEN calls it
+
+  const TRY_STATUS = { 200: ['ok', '판정 완료'], 422: ['warn', '판정 값 필요'], 409: ['warn', '원천 미연결'], 400: ['bad', '요청 오류'], 403: ['bad', '권한 없음'], 404: ['bad', '대상 없음'] };
+
+  function tryState(i) {
+    const c = S.ctry || (S.ctry = { decision: '', mode: 'values', values: {}, key: '', at: '', res: null, busy: false, view: 'body' });
+    if (!i.decisions.some((d) => d.name === c.decision)) { c.decision = (i.decisions[0] || {}).name || ''; c.values = {}; c.res = null; }
+    return c;
+  }
+
+  // the body this page sends is the one a platform sends: typed values, '' left out, '값 없음' as null
+  function tryBody(c, d) {
+    const body = { decision: c.decision };
+    if (c.mode === 'record') { body.key = c.key.trim(); return body; }
+    const values = {};
+    for (const i of (d && d.inputs) || []) {
+      const s = String((c.values || {})[i.name] ?? '').trim();
+      if (s === '') continue;
+      if (s === 'null' || s === '값 없음') values[i.name] = null;
+      else if (i.type === 'boolean') values[i.name] = s === 'true';
+      else if (['integer', 'decimal', 'number'].includes(i.type) && !Number.isNaN(Number(s))) values[i.name] = Number(s);
+      else values[i.name] = s;
+    }
+    body.values = values;
+    if (c.at.trim()) body.at = c.at.trim();
+    return body;
+  }
+
+  function tryResult(c) {
+    const r = c.res;
+    if (c.busy) return '<div class="empty"><span class="spin"></span>판정 중입니다.</div>';
+    if (!r) return '<div class="empty" style="padding:18px 8px">판정 값을 입력하고 판정 실행을 누르면 API 응답을 표시합니다.</div>';
+    const [tone, word] = TRY_STATUS[r.status] || ['bad', '오류'];
+    const b = r.body || {};
+    const head = `<div class="tryhead"><span class="chip ${tone}">${r.status} · ${word}</span>${b.mode ? `<span class="muted">${b.mode === 'values' ? '판정 값 기준' : '레코드 기준'}</span>` : ''}</div>`;
+    if (r.status === 422) {
+      return `${head}<div class="hint" style="margin:8px 0">판정에 필요한 값이 빠져 있어 판정하지 않았습니다. 빠진 값은 추정하지 않고 응답의 missing 목록으로 돌려줍니다. Agent는 이 목록으로 사용자에게 되물을 수 있습니다.</div>
+        <table class="tight"><tr><th>빠진 값</th><th>이름</th><th>형식</th></tr>${(b.missing || []).map((m) => `<tr><td><b>${esc(m.label)}</b></td><td class="mono">${esc(m.input)}${m.property && m.property !== m.input ? ` <span class="muted">또는 ${esc(m.property)}</span>` : ''}</td><td>${esc(m.type)}</td></tr>`).join('')}</table>`;
+    }
+    if (r.status !== 200) return `${head}<div class="hint" style="margin-top:8px">${esc(b.error || '')}</div>`;
+    const outs = b.outputs && typeof b.outputs === 'object' ? b.outputs : { result: b.outputs };
+    const layers = ((b.path || {}).layers || []).map((x) => `<span class="chip sm${x.state === 'fired' ? ' ok' : ''}" title="${esc(x.said)}">${esc(x.label)} ${esc(x.fired.join(', ') || x.said)}</span>`).join('<span class="muted">›</span>');
+    const src = (b.path || {}).source;
+    const keep = b.mode === 'values' ? `<div style="margin-top:12px"><button class="btn sm" data-act="ctrysave"${c.saved ? ' disabled' : ''}>${c.saved ? '검증 질문에 추가함' : '검증 질문으로 저장'}</button><div class="fnote">이 값과 결과를 검증 질문으로 저장합니다. 관리 변경에 기록되고, 변경 요청이 승인되면 검증에 포함됩니다.</div></div>` : '';
+    return `${head}<div class="trybig">${esc(b.verdict || '')}</div>
+      <dl class="trydl">${Object.entries(outs).map(([k, v]) => `<dt class="mono">${esc(k)}</dt><dd>${show(v)}</dd>`).join('')}</dl>
+      <div class="sec">판정 경로</div><div class="chips" style="align-items:center">${layers || '<span class="muted">-</span>'}</div>
+      ${src ? `<div class="fnote" style="margin-top:6px">판정을 정한 규칙 <span class="mono">${esc(src.rule)}</span> · ${esc(src.layer_label)} · ${esc(src.module_label)} ${esc(src.version)}${src.cite ? ` · ${esc(src.cite)}` : ''}</div>` : ''}
+      <div class="sec">근거 값</div><table class="tight">${(b.evidence || []).map((e) => `<tr><td class="mono">${esc(e.input)}</td><td>${show(e.value)}</td><td class="muted" style="font-size:12px">${e.source === 'given' ? '요청 값' : esc(e.source || '')}</td></tr>`).join('')}</table>
+      ${b.decision_id ? `<div class="fnote mono" style="margin-top:6px">decision_id ${esc(b.decision_id)}</div>` : ''}${keep}`;
+  }
+
+  function tryCode(c, d, i) {
+    const base = location.origin, body = tryBody(c, d);
+    const lib = i.library && i.libraries > 1 ? { library: i.library.id } : {};
+    const json = JSON.stringify({ ...lib, ...body }, null, 2);
+    const curl = `curl -X POST ${base}/v1/decide \\\n  -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ ...lib, ...body })}'`;
+    const node = [['method', 'POST'], ['url', `${base}/v1/decide`], ['auth_type', 'bearer'], ['auth_token', 'API 토큰'], ['body_type', 'json'], ['body', JSON.stringify({ ...lib, ...body })], ['passthrough_input', 'false'], ['failure_mode', 'emit']];
+    const text = { body: json, curl, node: node.map(([k, v]) => `${k}: ${v}`).join('\n') }[c.view];
+    const tab = (k, label) => `<button class="tab${c.view === k ? ' on' : ''}" data-act="ctryview" data-k="${k}" aria-pressed="${c.view === k}">${label}</button>`;
+    return `<div class="trycode"><div class="tabs">${tab('body', '요청 본문')}${tab('curl', 'cURL')}${tab('node', 'XGEN HTTP 요청 노드')}<div class="grow"></div><button class="iconbtn" data-act="copycode" data-v="${esc(text)}" aria-label="복사" title="복사">${ui('copy')}</button></div>
+      ${c.view === 'node' ? `<table class="tight">${node.map(([k, v]) => `<tr><td class="mono" style="width:140px">${esc(k)}</td><td class="mono" style="word-break:break-all">${esc(v)}</td></tr>`).join('')}</table><div class="hint" style="margin-top:6px">워크플로우의 값은 body에 템플릿으로 넣습니다. 예: <span class="mono">{"decision": "${esc(c.decision)}", "values": {{ values | tojson }}}</span>. 출력의 result에 판정 결과가 들어 있습니다.</div>` : `<pre class="code">${esc(text)}</pre>`}</div>`;
+  }
+
+  function tryPanel(i) {
+    if (!i.decisions.length) return '<div class="card" style="grid-column:1/-1"><div class="ch">판정 API 실행</div><div class="cb"><div class="hint">이 라이브러리에 결정표가 없습니다. 규칙에서 결정표를 추가하면 여기서 판정 API를 실행할 수 있습니다.</div></div></div>';
+    const c = tryState(i), d = i.decisions.find((x) => x.name === c.decision);
+    const NONE = '값 없음';
+    const control = (x) => {
+      const cur = (c.values || {})[x.name], attr = `data-in="ctryv" data-k="${esc(x.name)}"`;
+      if (x.type === 'boolean') return `<select ${attr}>${opt('', '입력 안 함', cur)}${opt('true', '예', cur)}${opt('false', '아니요', cur)}${opt('null', NONE, cur)}</select>`;
+      if (x.values && x.values.length) return `<select ${attr}>${opt('', '입력 안 함', cur)}${x.values.map((v) => opt(String(v), String(v), cur)).join('')}${opt('null', NONE, cur)}</select>`;
+      const num = ['integer', 'decimal', 'number'].includes(x.type);
+      return `<input type="text" ${attr} value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${num ? `숫자 · 없으면 ${NONE}` : `없으면 ${NONE}`}">`;
+    };
+    const help = (x) => (x.days_since ? `${x.property_label || x.property}에서 지난 일수. 일시(${x.property})로 보내도 됩니다.` : x.param ? '판정 Parameter' : x.property ? '' : '연결된 Entity에서 읽는 값');
+    const fields = c.mode === 'record'
+      ? `<div class="field"><label>레코드 키</label><input type="text" data-in="ctryk" value="${esc(c.key)}" placeholder="예: ${esc(d && d.target ? `${d.target_label} 키` : '레코드 키')}"><div class="fnote">${i.source ? '원천에서 레코드를 읽어 판정합니다.' : '원천이 연결되어 있지 않아 409 응답을 반환합니다. 원천 없이 판정하려면 판정 값 기준을 사용합니다.'}</div></div>`
+      : `<div class="rgrid">${d.inputs.map((x) => `<div class="field"><label>${esc(x.label)} <span class="muted mono cn">${esc(x.name)}</span></label>${control(x)}${help(x) ? `<div class="fnote">${esc(help(x))}</div>` : ''}</div>`).join('')}</div>
+        ${d.inputs.some((x) => x.days_since) ? `<div class="field" style="max-width:260px"><label>기준 시각 (선택)</label><input type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><div class="fnote">일시로 보낸 값의 경과일을 이 시각 기준으로 계산합니다. 비우면 지금 기준입니다.</div></div>` : ''}`;
+    return `<div class="card" style="grid-column:1/-1"><div class="ch">판정 API 실행<div class="right"><span class="muted" style="font-size:12px">POST /v1/decide${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
+      <div class="cb"><div class="gwhat">워크플로우와 Agent가 이 라이브러리의 규칙으로 판정하는 API를 화면에서 실행합니다. 화면 결과는 같은 요청을 보낸 플랫폼이 받는 응답과 같습니다.</div>
+      <div class="trygrid"><div>
+        <div class="rgrid two"><div class="field"><label>판정</label><select data-in="ctryd">${i.decisions.map((x) => opt(x.name, `${x.label} (${x.name})`, c.decision)).join('')}</select></div>
+          <div class="field"><label>기준</label><div class="seg">${[['values', '판정 값'], ['record', '레코드 키']].map(([k, label]) => `<button class="tab${c.mode === k ? ' on' : ''}" data-act="ctrymode" data-k="${k}" aria-pressed="${c.mode === k}">${label}</button>`).join('')}</div></div></div>
+        ${fields}
+        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><button class="btn primary" data-act="ctryrun"${c.busy ? ' disabled' : ''}>판정 실행</button>${c.mode === 'values' && d.example ? `<button class="btn" data-act="ctryfill" title="${esc(`${d.example.question} ${d.example.text}`)}">예시 값 채우기</button>` : ''}<button class="btn ghost" data-act="ctryclear">값 지우기</button></div>
+        ${tryCode(c, d, i)}
+      </div><div class="tryres">${tryResult(c)}</div></div></div></div>`;
+  }
+
+  function repaintTry() {
+    const box = document.querySelector('.trycode'), i = S.conn;
+    if (!box || !i) return;
+    const c = S.ctry, d = i.decisions.find((x) => x.name === c.decision);
+    box.outerHTML = tryCode(c, d, i);
+  }
+
   function viewConnect() {
     const i = S.conn;
-    const head = pageHead('외부 연동', '외부 플랫폼과 Agent의 연동 방법을 확인합니다');
+    const head = pageHead('외부 연동', '워크플로우와 Agent가 이 라이브러리의 규칙과 온톨로지를 호출하는 방법을 확인하고, 판정 API를 실행합니다');
     if (!i) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const base = location.origin;
     const code = (t) => `<pre class="code">${esc(t)}</pre>`;
-    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start">
+    const xgen = `<div class="card"><div class="ch">XGEN 연동</div><div class="cb"><ol class="steps2">
+        <li><b>판정 노드</b><span>HTTP 요청 노드로 <span class="mono">POST ${esc(base)}/v1/decide</span>를 호출합니다. 원천이 없어도 워크플로우가 가진 값을 values로 보내면 규칙대로 판정합니다. 값이 빠지면 422와 빠진 값 목록을 반환합니다.</span></li>
+        <li><b>Agent 도구</b><span>OpenAPI 문서를 API 컬렉션으로 등록하고 Geny의 도구로 연결합니다. 판정, 규칙 카드, 용어, 검증 도구를 그대로 사용합니다.</span></li>
+        <li><b>Agent 컨텍스트</b><span><span class="mono">/v1/context</span>의 text를 Geny 시스템 프롬프트에 넣습니다. 질문과 관련된 정의와 규칙이 들어갑니다.</span></li>
+        <li><b>검증</b><span><span class="mono">/v1/questions</span>로 원천 연결 전에는 값 기준, 연결 후에는 레코드 기준으로 같은 검증 질문을 측정합니다.</span></li></ol>
+        ${i.libraries > 1 ? '<div class="hint xp">라이브러리가 여럿이면 요청에 library를 지정합니다. 목록은 /v1/libraries에서 확인합니다.</div>' : ''}</div></div>`;
+    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start">${tryPanel(i)}${xgen}
       <div class="card"><div class="ch">MCP<div class="right"><span class="chip ok">사용 가능</span></div></div><div class="cb"><div class="gwhat">Claude, Cursor처럼 MCP를 지원하는 Agent에 공간을 도구로 연결합니다. 문서 검색, 질의, 판정을 도구로 호출합니다.</div>
         ${code('ontlas mcp studio.yaml --role customer_agent --principal customer_id=C001 --read-only')}<div class="hint xp">역할을 지정하면 그 역할의 조회 범위와 가림이 그대로 적용됩니다.</div></div></div>
       <div class="card"><div class="ch">REST API<div class="right"><span class="chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? '켜짐' : '이 서버는 꺼짐'}</span></div></div><div class="cb"><div class="gwhat">어떤 플랫폼에서든 토큰으로 호출합니다. OpenAPI 문서를 가져가면 도구로 등록할 수 있습니다.</div>
@@ -4909,23 +5015,23 @@ ${controls}${body}`;
 
   function viewCheck() {
     const r = S.qa;
-    const head = `<div class="head"><div><h1>검증</h1><div class="sub">검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다</div></div>
+    const head = `<div class="head"><div><h1>검증</h1><div class="sub">검증 질문을 값 기준과 레코드 기준 두 단계로 측정하고, 오답의 원인을 규칙 · 매핑 · 데이터로 나눠 확인합니다</div></div>
       <div class="right"><button class="btn primary" data-act="checks">다시 실행</button></div></div>`;
     if (!r || r.busy) return head + '<div class="empty"><span class="spin"></span>검증 중입니다.</div>';
     if (r.error) return head + `<div class="banner no"><div class="why">${esc(r.error)}</div></div>`;
     const passed = r.results.filter((x) => x.passed).length;
     const c = r.conformance;
     const asked = r.results.filter((x) => x.passed !== null).length;  // questions that need rows wait for a source
-    const stats = `<div class="stats"><div class="stat"><b>${asked && r.accuracy !== null ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
+    const stats = `${stageStrip(r)}<div class="stats"><div class="stat"><b>${asked && r.accuracy !== null ? Math.round(r.accuracy * 100) + '%' : '-'}</b><span>정답률</span></div>
       <div class="stat"><b>${passed} / ${asked}</b><span>정답 수${asked < r.results.length ? ` · 측정 안 함 ${r.results.length - asked}` : ''}</span></div>
       <div class="stat"><b>${asked && r.grounded !== null ? Math.round(r.grounded * 100) + '%' : '-'}</b><span>근거 제시율</span></div>
       ${r.sets && r.sets.holdout && r.sets.holdout.questions ? `<div class="stat"><b>${pct(r.sets.dev.accuracy)} · ${pct(r.sets.holdout.accuracy)}</b><span>개발 ${r.sets.dev.measured}문항 · 홀드아웃 ${r.sets.holdout.measured}문항</span></div>` : ''}
       ${c && c.summary ? `<div class="stat"><b>${c.summary.agree} / ${c.summary.queries}</b><span>Backend 결과 일치 질의</span></div>` : ''}</div>
       ${r.types ? `<div class="chips" style="margin:-4px 0 12px">${Object.entries(r.types).map(([k, t]) => `<span class="chip sm">${esc(Q_TYPE[k] || k)} ${t.passed} / ${t.measured}${t.measured < t.questions ? ` · 측정 안 함 ${t.questions - t.measured}` : ''}</span>`).join('')}</div>` : ''}
-      <div class="hint xp" style="margin:-4px 0 12px">정답률은 정답이 정해진 질문에 같은 답을 낸 비율이고, 근거 제시율은 답에 적용 규칙 또는 질의, 출처, 모듈 버전이 모두 있는 비율입니다. 기준보다 낮으면 오답 원인에서 질문을 확인하고, 정의를 고치거나 의도한 변경이면 정답을 갱신합니다.</div>`;
+      <div class="hint xp" style="margin:-4px 0 12px">정답률은 정답이 정해진 질문에 같은 답을 낸 비율이고, 근거 제시율은 답에 적용 규칙 또는 질의, 출처, 모듈 버전이 모두 있는 비율입니다. 레코드 기준으로 측정한 질문은 그 결과를, 아직 원천이 없으면 값 기준 결과를 정답률에 반영합니다. 기준보다 낮으면 오답 원인에서 질문을 확인하고, 정의를 고치거나 의도한 변경이면 정답을 갱신합니다.</div>`;
     // a question that passes with its grounds is one line; its answer and the expected one show for the ones that do not, or on request
     const qa = (x) => `<div class="qdetail"><span><i>정답</i>${showObj(x.expected)}</span><span><i>결과</i>${x.error ? `<span class="muted">${esc(x.error)}</span>` : (typeof x.got === 'number' ? `${show(x.got)}행` : showObj(x.got))}</span></div>`;
-    const rows = r.results.map((x) => x.passed === null ? `<tr data-row="q:${esc(x.id)}" class="unasked"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div></td><td></td><td><span class="chip sm" title="${esc(x.note || '')}">측정 안 함</span></td></tr>` : `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div>${S.qaAll || !x.passed ? qa(x) : ''}</td>
+    const rows = r.results.map((x) => x.passed === null ? `<tr data-row="q:${esc(x.id)}" class="unasked"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div></td><td>${stageChips(x)}</td><td></td><td><span class="chip sm" title="${esc(x.note || '')}">측정 대기</span></td></tr>` : `<tr data-row="q:${esc(x.id)}"><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div>${diagnosisLine(x)}${S.qaAll || !x.passed ? qa(x) : ''}</td><td>${stageChips(x)}</td>
       <td style="font-size:12px">${x.grounded ? '<span class="ic y">✓</span>' : `<span class="muted">${esc((x.gaps || []).join(', '))}</span>`}</td><td><span class="ic ${x.passed ? 'y' : 'x'}">${x.passed ? '✓' : '!'}</span>${x.passed && x.grounded ? '' : `<div class="iacts"><button class="btn sm" data-act="chkopen" data-id="${esc(x.id)}">열기</button>${x.passed || x.error ? '' : `<button class="btn sm" data-act="chkexpect" data-id="${esc(x.id)}">정답 갱신</button>`}</div>`}</td></tr>`).join('');
     const confAll = (c && c.queries) || [], confShown = S.confAll ? confAll : confAll.filter((x) => !x.agree);  // what agrees is a count until asked for
     const conf = confShown.map((x) => `<tr data-row="conf:${esc(x.name)}"><td><b>${esc(x.label)}</b><div class="muted mono cn">${esc(x.name)}</div></td>
@@ -4933,14 +5039,56 @@ ${controls}${body}`;
       <td><span class="ic ${x.agree ? 'y' : 'x'}">${x.agree ? '✓' : '!'}</span>${x.agree ? '' : `<div class="iacts"><a class="btn sm" href="#query?query=${encodeURIComponent(x.name)}">질의 열기</a></div>`}</td></tr>`).join('');
     const causes = {};
     const put = (k, id) => { (causes[k] = causes[k] || []).push(id); };
-    r.results.filter((x) => x.passed === false).forEach((x) => put(x.error ? '실행 오류' : (typeof x.got === 'number' ? '질의 결과 불일치' : '판정 결과 불일치'), x.id));
+    r.results.filter((x) => x.passed === false).forEach((x) => put(DIAGNOSIS[x.diagnosis] ? DIAGNOSIS[x.diagnosis][1] : x.error ? '실행 오류' : (typeof x.got === 'number' ? '질의 결과 불일치' : '판정 결과 불일치'), x.id));
     r.results.filter((x) => x.passed && !x.grounded).forEach((x) => (x.gaps || []).forEach((g) => put(`근거 부족 · ${g}`, x.id)));
     const wrong = Object.keys(causes).length ? `<div class="card"><div class="ch">오답 원인 <span class="chip sm warn">${Object.keys(causes).length}종</span></div><div class="cb scroll" style="padding:0"><table class="tight"><tr><th>원인</th><th>질문 수</th><th>질문</th></tr>${Object.entries(causes).sort((a, b) => b[1].length - a[1].length).map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td>${v.length}</td><td class="mono" style="font-size:12px">${v.slice(0, 12).map((id) => `<button class="ilinkb" data-act="chkrow" data-row="q:${esc(id)}">${esc(id)}</button>`).join(' ')}</td></tr>`).join('')}</table></div></div>` : '';
     return `${head}${stats}${wrong}
 <div class="grid" style="grid-template-columns:minmax(0,1.4fr) minmax(320px,1fr);align-items:start">
-  <div class="card"><div class="ch">검증 질문<div class="right">${rows ? `<button class="btn sm ghost" data-act="qaall" aria-pressed="${!!S.qaAll}">${S.qaAll ? '정답 · 결과 접기' : '정답 · 결과 보기'}</button>` : ''}</div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>번호</th><th>질문</th><th>근거</th><th>정답 여부</th></tr>${rows}</table>` : '<div class="empty" style="padding:14px">등록된 검증 질문이 없습니다.</div>'}</div></div>
+  <div class="card"><div class="ch">검증 질문<div class="right">${rows ? `<button class="btn sm ghost" data-act="qaall" aria-pressed="${!!S.qaAll}">${S.qaAll ? '정답 · 결과 접기' : '정답 · 결과 보기'}</button>` : ''}</div></div><div class="cb scroll" style="padding:0">${rows ? `<table class="tight"><tr><th>번호</th><th>질문</th><th>측정 단계</th><th>근거</th><th>정답 여부</th></tr>${rows}</table>` : '<div class="empty" style="padding:14px">등록된 검증 질문이 없습니다.</div>'}</div></div>
   <div class="card"><div class="ch">Backend 결과 일치${confAll.length ? `<span class="chip sm ${confAll.every((x) => x.agree) ? 'ok' : 'warn'}">${confAll.filter((x) => x.agree).length} / ${confAll.length}</span>` : ''}<div class="right">${confAll.length ? `<button class="btn sm ghost" data-act="confall" aria-pressed="${!!S.confAll}">${S.confAll ? '불일치만 보기' : '모두 보기'}</button>` : ''}</div></div><div class="cb scroll" style="padding:0">${conf ? `<table class="tight"><tr><th>질의</th><th>행</th><th></th></tr>${conf}</table>` : `<div class="empty" style="padding:14px">${confAll.length ? '등록 질의의 결과가 모든 Backend에서 같습니다.' : '비교할 Backend가 하나뿐입니다.'}</div>`}</div></div>
 </div>${valuesCard()}${questionCard()}`;
+  }
+
+  // two stages: on the values a question states (no source needed), then on the record its key reads
+  const STAGE = { values: ['1단계 · 값 기준', '질문에 적은 값으로 판정합니다. 원천 없이 측정합니다.', '값 기준'],
+    record: ['2단계 · 레코드 기준', '원천에서 레코드를 읽어 같은 질문을 판정합니다.', '레코드 기준'] };
+  // [the line in a row, the cause in the list of causes, what to do]
+  const DIAGNOSIS = { rule: ['규칙 확인', '규칙 확인 · 질문 값으로도 오답', '질문에 적은 값으로도 기대한 답이 나오지 않습니다. 결정표 규칙이나 기대값을 확인해 주세요.'],
+    mapping: ['매핑 확인', '매핑 확인 · 레코드 값이 질문 값과 다름', '질문에 적은 값으로는 맞고 레코드로는 틀립니다. 원천 컬럼 매핑과 레코드 값을 확인해 주세요.'],
+    data: ['데이터 확인', '데이터 확인 · 레코드를 읽지 못함', '질문에 적은 값으로는 맞고 레코드를 읽지 못했습니다. 레코드 키와 원천 데이터를 확인해 주세요.'] };
+
+  function stageStrip(r) {
+    const s = r.stages;
+    if (!s || !(s.values.questions + s.record.questions)) return '';
+    const cell = (k) => {
+      const x = s[k], [title, what] = STAGE[k];
+      const tone = !x.questions || !x.measured ? '' : x.passed === x.measured ? ' ok' : ' warn';
+      const value = !x.questions ? '<b>-</b><span>이 단계로 측정하는 질문이 없습니다</span>'
+        : !x.measured ? `<b>측정 대기</b><span>원천을 연결하면 ${x.questions}문항을 측정합니다</span>`
+          : `<b>${x.passed} / ${x.measured}</b><span>통과${x.measured < x.questions ? ` · 측정 대기 ${x.questions - x.measured}문항` : ''}</span>`;
+      return `<div class="stage2${tone}"><div class="t">${title}</div><div class="v">${value}</div><div class="d">${what}</div></div>`;
+    };
+    const dg = s.diagnosis || {}, found = (dg.rule || 0) + (dg.mapping || 0) + (dg.data || 0);
+    return `<div class="stage2s">${cell('values')}<div class="stage2arrow" aria-hidden="true">›</div>${cell('record')}
+      <div class="stage2${found ? ' warn' : ''}"><div class="t">오답 진단</div><div class="v"><b>${found ? [['rule', '규칙'], ['mapping', '매핑'], ['data', '데이터']].filter(([k]) => dg[k]).map(([k, w]) => `${w} ${dg[k]}`).join(' · ') : '없음'}</b><span>${found ? '확인할 질문' : '진단할 오답이 없습니다'}</span></div><div class="d">값 기준으로도 틀리면 규칙, 레코드 기준에서만 틀리면 매핑, 레코드를 읽지 못하면 데이터를 확인합니다.</div></div></div>`;
+  }
+
+  function stageChips(x) {
+    return `<div class="chips nowrap">${['values', 'record'].filter((k) => x.stages && x.stages[k]).map((k) => {
+      const g = x.stages[k], word = STAGE[k][2];
+      if (!g.measured) return `<span class="chip sm" title="원천을 연결하면 측정합니다">${word} 대기</span>`;
+      return `<span class="chip sm ${g.passed ? 'ok' : 'bad'}" title="${esc(g.missing ? `질문에 없는 값: ${g.missing.map((m) => m.label || m.input).join(', ')}` : g.error || `${STAGE[k][0]} ${g.passed ? '통과' : '오답'}`)}">${word} ${g.passed ? '✓' : '✗'}</span>`;
+    }).join('')}</div>`;
+  }
+
+  function diagnosisLine(x) {
+    const d = DIAGNOSIS[x.diagnosis];
+    if (!d) return '';
+    const v = x.stages && x.stages.values;
+    const missing = v && v.missing && v.missing.length ? ` 질문에 없는 값: ${v.missing.map((m) => m.label || m.input).join(', ')}.` : '';
+    const diff = (x.differs || []).map((m) => `<span class="mono">${esc(m.label || m.input)}</span> 질문 ${show(m.given)} · 레코드 ${show(m.read)}`).join('<br>');
+    const rec = x.stages && x.stages.record, why = x.diagnosis === 'data' && rec && rec.error ? `<div class="dgdiff">${esc(rec.error)}</div>` : '';
+    return `<div class="dgline"><span class="chip sm warn">${d[0]}</span> ${esc(d[2] + missing)}${diff ? `<div class="dgdiff">${diff}</div>` : ''}${why}</div>`;
   }
 
   function valuesCard() {
@@ -6476,11 +6624,31 @@ ${controls}${body}`;
   const Q_GRADE = { keywords: '키워드 채점', evidence: '근거 채점', llm: '모델 채점' };
   const qTags = (x) => `${x.type ? `<span class="chip sm">${esc(Q_TYPE[x.type] || x.type)}</span>` : ''}${x.holdout ? '<span class="chip sm b" title="개발 세트와 분리해 측정하는 질문">홀드아웃</span>' : ''}${Q_GRADE[x.grading] ? `<span class="chip sm">${Q_GRADE[x.grading]}</span>` : ''}`;
 
+  // one field per value a decision takes, and per result it gives: typed, so a question is written the way a person
+  // reads it. An empty value is not given; '값 없음' is given as none (no delivery date yet).
+  function questionValues(v) {
+    const d = S.st.decisions.find((x) => x.name === v.decision);
+    if (!d || !d.inputs) return '';
+    const NONE = '값 없음';
+    const control = (box, i, cur) => {
+      const attr = `data-in="${box}" data-k="${esc(i.name)}"`;
+      if (i.type === 'boolean') return `<select ${attr}>${opt('', box === 'mgqe' ? '확인 안 함' : '입력 안 함', cur)}${opt('true', '예', cur)}${opt('false', '아니요', cur)}${box === 'mgqv' ? opt('null', NONE, cur) : ''}</select>`;
+      if (i.values && i.values.length) return `<select ${attr}>${opt('', '입력 안 함', cur)}${i.values.map((x) => opt(String(x), String(x), cur)).join('')}${opt('null', NONE, cur)}</select>`;
+      const num = ['integer', 'decimal', 'number'].includes(i.type);
+      return `<input type="text" ${attr} value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${box === 'mgqe' ? '비우면 확인하지 않음' : num ? `숫자 · 없으면 ${NONE}` : `없으면 ${NONE}`}">`;
+    };
+    const help = (i) => (i.days_since ? `${i.property_label || i.property}에서 지난 일수` : i.param ? '판정 Parameter' : i.property ? '' : '연결된 Entity에서 읽는 값');
+    const ins = d.inputs.map((i) => `<div class="field"><label>${esc(i.label)} <span class="muted mono cn">${esc(i.name)}</span></label>${control('mgqv', i, (v.values || {})[i.name])}${help(i) ? `<div class="fnote">${esc(help(i))}</div>` : ''}</div>`).join('');
+    const outs = (d.outputs || []).map((o) => `<div class="field"><label><span class="mono">${esc(o.name)}</span> <span class="muted cn">${esc(o.type)}</span></label>${control('mgqe', { ...o, values: [] }, (v.expectv || {})[o.name])}</div>`).join('');
+    return `<div class="sec" style="margin-top:6px">판정 값</div><div class="hint" style="margin-bottom:8px">판정 값을 입력하면 원천 없이 1단계(값 기준)에서 측정합니다. 레코드 키도 입력하면 원천을 연결한 뒤 2단계(레코드 기준)에서 같은 질문을 레코드로 다시 측정하고, 두 결과가 다르면 매핑 확인으로 표시합니다.</div>
+      <div class="rgrid">${ins}</div><div class="sec">기대 결과</div><div class="rgrid">${outs}</div>`;
+  }
+
   function questionCard() {
     const m = S.mg.st;
     if (!m || m.error) return '';
     const f = S.mg.form && S.mg.form.kind === 'question' ? S.mg.form : null;
-    const target = (x) => (x.decision ? `판정 <span class="mono">${esc(x.decision)}</span> · 키 <span class="mono">${esc(x.key)}</span>`
+    const target = (x) => (x.decision ? `판정 <span class="mono">${esc(x.decision)}</span>${x.key ? ` · 키 <span class="mono">${esc(x.key)}</span>` : ''}${Object.keys(x.values || {}).length ? ` <span class="chip sm" title="${esc(Object.entries(x.values).map(([k, val]) => `${k} ${show(val)}`).join(' · '))}">판정 값 ${Object.keys(x.values).length}개</span>` : ''}`
       : x.query ? `질의 <span class="mono">${esc(x.query)}</span>${Object.keys(x.params || {}).length ? ` <span class="muted mono">${esc(JSON.stringify(x.params))}</span>` : ''}`
         : `키워드 ${esc((x.keywords || []).join(', ') || '-')}`);
     const rows = m.questions.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td style="min-width:180px">${esc(x.text)}<div class="chips qtags">${qTags(x)}</div></td><td style="font-size:12px">${target(x)}</td>
@@ -6491,12 +6659,13 @@ ${controls}${body}`;
       const v = f.v;
       const field = (label, html) => `<div class="field"><label>${label}</label>${html}</div>`;
       const pick = v.kind === 'decision'
-        ? `${field('판정', `<select data-in="mgf" data-f="decision">${S.st.decisions.map((d) => opt(d.name, `${d.label} (${d.name})`, v.decision)).join('')}</select>`)}${field('대상 키', `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: I1001">`)}`
+        ? `${field('판정', `<select data-in="mgf" data-f="decision" data-re="1">${S.st.decisions.map((d) => opt(d.name, `${d.label} (${d.name})`, v.decision)).join('')}</select>`)}${field('레코드 키 (선택)', `<input type="text" data-in="mgf" data-f="key" value="${esc(v.key)}" placeholder="예: I1001 · 원천 연결 후 2단계에서 측정">`)}`
         : `${field('질의', `<select data-in="mgf" data-f="query">${S.st.queries.map((q) => opt(q.name, `${q.label} (${q.name})`, v.query)).join('')}</select>`)}${field('JSON Parameter', `<input type="text" data-in="mgf" data-f="params" value="${esc(v.params)}" class="mono" placeholder='예: {"customer": "C001"}'>`)}`;
       form = `<div class="review"><div class="rgrid">${field('번호', `<input type="text" data-in="mgf" data-f="id" value="${esc(v.id)}" placeholder="예: G1">`)}
           ${field('종류', `<select data-in="mgf" data-f="kind" data-re="1">${opt('query', '질의 결과 행 수', v.kind)}${opt('decision', '판정 결과', v.kind)}${opt('definition', '정의 질문', v.kind)}</select>`)}
-          ${field(v.kind === 'decision' ? 'JSON 기대값' : '기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="${v.kind === 'decision' ? '예: {&quot;eligible&quot;: true}' : '예: 2'}">`)}</div>
+          ${v.kind === 'decision' ? '' : field('기대 행 수', `<input type="text" data-in="mgf" data-f="expect" value="${esc(v.expect)}" class="mono" placeholder="예: 2">`)}</div>
         ${field('질문', `<input type="text" data-in="mgf" data-f="text" value="${esc(v.text)}" placeholder="예: C001 고객의 주문은 몇 건인가요?">`)}<div class="rgrid two">${v.kind === 'definition' ? field('키워드', `<input type="text" data-in="mgf" data-f="keywords" value="${esc(v.keywords || '')}" placeholder="답에 포함할 단어, 쉼표로 구분합니다">`) : pick}</div>
+        ${v.kind === 'decision' ? questionValues(v) : ''}
         <div class="rgrid two">${field('세트', `<select data-in="mgf" data-f="holdout">${opt('', '개발', v.holdout || '')}${opt('1', '홀드아웃', v.holdout || '')}</select>`)}${field('채점', `<select data-in="mgf" data-f="grading">${opt('', '기본', v.grading || '')}${opt('keywords', '키워드', v.grading || '')}${opt('evidence', '근거', v.grading || '')}</select>`)}</div>
         <div style="display:flex;gap:8px"><button class="btn primary" data-act="mgsave"${S.mg.busy ? ' disabled' : ''}>질문 추가</button><button class="btn ghost" data-act="mgcancel">닫기</button></div></div>`;
     }
@@ -7283,15 +7452,31 @@ ${controls}${body}`;
         mgEdit('add_question', { id: v.id, text: v.text, type: 'definition', ...meta }, `검증 질문 ${v.id}을 추가했습니다.`);
         return;
       }
-      try {
-        if (v.kind === 'decision') expect = v.expect.trim() ? JSON.parse(v.expect) : {};
-        else { expect = v.expect.trim() === '' ? {} : { rows: Number(v.expect) }; params = v.params.trim() ? JSON.parse(v.params) : {}; }
-      } catch (_) { toast('JSON 형식이 아니어서 읽지 못했습니다. 예시처럼 입력해 주세요.', true); return; }
-      if (v.kind === 'decision' ? (typeof expect !== 'object' || expect === null || Array.isArray(expect)) : Number.isNaN(expect.rows)) {
-        toast(v.kind === 'decision' ? '기대값 형식이 올바르지 않아 저장하지 못했습니다. 예: {"eligible": true}' : '기대 행 수가 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.', true);
-        return;
+      let values = {};
+      if (v.kind === 'decision') {
+        const d = S.st.decisions.find((x) => x.name === v.decision);
+        const typed = (raw, type) => {  // '' is not given, '값 없음' or null is given as none
+          const s = String(raw ?? '').trim();
+          if (s === '') return undefined;
+          if (s === 'null' || s === '값 없음') return null;
+          if (type === 'boolean') return s === 'true';
+          if (['integer', 'decimal', 'number'].includes(type)) return Number(s);
+          return s;
+        };
+        for (const i of (d && d.inputs) || []) { const x = typed((v.values || {})[i.name], i.type); if (x !== undefined) values[i.name] = x; }
+        for (const o of (d && d.outputs) || []) { const x = typed((v.expectv || {})[o.name], o.type); if (x !== undefined) expect[o.name] = x; }
+        const bad = Object.entries({ ...values, ...expect }).find(([, x]) => typeof x === 'number' && Number.isNaN(x));
+        if (bad) { toast(`${bad[0]} 값이 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.`, true); return; }
+        if (!Object.keys(expect).length) { toast('기대 결과가 없어 질문을 추가하지 못했습니다. 확인할 결과를 하나 이상 입력해 주세요.', true); return; }
+        if (!v.key.trim() && !Object.keys(values).length) { toast('판정 값과 레코드 키가 모두 비어 있어 질문을 추가하지 못했습니다. 판정 값을 입력하거나 레코드 키를 입력해 주세요.', true); return; }
+        const missing = Object.keys(values).length ? ((d && d.inputs) || []).filter((i) => !(i.name in values)) : [];
+        if (missing.length) { toast(`판정 값이 빠져 있어 질문을 추가하지 못했습니다: ${missing.map((i) => i.label).join(', ')}. 값이 없으면 '값 없음'을 선택해 주세요.`, true); return; }
+      } else {
+        try { params = v.params.trim() ? JSON.parse(v.params) : {}; } catch (_) { toast('JSON 형식이 아니어서 읽지 못했습니다. 예시처럼 입력해 주세요.', true); return; }
+        expect = v.expect.trim() === '' ? {} : { rows: Number(v.expect) };
+        if (Number.isNaN(expect.rows)) { toast('기대 행 수가 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.', true); return; }
       }
-      const args = v.kind === 'decision' ? { id: v.id, text: v.text, decision: v.decision, key: v.key, expect, ...meta }
+      const args = v.kind === 'decision' ? { id: v.id, text: v.text, decision: v.decision, key: v.key.trim(), expect, ...(Object.keys(values).length ? { values } : {}), ...meta }
         : { id: v.id, text: v.text, query: v.query, params, expect, ...meta };
       mgEdit('add_question', args, `검증 질문 ${v.id}을 추가했습니다.`);
     }
@@ -8322,6 +8507,35 @@ ${controls}${body}`;
     cbulk: (t) => catalogCall('catalog/include', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
     cembulk: (t) => catalogCall('catalog/embed', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
     cclear: () => { S.cat.sel = {}; render(); },
+    ctrymode: (t) => { S.ctry.mode = t.dataset.k; S.ctry.res = null; render(); },
+    ctryview: (t) => { S.ctry.view = t.dataset.k; render(); },
+    ctryclear: () => { Object.assign(S.ctry, { values: {}, key: '', at: '', res: null, saved: false }); render(); },
+    ctryfill: () => {
+      const c = S.ctry, d = S.conn.decisions.find((x) => x.name === c.decision);
+      if (!d || !d.example) return;
+      c.values = Object.fromEntries(Object.entries(d.example.values).map(([k, v]) => [k, v === null ? 'null' : String(v)]));
+      c.res = null; c.saved = false; render();
+    },
+    ctrysave: async () => {
+      const c = S.ctry, r = c.res, d = S.conn.decisions.find((x) => x.name === c.decision);
+      if (!r || r.status !== 200) return;
+      const values = tryBody(c, d).values;
+      const said = Object.entries(values).map(([k, v]) => `${(d.inputs.find((i) => i.name === k) || {}).label || k} ${v === null ? '값 없음' : show(v)}`).join(', ');
+      try {
+        await api('manage/edit', { op: 'add_question', args: { id: `api-${Date.now().toString(36)}`, text: `${d.label}: ${said}`, decision: d.name, values, expect: r.body.outputs } });
+        S.mg.st = null; c.saved = true; render(); toast('검증 질문으로 저장했습니다. 관리 변경에서 변경 요청을 올리면 검증에 반영됩니다.');
+      } catch (e) { fail(e); }
+    },
+    ctryrun: async () => {
+      const c = S.ctry, d = S.conn.decisions.find((x) => x.name === c.decision);
+      c.busy = true; render();
+      c.saved = false;
+      try { c.res = await api('rest/try', { path: '/v1/decide', body: tryBody(c, d) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
+      c.busy = false; render();
+    },
+    copycode: async (t) => {
+      try { await navigator.clipboard.writeText(t.dataset.v); toast('복사했습니다.'); } catch (_) { toast('복사하지 못했습니다. 직접 선택해 복사해 주세요.', true); }
+    },
     copybase: async (t) => {
       try { await navigator.clipboard.writeText(t.dataset.v); toast('주소를 복사했습니다.'); } catch (_) { toast(t.dataset.v); }
     },
@@ -8598,7 +8812,7 @@ ${controls}${body}`;
       const ids = new Set(S.mg.st.questions.map((x) => x.id));
       let i = 1;
       while (ids.has(`G${i}`)) i += 1;
-      S.mg.form = { kind: 'question', mode: 'new', v: { id: `G${i}`, text: '', kind: 'query', query: (S.st.queries[0] || {}).name || '', params: '', decision: (S.st.decisions[0] || {}).name || '', key: '', expect: '' } };
+      S.mg.form = { kind: 'question', mode: 'new', v: { id: `G${i}`, text: '', kind: 'query', query: (S.st.queries[0] || {}).name || '', params: '', decision: (S.st.decisions[0] || {}).name || '', key: '', expect: '', values: {}, expectv: {} } };
       render();
     },
     mgqimp: () => { S.mg.form = { kind: 'question', mode: 'import', v: { text: '' } }; render(); },
@@ -8755,6 +8969,12 @@ ${controls}${body}`;
     mgwhen: (t) => { S.mg.form.v.when[t.dataset.k] = { ...(S.mg.form.v.when[t.dataset.k] || { op: 'any', value: '' }), [t.dataset.p]: t.value }; },
     mgthen: (t) => { S.mg.form.v.then[t.dataset.k] = t.dataset.t === 'boolean' ? t.value === 'true' : (['integer', 'decimal', 'number'].includes(t.dataset.t) && t.value !== '' ? Number(t.value) : t.value); },
     mgrow: (t) => { S.mg.form.v[t.dataset.list][Number(t.dataset.i)][t.dataset.f] = t.value; },
+    ctryv: (t) => { const c = S.ctry; c.values = { ...(c.values || {}), [t.dataset.k]: t.value }; repaintTry(); },
+    ctryk: (t) => { S.ctry.key = t.value; repaintTry(); },
+    ctryat: (t) => { S.ctry.at = t.value; repaintTry(); },
+    ctryd: (t) => { Object.assign(S.ctry, { decision: t.value, values: {}, res: null }); render(); },
+    mgqv: (t) => { const v = S.mg.form.v; v.values = { ...(v.values || {}), [t.dataset.k]: t.value }; },
+    mgqe: (t) => { const v = S.mg.form.v; v.expectv = { ...(v.expectv || {}), [t.dataset.k]: t.value }; },
     fnkey: (t) => { S.mg.fnkey = t.value; },
     actrykey: (t) => { S.mg.actry.key = t.value; },
     actry: (t) => { S.mg.actry.params[t.dataset.k] = t.value; },
@@ -8870,6 +9090,7 @@ ${controls}${body}`;
         if (f.mode === 'new' && !v.touched && v.target) v.name = lowerFirst(v.target);
       }
       if (f.kind === 'link' && v.source && v.tp && !v.sp && mgProps(v.source).some((p) => p.name === v.tp)) v.sp = v.tp;
+      if (f.kind === 'question' && k === 'decision') { v.values = {}; v.expectv = {}; }  // another decision takes other values
       if (t.tagName === 'INPUT' && t.type === 'text') setTimeout(() => repaintKept(true), 0);  // once the cursor has moved on
       else repaintKept(false);
     },

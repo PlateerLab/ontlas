@@ -122,7 +122,7 @@ def test_a_whole_ontology_runs_through_a_gateway(service):
 def test_the_api_is_described_for_whoever_imports_it():
     spec = openapi("1.2.3", "https://space.example")
     assert spec["openapi"].startswith("3.1") and spec["servers"][0]["url"] == "https://space.example"
-    assert {r[0] for r in ROUTES} == set(spec["paths"])
+    assert {r[0] for r in ROUTES} | {"/v1/libraries"} == set(spec["paths"])
     assert spec["paths"]["/v1/search"]["post"]["requestBody"]["content"]["application/json"]["schema"]["required"] == ["text"]
     assert {t["name"] for t in tool_list()} >= {"search_documents", "run_query", "decide", "describe_space"}
 

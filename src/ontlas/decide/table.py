@@ -21,6 +21,15 @@ class DecisionError(ValueError):
     """The decision cannot be evaluated as defined."""
 
 
+class MissingValues(DecisionError):
+    """Decided on given values, some of its inputs were not given. Not given is not known: a value it was given as
+    null (no delivery date yet) decides, one it was not given at all is asked for rather than read as null."""
+
+    def __init__(self, decision: str, missing: list[dict]):
+        self.decision, self.missing = decision, missing
+        super().__init__(f"decision '{decision}' needs " + ", ".join(m["input"] for m in missing))
+
+
 class Matched(list):
     """The ids of the rules that matched, the winner first, carrying what the others would have said, the named
     parameters they read, and where their sources disagree."""

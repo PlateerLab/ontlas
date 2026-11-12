@@ -935,8 +935,9 @@ class PagesMixin:
         for q in onto.questions:
             if q.decision != name:
                 continue
-            try:
-                got = run(dict(st.decide(name, q.key, q.params).inputs))["outputs"]
+            try:  # a question that states its values is decided on them; one that names a record, on the record
+                how = {"values": q.values} if q.values else {"key": q.key}
+                got = run(dict(st.decide(name, params=q.params, **how).inputs))["outputs"]
             except NoSource:  # it is asked of a record, and there are no rows to read: not asked, rather than wrong
                 questions.append({"id": q.id, "text": q.text, "key": q.key, "expect": q.expect, "passed": None,
                                   "unmeasured": "no_source", "note": UNMEASURED["no_source"]})
