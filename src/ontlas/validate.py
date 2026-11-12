@@ -273,6 +273,17 @@ def validate_ontology(o: Ontology) -> list[str]:
             add(f"question {qs.id}: unknown query '{qs.query}'")
         if qs.decision and qs.decision not in o.decisions:
             add(f"question {qs.id}: unknown decision '{qs.decision}'")
+        elif qs.decision:
+            if not (qs.key or qs.values):
+                add(f"question {qs.id}: give the record it is about (key) or the values it decides on (values)")
+            t = o.decisions[qs.decision]
+            known = set(t.inputs) | {s.get("param") for s in (i.source for i in t.inputs.values()) if s.get("param")}
+            known |= {s.get("property") or s.get("days_since") for s in (i.source for i in t.inputs.values())
+                      if not s.get("path") and (s.get("property") or s.get("days_since"))}
+            for k in qs.values:
+                if k not in known:
+                    add(f"question {qs.id}: value '{k}' is neither an input of decision '{qs.decision}' nor a property "
+                        "it reads")
     return issues
 
 

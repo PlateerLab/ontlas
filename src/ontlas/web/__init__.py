@@ -68,4 +68,6 @@ def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = 
             s._adopt(s.studio)
         return s
 
-    serve(build, data=data, **kw)
+    # /v1 answers from the first library unless a caller names another; each of the others is built when first asked
+    paths = [config, *(libraries or [])]
+    serve(build, data=data, libraries=[{**x, "load": (lambda p=paths[i]: load_studio(p))} for i, x in enumerate(offered)], **kw)

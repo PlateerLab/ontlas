@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.20.0
+
+- **Decide with no source.** `POST /v1/decide` takes `values` instead of `key`: each by the decision's input name, the
+  target property the input reads (a date for an elapsed-days input, counted to `at`) or its parameter. `null` is a
+  value; an input not given is answered `422` with `missing` (label, type, the property that stands for it), never read
+  as null. The answer adds `verdict`, `mode` (values, record), `decided_by` (the rule that gave the answer, its layer,
+  module and version), the `modules` that decided and a `decision_id` kept in the audit trail.
+- **Rules, terms and validation over the API.** `/v1/rules` (rule cards, AXIOM first, by text, layer or decision),
+  `/v1/terms` (a sentence in preferred words, with the terms not to confuse), `/v1/questions` (the validation questions in
+  two stages). `/v1/libraries` lists the libraries `--library` offers, and every call takes `library`; the OpenAPI
+  document describes both, 22 paths.
+- **Validation in two stages.** A decision question may give `values` as well as, or instead of, `key`. On its values it
+  is measured with no source (값 기준), on its key once a source is connected (레코드 기준). A wrong answer says what to
+  look at: `rule` (wrong on its values too), `mapping` (right on them, wrong on the record, with the inputs that differ)
+  or `data` (the record could not be read). The 검증 screen shows both stages, each question's stages and its cause; a
+  question with neither a key nor values, or a value the decision does not read, is a definition issue.
+- **Questions with typed values.** 검증 질문 관리 asks a decision question's values and expected results field by
+  field (a select for an enumerated or yes-or-no value, `값 없음` for none) instead of JSON; the record key is optional.
+- **The API tried on the page.** 외부 연동 runs `/v1/decide` on the library open, through the same code a platform's call
+  takes: values field by field, filled from a question that states them, the answer with its path and evidence, the
+  request body, cURL and the XGEN HTTP request node settings, and a good call kept as a validation question. The card
+  beside it says how XGEN calls the library: decision node, agent tools, agent context, validation.
+- The example states values on its shipping questions and A1, so the public studio shows both stages.
+
 ## 0.19.3
 
 - **Every node of the document graph shows what it holds.** An item shows its text and the concepts it names; a

@@ -959,9 +959,55 @@ class SpaceMixin:
     # ---- the way in from outside ---------------------------------------------------------------------------------------
 
     def integrations(self) -> dict:
+        """What a platform needs to call this library: whether /v1 is on, its tools, the library it names, and each
+        decision with the values it takes (the form the page tries a call with)."""
         from ontlas.rest import tool_list
 
-        return {"rest": bool(getattr(self.data, "rest", False)), "openapi": "/v1/openapi.json", "tools": tool_list(), "gateway": self.data.allow_connect}
+        o = self.studio.onto
+        example = {}
+        for q in o.questions:  # a request filled in from a question that already states its values
+            if q.decision and q.values and q.decision not in example:
+                example[q.decision] = {"question": q.id, "text": q.text, "values": dict(q.values)}
+        decisions = [{"name": d.name, "label": d.label or d.name, "target": d.target,
+                      "target_label": (o.objects[d.target].label or d.target) if d.target in o.objects else "",
+                      "example": example.get(d.name), **decision_fields(o, d)} for d in o.decisions.values()]
+        lib = next((x for x in getattr(self, "libraries", []) if x.get("id") == getattr(self, "library_id", "")), None)
+        return {"rest": bool(getattr(self.data, "rest", False)), "openapi": "/v1/openapi.json", "tools": tool_list(),
+                "gateway": self.data.allow_connect, "decisions": decisions, "source": bool(self.studio.source),
+                "library": {"id": lib.get("id"), "label": lib.get("label")} if lib else None,
+                "libraries": len(getattr(self, "libraries", []) or [])}
+
+    # what the page may call the way a platform calls /v1: reading and deciding, nothing that writes
+    TRY = ("/v1/decide", "/v1/rules", "/v1/terms", "/v1/questions", "/v1/context", "/v1/find", "/v1/object")
+
+    def rest_try(self, path: str, body: dict | None) -> dict:
+        """One /v1 call on this visitor's library, through the same code a platform's call takes, so what the page shows
+        is what the platform gets: the status and the body."""
+        from ontlas.rest import Rest
+        from ontlas.tools import StudioTools
+
+        if path not in self.TRY:
+            raise ValueError("이 화면에서는 조회와 판정 API만 실행할 수 있습니다.")
+        body = {k: v for k, v in (body or {}).items() if k != "library"}  # this page is on one library already
+        code, out = Rest(StudioTools(self.studio, actor_id="page")).answer("POST", path, body)
+        return {"status": code, "body": out}
+
+
+def decision_fields(o, d) -> dict:
+    """What a decision takes and gives, as a form asks for it: each input with its label and type, the target property it
+    reads (a date, for an elapsed-days input) or the parameter, and the values an enumerated property allows."""
+    from ontlas.decide.words import input_label
+
+    inputs = []
+    for name, i in d.inputs.items():
+        src = i.source
+        prop = src.get("property") or src.get("days_since") or ""
+        own = bool(d.target and prop and not src.get("path"))
+        p = o.objects[d.target].properties.get(prop) if own and d.target in o.objects else None
+        inputs.append({"name": name, "label": input_label(o, d, name), "type": i.type, "property": prop if own else "",
+                       "property_label": (p.label or prop) if p is not None else "", "days_since": bool(own and src.get("days_since")),
+                       "param": src.get("param", ""), "values": list(p.values) if p is not None and p.values else []})
+    return {"inputs": inputs, "outputs": [{"name": k, "type": v} for k, v in d.outputs.items()]}
 
 
 def _target(lang: str, dialect: str) -> str:

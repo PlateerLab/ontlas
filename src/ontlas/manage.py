@@ -359,6 +359,10 @@ class Workspace(TermEdits):
         q = {"id": qid, "text": str(a.get("text") or "")}
         if a.get("decision"):
             q.update({"decision": a["decision"], "key": str(a.get("key") or "")})
+            if isinstance(a.get("values"), dict) and a["values"]:  # measured with no source on these, beside the record
+                q["values"] = dict(a["values"])
+            if not q["key"] and not q.get("values"):
+                raise EditError(f"question '{qid}': give the record it is about (key) or the values it decides on")
         elif a.get("query") or a.get("params"):  # one with neither asks what a word means (type definition)
             q.update({"query": a.get("query"), "params": dict(a.get("params") or {})})
         q["expect"] = a.get("expect") or {}
@@ -380,6 +384,8 @@ class Workspace(TermEdits):
             mine = {"id": qid, "text": current.text}
             if current.decision:
                 mine.update({"decision": current.decision, "key": current.key})
+                if current.values:
+                    mine["values"] = dict(current.values)
             elif current.query:
                 mine["query"] = current.query
             if current.params:  # a decision question is decided with its params too (Studio.questions)
@@ -390,6 +396,13 @@ class Workspace(TermEdits):
             own.append(mine)
         if "expect" in a:
             mine["expect"] = a["expect"] if isinstance(a["expect"], (str, list)) and a["expect"] else dict(a["expect"] or {})
+        if "values" in a and current.decision:  # the values it is measured on with no source
+            if a["values"]:
+                mine["values"] = dict(a["values"])
+            else:
+                mine.pop("values", None)
+            if not mine.get("key") and not mine.get("values"):
+                raise EditError(f"question '{qid}': give the record it is about (key) or the values it decides on")
         for k in QUESTION_FIELDS:  # what a person sets of it: the rest stays as it was
             if k in a:
                 mine.pop(k, None)
