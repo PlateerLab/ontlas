@@ -1200,7 +1200,7 @@ tr.unasked td { color:#98a2b3; }
 
 /* the sidebar: the XGEN mark beside the product's name, the space being worked on, its parts, how far it has come */
 .sbrand { gap:8px; text-decoration:none; }
-.sbrand { justify-content:flex-end; padding:13px 24px 13px 12px; }
+.sbrand { justify-content:flex-start; padding:13px 12px 13px 20px; }
 .sbrand .xword { height:31px; width:auto; flex:none; fill:var(--navy); }
 .sbrand .xsym { display:none; width:26px; height:26px; flex:none; fill:var(--navy); }
 .sbrand .bname { display:block; flex:none; font-size:23px; font-weight:800; letter-spacing:-.3px; color:var(--navy); line-height:1; }
