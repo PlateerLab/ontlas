@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.19.1
+
+- The brand stands at the left of the sidebar head again, at the larger size.
+
 ## 0.19.0
 
 - **Libraries to choose from.** `ontlas serve studio.yaml --library other/studio.yaml` (repeat for more) offers other
