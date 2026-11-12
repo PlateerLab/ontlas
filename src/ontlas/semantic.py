@@ -7,7 +7,8 @@ Custom rules, and every other module writes Standard ones. A table checks its AX
 A rule card is the record of one rule: what it says, what it applies to, its conditions, result and exceptions, where it
 comes from, who answers for it and how far it is reviewed. Many rules run as decision rows; a card can also state a rule
 that something else carries out (a computation, a state transition, what a screen shows) and point at it. An AXIOM card
-may carry a check on a named value (a parameter): a composition whose final value breaks it does not hold.
+may carry a check on a named value (a parameter): a composition whose final value breaks it does not hold. A card of any
+layer may bound a property instead (an amount is never negative): each value a caller gives is checked against it.
 """
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ REF_KINDS = ("decision", "function", "action", "object", "property", "link", "pa
              "states")
 _ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PROPERTY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$")
 _REF = re.compile(r"^([a-z_]+):(\S+)$")
 _NAMED = re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -97,12 +99,15 @@ def card_spec(card: Any, kind: str = "domain") -> dict:
         raise CardError(f"rule card '{cid}': params is a mapping of names to values")
     check = card.get("check") or None
     if check is not None:
-        if not isinstance(check, dict) or set(check) - {"parameter", "min", "max"} or \
-                not _NAME.match(str(check.get("parameter") or "")) or \
+        # on a named value (parameter), checked once the modules are composed; or on a property (Type.name), checked on
+        # each value a caller gives it (POST /v1/validate)
+        on = [k for k in ("parameter", "property") if isinstance(check, dict) and check.get(k)]
+        if not isinstance(check, dict) or set(check) - {"parameter", "property", "min", "max"} or len(on) != 1 or \
+                not (_NAME if on[0] == "parameter" else _PROPERTY).match(str(check[on[0]])) or \
                 not any(_number(check.get(k)) for k in ("min", "max")) or \
                 any(check.get(k) is not None and not _number(check[k]) for k in ("min", "max")):
-            raise CardError(f"rule card '{cid}': check needs a parameter and a numeric min or max")
-        check = {k: check[k] for k in ("parameter", "min", "max") if check.get(k) is not None}
+            raise CardError(f"rule card '{cid}': check needs a parameter or a property (Type.name) and a numeric min or max")
+        check = {k: check[k] for k in ("parameter", "property", "min", "max") if check.get(k) is not None}
     return {"id": cid, "type": kind_of, "statement": statement, "applies_to": _strings(card.get("applies_to")),
             "conditions": _strings(card.get("conditions")), "result": str(card.get("result") or ""),
             "exceptions": _strings(card.get("exceptions")), "params": dict(params), "source": str(card.get("source") or ""),
@@ -194,7 +199,7 @@ def check_cards(cards: list[dict], onto, modules: list) -> list[dict]:
     out = []
     for c in cards:
         chk = c.get("check")
-        if not chk:
+        if not chk or "parameter" not in chk:  # a bound on a property holds per value, not on the composition
             continue
         name = chk["parameter"]
         p = onto.parameters.get(name)

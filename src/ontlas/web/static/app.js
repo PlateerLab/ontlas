@@ -3177,7 +3177,7 @@
       <h2><span class="mono" style="font-size:15px;color:var(--ink)">${esc(c.id)}</span></h2><div>${esc(c.statement || '')}</div></div>
       ${sect(`${row('적용 대상', (c.applies_to_labels || c.applies_to || []).map(esc).join(', '))}${row('조건', list(c.conditions))}${row('결과', esc(c.result || ''))}${row('예외', list(c.exceptions))}${row('기준값', params)}`)}
       ${sect(`${(c.implements || []).length ? `<div class="label">실행 위치</div><div class="chips" style="margin:4px 0 8px">${c.implements.map(ref).join('')}</div>` : ''}${(c.used_by || []).length ? `<div class="label">사용처</div><div class="chips" style="margin-top:4px">${c.used_by.map(ref).join('')}</div>` : ''}
-        ${c.check ? row('AXIOM 검사', `${esc(c.check.parameter)}${c.check.min !== undefined ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined ? ` ${esc(String(c.check.max))} 이하` : ''}`) : ''}
+        ${c.check ? row(c.check.property ? '값 범위' : 'AXIOM 검사', `${esc(c.check.parameter || c.check.property)}${c.check.min !== undefined ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined ? ` ${esc(String(c.check.max))} 이하` : ''}`) : ''}
         ${c.decision ? `<a class="btn sm" href="#mgrules?decision=${encodeURIComponent(c.decision)}" style="margin-top:6px">결정표 ${esc(c.decision_label || c.decision)}에서 열기</a>` : ''}`)}
       <div class="cb" style="border-top:1px solid var(--line)">${row('근거', esc(c.source || '-'))}${row('소유자 · 버전', `${esc(c.owner || '-')} · ${esc(c.module_label || c.module || '-')} ${esc(c.version || '')}`)}${(c.extended_by || []).length ? row('확장 모듈', c.extended_by.map(esc).join(', ')) : ''}</div></div>`;
   }
@@ -4412,54 +4412,113 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
   // what each REST tool does, in the page's words; the OpenAPI document keeps the English an agent framework reads
   const TOOL_WORD = { describe_space: '공간에 있는 문서, 벡터 저장소, 임베딩 모델, 그래프 저장소, 추론기, 온톨로지 규모', describe_ontology: '이 토큰이 사용할 수 있는 Entity, 속성, 관계, 등록 질의, 결정, 액션',
     answer_question: '질문 하나에 결정, 데이터, 문서로 답하고 적용 규칙, 원천 값, 조항을 함께 반환', agent_context: '질문과 관련된 정의와 규칙을 Agent 프롬프트에 넣을 글로 반환',
-    find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 항목, 언급한 개념',
+    find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 계층 위치, 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 항목, 언급한 개념',
     search_documents: '문서를 의미로 검색하고 문서, 항목, 관련 온톨로지 요소를 반환', run_query: '등록 질의 또는 질의 IR을 저장소에서 실행', translate_query: '질의를 저장소 언어의 쿼리문으로 변환',
     run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: '레코드 키 또는 판정 값으로 결정표를 실행해 결과, 적용 규칙, 판정 경로, 근거, 모듈 버전을 반환',
-    find_rules: '규칙 카드를 AXIOM부터 조회하고 조건, 결과, 예외, 근거, 소유자, 실행 연결을 반환', read_terms: '문장의 용어를 대표어로 바꾸고 혼동 주의 용어를 함께 반환',
+    find_rules: '규칙 카드를 AXIOM부터 조회하고 조건, 결과, 예외, 근거, 소유자, 실행 연결을 반환', read_terms: '문장의 용어를 대표어로 바꾸고 뜻, 검색 표기, 혼동 주의 용어, 정의에서 찾은 이름을 반환',
+    validate_values: 'Entity 값이 정의와 규칙 카드의 범위 안에 있는지 확인하고 위반 사유와 근거 규칙을 반환',
     run_questions: '검증 질문을 값 기준과 레코드 기준으로 측정하고 오답의 원인을 규칙과 매핑으로 구분', list_libraries: '이 서버의 라이브러리와 모듈 버전',
     list_functions: '이 토큰이 실행할 수 있는 함수와 입출력, 버전, 담당', run_function: '등록 함수를 Entity 하나 또는 입력값으로 실행',
     request_action: '액션을 요청합니다. 검사를 통과하면 승인 대기로 접수하고, 자동 승인 기준 안이면 바로 실행', list_proposals: '이 토큰이 요청한 처리와 상태', get_record: 'Entity 하나의 값을 행 범위와 가림 안에서 반환' };
 
   // ---- calling the library as a workflow or an agent does: one /v1 call tried on this page, and how XGEN calls it
 
-  const TRY_STATUS = { 200: ['ok', '판정 완료'], 422: ['warn', '판정 값 필요'], 409: ['warn', '원천 미연결'], 400: ['bad', '요청 오류'], 403: ['bad', '권한 없음'], 404: ['bad', '대상 없음'] };
+  const TRY_STATUS = { 422: ['warn', '판정 값 필요'], 409: ['warn', '원천 미연결'], 400: ['bad', '요청 오류'], 403: ['bad', '권한 없음'], 404: ['bad', '대상 없음'] };
+  // the calls a platform makes first: id, label, path, the run button, what a 200 is called, what the panel says before a run
+  const TRY_API = [
+    ['decide', '판정', '/v1/decide', '판정 실행', '판정 완료', '판정 값을 입력하고 판정 실행을 누르면 API 응답을 표시합니다.'],
+    ['validate', '값 검증', '/v1/validate', '검증 실행', '검증 완료', 'Entity 값을 입력하고 검증 실행을 누르면 정의와 규칙 카드 기준의 위반 여부를 표시합니다.'],
+    ['terms', '용어 해석', '/v1/terms', '해석 실행', '해석 완료', '문장을 입력하고 해석 실행을 누르면 대표어, 뜻, 검색 표기를 표시합니다.'],
+    ['object', '개념 조회', '/v1/object', '조회 실행', '조회 완료', 'Entity를 선택하고 조회 실행을 누르면 계층 위치, 속성, 관계를 표시합니다.']];
+  const TRY_KIND = { rule: '규칙 위반', type: '형식 불일치', code: '허용되지 않은 코드', missing: '필수 값 누락', unknown: '정의에 없는 속성' };
+  const tryApi = (c) => TRY_API.find((x) => x[0] === c.api) || TRY_API[0];
 
   function tryState(i) {
-    const c = S.ctry || (S.ctry = { decision: '', mode: 'values', values: {}, key: '', at: '', res: null, busy: false, view: 'body' });
-    if (!i.decisions.some((d) => d.name === c.decision)) { c.decision = (i.decisions[0] || {}).name || ''; c.values = {}; c.res = null; }
+    const c = S.ctry || (S.ctry = { api: 'decide', decision: '', mode: 'values', values: {}, key: '', at: '', text: '', object: '', ovalues: {}, complete: false, res: null, busy: false, view: 'body' });
+    if (!i.decisions.some((d) => d.name === c.decision)) { c.decision = (i.decisions[0] || {}).name || ''; c.values = {}; if (c.api === 'decide') c.res = null; }
+    if (!(i.objects || []).some((o) => o.name === c.object)) { c.object = ((i.objects || [])[0] || {}).name || ''; c.ovalues = {}; if (c.api !== 'decide' && c.api !== 'terms') c.res = null; }
     return c;
   }
 
-  // the body this page sends is the one a platform sends: typed values, '' left out, '값 없음' as null
-  function tryBody(c, d) {
+  // values as a platform sends them: typed, '' left out, '값 없음' as null
+  function tryTyped(fields, raw) {
+    const values = {};
+    for (const f of fields || []) {
+      const s = String((raw || {})[f.name] ?? '').trim();
+      if (s === '') continue;
+      if (s === 'null' || s === '값 없음') values[f.name] = null;
+      else if (f.type === 'boolean') values[f.name] = s === 'true';
+      else if (['integer', 'decimal', 'number'].includes(f.type) && !Number.isNaN(Number(s))) values[f.name] = Number(s);
+      else values[f.name] = s;
+    }
+    return values;
+  }
+
+  // the body this page sends is the one a platform sends
+  function tryBody(c, i) {
+    if (c.api === 'terms') return { text: c.text.trim() };
+    if (c.api === 'object') return { name: c.object };
+    if (c.api === 'validate') {
+      const o = (i.objects || []).find((x) => x.name === c.object);
+      return { object: c.object, values: tryTyped(o && o.properties, c.ovalues), ...(c.complete ? { complete: true } : {}) };
+    }
+    const d = i.decisions.find((x) => x.name === c.decision);
     const body = { decision: c.decision };
     if (c.mode === 'record') { body.key = c.key.trim(); return body; }
-    const values = {};
-    for (const i of (d && d.inputs) || []) {
-      const s = String((c.values || {})[i.name] ?? '').trim();
-      if (s === '') continue;
-      if (s === 'null' || s === '값 없음') values[i.name] = null;
-      else if (i.type === 'boolean') values[i.name] = s === 'true';
-      else if (['integer', 'decimal', 'number'].includes(i.type) && !Number.isNaN(Number(s))) values[i.name] = Number(s);
-      else values[i.name] = s;
-    }
-    body.values = values;
+    body.values = tryTyped(d && d.inputs, c.values);
     if (c.at.trim()) body.at = c.at.trim();
     return body;
   }
 
+  function tryValid(b) {
+    const bound = (v) => [v.min !== null && v.min !== undefined ? `${v.min} 이상` : '', v.max !== null && v.max !== undefined ? `${v.max} 이하` : ''].filter(Boolean).join(' · ');
+    const why = (v) => (v.kind === 'rule' ? `<div class="fnote">${esc(v.statement)}</div><div class="fnote"><span class="mono">${esc(v.rule)}</span> · ${esc(v.layer_label)} · ${esc(v.module)} ${esc(v.version)}${v.source ? ` · ${esc(v.source)}` : ''}</div>`
+      : v.kind === 'code' ? `<div class="fnote">허용 코드 ${esc((v.allowed || []).map((a) => a.code).join(', '))}</div>`
+        : v.kind === 'type' ? `<div class="fnote">${esc(TYPE_WORD[v.expected] || v.expected || '')} 형식</div>` : '');
+    const rows = (b.violations || []).map((v) => `<tr><td><b>${esc(v.label)}</b><div class="muted mono" style="font-size:11.5px">${esc(v.property)}</div></td><td>${v.value === null || v.value === undefined ? '<span class="muted">-</span>' : show(v.value)}</td><td>${esc(TRY_KIND[v.kind] || v.kind)}${v.kind === 'rule' && bound(v) ? ` · ${esc(bound(v))}` : ''}${why(v)}</td></tr>`).join('');
+    return `<div class="trybig">${b.valid ? '기준 충족' : `위반 ${(b.violations || []).length}건`}</div>
+      ${rows ? `<table class="tight"><tr><th>속성</th><th>값</th><th>사유</th></tr>${rows}</table>` : `<div class="fnote">확인한 속성 ${(b.checked || []).length}개가 정의와 규칙 카드의 범위 안에 있습니다.</div>`}
+      ${(b.rules || []).length ? `<div class="fnote" style="margin-top:8px">적용한 규칙 카드 <span class="mono">${esc(b.rules.join(', '))}</span></div>` : ''}`;
+  }
+
+  function tryTerms(b) {
+    const m = b.matched || [], d = b.defined || [];
+    if (!m.length && !d.length) return '<div class="hint" style="margin-top:8px">문장에서 용어 사전의 용어와 정의의 이름을 찾지 못했습니다.</div>';
+    const exp = Object.fromEntries((b.expansions || []).map((x) => [x.term, x.labels]));
+    return `<div class="sec">대표어 문장</div><div class="trybig" style="font-size:15px;margin-top:4px">${esc(b.text)}</div>
+      ${m.length ? `<div class="sec">용어</div><table class="tight"><tr><th>입력 표기</th><th>대표어</th><th>뜻</th></tr>${m.map((x) => `<tr><td>${esc(x.label)}<div class="muted" style="font-size:11.5px">${esc(x.as_label)}</div></td><td><b>${esc(x.term)}</b></td><td>${esc(x.meaning || '-')}${x.definition ? `<div class="fnote">${esc(x.definition)}</div>` : ''}${(exp[x.term] || []).length > 1 ? `<div class="fnote">검색 표기 ${esc(exp[x.term].join(', '))}</div>` : ''}</td></tr>`).join('')}</table>` : ''}
+      ${(b.confusables || []).length ? `<div class="sec">혼동 주의</div>${b.confusables.map((x) => `<div class="fnote"><b>${esc(x.term)}</b> ≠ ${esc(x.confusable)}${x.note ? ` · ${esc(x.note)}` : ''}</div>`).join('')}` : ''}
+      ${d.length ? `<div class="sec">정의에서 찾은 이름</div><table class="tight">${d.map((x) => `<tr><td><b>${esc(x.label)}</b></td><td>${x.concepts.map((k) => `<span class="muted">${esc(k.concept_kind)}</span> ${esc(k.meaning)}`).join('<br>')}</td></tr>`).join('')}</table>` : ''}`;
+  }
+
+  function tryObject(b) {
+    const o = b.object || {}, at = [b.area && b.area.label, b.parent && b.parent.label, o.label].filter(Boolean);
+    const props = Object.entries(o.properties || {});
+    const named = (n) => (((S.conn || {}).objects || []).find((x) => x.name === n) || {}).label || n;
+    return `<div class="trybig">${esc(at.join(' › '))}</div>
+      ${(b.children || []).length ? `<div class="fnote">하위 Entity ${esc(b.children.map((x) => x.label).join(', '))}</div>` : ''}
+      <div class="sec">속성 ${props.length}개</div><table class="tight">${props.map(([k, p]) => `<tr><td class="mono">${esc(k)}</td><td>${esc(p.label || '')}</td><td class="muted" style="font-size:12px">${esc(TYPE_WORD[p.type] || p.type)}${(p.values || []).length ? ` · ${esc(p.values.join(', '))}` : ''}</td></tr>`).join('')}</table>
+      ${(b.links || []).length ? `<div class="sec">관계 ${b.links.length}개</div><table class="tight">${b.links.map((x) => `<tr><td class="mono">${esc(x.name)}</td><td>${esc(named(x.from))} → ${esc(named(x.to))}</td></tr>`).join('')}</table>` : ''}
+      ${(b.decisions || []).length ? `<div class="fnote" style="margin-top:8px">판정 <span class="mono">${esc(b.decisions.join(', '))}</span></div>` : ''}`;
+  }
+
   function tryResult(c) {
-    const r = c.res;
-    if (c.busy) return '<div class="empty"><span class="spin"></span>판정 중입니다.</div>';
-    if (!r) return '<div class="empty" style="padding:18px 8px">판정 값을 입력하고 판정 실행을 누르면 API 응답을 표시합니다.</div>';
-    const [tone, word] = TRY_STATUS[r.status] || ['bad', '오류'];
+    const r = c.res, api = tryApi(c);
+    if (c.busy) return '<div class="empty"><span class="spin"></span>실행 중입니다.</div>';
+    if (!r) return `<div class="empty" style="padding:18px 8px">${esc(api[5])}</div>`;
+    const [tone, word] = r.status === 200 ? ['ok', api[4]] : TRY_STATUS[r.status] || ['bad', '오류'];
     const b = r.body || {};
-    const head = `<div class="tryhead"><span class="chip ${tone}">${r.status} · ${word}</span>${b.mode ? `<span class="muted">${b.mode === 'values' ? '판정 값 기준' : '레코드 기준'}</span>` : ''}</div>`;
+    const head = `<div class="tryhead"><span class="chip ${tone}">${r.status} · ${word}</span>${c.api === 'decide' && b.mode ? `<span class="muted">${b.mode === 'values' ? '판정 값 기준' : '레코드 기준'}</span>` : ''}</div>`;
     if (r.status === 422) {
       return `${head}<div class="hint" style="margin:8px 0">판정에 필요한 값이 빠져 있어 판정하지 않았습니다. 빠진 값은 추정하지 않고 응답의 missing 목록으로 돌려줍니다. Agent는 이 목록으로 사용자에게 되물을 수 있습니다.</div>
         <table class="tight"><tr><th>빠진 값</th><th>이름</th><th>형식</th></tr>${(b.missing || []).map((m) => `<tr><td><b>${esc(m.label)}</b></td><td class="mono">${esc(m.input)}${m.property && m.property !== m.input ? ` <span class="muted">또는 ${esc(m.property)}</span>` : ''}</td><td>${esc(m.type)}</td></tr>`).join('')}</table>`;
     }
     if (r.status !== 200) return `${head}<div class="hint" style="margin-top:8px">${esc(b.error || '')}</div>`;
+    // which definitions answered: a platform keeps this with what it did
+    const ver = b.definition ? `<div class="fnote mono" style="margin-top:8px">정의 버전 ${esc(b.definition.version)} · 모듈 ${b.definition.modules.length}개</div>` : '';
+    if (c.api === 'validate') return `${head}${tryValid(b)}${ver}`;
+    if (c.api === 'terms') return `${head}${tryTerms(b)}${ver}`;
+    if (c.api === 'object') return `${head}${tryObject(b)}${ver}`;
     const outs = b.outputs && typeof b.outputs === 'object' ? b.outputs : { result: b.outputs };
     const layers = ((b.path || {}).layers || []).map((x) => `<span class="chip sm${x.state === 'fired' ? ' ok' : ''}" title="${esc(x.said)}">${esc(x.label)} ${esc(x.fired.join(', ') || x.said)}</span>`).join('<span class="muted">›</span>');
     const src = (b.path || {}).source;
@@ -4469,63 +4528,83 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
       <div class="sec">판정 경로</div><div class="chips" style="align-items:center">${layers || '<span class="muted">-</span>'}</div>
       ${src ? `<div class="fnote" style="margin-top:6px">판정을 정한 규칙 <span class="mono">${esc(src.rule)}</span> · ${esc(src.layer_label)} · ${esc(src.module_label)} ${esc(src.version)}${src.cite ? ` · ${esc(src.cite)}` : ''}</div>` : ''}
       <div class="sec">근거 값</div><table class="tight">${(b.evidence || []).map((e) => `<tr><td class="mono">${esc(e.input)}</td><td>${show(e.value)}</td><td class="muted" style="font-size:12px">${e.source === 'given' ? '요청 값' : esc(e.source || '')}</td></tr>`).join('')}</table>
-      ${b.decision_id ? `<div class="fnote mono" style="margin-top:6px">decision_id ${esc(b.decision_id)}</div>` : ''}${keep}`;
+      ${b.decision_id ? `<div class="fnote mono" style="margin-top:6px">decision_id ${esc(b.decision_id)}</div>` : ''}${ver}${keep}`;
   }
 
-  function tryCode(c, d, i) {
-    const base = location.origin, body = tryBody(c, d);
+  function tryCode(c, i) {
+    const base = location.origin, body = tryBody(c, i), path = tryApi(c)[2];
     const lib = i.library && i.libraries > 1 ? { library: i.library.id } : {};
     const json = JSON.stringify({ ...lib, ...body }, null, 2);
-    const curl = `curl -X POST ${base}/v1/decide \\\n  -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ ...lib, ...body })}'`;
-    const node = [['method', 'POST'], ['url', `${base}/v1/decide`], ['auth_type', 'bearer'], ['auth_token', 'API 토큰'], ['body_type', 'json'], ['body', JSON.stringify({ ...lib, ...body })], ['passthrough_input', 'false'], ['failure_mode', 'emit']];
+    const curl = `curl -X POST ${base}${path} \\\n  -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ ...lib, ...body })}'`;
+    const node = [['method', 'POST'], ['url', `${base}${path}`], ['auth_type', 'bearer'], ['auth_token', 'API 토큰'], ['body_type', 'json'], ['body', JSON.stringify({ ...lib, ...body })], ['passthrough_input', 'false'], ['failure_mode', 'emit']];
     const text = { body: json, curl, node: node.map(([k, v]) => `${k}: ${v}`).join('\n') }[c.view];
     const tab = (k, label) => `<button class="tab${c.view === k ? ' on' : ''}" data-act="ctryview" data-k="${k}" aria-pressed="${c.view === k}">${label}</button>`;
+    // how the node takes what the step before it sends: `input` is that step's whole value
+    const template = { decide: `{"decision": "${c.decision}", "values": {{ input | tojson }}}`, validate: `{"object": "${c.object}", "values": {{ input | tojson }}}`, terms: '{"text": {{ input | tojson }}}' }[c.api];
     return `<div class="trycode"><div class="tabs">${tab('body', '요청 본문')}${tab('curl', 'cURL')}${tab('node', 'XGEN HTTP 요청 노드')}<div class="grow"></div><button class="iconbtn" data-act="copycode" data-v="${esc(text)}" aria-label="복사" title="복사">${ui('copy')}</button></div>
-      ${c.view === 'node' ? `<table class="tight">${node.map(([k, v]) => `<tr><td class="mono" style="width:140px">${esc(k)}</td><td class="mono" style="word-break:break-all">${esc(v)}</td></tr>`).join('')}</table><div class="hint" style="margin-top:6px">워크플로우의 값은 body에 템플릿으로 넣습니다. 예: <span class="mono">{"decision": "${esc(c.decision)}", "values": {{ values | tojson }}}</span>. 출력의 result에 판정 결과가 들어 있습니다.</div>` : `<pre class="code">${esc(text)}</pre>`}</div>`;
+      ${c.view === 'node' ? `<table class="tight">${node.map(([k, v]) => `<tr><td class="mono" style="width:140px">${esc(k)}</td><td class="mono" style="word-break:break-all">${esc(v)}</td></tr>`).join('')}</table><div class="hint" style="margin-top:6px">${template ? `앞 노드의 값은 body에 템플릿으로 넣습니다. 예: <span class="mono">${esc(template)}</span>. ` : ''}출력의 result에 응답이 들어 있고, 실패하면 success가 false입니다.</div>` : `<pre class="code">${esc(text)}</pre>`}</div>`;
   }
 
   function tryPanel(i) {
-    if (!i.decisions.length) return '<div class="card" style="grid-column:1/-1"><div class="ch">판정 API 실행</div><div class="cb"><div class="hint">이 라이브러리에 결정표가 없습니다. 규칙에서 결정표를 추가하면 여기서 판정 API를 실행할 수 있습니다.</div></div></div>';
-    const c = tryState(i), d = i.decisions.find((x) => x.name === c.decision);
-    const NONE = '값 없음';
-    const control = (x) => {
-      const cur = (c.values || {})[x.name], attr = `data-in="ctryv" data-k="${esc(x.name)}"`;
+    const c = tryState(i), api = tryApi(c), NONE = '값 없음';
+    const d = i.decisions.find((x) => x.name === c.decision), o = (i.objects || []).find((x) => x.name === c.object);
+    const control = (x, cur, on) => {
+      const attr = `data-in="${on}" data-k="${esc(x.name)}"`;
       if (x.type === 'boolean') return `<select ${attr}>${opt('', '입력 안 함', cur)}${opt('true', '예', cur)}${opt('false', '아니요', cur)}${opt('null', NONE, cur)}</select>`;
       if (x.values && x.values.length) return `<select ${attr}>${opt('', '입력 안 함', cur)}${x.values.map((v) => opt(String(v), String(v), cur)).join('')}${opt('null', NONE, cur)}</select>`;
       const num = ['integer', 'decimal', 'number'].includes(x.type);
       return `<input type="text" ${attr} value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${num ? `숫자 · 없으면 ${NONE}` : `없으면 ${NONE}`}">`;
     };
+    const pickObject = `<div class="field"><label>Entity</label><select data-in="ctryo">${(i.objects || []).map((x) => opt(x.name, `${x.label} (${x.name})`, c.object)).join('')}</select></div>`;
     const help = (x) => (x.days_since ? `${x.property_label || x.property}에서 지난 일수. 일시(${x.property})로 보내도 됩니다.` : x.param ? '판정 Parameter' : x.property ? '' : '연결된 Entity에서 읽는 값');
-    const fields = c.mode === 'record'
-      ? `<div class="field"><label>레코드 키</label><input type="text" data-in="ctryk" value="${esc(c.key)}" placeholder="예: ${esc(d && d.target ? `${d.target_label} 키` : '레코드 키')}"><div class="fnote">${i.source ? '원천에서 레코드를 읽어 판정합니다.' : '원천이 연결되어 있지 않아 409 응답을 반환합니다. 원천 없이 판정하려면 판정 값 기준을 사용합니다.'}</div></div>`
-      : `<div class="rgrid">${d.inputs.map((x) => `<div class="field"><label>${esc(x.label)} <span class="muted mono cn">${esc(x.name)}</span></label>${control(x)}${help(x) ? `<div class="fnote">${esc(help(x))}</div>` : ''}</div>`).join('')}</div>
-        ${d.inputs.some((x) => x.days_since) ? `<div class="field" style="max-width:260px"><label>기준 시각 (선택)</label><input type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><div class="fnote">일시로 보낸 값의 경과일을 이 시각 기준으로 계산합니다. 비우면 지금 기준입니다.</div></div>` : ''}`;
-    return `<div class="card" style="grid-column:1/-1"><div class="ch">판정 API 실행<div class="right"><span class="muted" style="font-size:12px">POST /v1/decide${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
-      <div class="cb"><div class="gwhat">워크플로우와 Agent가 이 라이브러리의 규칙으로 판정하는 API를 화면에서 실행합니다. 화면 결과는 같은 요청을 보낸 플랫폼이 받는 응답과 같습니다.</div>
-      <div class="trygrid"><div>
-        <div class="rgrid two"><div class="field"><label>판정</label><select data-in="ctryd">${i.decisions.map((x) => opt(x.name, `${x.label} (${x.name})`, c.decision)).join('')}</select></div>
+    let fields, ready = true;
+    if (c.api === 'terms') {
+      fields = `<div class="field"><label>문장</label><input type="text" data-in="ctryt" value="${esc(c.text)}" placeholder="질문 또는 문장"><div class="fnote">용어 사전의 동의어, 약어, 채널 표기를 대표어로 바꾸고 정의에 있는 이름을 찾습니다.</div></div>`;
+    } else if (c.api === 'object') {
+      ready = !!o;
+      fields = o ? pickObject : '<div class="hint">이 라이브러리에 Entity가 없습니다.</div>';
+    } else if (c.api === 'validate') {
+      ready = !!o;
+      fields = !o ? '<div class="hint">이 라이브러리에 Entity가 없습니다.</div>'
+        : `<div class="rgrid two">${pickObject}<div class="field"><label>범위</label><select data-in="ctryc">${opt('', '입력한 값만', c.complete ? '1' : '')}${opt('1', '필수 속성 누락 포함', c.complete ? '1' : '')}</select></div></div>
+          <div class="rgrid">${o.properties.map((x) => `<div class="field"><label>${esc(x.label)} <span class="muted mono cn">${esc(x.name)}</span></label>${control(x, (c.ovalues || {})[x.name], 'ctryov')}</div>`).join('')}</div>`;
+    } else if (!d) {
+      ready = false;
+      fields = '<div class="hint">이 라이브러리에 결정표가 없습니다. 규칙에서 결정표를 추가하면 판정 API를 실행할 수 있습니다.</div>';
+    } else {
+      fields = `<div class="rgrid two"><div class="field"><label>판정</label><select data-in="ctryd">${i.decisions.map((x) => opt(x.name, `${x.label} (${x.name})`, c.decision)).join('')}</select></div>
           <div class="field"><label>기준</label><div class="seg">${[['values', '판정 값'], ['record', '레코드 키']].map(([k, label]) => `<button class="tab${c.mode === k ? ' on' : ''}" data-act="ctrymode" data-k="${k}" aria-pressed="${c.mode === k}">${label}</button>`).join('')}</div></div></div>
+        ${c.mode === 'record'
+    ? `<div class="field"><label>레코드 키</label><input type="text" data-in="ctryk" value="${esc(c.key)}" placeholder="예: ${esc(d.target ? `${d.target_label} 키` : '레코드 키')}"><div class="fnote">${i.source ? '원천에서 레코드를 읽어 판정합니다.' : '원천이 연결되어 있지 않아 409 응답을 반환합니다. 원천 없이 판정하려면 판정 값 기준을 사용합니다.'}</div></div>`
+    : `<div class="rgrid">${d.inputs.map((x) => `<div class="field"><label>${esc(x.label)} <span class="muted mono cn">${esc(x.name)}</span></label>${control(x, (c.values || {})[x.name], 'ctryv')}${help(x) ? `<div class="fnote">${esc(help(x))}</div>` : ''}</div>`).join('')}</div>
+        ${d.inputs.some((x) => x.days_since) ? `<div class="field" style="max-width:260px"><label>기준 시각 (선택)</label><input type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><div class="fnote">일시로 보낸 값의 경과일을 이 시각 기준으로 계산합니다. 비우면 지금 기준입니다.</div></div>` : ''}`}`;
+    }
+    const fill = c.api === 'decide' && d && c.mode === 'values' && d.example ? `<button class="btn" data-act="ctryfill" title="${esc(`${d.example.question} ${d.example.text}`)}">예시 값 채우기</button>` : '';
+    return `<div class="card" style="grid-column:1/-1"><div class="ch">연동 API 실행<div class="right"><span class="muted" style="font-size:12px">POST ${esc(api[2])}${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
+      <div class="cb"><div class="gwhat">워크플로우와 Agent가 이 라이브러리를 호출하는 API를 화면에서 실행합니다. 화면 결과는 같은 요청을 보낸 플랫폼이 받는 응답과 같습니다.</div>
+      <div class="trygrid"><div>
+        <div class="field"><label>API</label><div class="seg">${TRY_API.map(([k, label]) => `<button class="tab${c.api === k ? ' on' : ''}" data-act="ctryapi" data-k="${k}" aria-pressed="${c.api === k}">${label}</button>`).join('')}</div></div>
         ${fields}
-        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><button class="btn primary" data-act="ctryrun"${c.busy ? ' disabled' : ''}>판정 실행</button>${c.mode === 'values' && d.example ? `<button class="btn" data-act="ctryfill" title="${esc(`${d.example.question} ${d.example.text}`)}">예시 값 채우기</button>` : ''}<button class="btn ghost" data-act="ctryclear">값 지우기</button></div>
-        ${tryCode(c, d, i)}
+        ${ready ? `<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><button class="btn primary" data-act="ctryrun"${c.busy ? ' disabled' : ''}>${api[3]}</button>${fill}${c.api === 'object' ? '' : '<button class="btn ghost" data-act="ctryclear">값 지우기</button>'}</div>
+        ${tryCode(c, i)}` : ''}
       </div><div class="tryres">${tryResult(c)}</div></div></div></div>`;
   }
 
   function repaintTry() {
     const box = document.querySelector('.trycode'), i = S.conn;
     if (!box || !i) return;
-    const c = S.ctry, d = i.decisions.find((x) => x.name === c.decision);
-    box.outerHTML = tryCode(c, d, i);
+    box.outerHTML = tryCode(S.ctry, i);
   }
 
   function viewConnect() {
     const i = S.conn;
-    const head = pageHead('외부 연동', '워크플로우와 Agent가 이 라이브러리의 규칙과 온톨로지를 호출하는 방법을 확인하고, 판정 API를 실행합니다');
+    const head = pageHead('외부 연동', '워크플로우와 Agent가 이 라이브러리의 규칙과 온톨로지를 호출하는 방법을 확인하고, 연동 API를 실행합니다');
     if (!i) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const base = location.origin;
     const code = (t) => `<pre class="code">${esc(t)}</pre>`;
     const xgen = `<div class="card"><div class="ch">XGEN 연동</div><div class="cb"><ol class="steps2">
         <li><b>판정 노드</b><span>HTTP 요청 노드로 <span class="mono">POST ${esc(base)}/v1/decide</span>를 호출합니다. 원천이 없어도 워크플로우가 가진 값을 values로 보내면 규칙대로 판정합니다. 값이 빠지면 422와 빠진 값 목록을 반환합니다.</span></li>
+        <li><b>용어 해석 · 값 검증</b><span><span class="mono">/v1/terms</span>는 질문의 용어를 대표어, 뜻, 검색 표기로 바꿔 검색 질의 확장에 사용합니다. <span class="mono">/v1/validate</span>는 값이 정의와 규칙 카드의 범위 안에 있는지 확인합니다.</span></li>
         <li><b>Agent 도구</b><span>OpenAPI 문서를 API 컬렉션으로 등록하고 Geny의 도구로 연결합니다. 판정, 규칙 카드, 용어, 검증 도구를 그대로 사용합니다.</span></li>
         <li><b>Agent 컨텍스트</b><span><span class="mono">/v1/context</span>의 text를 Geny 시스템 프롬프트에 넣습니다. 질문과 관련된 정의와 규칙이 들어갑니다.</span></li>
         <li><b>검증</b><span><span class="mono">/v1/questions</span>로 원천 연결 전에는 값 기준, 연결 후에는 레코드 기준으로 같은 검증 질문을 측정합니다.</span></li></ol>
@@ -8507,9 +8586,14 @@ ${controls}${body}`;
     cbulk: (t) => catalogCall('catalog/include', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
     cembulk: (t) => catalogCall('catalog/embed', { paths: Object.keys(S.cat.sel).filter((k) => S.cat.sel[k]), on: !!t.dataset.on }),
     cclear: () => { S.cat.sel = {}; render(); },
+    ctryapi: (t) => { Object.assign(S.ctry, { api: t.dataset.k, res: null, saved: false }); render(); },
     ctrymode: (t) => { S.ctry.mode = t.dataset.k; S.ctry.res = null; render(); },
     ctryview: (t) => { S.ctry.view = t.dataset.k; render(); },
-    ctryclear: () => { Object.assign(S.ctry, { values: {}, key: '', at: '', res: null, saved: false }); render(); },
+    ctryclear: () => {
+      const c = S.ctry;
+      Object.assign(c, c.api === 'terms' ? { text: '' } : c.api === 'validate' ? { ovalues: {} } : { values: {}, key: '', at: '' }, { res: null, saved: false });
+      render();
+    },
     ctryfill: () => {
       const c = S.ctry, d = S.conn.decisions.find((x) => x.name === c.decision);
       if (!d || !d.example) return;
@@ -8519,7 +8603,7 @@ ${controls}${body}`;
     ctrysave: async () => {
       const c = S.ctry, r = c.res, d = S.conn.decisions.find((x) => x.name === c.decision);
       if (!r || r.status !== 200) return;
-      const values = tryBody(c, d).values;
+      const values = tryBody(c, S.conn).values;
       const said = Object.entries(values).map(([k, v]) => `${(d.inputs.find((i) => i.name === k) || {}).label || k} ${v === null ? '값 없음' : show(v)}`).join(', ');
       try {
         await api('manage/edit', { op: 'add_question', args: { id: `api-${Date.now().toString(36)}`, text: `${d.label}: ${said}`, decision: d.name, values, expect: r.body.outputs } });
@@ -8527,10 +8611,11 @@ ${controls}${body}`;
       } catch (e) { fail(e); }
     },
     ctryrun: async () => {
-      const c = S.ctry, d = S.conn.decisions.find((x) => x.name === c.decision);
+      const c = S.ctry;
+      if (c.api === 'terms' && !c.text.trim()) { toast('문장을 입력해 주세요.', true); return; }
       c.busy = true; render();
       c.saved = false;
-      try { c.res = await api('rest/try', { path: '/v1/decide', body: tryBody(c, d) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
+      try { c.res = await api('rest/try', { path: tryApi(c)[2], body: tryBody(c, S.conn) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
       c.busy = false; render();
     },
     copycode: async (t) => {
@@ -8971,6 +9056,10 @@ ${controls}${body}`;
     mgrow: (t) => { S.mg.form.v[t.dataset.list][Number(t.dataset.i)][t.dataset.f] = t.value; },
     ctryv: (t) => { const c = S.ctry; c.values = { ...(c.values || {}), [t.dataset.k]: t.value }; repaintTry(); },
     ctryk: (t) => { S.ctry.key = t.value; repaintTry(); },
+    ctryt: (t) => { S.ctry.text = t.value; repaintTry(); },
+    ctryo: (t) => { Object.assign(S.ctry, { object: t.value, ovalues: {}, res: null }); render(); },
+    ctryov: (t) => { const c = S.ctry; c.ovalues = { ...(c.ovalues || {}), [t.dataset.k]: t.value }; repaintTry(); },
+    ctryc: (t) => { S.ctry.complete = t.value === '1'; repaintTry(); },
     ctryat: (t) => { S.ctry.at = t.value; repaintTry(); },
     ctryd: (t) => { Object.assign(S.ctry, { decision: t.value, values: {}, res: null }); render(); },
     mgqv: (t) => { const v = S.mg.form.v; v.values = { ...(v.values || {}), [t.dataset.k]: t.value }; },

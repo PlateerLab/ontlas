@@ -320,6 +320,15 @@ terms:
     owner: 주문팀
 
 rule_cards:
+  - id: unit-price-not-negative
+    type: compute
+    statement: 주문상품의 결제 단가는 음수일 수 없습니다.
+    applies_to: [property:OrderItem.unit_price]
+    result: 결제 단가 0 이상
+    source: 주문 정의서 v1.0 2조
+    owner: 주문팀
+    status: approved
+    check: {property: OrderItem.unit_price, min: 0}
   - id: return-request-moves
     type: transition
     statement: 반품 신청이 승인되면 주문상품 상태가 정상에서 반품 요청으로 바뀝니다.

@@ -163,9 +163,42 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         return tools.run_cypher(text, params, backend)
 
     @server.tool()
-    def decide(decision: str, key: str, params: dict | None = None) -> dict:
-        """Evaluate a decision table for one object; returns the outputs, the rule that matched and the evidence."""
-        return tools.decide(decision, key, params)
+    def decide(decision: str, key: str = "", params: dict | None = None, values: dict | None = None, at: str = "") -> dict:
+        """Evaluate a decision table for one object's record (key), or on values you give (values, no source needed):
+        the outputs, the verdict, the rule that matched, the path through AXIOM, Custom and Standard and the evidence.
+        Values are named by the decision's inputs or the properties they read; null is a value. When some are not
+        given the answer is needs_values with what is missing: ask for those, do not guess them."""
+        from ontlas.decide.table import MissingValues
+        from ontlas.values import parse_datetime
+
+        try:
+            return tools.decide(decision, key, params, parse_datetime(at) if at else None, values)
+        except MissingValues as e:
+            return {"needs_values": True, "decision": e.decision, "missing": e.missing}
+
+    @server.tool()
+    def find_rules(text: str = "", layer: str = "", decision: str = "", k: int = 0) -> dict:
+        """The rule cards, AXIOM first, or those a text, a layer (axiom, custom, standard) or a decision names: each
+        rule's statement, conditions, result, exceptions, source, owner, status and what carries it out."""
+        return tools.find_rules(text, layer, decision, k)
+
+    @server.tool()
+    def read_terms(text: str = "") -> dict:
+        """The glossary. With text: the terms it uses in their preferred words, what each stands for, the labels to
+        search by, the terms each must not be confused with, and the definitions it names by their own label."""
+        return tools.read_terms(text)
+
+    @server.tool()
+    def validate_values(object: str, values: dict, complete: bool = False) -> dict:  # noqa: A002 - the API's field name
+        """Whether values for one object keep to its definition and to the rule cards that bound its properties: types,
+        allowed codes, and the min or max a card sets. No source needed."""
+        return tools.validate_values(object, values, complete)
+
+    @server.tool()
+    def run_questions(stage: str = "") -> dict:
+        """Run the validation questions in two stages (values: on each question's own values, no source needed;
+        record: on the records they name) and say where a wrong answer comes from: the rule, the mapping or the data."""
+        return tools.run_questions(stage)
 
     @server.tool()
     def list_functions() -> dict:
