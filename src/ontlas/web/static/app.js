@@ -61,7 +61,7 @@
   };
   const ui = (k) => `<svg class="ui" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
   const NAV = [['home', '홈'], ['inbox', '할 일'], ['records', '레코드 탐색'], ['record', '레코드'], ['changes', '변경 요청'], ['graph', '레코드 그래프'], ['model', '그래프 탐색'], ['rules', '기준값 · 지표'], ['monitor', '파이프라인 관제'], ['guide', '사용 안내'], ['flow', '흐름 · 통과 조건'], ['explorer', '자산 탐색기'], ['map', '자산 그래프'], ['docs', '문서'], ['vectors', '벡터 · 임베딩'], ['adapters', '어댑터'],
-    ['search', '질문해 보기'], ['connect', '외부 연동'], ['catalog', '재료 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
+    ['search', '질문해 보기'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', 'Entity'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '결정표'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한'], ['library', '모듈 라이브러리'], ['onto', '전체 보기'],
     ['query', '질의'], ['decide', '처리 요청'], ['check', '검증 질문'], ['bind', 'DB 대조'], ['objmgr', 'Object'], ['ruleagent', '규칙 생성 Agent'], ['versions', '버전 이력'], ['lexicon', '용어 사전'], ['semrules', '규칙 카드']];
   // the sidebar: 홈, then the four parts a space is made of (the rules, the ontology, the data it is bound to, what proves
@@ -80,7 +80,7 @@
   const REPO_TABS = new Set(['convert', 'data', 'explorer', 'map', 'docs', 'vectors']);  // where the repository decides what is shown (the catalog names it in its own head)
   const NO_TAB = new Set(['record', 'inbox']);  // screens reached from another (a record from its list, 할 일 from the top bar and the home)
   // a tab sits under its screen, so it does not repeat the screen's word; screens of one thing are one tab with a switch
-  const TAB_WORD = { semrules: '규칙 카드', mgrules: '결정표', rules: '기준값 · 지표', mgfuncs: '함수', actions: '액션 정의', decide: '처리 요청', changes: '변경 요청', versions: '버전 이력', library: '모듈 라이브러리', model: '다이어그램', onto: '전체 보기', objects: 'Entity · 속성 · 관계', states: '상태 전이', docs: '문서', graph: '레코드 그래프', records: '레코드 탐색', monitor: '관제', catalog: '재료 카탈로그', db: 'DB 연결', data: '초안 생성', convert: '변환 결과', sources: '데이터 소스', bind: 'DB 대조', adapters: '어댑터', vectors: '벡터 · 임베딩', connect: '외부 연동', check: '검증 질문', flow: '흐름 · 통과 조건', search: '질문해 보기', explorer: '자산 탐색기', map: '자산 그래프' };
+  const TAB_WORD = { semrules: '규칙 카드', mgrules: '결정표', rules: '기준값 · 지표', mgfuncs: '함수', actions: '액션 정의', decide: '처리 요청', changes: '변경 요청', versions: '버전 이력', library: '모듈 라이브러리', model: '다이어그램', onto: '전체 보기', objects: 'Entity · 속성 · 관계', states: '상태 전이', docs: '문서', graph: '레코드 그래프', records: '레코드 탐색', monitor: '관제', catalog: '데이터 카탈로그', db: 'DB 연결', data: '초안 생성', convert: '변환 결과', sources: '데이터 소스', bind: 'DB 대조', adapters: '어댑터', vectors: '벡터 · 임베딩', connect: '외부 연동', check: '검증 질문', flow: '흐름 · 통과 조건', search: '질문해 보기', explorer: '자산 탐색기', map: '자산 그래프' };
   // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere
   const TAB_SETS = [];
   const TABLE_TABS = ['objects', 'props', 'links'];
@@ -143,10 +143,10 @@
       '레코드 페이지의 머리글은 핵심 값, 상태 전이의 지금 단계와 다음 단계, 할 수 있는 액션과 함수를 보여 줍니다. 역할을 고르면 그 역할이 요청할 수 있는 액션만 남습니다.',
       '연결 탭은 따라간 레코드를 들여쓰기로 보여 주고 누르면 그 레코드로 이동합니다. 가림 속성은 가린 채로 보입니다.',
       '판정 탭은 이 레코드에 적용되는 결정표와 함수를 열 때 계산해 보여 줍니다. 기록은 남기지 않습니다.',
-      '문서 탭은 이 레코드나 타입을 언급한 문서의 절을 모읍니다. 이력 탭은 원천의 날짜, 사람과 Agent의 요청, 승인을 한 시간순으로 보여 줍니다.']],
+      '문서 탭은 이 레코드나 타입을 언급한 문서의 항목을 모읍니다. 이력 탭은 원천의 날짜, 사람과 Agent의 요청, 승인을 한 시간순으로 보여 줍니다.']],
     ['graph', '레코드 하나에서 출발해 관계 종류별 개수를 보고 펼치는 지식그래프 탐색입니다.', [
       '검색 상자에 레코드를 적고 Enter로 시작합니다. 관계마다 연결된 레코드 수가 보이고, 고른 관계만 펼칩니다. 한 번에 25개까지 펼치고 넘으면 묶음으로 둡니다.',
-      '노드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색과 모양이 다릅니다.',
+      '레코드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색과 모양이 다릅니다.',
       '경로 찾기에서 시작과 도착 레코드를 적으면 둘을 잇는 가장 짧은 관계 사슬을 찾아 주황색으로 강조합니다. 경로는 온톨로지 질의로 실행되므로 SQL 원천에서도 됩니다.',
       '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 관점에 역할을 정해 두면 홈에서 그 역할을 고를 때 그 관점으로 바뀝니다.',
       '탐색 기록에서 지나온 단계로 돌아가고, [링크 복사]로 지금 시작 레코드를 다른 사람에게 보냅니다.']],
@@ -266,12 +266,12 @@
       '관계를 선택하면 연결된 Entity로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
       '레코드 단위의 지식그래프는 [그래프 탐색]에서, 파일 · 테이블 · 문서까지 아우르는 연결은 [자산 그래프]에서 봅니다.',
       '식별 통합 Entity를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.']],
-    ['docs', '문서를 문서, 절, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 Entity, 속성, 허용값, 용어와 연결됩니다.', [
+    ['docs', '문서를 문서, 항목, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 Entity, 속성, 허용값, 용어와 연결됩니다.', [
       '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
-      '함께 언급은 같은 절에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
+      '함께 언급은 같은 항목에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
       '문서 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서만 그래프에 표시하고 [관계 추출]도 그 범위만 읽습니다. 추출은 서버에서 진행되며 [중지]로 멈춘 뒤 다시 선택하면 이어서 읽습니다.',
       '[다시 추출]은 선택한 범위의 추출 결과를 지우고 처음부터 다시 읽습니다. 추출한 관계는 문서 온톨로지 질의와 통합 검색의 연결 관계에 사용합니다.',
-      '그래프에서 절을 선택하면 본문과 그 절의 개념이 표시됩니다. Entity 개념을 선택하면 온톨로지 화면으로 이동합니다.',
+      '그래프에서 항목을 선택하면 본문과 그 항목의 개념이 표시됩니다. Entity 개념을 선택하면 온톨로지 화면으로 이동합니다.',
       '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
     ['vectors', '임베딩 모델과 벡터 저장소의 구성을 확인합니다.', [
       '글자 비교는 모델 없이 동작하는 기본 방식입니다. 의미 비교는 구성 파일의 space.embedder 항목에서 모델을 지정합니다.',
@@ -392,7 +392,7 @@
     roles: '역할에 필요한 범위만 열어 두어야 다른 고객의 행이나 내부 문서가 Agent의 답변에 포함되지 않습니다.',
     library: '표준 모듈은 직접 수정하지 않고 달라지는 내용만 별도 모듈로 추가합니다. 표준 버전이 바뀌어도 차이 모듈만 다시 적용합니다.',
     onto: '그래프 저장소에는 원천 데이터를 정의 기준으로 반영하므로, 화면의 연결은 원천의 값과 일치합니다.',
-    docs: '문서의 절과 개념을 온톨로지와 연결해 두어야 답변이 규칙과 그 근거 조항을 함께 제시합니다. 관계는 근거 문장이 있는 것만 추가해 연결마다 원문을 확인할 수 있습니다.',
+    docs: '문서의 항목과 개념을 온톨로지와 연결해 두어야 답변이 규칙과 그 근거 조항을 함께 제시합니다. 관계는 근거 문장이 있는 것만 추가해 연결마다 원문을 확인할 수 있습니다.',
     vectors: '임베딩 모델이 다르면 벡터를 서로 비교할 수 없어 모델을 바꾸면 모든 청크를 다시 임베딩합니다. 바꾼 뒤에는 문서 검색 검증으로 같은 질문에 같은 문서가 상위에 오는지 확인합니다.',
     adapters: '저장소와 쿼리 언어는 교체할 수 있지만, 같은 질의가 같은 결과를 내는지 적합성 시험을 통과한 구성만 사용합니다.',
     search: '판정은 결정표로만 내리고 언어 모델은 찾은 근거를 문장으로 옮기는 데만 사용합니다. 같은 질문에는 같은 판정이 나옵니다.',
@@ -3427,7 +3427,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     return `<div class="card" style="margin-bottom:16px"><div class="ch">정책서로 규칙 초안<div class="right">${S.tab === 'ruleagent' ? '' : '<button class="btn sm ghost" data-act="pclose">닫기</button>'}</div></div><div class="cb">
       <div class="hint xp" style="margin-bottom:8px">정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고, 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 사람이 확인하고 승인해야 반영됩니다.</div>
       ${docs.length ? `<div class="rgrid two" style="margin-bottom:8px"><label class="field" style="margin:0"><span>업로드한 문서</span><select data-in="pdoc"><option value="">선택</option>${docs.map((d) => `<option value="${esc(d.name)}"${d.name === p.doc ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
-        ${(p.sections || []).length ? `<label class="field" style="margin:0"><span>절</span><select data-in="psec"><option value="">전체</option>${p.sections.map((x) => `<option value="${esc(x)}"${x === p.section ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}</div>` : ''}
+        ${(p.sections || []).length ? `<label class="field" style="margin:0"><span>항목</span><select data-in="psec"><option value="">전체</option>${p.sections.map((x) => `<option value="${esc(x)}"${x === p.section ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>` : ''}</div>` : ''}
       <textarea class="code" data-in="ptext" spellcheck="false" style="min-height:180px" placeholder="제1조 (목적) ...">${esc(p.text)}</textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
         <label class="field" style="margin:0;min-width:220px"><span>대상 Entity</span><select data-in="ptarget">${targets}</select></label>
@@ -3442,7 +3442,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
       const r = await api('policy/document', { name, section });
       if (!r.ok) throw new Error(r.error);
       S.pol.text = r.text; S.pol.sections = r.sections;
-      if (r.cut) toast('문서가 길어 앞부분만 불러왔습니다. 절을 선택하면 해당 절만 불러옵니다.');
+      if (r.cut) toast('문서가 길어 앞부분만 불러왔습니다. 항목을 선택하면 해당 항목만 불러옵니다.');
     } catch (e) { fail(e); }
     render();
   }
@@ -3896,13 +3896,13 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
   function viewDocs() {
     const sp = S.sp;
     const pick = sp && !sp.busy && !sp.error ? folderPick('dfolder', S.dfolder, sp, '문서 범위') : '';
-    const head = pageHead('문서 온톨로지', '문서를 문서, 절, 개념으로 구성하고 도메인 온톨로지와 연결합니다', `${pick}<a class="btn" href="#catalog">문서 추가</a>`);
+    const head = pageHead('문서 온톨로지', '문서를 문서, 항목, 개념으로 구성하고 도메인 온톨로지와 연결합니다', `${pick}<a class="btn" href="#catalog">문서 추가</a>`);
     if (!sp || sp.busy) return `${head}<div class="empty"><span class="spin"></span>문서를 읽는 중입니다.</div>`;
     if (sp.error) return `${head}<div class="banner no"><div class="why">${esc(sp.error)}</div></div>`;
     const g = S.dg && !S.dg.busy ? S.dg : null;
     const inScope = sp.items.filter(inDocScope);
     const inGraph = (kinds) => (g.nodes || []).filter((n) => kinds.includes(n.module)).length;
-    const stats = [[inScope.length, '문서'], [g && g.sections_shown ? inGraph(['section']) : sp.sections, '절'], [g ? (g.nodes || []).length - inGraph(['document', 'section']) : sp.concepts, '개념'],
+    const stats = [[inScope.length, '문서'], [g && g.sections_shown ? inGraph(['section']) : sp.sections, '항목'], [g ? (g.nodes || []).length - inGraph(['document', 'section']) : sp.concepts, '개념'],
       [g ? g.relations : (sp.reading || {}).relations || 0, '관계'], [inScope.reduce((n, d) => n + d.chunks, 0), '벡터 청크']].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
     const qs = S.dq;
     const queries = !qs ? '' : `<div class="card" style="margin-top:14px"><div class="ch">문서 온톨로지 질의${qs.conformance ? `<div class="right"><span class="chip ${qs.conformance.agree === qs.conformance.queries ? 'ok' : 'bad'}">SQL · 그래프 결과 일치 ${qs.conformance.agree} / ${qs.conformance.queries}</span></div>` : ''}</div><div class="cb">
@@ -3945,14 +3945,76 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
 
   const inDocScope = (d) => !S.dfolder || d.folder === S.dfolder || (d.folder || '').startsWith(S.dfolder + '/');
 
+  // what the node picked in the document graph holds: an item's text and concepts, a document's items, where a concept is named
+  const DOC_KIND = { document: '문서', section: '항목', ontology: '온톨로지 요소', keyword: '키워드' };
+  function elementWord(el) {  // a concept's definition, as the definition reads it
+    const [kind, rest] = [el.split(':')[0], el.split(':').slice(1).join(':')];
+    const m = S.mg.st && !S.mg.st.error ? S.mg.st : null;
+    if (kind === 'object') { const o = m && m.objects.find((x) => x.name === rest); return { kind: 'Entity', label: o ? o.label : rest, text: o ? o.description : '', obj: rest }; }
+    if (kind === 'area') { const a = m && (m.areas || []).find((x) => x.name === rest); return { kind: 'Object', label: a ? a.label : rest, text: a ? a.description : '', area: rest }; }
+    if (kind === 'property') {
+      const [o, p] = rest.split('.'), pr = m && m.properties.find((x) => x.object === o && x.name === p);
+      return { kind: '속성', label: pr ? pr.label : rest, text: pr ? pr.description : '', obj: o };
+    }
+    if (kind === 'value') { const [path, v] = rest.split('='); return { kind: '허용값', label: v, text: `${path} 의 값`, obj: path.split('.')[0] }; }
+    const named = { decision: S.st.decisions, query: S.st.queries }[kind];  // a table or a query goes by its label
+    const d = named && named.find((x) => x.name === rest);
+    return { kind: ELEMENT[kind] || kind, label: d ? d.label : rest, text: '' };
+  }
+
   function docSide() {
-    const sp = S.sp, sel = S.dsec;
-    const detail = sel ? `<b style="font-size:15px">${esc(sel.section)}</b><div class="muted" style="font-size:12px;margin:2px 0 10px">${esc(sel.document)}</div>
-        <div class="hit-text" style="white-space:pre-wrap">${esc(sel.text)}</div>
-        ${sel.concepts.length ? `<div class="sec">이 절의 개념</div><div class="chips">${sel.concepts.map((c) => (c.element.startsWith('object:') ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)}</button>` : `<span class="chip">${esc(c.label)} · ${esc(KIND_LABEL[c.kind] || c.kind)}</span>`)).join('')}</div>` : ''}`
-      : `<table class="tight"><tr><th>문서</th><th>절</th><th>언급</th></tr>${sp.items.filter(inDocScope).map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
-        <div class="hint" style="margin-top:10px">그래프에서 절을 선택하면 본문과 개념이 표시됩니다.</div>`;
-    return `<div class="ch">${sel ? '절 내용' : '문서 목록'}${sel ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${detail}</div>`;
+    const sp = S.sp, dg = S.dg && !S.dg.busy && !S.dg.error ? S.dg : null, id = S.dgx.sel;
+    const byId = dg ? Object.fromEntries((dg.nodes || []).map((n) => [n.id, n])) : {};
+    const node = byId[id];
+    const near = (label) => (dg ? dg.edges.filter((e) => e.label === label && (e.source === id || e.target === id)).map((e) => byId[e.source === id ? e.target : e.source]).filter(Boolean) : []);
+    const pick = (n) => `<button class="chip" data-act="dgxpick" data-id="${esc(n.id)}">${esc(n.label)}</button>`;
+    const chips = (xs) => (xs.length ? `<div class="chips" style="margin-top:4px">${xs.map(pick).join('')}</div>` : '<div class="muted" style="font-size:12px">없음</div>');
+    let body;
+    if (node && node.module === 'section') {
+      const sel = S.dsec && S.dsec.id === id ? S.dsec : null;
+      body = !sel ? '<div class="empty"><span class="spin"></span>본문을 불러오는 중입니다.</div>'
+        : `<div class="muted" style="font-size:12px;margin:0 0 10px">${esc(sel.document)}</div><div class="hit-text" style="white-space:pre-wrap">${esc(sel.text)}</div>
+          <div class="sec">언급한 개념</div>${sel.concepts.length ? `<div class="chips">${sel.concepts.map((c) => (c.element.startsWith('object:') ? `<button class="chip b" data-act="srobj" data-obj="${esc(c.element.slice(7))}">${esc(c.label)}</button>` : `<span class="chip">${esc(c.label)} · ${esc(KIND_LABEL[c.kind] || c.kind)}</span>`)).join('')}</div>` : '<div class="muted" style="font-size:12px">없음</div>'}`;
+    } else if (node && node.module === 'document') {
+      const items = near('항목'), ids = new Set(items.map((n) => n.id));
+      // what a document names is what its items name
+      const named = [...new Map(dg.edges.filter((e) => e.label === '언급' && (ids.has(e.source) || ids.has(e.target))).map((e) => byId[ids.has(e.source) ? e.target : e.source]).filter(Boolean).map((n) => [n.id, n])).values()];
+      body = `<div class="label">항목 ${items.length}</div>${chips(items)}<div class="label" style="margin-top:12px">언급한 개념 ${named.length}</div>${chips(named)}`;
+    } else if (node) {
+      const named = near('언급'), items = named.filter((n) => n.module === 'section'), docs = named.filter((n) => n.module === 'document');
+      const el = node.module === 'ontology' && node.table && node.table.includes(':') ? elementWord(node.table) : null;
+      const open = el && el.obj ? `<button class="btn sm" data-act="srobj" data-obj="${esc(el.obj)}" style="margin-top:8px">Entity 열기</button>` : '';
+      body = `${el ? `<div class="odrow"><span>${esc(el.kind)}</span><b>${esc(el.label)}</b></div>${el.text ? `<div class="muted" style="font-size:12.5px;margin:4px 0 8px">${esc(el.text)}</div>` : ''}${open}` : ''}
+        <div class="label" style="margin-top:12px">언급한 항목 ${items.length}</div>${chips(items)}
+        ${docs.length ? `<div class="label" style="margin-top:12px">언급한 문서 ${docs.length}</div>${chips(docs)}` : ''}
+        ${near('함께 언급').length ? `<div class="label" style="margin-top:12px">함께 언급된 개념 ${near('함께 언급').length}</div>${chips(near('함께 언급').slice(0, 20))}` : ''}`;
+    } else {
+      body = `<table class="tight"><tr><th>문서</th><th>항목</th><th>언급</th></tr>${sp.items.filter(inDocScope).map((d) => `<tr><td><b>${esc(d.name)}</b>${d.fixed ? '' : ' <span class="chip sm b">업로드</span>'}</td><td>${d.sections}</td><td>${d.mentions}</td></tr>`).join('')}</table>
+        <div class="hint" style="margin-top:10px">그래프에서 문서, 항목, 개념을 선택하면 내용이 표시됩니다.</div>`;
+    }
+    const head = node ? `${esc(node.label)} <span class="chip sm">${esc(DOC_KIND[node.module] || node.module)}</span>` : '문서 목록';
+    return `<div class="ch">${head}${node ? '<div class="right"><button class="btn sm ghost" data-act="dsecclose">문서 목록</button></div>' : ''}</div><div class="cb scroll" style="max-height:600px">${body}</div>`;
+  }
+
+  async function dgxPick(id) {  // a node pressed in the graph or named in the side: shown there, an item with its text
+    const dg = S.dg;
+    if (!dg || dg.busy) return;
+    const outside = !S.dgx.nodes[id];
+    if (outside) dgxAround(id);  // a node not in the picture moves to its middle
+    S.dgx.sel = id;
+    S.dsec = null;
+    if (outside) render(); else { dgxPaint(); $('#docside').innerHTML = docSide(); }
+    const title = (dg.titles || {})[id];
+    if (!title) return;
+    const parent = (dg.edges.find((e) => e.label === '항목' && e.target === id) || {}).source;
+    const doc = (dg.nodes.find((n) => n.id === parent) || {}).label || '';
+    try {
+      const sec = await api(`space/section?document=${encodeURIComponent(doc)}&section=${encodeURIComponent(title)}`);
+      if (S.dgx.sel !== id) return;
+      S.dsec = { ...sec, id };
+      const side = $('#docside');
+      if (side) side.innerHTML = docSide();
+    } catch (e) { fail(e); }
   }
 
   // ---- the document graph: one document or concept in the middle, what it holds and names around it -----------------
@@ -3970,7 +4032,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     const dg = S.dg, x = S.dgx, near = {};
     const kind = Object.fromEntries(dg.nodes.map((n) => [n.id, n.module]));
     // a document's sections carry what it names: around a document the path is document, section, concept
-    const direct = (e) => kind[seed] === 'document' && e.label !== '절' && (kind[e.source] === 'document' || kind[e.target] === 'document');
+    const direct = (e) => kind[seed] === 'document' && e.label !== '항목' && (kind[e.source] === 'document' || kind[e.target] === 'document');
     dg.edges.forEach((e) => { (near[e.source] = near[e.source] || []).push(e); (near[e.target] = near[e.target] || []).push(e); });
     const keep = new Set([seed]);
     let ring = [seed];
@@ -4002,7 +4064,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
         <label class="chip chipsel">레이아웃: <select data-in="dgxlayout" aria-label="레이아웃">${[['radial', '방사형'], ['layered', '계층']].map(([k, w]) => opt(k, w, x.layout)).join('')}</select></label>
         <span class="erzoom" role="group" aria-label="확대"><button class="iconbtn" data-act="dgxzoom" data-z="-1" aria-label="축소">−</button><button class="btn sm ghost" data-act="dgxzoom" data-z="0" title="화면에 맞춤">${Math.round((x.zoom || 1) * 100)}%</button><button class="iconbtn" data-act="dgxzoom" data-z="1" aria-label="확대">+</button></span></div></div>
       <div class="cb gxcanvas dgxcanvas" id="dgxcanvas">${n ? gxSvg(x, DGX_LOOK) : '<div class="empty">문서가 없습니다.</div>'}</div>
-      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">노드 ${n} · 관계 ${x.edges.length} · 선택한 노드의 관계 이름 표시 · 두 번 눌러 중심 이동 · 휠로 확대</span></div></div>`;
+      <div class="cb gxfoot"><span class="gxlegs">${legend}</span><span class="muted">표시 ${n}개 · 관계 ${x.edges.length} · 두 번 눌러 가운데로 이동 · 휠로 확대</span></div></div>`;
   }
 
   function dgxPaint() {
@@ -4037,9 +4099,6 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
         if (card && S.tab === 'docs') card.innerHTML = readCard();
       }
       if (S.dg && !S.dg.busy) {
-        const titles = S.dg.titles || {};
-        const doc = Object.fromEntries((S.dg.nodes || []).filter((n) => n.module === 'document').map((n) => [n.id, n.label]));
-        const parent = Object.fromEntries((S.dg.edges || []).filter((e) => e.label === '절').map((e) => [e.target, e.source]));
         if (S.dgx.of !== S.dg) {  // a graph read anew: its first document in the middle
           S.dgx.of = S.dg;
           const first = (S.dg.nodes || []).find((n) => n.module === 'document');
@@ -4047,14 +4106,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
           if (S.tab === 'docs') render();
           return;
         }
-        mountGx($('#dgxcanvas'), S.dgx, DGX_LOOK, { open: (id) => { dgxAround(id); render(); }, zoom: dgxZoom,
-          pick: async (id) => {
-            S.dgx.sel = id;
-            dgxPaint();
-            if (titles[id]) {
-              try { S.dsec = await api(`space/section?document=${encodeURIComponent(doc[parent[id]] || '')}&section=${encodeURIComponent(titles[id])}`); $('#docside').innerHTML = docSide(); } catch (e) { fail(e); }
-            }
-          } });
+        mountGx($('#dgxcanvas'), S.dgx, DGX_LOOK, { open: (id) => { dgxAround(id); render(); }, zoom: dgxZoom, pick: (id) => dgxPick(id) });
         dgxPaint();
       }
       if (!S.dq) { S.dq = 0; try { S.dq = await api('space/queries'); if (S.tab === 'docs') render(); } catch (e) { S.dq = null; } }
@@ -4090,7 +4142,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
       <table class="tight"><tr><th>질문</th><th>정답 문서</th><th>순위</th></tr>${c.results.map((x) => `<tr><td>${esc(x.text)}</td><td>${esc(x.document)}</td><td>${x.rank ? `${x.rank}위` : '<span class="chip sm bad">미포함</span>'}</td></tr>`).join('')}</table></div></div>` : '';
     return `${head}${failed}<div class="grid" style="grid-template-columns:minmax(280px,1fr) minmax(0,2fr);align-items:start">${embed}
       <div class="card"><div class="ch">벡터 저장소<div class="right muted" style="font-size:12px;font-weight:600">컬렉션 ${esc(sp.collection)}</div></div><div class="cb"><table class="tight"><tr><th>이름</th><th>종류</th><th>청크</th><th>검색</th><th>보관</th><th>상태</th>${sp.can_connect ? '<th></th>' : ''}</tr>${rows}</table>${add}</div></div></div>
-      <div class="card" style="margin-top:14px"><div class="ch">문서별 임베딩<div class="right"><a class="btn sm" href="#catalog">임베딩 설정</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>경로</th><th>절</th><th>색인 청크</th><th>상태</th></tr>${docs}</table>
+      <div class="card" style="margin-top:14px"><div class="ch">문서별 임베딩<div class="right"><a class="btn sm" href="#catalog">임베딩 설정</a></div></div><div class="cb"><table class="tight"><tr><th>문서</th><th>경로</th><th>항목</th><th>색인 청크</th><th>상태</th></tr>${docs}</table>
       <div class="hint xp" style="margin-top:8px">데이터 카탈로그의 임베딩 열에서 파일 또는 폴더 단위로 임베딩을 켜고 끕니다. 임베딩을 끈 문서는 검색에서 제외되고 문서 온톨로지에는 남습니다.</div></div></div>${check}`;
   }
 
@@ -4360,8 +4412,8 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
   // what each REST tool does, in the page's words; the OpenAPI document keeps the English an agent framework reads
   const TOOL_WORD = { describe_space: '공간에 있는 문서, 벡터 저장소, 임베딩 모델, 그래프 저장소, 추론기, 온톨로지 규모', describe_ontology: '이 토큰이 사용할 수 있는 Entity, 속성, 관계, 등록 질의, 결정, 액션',
     answer_question: '질문 하나에 결정, 데이터, 문서로 답하고 적용 규칙, 원천 값, 조항을 함께 반환', agent_context: '질문과 관련된 정의와 규칙을 Agent 프롬프트에 넣을 글로 반환',
-    find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 절, 언급한 개념',
-    search_documents: '문서를 의미로 검색하고 문서, 절, 관련 온톨로지 요소를 반환', run_query: '등록 질의 또는 질의 IR을 저장소에서 실행', translate_query: '질의를 저장소 언어의 쿼리문으로 변환',
+    find_definitions: '질문과 관련된 Entity, 규칙, 질의, 액션', describe_object: 'Entity 하나의 속성, 관계, 결정, 액션', list_documents: '공간의 문서와 항목, 언급한 개념',
+    search_documents: '문서를 의미로 검색하고 문서, 항목, 관련 온톨로지 요소를 반환', run_query: '등록 질의 또는 질의 IR을 저장소에서 실행', translate_query: '질의를 저장소 언어의 쿼리문으로 변환',
     run_sparql: 'SPARQL SELECT를 어느 저장소에서든 실행', run_cypher: 'Cypher 조회를 어느 저장소에서든 실행', decide: 'Entity 하나에 결정표를 실행해 결과, 적용 규칙, 근거를 반환',
     list_functions: '이 토큰이 실행할 수 있는 함수와 입출력, 버전, 담당', run_function: '등록 함수를 Entity 하나 또는 입력값으로 실행',
     request_action: '액션을 요청합니다. 검사를 통과하면 승인 대기로 접수하고, 자동 승인 기준 안이면 바로 실행', list_proposals: '이 토큰이 요청한 처리와 상태', get_record: 'Entity 하나의 값을 행 범위와 가림 안에서 반환' };
@@ -5017,7 +5069,7 @@ ${controls}${body}`;
       if (step.sync && step.sync.at) lines += `<div class="muted" style="margin-top:4px;font-size:12px">마지막 다시 읽기 ${esc(step.sync.at.replace('T', ' '))} · ${step.sync.error ? '실패' : (step.sync.changed ? '변경분 반영' : '변경 없음')}</div>`;
     } else if (id === 'index') {
       ok = step.stores.every((x) => !x.error);
-      lines = `문서 ${step.documents} · 절 ${step.sections} · 청크 ${step.chunks}<div style="margin-top:4px">${esc(step.embedder.name)} → ${esc(step.stores.map((x) => x.name).join(', '))}</div>${step.questions ? `<div style="margin-top:4px">검색 적중 <b>${step.found} / ${step.questions}</b></div>` : ''}`;
+      lines = `문서 ${step.documents} · 항목 ${step.sections} · 청크 ${step.chunks}<div style="margin-top:4px">${esc(step.embedder.name)} → ${esc(step.stores.map((x) => x.name).join(', '))}</div>${step.questions ? `<div style="margin-top:4px">검색 적중 <b>${step.found} / ${step.questions}</b></div>` : ''}`;
     } else if (id === 'query') {
       const c = step.conformance;
       ok = !c || (!c.error && c.agree === c.queries);
@@ -7671,6 +7723,7 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast(`정답 변경을 대기 중인 변경에 기록했습니다. ${fileAsk()}`); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    dgxpick: (t) => dgxPick(t.dataset.id),
     navopen: () => { $('#app').classList.add('navopen'); },  // a narrow window: the sidebar opens over the page
     navclose: () => { $('#app').classList.remove('navopen'); },
     libuse: (t) => libraryUse(t.dataset.id),
