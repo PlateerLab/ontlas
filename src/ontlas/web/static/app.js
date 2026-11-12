@@ -2077,7 +2077,7 @@
     };
     const seg = areasOn() ? `<div class="mdgroupby"><div class="seg" role="group" aria-label="묶는 기준"><button class="${byArea() ? 'on' : ''}" data-act="mdgroup" data-k="area">Object별</button><button class="${byArea() ? '' : 'on'}" data-act="mdgroup" data-k="module">모듈별</button></div>${byArea() ? '<button class="btn sm" data-act="mdareanew">+ Object</button>' : ''}</div>`
       : '<div class="mdgroupby"><span class="muted">모듈별</span><button class="btn sm" data-act="mdareanew">+ Object</button></div>';
-    return seg + (Object.entries(groups).sort((a, b) => (a[0] === AREA_NONE) - (b[0] === AREA_NONE)).map(([k, list]) => `<div class="mdgrp">${head(k, list)}${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">Entity가 없습니다.</div>');
+    return seg + (Object.entries(groups).sort((a, b) => (a[0] === AREA_NONE) - (b[0] === AREA_NONE)).map(([k, list]) => `<div class="mdgrp">${head(k, list)}${list.map((o) => `<button class="mdnode${o.name === md.sel ? ' on' : ''}" data-act="mdpick" data-name="${esc(o.name)}"><span>${esc(o.label)}</span>${o.parent ? `<span class="muted mdpar" title="상위 Entity 의 속성과 관계를 물려받습니다">상위 ${esc(mgLabel(o.parent))}</span>` : ''}${o.concept ? '<span class="chip sm">개념</span>' : ''}${marks(o)}</button>`).join('')}</div>`).join('') || '<div class="empty">Entity가 없습니다.</div>');
   }
 
   function modelUses(o) {

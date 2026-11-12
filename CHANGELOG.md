@@ -8,6 +8,8 @@
   named. Each one listed is pressed to move there, and an Entity opens from its concept.
 - A document's parts are 항목, not 절, across the page and the document ontology (`Section`, its relation and query).
   The catalog tab is 데이터 카탈로그 again, and the graphs' notes say 레코드 · 문서 · 개념, not 노드.
+- The workspace tree shows each Entity's parent (상위 당사자, 상위 약정), and its [+ Object] button keeps its words on
+  one line, moving below the switch when the column is narrow.
 
 ## 0.19.2
 

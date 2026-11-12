@@ -1181,7 +1181,10 @@ tr:hover .libacts, tr:focus-within .libacts, tr.sel .libacts { opacity:1; }
 .qdetail i { font-style:normal; font-weight:700; color:#98a2b3; margin-right:6px; }
 .stalebar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
 /* the workspace tree by Object: each Object's head opens it; the switch between Object and module grouping */
-.mdgroupby { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 10px 6px; font-size:12px; }
+.mdgroupby { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 8px; padding:0 10px 6px; font-size:12px; }
+.mdgroupby .btn, .mdgroupby .seg button { white-space:nowrap; }  /* a narrow column moves the button below; its words stay on one line */
+.mdgroupby .btn { flex:none; }
+.mdnode .mdpar { font-size:11px; white-space:nowrap; }
 .mdgroupby .seg button { padding:3px 8px; font-size:11.5px; }
 button.mdgh.mdarea { display:flex; align-items:center; gap:6px; width:100%; border:0; background:none; font:inherit; text-align:left; cursor:pointer; border-radius:6px; }
 button.mdgh.mdarea:hover, button.mdgh.mdarea.on { background:var(--blue-soft); }
