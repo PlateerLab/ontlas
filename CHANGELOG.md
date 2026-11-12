@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.21.0
+
+- **What a platform asks first.** `/v1/terms` says what each term stands for (`meaning`, a code value as
+  `주문 · 주문 상태 = DELIVERED`), the labels to search by (`expansions`) and the definitions a sentence names by their
+  own label (`defined`). `/v1/object` says where an Entity sits (`area`, `parent`, `children`).
+- **Values against the rules.** A rule card of any layer may bound a property (`check: {property: OrderItem.unit_price,
+  min: 0}`). `POST /v1/validate {object, values}` checks values against the definition (type, allowed codes, required)
+  and those cards, with no source: each violation has its kind and, for a rule, the card, layer, source, module and
+  version. The OpenAPI document has 23 paths.
+- **Which definitions answered.** Every `/v1` answer carries `definition`: the modules with their versions and one
+  `version` that changes when any of them does.
+- **The same over MCP.** `decide` takes `values` (and answers `needs_values` with what is missing), and `find_rules`,
+  `read_terms`, `validate_values` and `run_questions` are tools.
+- **On the page.** 외부 연동 › 연동 API 실행 tries 판정, 값 검증, 용어 해석 and 개념 조회, each with its request body, cURL
+  and XGEN HTTP node settings. The node's template is `{{ input | tojson }}`, the value the step before it sends.
+
 ## 0.20.1
 
 - **Elapsed days from a time with an offset.** An elapsed-days input given as a time with an offset

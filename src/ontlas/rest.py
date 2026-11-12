@@ -5,6 +5,7 @@ The page's /api is for a browser session. This one has no session: a token, a ro
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import threading
 from typing import Any, Callable
@@ -19,6 +20,7 @@ ANY = {"type": "string", "description": "The name of a registered query, or an I
 STRING = {"type": "string"}
 OBJECT = {"type": "object"}
 INT = {"type": "integer"}
+BOOLEAN = {"type": "boolean"}
 VALUES = {"type": "object", "description": "Decide on these values instead of reading a record: each by the decision's "
           "input name or by the target property it reads (a date for an elapsed-days input). null is a value (none yet); "
           "an input not given at all is reported back as missing (422), never taken as null."}
@@ -62,8 +64,14 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      "rule's statement, conditions, result, exceptions, source, owner, status and what carries it out.",
      {"text": STRING, "layer": {"type": "string", "enum": ["", "axiom", "custom", "standard"]}, "decision": STRING, "k": INT},
      [], lambda t, b: t.find_rules(b.get("text", ""), b.get("layer", ""), b.get("decision", ""), b.get("k", 0))),
-    ("/v1/terms", "POST", "read_terms", "The glossary: with text, the terms it uses in their preferred words and the terms "
-     "each must not be confused with; without, every term.",
+    ("/v1/validate", "POST", "validate_values", "Whether values for one object keep to its definition and to the rule "
+     "cards that bound its properties: each value's type and allowed codes, and the min or max a card sets. No source "
+     "needed. complete: every required property must be given too.",
+     {"object": STRING, "values": OBJECT, "complete": BOOLEAN}, ["object", "values"],
+     lambda t, b: t.validate_values(b["object"], b["values"], bool(b.get("complete")))),
+    ("/v1/terms", "POST", "read_terms", "The glossary: with text, the terms it uses in their preferred words, what each "
+     "stands for, the labels to search by and the terms each must not be confused with, and the definitions the text "
+     "names by their own label; without, every term.",
      {"text": STRING}, [], lambda t, b: t.read_terms(b.get("text", ""))),
     ("/v1/questions", "POST", "run_questions", "Run the validation questions in two stages, on each question's own values "
      "(no source needed) and on the records they name, and say where a wrong answer comes from: the rule or the mapping.",
@@ -116,6 +124,14 @@ def openapi(version: str, server: str = "") -> dict:
     if server:
         spec["servers"] = [{"url": server}]
     return spec
+
+
+def definition(tools: StudioTools) -> dict:
+    """The definitions an answer came from: each module with its version, and one `version` for all of them that
+    changes whenever one of them does."""
+    modules = [{k: m[k] for k in ("module", "version", "kind")} for m in tools.list_modules()]
+    said = " ".join(f"{m['module']}@{m['version']}" for m in sorted(modules, key=lambda m: m["module"]))
+    return {"version": hashlib.sha1(said.encode("utf-8")).hexdigest()[:12], "modules": modules}
 
 
 def tool_list() -> list[dict]:
@@ -208,7 +224,10 @@ class Rest:
             if missing:
                 return 400, {"error": "missing: " + ", ".join(missing)}
             try:
-                return 200, handler(tools, body)
+                out = handler(tools, body)
+                if isinstance(out, dict):  # which definitions answered, for a platform to keep with what it did
+                    out = {**out, "definition": definition(tools)}
+                return 200, out
             except PermissionError as e:
                 return 403, {"error": str(e)}
             except NoSource as e:  # the space holds its definition only: a caller tells this from a bad request

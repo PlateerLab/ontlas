@@ -961,6 +961,7 @@ class SpaceMixin:
     def integrations(self) -> dict:
         """What a platform needs to call this library: whether /v1 is on, its tools, the library it names, and each
         decision with the values it takes (the form the page tries a call with)."""
+        from ontlas.check import _find_prop, all_props
         from ontlas.rest import tool_list
 
         o = self.studio.onto
@@ -972,13 +973,27 @@ class SpaceMixin:
                       "target_label": (o.objects[d.target].label or d.target) if d.target in o.objects else "",
                       "example": example.get(d.name), **decision_fields(o, d)} for d in o.decisions.values()]
         lib = next((x for x in getattr(self, "libraries", []) if x.get("id") == getattr(self, "library_id", "")), None)
+        objects = []  # each Entity with the values a caller may give it: what the page asks for to look one up or validate
+        for t in o.objects.values():
+            names, at, seen = [], t.name, set()  # as defined: the Entity's own properties, then what its parents give it
+            while at in o.objects and at not in seen:
+                seen.add(at)
+                names += [n for n in o.objects[at].properties if n not in names]
+                at = o.objects[at].parent
+            props = [_find_prop(o, t.name, n) for n in names if n in all_props(o, t.name)]
+            objects.append({"name": t.name, "label": t.label or t.name,
+                            "properties": [{"name": x.name, "label": x.label or x.name, "type": x.type,
+                                            "values": list(x.values or []), "required": x.required}
+                                           for x in props if not x.internal and not x.expr]})
         return {"rest": bool(getattr(self.data, "rest", False)), "openapi": "/v1/openapi.json", "tools": tool_list(),
-                "gateway": self.data.allow_connect, "decisions": decisions, "source": bool(self.studio.source),
+                "gateway": self.data.allow_connect, "decisions": decisions, "objects": objects,
+                "source": bool(self.studio.source),
                 "library": {"id": lib.get("id"), "label": lib.get("label")} if lib else None,
                 "libraries": len(getattr(self, "libraries", []) or [])}
 
     # what the page may call the way a platform calls /v1: reading and deciding, nothing that writes
-    TRY = ("/v1/decide", "/v1/rules", "/v1/terms", "/v1/questions", "/v1/context", "/v1/find", "/v1/object")
+    TRY = ("/v1/decide", "/v1/validate", "/v1/rules", "/v1/terms", "/v1/questions", "/v1/context", "/v1/find",
+           "/v1/object")
 
     def rest_try(self, path: str, body: dict | None) -> dict:
         """One /v1 call on this visitor's library, through the same code a platform's call takes, so what the page shows

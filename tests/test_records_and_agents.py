@@ -187,7 +187,7 @@ def test_each_token_is_one_agent_in_the_audit(tmp_path):
     code, out = rest.answer("POST", "/v1/actions", {"action": "setPrice", "key": "G1", "params": {"to": 1100}}, north)
     assert code == 200 and out["requested_by"]["id"] == "북쪽 Agent"
     code, out = rest.answer("GET", "/v1/proposals", {}, south)
-    assert code == 200 and out == {"proposals": []}
+    assert code == 200 and out["proposals"] == []
     code, out = rest.answer("POST", "/v1/record", {"object": "Goods", "key": "G1"}, south)
     assert code == 403
     assert {e.actor for e in st.actions.audit} == {"북쪽 Agent"}

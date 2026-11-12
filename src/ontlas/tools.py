@@ -90,7 +90,18 @@ class StudioTools:
         if name not in d["objects"]:
             raise KeyError(f"unknown object '{name}'")
         onto = self.studio.onto
+        t = onto.objects[name]
+
+        def named(n: str, label: str) -> dict:
+            return {"name": n, "label": label or n}
+
+        area = onto.areas.get(t.area) if t.area else None
+        parent = onto.objects.get(t.parent) if t.parent else None
         return {"object": d["objects"][name],
+                # where it sits: Object (area) > Entity > its sub-Entities
+                "area": named(t.area, area.label) if area is not None else None,
+                "parent": named(t.parent, parent.label) if parent is not None else None,
+                "children": [named(k, x.label) for k, x in onto.objects.items() if x.parent == name and k in d["objects"]],
                 "links": [{"name": k, "from": lk.source, "to": lk.target, "label": lk.label, "inverse": lk.inverse}
                           for k, lk in onto.links.items() if name in (lk.source, lk.target)],
                 "decisions": [k for k in d["decisions"] if onto.decisions[k].target == name],
@@ -201,14 +212,95 @@ class StudioTools:
                            "runs": [{"ref": r.get("ref"), "label": r.get("label")} for r in c["implements"]]} for c in cards]}
 
     def read_terms(self, text: str = "") -> dict:
-        """With text: the terms it uses in their preferred words, what each stands for and the terms it must not be
-        taken for. Without: the whole lexicon."""
-        from ontlas.lexicon import entry, read
+        """With text: the terms it uses in their preferred words, what each stands for (a code value as 주문 · 주문 상태 =
+        배송완료), the labels to search by for each (`expansions`), the terms it must not be taken for, and the
+        definitions it names by their own label though no term covers them (`defined`). Without: the whole lexicon."""
+        from ontlas.lexicon import _pattern, entry, labels, read
 
         terms = list(self.studio.composition.terms) if self.studio.composition is not None else []
-        if text:
-            return read(str(text), terms)
-        return {"terms": [entry(t) for t in terms]}
+        if not text:
+            return {"terms": [entry(t) for t in terms]}
+        text = str(text)
+        out = read(text, terms)
+        onto = self.studio.onto
+        by_id = {e["id"]: e for e in (entry(t) for t in terms)}
+        for m in out["matched"]:
+            m.update(_meaning(onto, m["concept"]))
+        out["expansions"] = [{"term": m["term"], "labels": [x for x, kind in labels(by_id[m["id"]]) if kind != "hidden"]}
+                             for i, m in enumerate(out["matched"]) if m["id"] not in [x["id"] for x in out["matched"][:i]]]
+        taken = [False] * len(text)  # the stretches a term already read
+        for m in out["matched"]:
+            for hit in _pattern(m["label"]).finditer(text):
+                taken[hit.start():hit.end()] = [True] * (hit.end() - hit.start())
+        d = self.describe()
+        out["defined"] = _defined(onto, text, taken, set(d["objects"]), set(d["decisions"]))
+        return out
+
+    def validate_values(self, type_name: str, values: dict, complete: bool = False) -> dict:
+        """Whether values for one object keep to its definition and to the rule cards that bound its properties: each
+        value's type and allowed codes, and the min or max a card sets (an amount is never negative). The values are the
+        caller's, so no source is needed. `complete`: every required property must be given as well."""
+        from ontlas.check import _find_prop, all_props
+        from ontlas.semantic import LAYER_LABEL
+        from ontlas.values import accepts
+
+        if type_name not in self.describe()["objects"]:
+            raise KeyError(f"unknown object '{type_name}'")
+        if not isinstance(values, dict):
+            raise ValueError("values is an object of property names to values")
+        onto, comp = self.studio.onto, self.studio.composition
+        t = onto.objects[type_name]
+        chain, at = [], type_name  # a bound on a parent's property holds for its sub-Entities
+        while at and at in onto.objects and at not in chain:
+            chain.append(at)
+            at = onto.objects[at].parent
+        versions = {m.name: m.version for m in comp.modules} if comp is not None else {}
+        cards = [c for c in (comp.cards if comp is not None else []) if (c.get("check") or {}).get("property")]
+        known = set(all_props(onto, type_name))
+        violations: list[dict] = []
+        applied: list[str] = []
+
+        def bad(name: str, label: str, value: Any, kind: str, said: str, **more) -> None:
+            violations.append({"property": name, "label": label, "value": value, "kind": kind, "said": said, **more})
+
+        for name, value in values.items():
+            p = _find_prop(onto, type_name, name) if name in known else None
+            if p is None or p.internal:
+                bad(name, name, value, "unknown", f"정의에 없는 속성 · {t.label or type_name} {name}")
+                continue
+            label = p.label or name
+            if value is None:
+                if p.required:
+                    bad(name, label, value, "missing", f"필수 값 누락 · {label}")
+                continue
+            if p.type == "enum" and isinstance(value, str) and p.values and value not in p.values:
+                bad(name, label, value, "code", f"허용되지 않은 코드 · {label} '{value}'",
+                    allowed=[{"code": v, "label": (p.labels or {}).get(v, v)} for v in p.values])
+                continue
+            if not accepts(p.type, value, p.values):
+                bad(name, label, value, "type", f"형식 불일치 · {label} '{value}'", expected=p.type)
+                continue
+            for c in cards:
+                chk = c["check"]
+                if chk["property"] not in {f"{x}.{name}" for x in chain} or isinstance(value, bool) or \
+                        not isinstance(value, (int, float)):
+                    continue
+                applied.append(c["id"])
+                low, high = chk.get("min"), chk.get("max")
+                if (low is not None and value < low) or (high is not None and value > high):
+                    bound = " · ".join(x for x in (f"{low} 이상" if low is not None else "", f"{high} 이하" if high is not None else "") if x)
+                    bad(name, label, value, "rule", f"규칙 위반 · {label} {value}, {bound} · {c['statement']}",
+                        rule=c["id"], layer=c["layer"], layer_label=LAYER_LABEL[c["layer"]], statement=c["statement"],
+                        source=c.get("source", ""), module=c.get("module", ""), version=versions.get(c.get("module", ""), ""),
+                        min=low, max=high)
+        if complete:
+            for name in sorted(known - set(values)):
+                p = _find_prop(onto, type_name, name)
+                if p is not None and p.required and not p.internal and not p.expr:
+                    bad(name, p.label or name, None, "missing", f"필수 값 누락 · {p.label or name}")
+        self._note("validated", type_name, "", "", valid=not violations, violations=len(violations), rules=applied)
+        return {"object": type_name, "label": t.label or type_name, "valid": not violations,
+                "checked": [n for n in values if n in known], "rules": sorted(set(applied)), "violations": violations}
 
     def run_questions(self, stage: str = "") -> dict:
         """The validation questions, measured in two stages: `values` on the values each question gives (no source
@@ -304,6 +396,44 @@ def _plain(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_plain(v) for v in value]
     return normalize(value)
+
+
+def _meaning(onto, element: str) -> dict:
+    """What a definition is, to read: its kind and label and where it sits (a code value: 주문 · 주문 상태 = 배송완료)."""
+    from ontlas.lexicon import concept_of
+
+    c = concept_of(onto, element) if element else None
+    if c is None:
+        return {"concept_kind": "", "concept_label": "", "meaning": ""}
+    sep = " = " if c["kind"] == "value" else " · "
+    return {"concept_kind": c["kind_label"], "concept_label": c["label"],
+            "meaning": f"{c['of']}{sep}{c['label']}" if c["of"] else c["label"]}
+
+
+def _defined(onto, text: str, taken: list[bool], objects: set[str], decisions: set[str]) -> list[dict]:
+    """The definitions a text names by their own label (an Object, an Entity, a property, a code value, a decision),
+    outside the stretches already read, longest label first; a label several definitions share lists each of them."""
+    from ontlas.lexicon import _pattern, concepts, norm
+
+    def visible(element: str) -> bool:
+        kind, _, name = element.partition(":")
+        owner = name.split("=")[0].split(".")[0]
+        return owner in objects if kind in ("object", "property", "value") else owner in decisions if kind == "decision" else True
+
+    by_label: dict[str, list[dict]] = {}
+    for c in concepts(onto):
+        if len(norm(c["label"])) >= 2 and visible(c["concept"]):
+            by_label.setdefault(c["label"], []).append(c)
+    out = []
+    for label in sorted(by_label, key=lambda x: -len(norm(x))):
+        for hit in _pattern(label).finditer(text):
+            if any(taken[hit.start():hit.end()]):
+                continue
+            taken[hit.start():hit.end()] = [True] * (hit.end() - hit.start())
+            if not any(x["label"] == label for x in out):
+                out.append({"label": label, "concepts": [{"concept": c["concept"], **_meaning(onto, c["concept"])}
+                                                         for c in by_label[label]]})
+    return out
 
 
 def _query_arg(query: Any) -> Any:

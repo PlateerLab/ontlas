@@ -876,7 +876,9 @@ out (`type`: decide, compute, transition, restore, order, display, watch). A car
 conditions, result, exceptions, source, owner, `status` (draft, review, approved), `legal_review` (none, pending, done)
 and `implements` (`decision:returnEligibility#in-window`, `function:refundEstimate`, ...). An AXIOM card's
 `check: {parameter: return_window_days, min: 7}` holds on the final values, so a module, an attach or a workspace edit
-that sets the return window to 5 is refused with the card, the value, the bound and who set it. A reason may say a named
+that sets the return window to 5 is refused with the card, the value, the bound and who set it. A card of any layer may
+bound a property instead (`check: {property: OrderItem.unit_price, min: 0}`, a price is never negative), and each value a
+caller gives is checked against it (`/v1/validate`, below). A reason may say a named
 value (`반품기간 {@return_window_days}일 이내입니다`), and it reads the value in force. Each decision answer carries
 `path`: per layer, how many rules, which fired or that none applied, and the module and version the answer came from
 (`AXIOM 통과 › Custom vip-window 적용 › Standard 선행 규칙 적용`). The example's `commerce-law` module (법령 기준, 예시) shows all
@@ -1174,6 +1176,29 @@ can ask for it. With `key` instead, the record is read from the source. Either w
 `/v1/questions` runs the validation questions in two stages (below). Served with `--library`, `/v1/libraries` lists the
 libraries and any call takes `library` to ask one of them; the first answers otherwise.
 
+### What a platform asks first
+
+Three calls answer before any source is connected, and a workflow can make each from one HTTP step:
+
+| Call | It gives |
+|---|---|
+| `POST /v1/terms {text}` | The sentence in the glossary's preferred words. Each term with what it stands for (`meaning`: `주문 · 주문 상태 = DELIVERED` for a code value), the labels to search by (`expansions`, for widening a document search), the terms it must not be taken for, and the definitions the sentence names by their own label though no term covers them (`defined`) |
+| `POST /v1/object {name}` | One Entity with where it sits (`area`, `parent`, `children`), its properties, relations, decisions and actions. `/v1/find` gives the definitions a question is about |
+| `POST /v1/validate {object, values}` | Whether the values keep to the definition and to the rule cards that bound a property: `valid`, and per violation its `kind` (`rule`, `type`, `code`, `missing`, `unknown`), the card, its layer, source, module and version. `complete: true` asks for every required property too |
+
+```bash
+curl localhost:7710/v1/validate -H "Authorization: Bearer $ONTLAS_API_TOKEN" -H "Content-Type: application/json" \
+     -d '{"object": "OrderItem", "values": {"unit_price": -100, "quantity": 2}}'
+# {"valid": false, "violations": [{"property": "unit_price", "kind": "rule", "rule": "unit-price-not-negative",
+#   "layer": "standard", "min": 0, "module": "commerce", "version": "1.0.0", ...}], "definition": {...}}
+```
+
+Every answer carries `definition`: the modules and versions it came from and one `version` for all of them, which changes
+when any of them does. A platform keeps it with what it did, so a result that changed can be traced to the definitions
+that changed. What a platform does when no answer comes is its own to set, and differs by call: a search goes on without
+the wider labels of `/v1/terms`, but a decision that got no answer is held for a person rather than guessed, the same way
+`/v1/decide` answers `422` rather than read a missing value as null.
+
 ### Validating in two stages
 
 A decision question can state its values as well as, or instead of, a record:
@@ -1188,8 +1213,9 @@ On its values it is measured with no source (stage 1, 값 기준); on its key, o
 기준). Where they disagree the question says what to look at: `rule` when it is wrong on its own values too, `mapping`
 when only the record is wrong (with the inputs the record reads otherwise, `differs`), `data` when the record could not
 be read. The page's 검증 screen shows both stages and the cause; a question written on the page takes its values in typed
-fields. 외부 연동 tries `/v1/decide` on the page, through the same code a platform's call takes, shows the request body,
-the cURL and the XGEN HTTP node settings, and keeps a call as a validation question.
+fields. 외부 연동 tries `/v1/decide`, `/v1/validate`, `/v1/terms` and `/v1/object` on the page, through the same code a
+platform's call takes, shows the request body, the cURL and the XGEN HTTP node settings, and keeps a decision call as a
+validation question.
 
 The other direction: a platform that manages database connections can lend one. `kind: gateway` sends SQL as text to its query
 service and reads the rows back, so the password never reaches the space and the platform's read-only rule and table allow-list
@@ -1207,7 +1233,9 @@ ontlas mcp examples/commerce/studio.yaml --role customer_agent --principal custo
 ```
 
 Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
-`decide`, `request_action`, `list_proposals`, `get_record`. Every call runs inside the role's row filters; `request_action`
+`decide`, `find_rules`, `read_terms`, `validate_values`, `run_questions`, `request_action`, `list_proposals`, `get_record`.
+`decide` takes `values` as `/v1/decide` does, and answers `needs_values` with what is missing instead of guessing.
+Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. `list_proposals` gives an agent with a role its own
 requests. `--agent NAME` is what the audit trail calls it, and `--journal FILE` keeps its requests across restarts. Works with
 the MCP Python SDK 1.x and 2.x.
