@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.19.2
+
+- **A narrow window has a drawer.** Below 1100px the sidebar no longer becomes a strip above the page: a menu button in
+  the top bar opens it over the page, picking a screen closes it, and the page takes the whole width. On a phone the top
+  bar names the screen it is on, and card heads and their controls wrap instead of running past the window.
+- 레코드 탐색's [찾기] with nothing typed says it shows every record.
+
 ## 0.19.1
 
 - The brand stands at the left of the sidebar head again, at the larger size.

@@ -48,6 +48,7 @@
     chevron: '<path d="M6 9l6 6 6-6"/>',
     inbox: '<path d="M4 13l2.5-8h11L20 13v6H4z"/><path d="M4 13h5l1 2.5h4l1-2.5h5"/>',
     fold: '<path d="M14.5 6.5L9 12l5.5 5.5"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>',
     upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>',
@@ -616,7 +617,7 @@
     const word = tabWord(cur);
     const trail = S.tab === 'home' ? '' : `${sec && sec[0] !== 'home' ? `<i>›</i><span>${esc(sec[1])}</span>` : ''}${g && g[0] !== 'home' && g[1] !== word ? `<i>›</i><span>${esc(g[1])}</span>` : ''}<i>›</i><b>${esc(word)}</b>`;
     const waits = S.home.box ? S.home.box.counts.assigned : 0;
-    $('#top').innerHTML = `<nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${trail}</nav>
+    $('#top').innerHTML = `<button class="iconbtn menubtn" data-act="navopen" aria-label="메뉴 열기" aria-expanded="${$('#app').classList.contains('navopen')}">${ui('menu')}</button><nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${trail}</nav>
       <div class="grow"></div>
       ${REPO_TABS.has(S.tab) ? `<button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>` : ''}
       <button class="pill quiet tfind hide-sm" data-act="palette">${ui('search')}<span>검색 또는 질문</span><kbd>Ctrl K</kbd></button>
@@ -7670,6 +7671,8 @@ ${controls}${body}`;
       try { S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: r.id, expect } }); toast(`정답 변경을 대기 중인 변경에 기록했습니다. ${fileAsk()}`); render(); } catch (e) { fail(e); }
     },
     mdpick: (t) => modelPick(t.dataset.name),
+    navopen: () => { $('#app').classList.add('navopen'); },  // a narrow window: the sidebar opens over the page
+    navclose: () => { $('#app').classList.remove('navopen'); },
     libuse: (t) => libraryUse(t.dataset.id),
     semlayer: (t) => { S.sem.layer = S.sem.layer === t.dataset.k ? 'all' : t.dataset.k; render(); },
     sempick: (t) => { S.sem.sel = t.dataset.ref; render(); },
@@ -7850,7 +7853,7 @@ ${controls}${body}`;
       try { r.fn[t.dataset.name] = await api('function/run', { name: t.dataset.name, key: r.key, params: {} }); } catch (e) { r.fn[t.dataset.name] = { ok: false, error: e.message }; }
       render();
     },
-    rlgo: () => { S.rl.res = null; render(); },
+    rlgo: () => { S.rl.res = null; render(); if (!S.rl.q.trim()) toast('찾을 말이 없어 전체 레코드를 표시합니다. 번호나 이름을 입력하면 좁혀 찾습니다.'); },
     rlpick: (t) => { S.rl.type = t.dataset.type; S.rl.res = null; render(); },
     ibtab: (t) => { S.home.tab = t.dataset.k; render(); },
     ibretry: () => { S.home.err = false; render(); },  // render asks for the list again
@@ -8987,6 +8990,7 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && ev.target.id === 'chgtext') { const b = $('[data-act=chgcomment]'); if (b) ACT.chgcomment(b); }
     });
     window.addEventListener('hashchange', () => {
+      $('#app').classList.remove('navopen');  // a screen picked from the drawer closes it
       readHash();
       $('#main').scrollTop = 0;
       S.cat.file = null; S.pa = null;

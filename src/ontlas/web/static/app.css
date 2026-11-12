@@ -1356,3 +1356,39 @@ tr.unasked td { color:#98a2b3; }
 .dgxcanvas .gxe.on text { display:block; }
 .card > .ch .right select[data-in=dgxseed] { width:auto; max-width:220px; }
 .chipsel select { width:auto; }
+
+/* a narrow window: the sidebar is a drawer from the menu button, over the page; the page takes the whole width */
+.menubtn, .navback { display:none; }
+@media (max-width: 1100px) {
+  .app, .app.slim { grid-template-columns:minmax(0, 1fr); grid-template-rows:auto minmax(0, 1fr); }
+  .top { grid-column:1; grid-row:1; flex-wrap:nowrap; gap:8px; padding:8px 12px; }
+  .top .crumbs { flex:1 1 auto; flex-basis:auto; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .main { grid-column:1; grid-row:2; }
+  .menubtn { display:inline-flex; flex:none; }
+  .side { position:fixed; top:0; bottom:0; left:0; width:min(300px, 86vw); z-index:40; grid-row:auto; overflow:hidden;
+    transform:translateX(-104%); transition:transform .2s ease; border-right:1px solid var(--line); border-bottom:0; }
+  .app.navopen .side { transform:none; box-shadow:0 12px 40px rgba(16,24,40,.28); }
+  .app.navopen .navback { display:block; position:fixed; inset:0; z-index:39; background:rgba(15,23,42,.38); }
+  .sbrand { min-height:56px; padding:13px 12px 13px 20px; }
+  .snav { flex-direction:column; flex:1; overflow:auto; padding:10px; gap:0; }
+  .nsec { display:block; }
+  .nsub { display:flex; }
+  .snav .nav { margin:0 0 2px; flex:none; }
+  .snav button.nav { width:100%; }
+  .sspace { flex-direction:column; align-items:stretch; gap:3px; margin:10px 10px 0; padding:10px 12px; }
+  .sspace select { width:100%; margin-top:6px; }
+  .sspace .chip { margin-top:4px; }
+  .smat, .sfoot { display:flex; }
+  .sidetoggle { display:none; }
+}
+@media (max-width: 640px) {
+  .top .btn.sm { padding:4px 8px; }
+  .top .crumbs > :not(:last-child) { display:none; }
+  .top a.tinbox > span:not(.nbadge) { display:none; }  /* 할 일 is its icon and count */
+  .top .pill[data-act=repopick] { max-width:120px; }  /* a phone names the screen it is on; the drawer shows where it sits */
+  .card > .ch { flex-wrap:wrap; row-gap:6px; }
+  .card > .ch .right { flex-wrap:wrap; margin-left:0; }
+  .omgrid .ch .right { width:100%; }
+  .omgrid .ch .omq { width:100%; flex:1 1 160px; }
+  .head .right { width:100%; }
+}
