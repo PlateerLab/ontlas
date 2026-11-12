@@ -25,6 +25,15 @@ def parse_datetime(v: Any) -> dt.datetime | None:
     return dt.datetime.fromisoformat(s)
 
 
+def days_since(start: Any, end: dt.datetime) -> int:
+    """Whole days from start to end. A time with an offset (2026-10-20T10:00:00+09:00, a timestamptz column) and one
+    without (the server's now) are compared in local time, which is what a time without an offset means here."""
+    a = parse_datetime(start)
+    if (a.tzinfo is None) != (end.tzinfo is None):
+        a, end = (x.astimezone().replace(tzinfo=None) if x.tzinfo else x for x in (a, end))
+    return (end - a).days
+
+
 def accepts(type_: str, value: Any, values: list[str] | None = None) -> bool:
     if value is None:
         return True
