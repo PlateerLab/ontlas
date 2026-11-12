@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.20.1
+
+- **Elapsed days from a time with an offset.** An elapsed-days input given as a time with an offset
+  (`2026-10-20T10:00:00+09:00`, as an order API sends it) or read from a `timestamptz` column was answered `400`
+  (`can't subtract offset-naive and offset-aware datetimes`) when counted to the server's time, which has none. The two
+  are now compared in local time, in a decision on values and on a record alike. Found by calling `/v1/decide` from an
+  XGEN workflow's HTTP request node.
+
 ## 0.20.0
 
 - **Decide with no source.** `POST /v1/decide` takes `values` instead of `key`: each by the decision's input name, the

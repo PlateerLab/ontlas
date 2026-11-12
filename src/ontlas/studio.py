@@ -18,7 +18,7 @@ from ontlas.model import Ontology
 from ontlas.modules import Composition, Impact, Module, ModuleError, compose, removal_impact
 from ontlas.projection import ChangeSet, Projection, _Reload, apply_changes, load, project
 from ontlas.roles import AccessDenied, apply_role, mask_rows, mask_style, mask_value, masking
-from ontlas.values import from_source, normalize, parse_datetime
+from ontlas.values import days_since, from_source, normalize
 
 
 @dataclass
@@ -326,7 +326,7 @@ class Studio:
             elif own and prop in values:
                 raw, said = values[prop], prop
                 if "days_since" in src and raw is not None:
-                    raw = ((at or self.now()) - parse_datetime(raw)).days
+                    raw = days_since(raw, at or self.now())
             elif "param" in src and (src["param"] in params or src["param"] in values):
                 raw = params.get(src["param"], values.get(src["param"]))
                 said = src["param"]
@@ -386,7 +386,7 @@ class Studio:
                 obj_row = self.fetch(here, obj_key) if keys else None
             raw = obj_row.get(prop) if obj_row else None
             if "days_since" in src:
-                value = None if raw is None else ((at or self.now()) - parse_datetime(raw)).days
+                value = None if raw is None else days_since(raw, at or self.now())
             else:
                 value = raw
             values[inp.name] = value

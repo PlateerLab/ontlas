@@ -56,6 +56,23 @@ def test_a_property_value_stands_for_the_input_that_reads_it(studio):
     assert by["days_since_delivery"].property == "delivered_at" and by["days_since_delivery"].object_type == "OrderItem"
 
 
+def test_a_time_with_an_offset_counts_days_like_one_without(studio):
+    from datetime import timedelta
+
+    from ontlas.values import days_since
+
+    sent = "2026-10-20T10:00:00+09:00"  # how an order API sends it
+    local = datetime.fromisoformat(sent).astimezone().replace(tzinfo=None)
+    assert days_since(sent, local + timedelta(days=10, hours=1)) == 10  # the server's now has no offset
+    assert days_since(local, datetime.fromisoformat("2026-10-30T12:00:00+09:00").astimezone()) == 10
+    vals = {k: v for k, v in VIP_IN_WINDOW.items() if k != "days_since_delivery"}
+    body = {"decision": "returnEligibility", "values": {**vals, "delivered_at": sent}}
+    code, out = _call(_rest(studio), "/v1/decide", {**body, "at": "2026-10-30T12:00:00+09:00"})
+    assert code == 200 and out["inputs"]["days_since_delivery"] == 10
+    code, out = _call(_rest(studio), "/v1/decide", body)  # counted to the server's now
+    assert code == 200 and out["inputs"]["days_since_delivery"] >= 0
+
+
 def test_an_input_not_given_is_asked_for_and_null_is_a_value(studio):
     with pytest.raises(MissingValues) as e:
         studio.decide("returnEligibility", values={"days_since_delivery": 3})
