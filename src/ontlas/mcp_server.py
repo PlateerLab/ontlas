@@ -166,8 +166,9 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
     def decide(decision: str, key: str = "", params: dict | None = None, values: dict | None = None, at: str = "") -> dict:
         """Evaluate a decision table for one object's record (key), or on values you give (values, no source needed):
         the outputs, the verdict, the rule that matched, the path through AXIOM, Custom and Standard and the evidence.
-        Values are named by the decision's inputs or the properties they read; null is a value. When some are not
-        given the answer is needs_values with what is missing: ask for those, do not guess them."""
+        Values are named by the decision's inputs or the properties they read; null is a value. When one the outcome
+        turns on is not given the answer is needs_values with what is missing: ask for those, do not guess them. Ones
+        the outcome does not turn on are not asked for (not_needed)."""
         from ontlas.decide.table import MissingValues
         from ontlas.values import parse_datetime
 

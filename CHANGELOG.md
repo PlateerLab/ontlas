@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.22.0
+
+- **A decision on values asks only for what its outcome turns on.** `/v1/decide` with `values` (and `decide` over MCP,
+  `Studio.decide(values=...)`) asked for every input that was not given, also where the given ones had already settled
+  the outcome: with no delivery yet, a return is refused whatever the item's status, its category and the customer's
+  grade are, yet an agent was sent back to ask its user all three. Now a rule one given value rules out is out, a rule
+  whose every condition is given and met stands, and under `first` nothing after it is read: when that settles the
+  outcome the answer is the verdict, with the inputs it did not need in `not_needed` (each with its label). When it
+  does not, `missing` lists only the inputs the outcome still turns on, not every one left out. A value that is not
+  given is still never read as null, and a code that is not allowed is still refused. The other hit policies read
+  every rule that is not ruled out. A rule that reads an input nobody gave is not counted among the rules that held
+  too (`also`). The page's 「연동 API 실행」 names the values a verdict did not use.
+
 ## 0.21.2
 
 - **A long question still finds the decision that judges it.** `/v1/find` (and `find_definitions`, `/v1/context`) cut

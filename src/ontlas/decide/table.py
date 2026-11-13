@@ -22,9 +22,10 @@ class DecisionError(ValueError):
 
 
 class MissingValues(DecisionError):
-    """Decided on given values, some of its inputs were not given, or were given a value the property they read does
-    not allow. Not given is not known: a value it was given as null (no delivery date yet) decides, one it was not
-    given at all is asked for rather than read as null. A code that is not one of the allowed ones (배송완료 for
+    """Decided on given values, an input the outcome turns on was not given, or one was given a value the property it
+    reads does not allow. Not given is not known: a value it was given as null (no delivery date yet) decides, one it
+    was not given at all is asked for rather than read as null, unless the given ones settle the outcome whatever it
+    is (`open_inputs`). A code that is not one of the allowed ones (배송완료 for
     배송완료(27)) is asked for again with the allowed ones, never decided on: it would match no rule and answer wrongly."""
 
     def __init__(self, decision: str, missing: list[dict], invalid: list[dict] | None = None):
@@ -73,6 +74,7 @@ class DecisionResult:
     parameters: dict[str, Any] = field(default_factory=dict)  # the named values the matched rules read
     conflicts: list[dict] = field(default_factory=list)  # {rules, sources, says}: nobody has picked between them yet
     also: list[str] = field(default_factory=list)  # rules that held too, which the hit policy did not use
+    not_needed: list[dict] = field(default_factory=list)  # {input, label}: not given, and the outcome did not turn on it
     path: dict = field(default_factory=dict)  # layer by layer, AXIOM first: what fired, and where it came from (semantic)
 
     def __post_init__(self):
@@ -129,6 +131,34 @@ def holding(table: DecisionTable, inputs: dict[str, Any]) -> list[DecisionRule]:
     named = table.named
     return [r for r in table.rules
             if all(evaluate(parse_test(cell, named), inputs.get(name)) for name, cell in r.when.items())]
+
+
+def open_inputs(table: DecisionTable, inputs: dict[str, Any], unknown: set[str]) -> list[str]:
+    """The inputs not given that the outcome still turns on, in the order the rules read them: none when what was
+    given settles it. A rule one given value rules out is out whatever the others are, and a rule whose every
+    condition is given and met stands. Under `first` nothing after the first rule that stands is read; under the
+    other hit policies every rule not ruled out is. A rule a person's pick sets aside when another holds waits on
+    that other rule as well."""
+    named = table.named
+    # per rule: ruled out by a given value, and the inputs it reads that were not given
+    states = [(any(not evaluate(parse_test(cell, named), inputs.get(n)) for n, cell in r.when.items() if n not in unknown),
+               [n for n in r.when if n in unknown]) for r in table.rules]
+    by_id = {r.id: s for r, s in zip(table.rules, states) if r.id}
+    need: list[str] = []
+    for r, (out, reads) in zip(table.rules, states):
+        if out:
+            continue
+        need += reads
+        if table.hit_policy != "first" or reads:
+            continue
+        over = [by_id[k] for k in r.overruled_by if k in by_id] if r.layer != "axiom" else []
+        if any(not o and not rd for o, rd in over):
+            continue  # set aside by a pick: the next rule that stands decides
+        waits = [n for o, rd in over if not o for n in rd]
+        if not waits:
+            break
+        need += waits
+    return list(dict.fromkeys(need))
 
 
 def evaluate_table(table: DecisionTable, inputs: dict[str, Any]) -> tuple[Any, list[str], list[str]]:

@@ -159,7 +159,8 @@ class StudioTools:
     def decide(self, decision: str, key: str = "", params: dict | None = None, at: datetime | None = None,
                values: dict | None = None) -> dict:
         """On the record `key` reads from the source, or on the `values` a caller gives (no source needed): an input
-        given as null is a value (no delivery date yet), one not given at all comes back in MissingValues."""
+        given as null is a value (no delivery date yet), one not given at all comes back in MissingValues when the
+        outcome turns on it, and in `not_needed` when the given ones settle the outcome without it."""
         from ontlas.decide.words import verdict
 
         if decision not in self.studio.onto.decisions:
