@@ -1166,8 +1166,9 @@ curl localhost:7710/v1/decide -H "Authorization: Bearer $ONTLAS_API_TOKEN" -H "C
 
 Each value goes by the decision's input name, or by the property of the target the input reads (a date stands for an
 elapsed-days input, counted to `at` or now), or by its parameter. `null` is a value (no delivery date yet); an input not
-given at all is never read as null: the answer is `422` with `missing`, each input with its label and type, so an agent
-can ask for it. With `key` instead, the record is read from the source. Either way the answer has `verdict`,
+given at all is never read as null: the answer is `422` with `missing`, each input with its label, type and the codes
+its property allows, so an agent can ask for it. A value that is not one of the allowed codes is not decided on either:
+it comes back in `invalid` with the codes to choose from. With `key` instead, the record is read from the source. Either way the answer has `verdict`,
 `decided_by` (the one rule that gave it, with its layer, module and version), `path` (AXIOM › Custom › Standard),
 `evidence`, the `modules` and versions that decided and a `decision_id` the audit trail keeps.
 

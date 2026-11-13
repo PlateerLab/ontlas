@@ -82,6 +82,19 @@ def test_an_input_not_given_is_asked_for_and_null_is_a_value(studio):
     assert res.matched[0] == "not-delivered"  # null given: no delivery date, which the rule decides on
 
 
+def test_a_code_the_property_does_not_allow_is_asked_for_again_not_decided_on(studio):
+    """A near miss of a code (a label for its code) matches no rule, so deciding on it would answer wrongly."""
+    with pytest.raises(MissingValues) as e:
+        studio.decide("returnEligibility", values={**VIP_IN_WINDOW, "item_status": "정상"})
+    assert e.value.missing == [] and [(m["input"], m["value"]) for m in e.value.invalid] == [("item_status", "정상")]
+    assert "NORMAL" in e.value.invalid[0]["values"]
+    code, out = _call(_rest(studio), "/v1/decide", {"decision": "returnEligibility", "values": {"item_status": "정상"}})
+    assert code == 422 and out["invalid"][0]["input"] == "item_status"
+    asked = {m["input"]: m for m in out["missing"]}
+    assert "days_since_delivery" in asked and asked["days_since_delivery"]["values"] == []
+    assert studio.decide("returnEligibility", values={**VIP_IN_WINDOW, "item_status": None}).matched  # null is still a value
+
+
 def test_a_value_of_the_wrong_type_is_refused(studio):
     from ontlas.decide.table import DecisionError
 

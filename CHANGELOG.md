@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.1
+
+- **A code the property does not allow is asked for again.** Deciding on values, an input that reads an enumerated
+  property and was given something other than one of its codes (`배송완료` or `27` for `배송완료(27)`) was decided on
+  anyway: it matched no rule and gave a wrong answer with `200`. It is now answered `422` with `invalid` (the input, the
+  value given, the allowed codes), and each `missing` entry carries its allowed codes (`values`), so a caller that fills
+  the values itself sends a code as written. MCP's `decide` answers the same, and the page's 422 shows both lists. Found
+  with an agent calling `/v1/decide` as a tool.
+
 ## 0.21.0
 
 - **What a platform asks first.** `/v1/terms` says what each term stands for (`meaning`, a code value as

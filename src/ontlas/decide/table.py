@@ -22,12 +22,19 @@ class DecisionError(ValueError):
 
 
 class MissingValues(DecisionError):
-    """Decided on given values, some of its inputs were not given. Not given is not known: a value it was given as
-    null (no delivery date yet) decides, one it was not given at all is asked for rather than read as null."""
+    """Decided on given values, some of its inputs were not given, or were given a value the property they read does
+    not allow. Not given is not known: a value it was given as null (no delivery date yet) decides, one it was not
+    given at all is asked for rather than read as null. A code that is not one of the allowed ones (배송완료 for
+    배송완료(27)) is asked for again with the allowed ones, never decided on: it would match no rule and answer wrongly."""
 
-    def __init__(self, decision: str, missing: list[dict]):
-        self.decision, self.missing = decision, missing
-        super().__init__(f"decision '{decision}' needs " + ", ".join(m["input"] for m in missing))
+    def __init__(self, decision: str, missing: list[dict], invalid: list[dict] | None = None):
+        self.decision, self.missing, self.invalid = decision, missing, list(invalid or [])
+        said = []
+        if self.invalid:
+            said.append("was given a value that is not allowed for " + ", ".join(m["input"] for m in self.invalid))
+        if missing:  # last: the page reads the names after `needs`
+            said.append("needs " + ", ".join(m["input"] for m in missing))
+        super().__init__(f"decision '{decision}' " + "; ".join(said))
 
 
 class Matched(list):

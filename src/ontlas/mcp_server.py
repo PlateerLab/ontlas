@@ -174,7 +174,7 @@ def build_server(studio: Studio, *, role: str | None = None, principal: dict | N
         try:
             return tools.decide(decision, key, params, parse_datetime(at) if at else None, values)
         except MissingValues as e:
-            return {"needs_values": True, "decision": e.decision, "missing": e.missing}
+            return {"needs_values": True, "decision": e.decision, "missing": e.missing, "invalid": e.invalid}
 
     @server.tool()
     def find_rules(text: str = "", layer: str = "", decision: str = "", k: int = 0) -> dict:
