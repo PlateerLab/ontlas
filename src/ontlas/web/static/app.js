@@ -4533,6 +4533,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
       <div class="sec">판정 경로</div><div class="chips" style="align-items:center">${layers || '<span class="muted">-</span>'}</div>
       ${src ? `<div class="fnote" style="margin-top:6px">판정을 정한 규칙 <span class="mono">${esc(src.rule)}</span> · ${esc(src.layer_label)} · ${esc(src.module_label)} ${esc(src.version)}${src.cite ? ` · ${esc(src.cite)}` : ''}</div>` : ''}
       <div class="sec">근거 값</div><table class="tight">${(b.evidence || []).map((e) => `<tr><td class="mono">${esc(e.input)}</td><td>${show(e.value)}</td><td class="muted" style="font-size:12px">${e.source === 'given' ? '요청 값' : esc(e.source || '')}</td></tr>`).join('')}</table>
+      ${(b.not_needed || []).length ? `<div class="fnote" style="margin-top:6px">판정에 쓰지 않은 값 · ${esc(b.not_needed.map((m) => m.label).join(', '))} (요청에 없음)</div>` : ''}
       ${b.decision_id ? `<div class="fnote mono" style="margin-top:6px">decision_id ${esc(b.decision_id)}</div>` : ''}${ver}${keep}`;
   }
 

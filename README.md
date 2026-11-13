@@ -1166,8 +1166,10 @@ curl localhost:7710/v1/decide -H "Authorization: Bearer $ONTLAS_API_TOKEN" -H "C
 
 Each value goes by the decision's input name, or by the property of the target the input reads (a date stands for an
 elapsed-days input, counted to `at` or now), or by its parameter. `null` is a value (no delivery date yet); an input not
-given at all is never read as null: the answer is `422` with `missing`, each input with its label, type and the codes
-its property allows, so an agent can ask for it. A value that is not one of the allowed codes is not decided on either:
+given at all is never read as null: when the outcome turns on it the answer is `422` with `missing`, each input with
+its label, type and the codes its property allows, so an agent can ask for it. Only those are asked for: where the given
+values settle the outcome whatever the rest are (no delivery yet refuses a return, whatever the item's status), the
+answer is the verdict and `not_needed` names the inputs it did without. A value that is not one of the allowed codes is not decided on either:
 it comes back in `invalid` with the codes to choose from. With `key` instead, the record is read from the source. Either way the answer has `verdict`,
 `decided_by` (the one rule that gave it, with its layer, module and version), `path` (AXIOM › Custom › Standard),
 `evidence`, the `modules` and versions that decided and a `decision_id` the audit trail keeps.
@@ -1235,7 +1237,7 @@ ontlas mcp examples/commerce/studio.yaml --role customer_agent --principal custo
 
 Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
 `decide`, `find_rules`, `read_terms`, `validate_values`, `run_questions`, `request_action`, `list_proposals`, `get_record`.
-`decide` takes `values` as `/v1/decide` does, and answers `needs_values` with what is missing instead of guessing.
+`decide` takes `values` as `/v1/decide` does, and answers `needs_values` with what the outcome still turns on instead of guessing.
 Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. `list_proposals` gives an agent with a role its own
 requests. `--agent NAME` is what the audit trail calls it, and `--journal FILE` keeps its requests across restarts. Works with

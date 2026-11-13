@@ -82,6 +82,33 @@ def test_an_input_not_given_is_asked_for_and_null_is_a_value(studio):
     assert res.matched[0] == "not-delivered"  # null given: no delivery date, which the rule decides on
 
 
+def test_what_was_given_settles_it_without_the_rest(studio):
+    """No delivery yet decides a return whatever the item's status, category and grade are: they are not asked for."""
+    res = studio.decide("returnEligibility", values={"days_since_delivery": None})
+    assert res.matched == ["not-delivered"] and res.also == ["expired"]  # a rule that reads a value nobody gave is not in play
+    assert [m["input"] for m in res.not_needed] == ["item_status", "category_returnable", "customer_grade"]
+    assert all(m["label"] for m in res.not_needed) and [e.input for e in res.evidence] == ["days_since_delivery"]
+    # thirty days is past every window, VIP or not: the grade is not asked for
+    late = studio.decide("returnEligibility", values={"days_since_delivery": 30, "item_status": "NORMAL", "category_returnable": True})
+    assert late.matched == ["expired"] and [m["input"] for m in late.not_needed] == ["customer_grade"]
+    assert studio.decide("returnEligibility", values=VIP_IN_WINDOW).not_needed == []
+    code, out = _call(_rest(studio), "/v1/decide", {"decision": "returnEligibility", "values": {"days_since_delivery": None}})
+    assert code == 200 and out["verdict"] and out["decided_by"]["rule"] == "not-delivered"
+    assert [m["input"] for m in out["not_needed"]] == ["item_status", "category_returnable", "customer_grade"]
+
+
+def test_only_what_the_outcome_turns_on_is_asked_for(studio):
+    with pytest.raises(MissingValues) as e:  # ten days, BASIC: the VIP rule is out, the status and the category still decide
+        studio.decide("returnEligibility", values={"days_since_delivery": 10, "customer_grade": "BASIC"})
+    assert [m["input"] for m in e.value.missing] == ["item_status", "category_returnable"]
+    with pytest.raises(MissingValues) as e:  # four days: VIP or not picks the rule, so the grade is asked for
+        studio.decide("returnEligibility", values={"days_since_delivery": 4, "item_status": "NORMAL", "category_returnable": True})
+    assert [m["input"] for m in e.value.missing] == ["customer_grade"]
+    with pytest.raises(MissingValues) as e:  # a code that is not allowed is refused even where the rest settles it
+        studio.decide("returnEligibility", values={"days_since_delivery": None, "item_status": "정상"})
+    assert e.value.missing == [] and [m["input"] for m in e.value.invalid] == ["item_status"]
+
+
 def test_a_code_the_property_does_not_allow_is_asked_for_again_not_decided_on(studio):
     """A near miss of a code (a label for its code) matches no rule, so deciding on it would answer wrongly."""
     with pytest.raises(MissingValues) as e:

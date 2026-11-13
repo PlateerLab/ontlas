@@ -23,7 +23,8 @@ INT = {"type": "integer"}
 BOOLEAN = {"type": "boolean"}
 VALUES = {"type": "object", "description": "Decide on these values instead of reading a record: each by the decision's "
           "input name or by the target property it reads (a date for an elapsed-days input). null is a value (none yet); "
-          "an input not given at all is reported back as missing (422), never taken as null."}
+          "an input not given at all is never taken as null: when the outcome turns on it, it is reported back as "
+          "missing (422); when the given ones settle the outcome without it, the answer names it in not_needed."}
 LIBRARY = {"type": "string", "description": "Which library answers: an id or a label from /v1/libraries. Default: the first."}
 STAGE = {"type": "string", "enum": ["", "values", "record"],
          "description": "values: measured on each question's own values, no source needed. record: on the record its key reads."}
@@ -116,7 +117,7 @@ def openapi(version: str, server: str = "") -> dict:
         elif path != LIBRARIES[0]:
             op["parameters"] = [{"name": "library", "in": "query", "required": False, "schema": LIBRARY}]
         if name == "decide":
-            op["responses"]["422"] = {"description": "Decided on values, some inputs were not given: `missing` lists them"}
+            op["responses"]["422"] = {"description": "Decided on values, an input the outcome turns on was not given: `missing` lists those"}
         paths[path] = {method.lower(): op}
     spec: dict[str, Any] = {"openapi": "3.1.0", "info": {"title": "Ontlas", "version": version,
                                                         "description": "Documents, vectors, graphs and ontologies behind one API."},

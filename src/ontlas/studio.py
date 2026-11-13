@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from typing import Any, Callable
 
@@ -12,7 +12,7 @@ from ontlas.check import all_props, check, column_of, find_prop, interface_view
 from ontlas.compile.base import Compiled, CompileError, compiler_for
 from ontlas.conformance import ConformanceReport
 from ontlas.conformance import run as run_conformance
-from ontlas.decide.table import DecisionError, DecisionResult, Evidence, evaluate_table, holding
+from ontlas.decide.table import DecisionError, DecisionResult, Evidence, evaluate_table, holding, open_inputs
 from ontlas.ir import Cmp, Column, Edge, Query, Ref
 from ontlas.model import Ontology
 from ontlas.modules import Composition, Impact, Module, ModuleError, compose, removal_impact
@@ -307,7 +307,9 @@ class Studio:
               ) -> tuple[dict[str, Any], list[Evidence]]:
         """A decision's inputs from values a caller gives instead of a record: each input by its own name, or by the
         property of the target it reads (a date for `days_since`), or by its parameter. With no source connected this
-        is how a workflow decides. An input given none of these ways is missing (MissingValues), never taken as null."""
+        is how a workflow decides. An input given none of these ways is never taken as null: it is missing
+        (MissingValues) when the outcome turns on it, and left out when the given ones settle the outcome without it
+        (no delivery yet decides a return whatever the item's status is)."""
         from ontlas.check import _find_prop
         from ontlas.decide.table import MissingValues
         from ontlas.decide.words import input_label, reads
@@ -352,6 +354,11 @@ class Studio:
             # what it stands on: the caller's value, for the property of the target it would otherwise be read from
             evidence.append(Evidence(inp.name, out[inp.name], table.target if own else "", "", prop if own else said, "given"))
         if missing or invalid:
+            unknown = {m["input"] for m in (*missing, *invalid)}
+            # the ZEN engine names no rules to walk, so there every input is asked for
+            need = unknown if self.use_zen else set(open_inputs(table, out, unknown))
+            missing = [m for m in missing if m["input"] in need]
+        if missing or invalid:
             raise MissingValues(name, missing, invalid)
         return out, evidence
 
@@ -366,8 +373,10 @@ class Studio:
             raise AccessDenied(f"role {role} may not run decision '{name}'")
         params = dict(params or {})
         evidence: list[Evidence] = []
+        spare: list[str] = []  # inputs not given that the outcome does not turn on (see `given`)
         if values is not None:
             inputs, evidence = self.given(name, values, params, at)
+            spare = [n for n in table.inputs if n not in inputs]
         stated = bool(inputs) or values is not None  # decided on what it was given: no record is read
         values = dict(inputs or {})
         row = None
@@ -411,9 +420,11 @@ class Studio:
 
             outputs, matched, notes, engine = evaluate_zen(table, values), [], [], "zen"
         else:
-            outputs, matched, notes = evaluate_table(table, values)
+            # a rule that reads an input nobody gave is not in play: read as null it could seem to hold
+            live = replace(table, rules=[r for r in table.rules if not set(spare) & set(r.when)]) if spare else table
+            outputs, matched, notes = evaluate_table(live, values)
             engine = "native"
-        held = [r.id for r in holding(table, values)] if engine == "native" else []
+        held = [r.id for r in holding(live, values)] if engine == "native" else []
         also = [i for i in held if i not in matched]
         path = {}
         if engine == "native":
@@ -429,8 +440,11 @@ class Studio:
                 if style:
                     ev.value = mask_value(ev.value, style)
                     shown[ev.input] = ev.value
+        from ontlas.decide.words import input_label
+
         return DecisionResult(name, outputs, matched, shown, evidence, notes, engine, table.target,
-                              "" if key is None else str(key), also=also, path=path)
+                              "" if key is None else str(key), also=also, path=path,
+                              not_needed=[{"input": n, "label": input_label(self.onto, table, n)} for n in spare])
 
     def project(self, *, into: list[str] | None = None, source: str | None = None) -> dict[str, Any]:
         """Re-read the source and bring each graph backend up to date with a change set."""
