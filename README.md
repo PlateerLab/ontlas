@@ -1184,7 +1184,7 @@ Three calls answer before any source is connected, and a workflow can make each 
 | Call | It gives |
 |---|---|
 | `POST /v1/terms {text}` | The sentence in the glossary's preferred words. Each term with what it stands for (`meaning`: `주문 · 주문 상태 = DELIVERED` for a code value), the labels to search by (`expansions`, for widening a document search), the terms it must not be taken for, and the definitions the sentence names by their own label though no term covers them (`defined`) |
-| `POST /v1/object {name}` | One Entity with where it sits (`area`, `parent`, `children`), its properties, relations, decisions and actions. `/v1/find` gives the definitions a question is about |
+| `POST /v1/object {name}` | One Entity with where it sits (`area`, `parent`, `children`), its properties, relations, decisions and actions. `/v1/find` gives the definitions a question is about, each kind (Entity, rule, query, action) taking its turn so the rule that decides a long question is among them |
 | `POST /v1/validate {object, values}` | Whether the values keep to the definition and to the rule cards that bound a property: `valid`, and per violation its `kind` (`rule`, `type`, `code`, `missing`, `unknown`), the card, its layer, source, module and version. `complete: true` asks for every required property too |
 
 ```bash
