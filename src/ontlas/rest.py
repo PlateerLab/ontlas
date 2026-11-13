@@ -233,7 +233,8 @@ class Rest:
             except NoSource as e:  # the space holds its definition only: a caller tells this from a bad request
                 return 409, {"error": str(e), "no_source": True}
             except MissingValues as e:  # asked on values, some were not given: what to give, not a guess on null
-                return 422, {"error": str(e), "needs_values": True, "decision": e.decision, "missing": e.missing}
+                return 422, {"error": str(e), "needs_values": True, "decision": e.decision, "missing": e.missing,
+                             "invalid": e.invalid}
             except (ValueError, LookupError, KeyError, TypeError, RuntimeError) as e:
                 return 400, {"error": f"{type(e).__name__}: {e}"}
         return 404, {"error": "no such path"}

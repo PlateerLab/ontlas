@@ -38,7 +38,8 @@ KIND_ORDER = list(MODULE_KIND)
 CHECK_LABEL = {"role": "역할 권한", "parameters": "Parameter", "target": "대상 확인", "state": "상태 전이",
                "states": "허용 상태", "call": "외부 호출"}
 _NO_COLUMN = re.compile(r"no such column: (\S+)|column \W?([\w.]+)\W? does not exist|Unknown column '([^']+)'", re.I)
-_NEEDS = re.compile(r"MissingValues: decision '[^']+' needs (.+)$")
+_NEEDS = re.compile(r"MissingValues: decision '[^']+' (?:.*; )?needs (.+)$")
+_NOT_ALLOWED = re.compile(r"MissingValues: decision '[^']+' was given a value that is not allowed for ([^;]+)")
 _NO_TABLE = re.compile(r"no such table: (\S+)|relation \W?([\w.]+)\W? does not exist|Table '([^']+)' doesn't exist", re.I)
 
 
@@ -48,6 +49,9 @@ def said(e: Exception | str) -> str:
     if isinstance(e, NoSource):
         return NO_SOURCE
     text = str(e) if isinstance(e, str) else f"{type(e).__name__}: {e}"
+    m = _NOT_ALLOWED.search(text)
+    if m:
+        return f"판정 값({m.group(1)})이 허용된 코드가 아니어서 판정하지 못했습니다. 허용 코드 중 하나로 바꿔 주세요."
     m = _NEEDS.search(text)
     if m:
         return f"판정에 필요한 값({m.group(1)})이 없어 판정하지 못했습니다. 판정 값에 이 항목을 추가해 주세요."

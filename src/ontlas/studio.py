@@ -308,8 +308,9 @@ class Studio:
         """A decision's inputs from values a caller gives instead of a record: each input by its own name, or by the
         property of the target it reads (a date for `days_since`), or by its parameter. With no source connected this
         is how a workflow decides. An input given none of these ways is missing (MissingValues), never taken as null."""
+        from ontlas.check import _find_prop
         from ontlas.decide.table import MissingValues
-        from ontlas.decide.words import input_label
+        from ontlas.decide.words import input_label, reads
         from ontlas.values import coerce
 
         table = self.onto.decisions[name]
@@ -317,10 +318,16 @@ class Studio:
         out: dict[str, Any] = {}
         evidence: list[Evidence] = []
         missing: list[dict] = []
+        invalid: list[dict] = []
         for inp in table.inputs.values():
             src = inp.source
             prop = src.get("property") or src.get("days_since") or ""
             own = table.target and prop and not src.get("path")  # a property of the target itself, not one a link reaches
+            allowed: list[str] = []  # the codes the property it reads allows, on the target or where its path ends
+            if "property" in src:
+                here, read = reads(self.onto, table, inp.name)
+                p = _find_prop(self.onto, here, read) if here and read else None
+                allowed = [str(v) for v in (p.values if p is not None else None) or []]
             if inp.name in values:
                 raw, said = values[inp.name], inp.name
             elif own and prop in values:
@@ -332,16 +339,20 @@ class Studio:
                 said = src["param"]
             else:
                 missing.append({"input": inp.name, "label": input_label(self.onto, table, inp.name), "type": inp.type,
-                                "property": prop if own else "", "param": src.get("param", "")})
+                                "property": prop if own else "", "param": src.get("param", ""), "values": allowed})
                 continue
             try:
                 out[inp.name] = coerce(raw, inp.type)
             except (TypeError, ValueError):
                 raise DecisionError(f"{name}.{inp.name}: '{raw}' is not {inp.type}") from None
+            if allowed and out[inp.name] is not None and str(out[inp.name]) not in allowed:
+                invalid.append({"input": inp.name, "label": input_label(self.onto, table, inp.name), "value": out[inp.name],
+                                "values": allowed})
+                continue
             # what it stands on: the caller's value, for the property of the target it would otherwise be read from
             evidence.append(Evidence(inp.name, out[inp.name], table.target if own else "", "", prop if own else said, "given"))
-        if missing:
-            raise MissingValues(name, missing)
+        if missing or invalid:
+            raise MissingValues(name, missing, invalid)
         return out, evidence
 
     def decide(self, name: str, key: Any = None, params: dict | None = None, *, role: str | None = None,
@@ -516,7 +527,8 @@ class Studio:
             except NoSource:  # its record is in a source that is not connected: measured once one is
                 stages[stage] = {"measured": False, "passed": None, "unmeasured": "no_source"}
             except MissingValues as e:  # the question gives too few values: the question is what to fix
-                stages[stage] = {"measured": True, "passed": False, "error": str(e), "missing": e.missing}
+                stages[stage] = {"measured": True, "passed": False, "error": str(e), "missing": e.missing,
+                                 "invalid": e.invalid}
                 done[stage] = (None, False, ["no answer"], f"MissingValues: {e}")
             except Exception as e:
                 said = f"{type(e).__name__}: {e}"

@@ -4510,8 +4510,13 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     const b = r.body || {};
     const head = `<div class="tryhead"><span class="chip ${tone}">${r.status} · ${word}</span>${c.api === 'decide' && b.mode ? `<span class="muted">${b.mode === 'values' ? '판정 값 기준' : '레코드 기준'}</span>` : ''}</div>`;
     if (r.status === 422) {
-      return `${head}<div class="hint" style="margin:8px 0">판정에 필요한 값이 빠져 있어 판정하지 않았습니다. 빠진 값은 추정하지 않고 응답의 missing 목록으로 돌려줍니다. Agent는 이 목록으로 사용자에게 되물을 수 있습니다.</div>
-        <table class="tight"><tr><th>빠진 값</th><th>이름</th><th>형식</th></tr>${(b.missing || []).map((m) => `<tr><td><b>${esc(m.label)}</b></td><td class="mono">${esc(m.input)}${m.property && m.property !== m.input ? ` <span class="muted">또는 ${esc(m.property)}</span>` : ''}</td><td>${esc(m.type)}</td></tr>`).join('')}</table>`;
+      const codes = (m) => ((m.values || []).length ? `<div class="fnote">허용 코드 ${esc(m.values.join(', '))}</div>` : '');
+      const missing = (b.missing || []).length ? `<div class="hint" style="margin:8px 0">판정에 필요한 값이 빠져 있어 판정하지 않았습니다. 빠진 값은 추정하지 않고 응답의 missing 목록으로 돌려줍니다. Agent는 이 목록으로 사용자에게 되물을 수 있습니다.</div>
+        <table class="tight"><tr><th>빠진 값</th><th>이름</th><th>형식</th></tr>${b.missing.map((m) => `<tr><td><b>${esc(m.label)}</b></td><td class="mono">${esc(m.input)}${m.property && m.property !== m.input ? ` <span class="muted">또는 ${esc(m.property)}</span>` : ''}</td><td>${esc(m.type)}${codes(m)}</td></tr>`).join('')}</table>` : '';
+      // a code outside the allowed ones would match no rule: it is asked for again, never decided on
+      const invalid = (b.invalid || []).length ? `<div class="hint" style="margin:8px 0">허용 코드가 아닌 값이 있어 판정하지 않았습니다. 응답의 invalid 목록에 보낸 값과 허용 코드를 돌려줍니다.</div>
+        <table class="tight"><tr><th>항목</th><th>보낸 값</th><th>허용 코드</th></tr>${b.invalid.map((m) => `<tr><td><b>${esc(m.label)}</b><div class="muted mono" style="font-size:11.5px">${esc(m.input)}</div></td><td>${show(m.value)}</td><td>${esc((m.values || []).join(', '))}</td></tr>`).join('')}</table>` : '';
+      return `${head}${invalid}${missing}`;
     }
     if (r.status !== 200) return `${head}<div class="hint" style="margin-top:8px">${esc(b.error || '')}</div>`;
     // which definitions answered: a platform keeps this with what it did
