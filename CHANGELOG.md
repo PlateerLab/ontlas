@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.2
+
+- **A long question still finds the decision that judges it.** `/v1/find` (and `find_definitions`, `/v1/context`) cut
+  its hits by score alone. A question in a sentence names many Entities, and they filled the list before the rule that
+  decides it: an agent asked for the decision and got none. The hits are now given with each kind (Entity, rule, query,
+  action) taking its turn, kinds in the order of their best hit. Found with an agent that looked for the decision of
+  "배송 완료 4일 된 VIP 고객의 주문상품, 반품 되나요?".
+
 ## 0.21.1
 
 - **A code the property does not allow is asked for again.** Deciding on values, an input that reads an enumerated

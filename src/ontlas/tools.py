@@ -125,7 +125,7 @@ class StudioTools:
         allowed = {f"object:{n}" for n in d["objects"]} | {f"query:{n}" for n in d["queries"]} | \
             {f"decision:{n}" for n in d["decisions"]} | {f"action:{n}" for n in d["actions"]}
         found = self.knowledge().find(str(text), max(1, min(int(k), 30)) * 3, ("object", "rule", "query", "action"))
-        return {"found": [f for f in found if f["element"] in allowed][:max(1, min(int(k), 30))]}
+        return {"found": _by_turns([f for f in found if f["element"] in allowed])[:max(1, min(int(k), 30))]}
 
     def agent_context(self, text: str, k: int = 8) -> dict:
         """What a question is about, written out for a prompt: an agent gets the words, rules and sources it should go by."""
@@ -396,6 +396,18 @@ def _plain(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_plain(v) for v in value]
     return normalize(value)
+
+
+def _by_turns(found: list[dict]) -> list[dict]:
+    """The hits with each kind taking its turn, kinds in the order of their best hit. A long question names many
+    Entities, and by score alone they fill the list before the rule that decides it is reached."""
+    groups: dict[str, list[dict]] = {}
+    for f in found:
+        groups.setdefault(f["kind"], []).append(f)
+    out = []
+    while any(groups.values()):
+        out += [g.pop(0) for g in groups.values() if g]
+    return out
 
 
 def _meaning(onto, element: str) -> dict:

@@ -39,6 +39,14 @@ def test_terms_say_what_each_word_stands_for_and_what_to_search_by(rest):
     assert "주문 총액" not in named and "배달완료" not in named  # what a term read is not read again
 
 
+def test_a_long_question_still_finds_the_decision_that_judges_it(rest):
+    """A question names many Entities; by score alone they fill the list before the rule that decides it."""
+    _, out = _call(rest, "/v1/find", {"text": "배송 완료 4일 된 VIP 고객의 주문상품, 반품 되나요?"})
+    kinds = [f["kind"] for f in out["found"]]
+    assert "decision:returnEligibility" in [f["element"] for f in out["found"]]
+    assert kinds[0] != kinds[1]  # each kind takes its turn
+
+
 def test_an_object_says_where_it_sits(rest):
     _, out = _call(rest, "/v1/object", {"name": "Order"})
     assert out["area"] == {"name": "Order", "label": "주문"} and out["parent"]["name"] == "Agreement"
