@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.23.0
+
+- **Definitions drafted outside come in as modules.** A team that writes its Objects, Entities, rules and glossary as
+  tables (YAML or JSON) before any of it is a module had to convert them by hand. `ontlas library import-definitions
+  <library> <name> <files...>` (`Library.import_definitions`, `exchange.definitions.from_definitions`) reads them as
+  one draft: Objects become areas, Entities with their properties and enumerations (each code with its name) become
+  object types, a property whose value is another Entity becomes a relation, named values become parameters, and each
+  rule becomes a card in the module of its layer: the domain module, an AXIOM module for the rules marked so and a
+  customer module for those marked Custom. A glossary's other words, pairs not to be confused, words not to use and
+  what a customer is shown are joined to the standard term. A name written with a vocabulary prefix loses it; one with
+  none is aligned to the vocabulary the draft follows. Keys are read in English or in the Korean a sheet uses. The
+  modules are composed before any is written, and the report names what was adjusted (one property name given two
+  types is read as the wider one; a relation named as a property goes by its Entity's name as well; an Entity with
+  nothing that reads as an identifier gets one) and what has no place in a module. `ontlas library delete` takes them
+  out again.
+- **Rule cards for what is not a decision.** A card's `type` may be `duty` (의무), `ban` (금지) or `limit` (제한) beside
+  the seven it had, and a card may say what breaking it costs (`risk`) and how far its source was checked
+  (`verification`: read in the text, held against the text). Both show on the card and in `/v1/rules`.
+- **A value the caller states is asked for by a label.** A decision input that reads no property (`param`) had only its
+  own name, so an agent told that `legal_judgment` was missing asked its user for `legal_judgment`. An input takes a
+  `label`, and `missing` and the page say that.
+
 ## 0.22.0
 
 - **A decision on values asks only for what its outcome turns on.** `/v1/decide` with `values` (and `decide` over MCP,

@@ -97,6 +97,18 @@ def test_what_was_given_settles_it_without_the_rest(studio):
     assert [m["input"] for m in out["not_needed"]] == ["item_status", "category_returnable", "customer_grade"]
 
 
+def test_a_value_the_caller_states_is_asked_for_by_the_label_it_is_given():
+    """An input that reads no property (whether a customer asks for a legal opinion) has only its own name to go by."""
+    from ontlas import Ontology
+    from ontlas.decide.words import input_label
+
+    onto = Ontology.from_dict({"name": "t", "namespace": "https://example.org/t#", "objects": {}, "decisions": {"handoff": {
+        "inputs": {"legal": {"type": "boolean", "param": "legal", "label": "법적 판단 요청"}, "amount": {"type": "integer", "param": "amount"}},
+        "outputs": {"route": "string"}, "rules": [{"when": {"legal": "true"}, "then": {"route": "상담원"}}, {"when": {}, "then": {"route": "Agent"}}]}}})
+    table = onto.decisions["handoff"]
+    assert input_label(onto, table, "legal") == "법적 판단 요청" and input_label(onto, table, "amount") == "amount"
+
+
 def test_only_what_the_outcome_turns_on_is_asked_for(studio):
     with pytest.raises(MissingValues) as e:  # ten days, BASIC: the VIP rule is out, the status and the category still decide
         studio.decide("returnEligibility", values={"days_since_delivery": 10, "customer_grade": "BASIC"})

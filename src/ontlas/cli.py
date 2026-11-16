@@ -426,6 +426,15 @@ def _main(argv: list[str] | None = None) -> int:
     x.add_argument("--kind", default="domain")
     x.add_argument("--label", default="")
     x.add_argument("--requires", action="append", default=[])
+    x = lib.add_parser("import-definitions", help="modules from definitions drafted outside: Objects, Entities, rules, a glossary")
+    x.add_argument("root")
+    x.add_argument("name")
+    x.add_argument("files", nargs="+", help="the draft's YAML or JSON files, read as one draft")
+    x.add_argument("--label", default="")
+    x.add_argument("--version", default="0.1.0")
+    x.add_argument("--namespace", default="")
+    x.add_argument("--vocabulary", default="", help="the IRI names with no prefix are aligned to (https://schema.org/)")
+    x.add_argument("--requires", action="append", default=[])
     x = lib.add_parser("diff")
     x.add_argument("root")
     x.add_argument("name")
@@ -677,6 +686,18 @@ def _main(argv: list[str] | None = None) -> int:
             m, rep = lib.import_owl(Path(a.file).read_text(encoding="utf-8"), a.name, kind=a.kind, label=a.label,
                                     requires=a.requires)
             _out({"created": m.key, "report": rep.to_dict()})
+        elif a.lib_cmd == "import-definitions":
+            import yaml
+
+            docs = [yaml.safe_load(Path(f).read_text(encoding="utf-8")) for f in a.files]
+            ms, rep = lib.import_definitions(docs, a.name, label=a.label, version=a.version, namespace=a.namespace,
+                                             requires=a.requires, vocabulary=a.vocabulary)
+            from collections import Counter
+
+            _out({"created": [m.key for m in ms],
+                  "elements": {m.name: {**Counter(e.split(":")[0] for e in m.elements()), "rule_card": len(m.body.get("rule_cards") or []),
+                                        "term": len(m.terms)} for m in ms},
+                  "report": {"summary": rep.summary(), "adjusted": rep.adjusted, "unsupported": rep.unsupported}})
         elif a.lib_cmd == "diff":
             _out(lib.diff(a.name, a.a, a.b))
         elif a.lib_cmd == "delete":

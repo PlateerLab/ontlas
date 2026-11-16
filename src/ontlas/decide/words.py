@@ -40,6 +40,8 @@ def unit_of(onto: Ontology, table: DecisionTable, name: str) -> str:
 
 def input_label(onto: Ontology, table: DecisionTable, name: str) -> str:
     src = table.inputs[name].source
+    if src.get("label"):  # a value the caller states reads no property to take a name from, so it is given its own
+        return str(src["label"])
     if "count" in src:
         lk = onto.links.get(src["count"][-1]) or onto.link_by_inverse(src["count"][-1])
         return f"{lk.label or name} 수" if lk is not None else name

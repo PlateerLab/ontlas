@@ -3175,11 +3175,11 @@
     const sect = (html) => (html.trim() ? `<div class="cb" style="border-top:1px solid var(--line)">${html}</div>` : '');  // a section with nothing in it is left out
     return `<div class="card odetail"><div class="cb"><div class="chips">${layerChip(c.layer) || '<span class="chip sm">Standard</span>'}<span class="chip sm">${esc(c.type_label || c.type)}</span><span class="chip sm ${CARD_TONE[c.status] || ''}">${esc(c.status_label || c.status)}</span>${c.legal_review && c.legal_review !== 'none' ? `<span class="chip sm">법무 검토 ${esc(c.legal_review_label || c.legal_review)}</span>` : ''}</div>
       <h2><span class="mono" style="font-size:15px;color:var(--ink)">${esc(c.id)}</span></h2><div>${esc(c.statement || '')}</div></div>
-      ${sect(`${row('적용 대상', (c.applies_to_labels || c.applies_to || []).map(esc).join(', '))}${row('조건', list(c.conditions))}${row('결과', esc(c.result || ''))}${row('예외', list(c.exceptions))}${row('기준값', params)}`)}
+      ${sect(`${row('적용 대상', (c.applies_to_labels || c.applies_to || []).map(esc).join(', '))}${row('조건', list(c.conditions))}${row('결과', esc(c.result || ''))}${row('예외', list(c.exceptions))}${row('기준값', params)}${row('위반 시', esc(c.risk || ''))}`)}
       ${sect(`${(c.implements || []).length ? `<div class="label">실행 위치</div><div class="chips" style="margin:4px 0 8px">${c.implements.map(ref).join('')}</div>` : ''}${(c.used_by || []).length ? `<div class="label">사용처</div><div class="chips" style="margin-top:4px">${c.used_by.map(ref).join('')}</div>` : ''}
         ${c.check ? row(c.check.property ? '값 범위' : 'AXIOM 검사', `${esc(c.check.parameter || c.check.property)}${c.check.min !== undefined ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined ? ` ${esc(String(c.check.max))} 이하` : ''}`) : ''}
         ${c.decision ? `<a class="btn sm" href="#mgrules?decision=${encodeURIComponent(c.decision)}" style="margin-top:6px">결정표 ${esc(c.decision_label || c.decision)}에서 열기</a>` : ''}`)}
-      <div class="cb" style="border-top:1px solid var(--line)">${row('근거', esc(c.source || '-'))}${row('소유자 · 버전', `${esc(c.owner || '-')} · ${esc(c.module_label || c.module || '-')} ${esc(c.version || '')}`)}${(c.extended_by || []).length ? row('확장 모듈', c.extended_by.map(esc).join(', ')) : ''}</div></div>`;
+      <div class="cb" style="border-top:1px solid var(--line)">${row('근거', esc(c.source || '-'))}${row('근거 확인', esc(c.verification || ''))}${row('소유자 · 버전', `${esc(c.owner || '-')} · ${esc(c.module_label || c.module || '-')} ${esc(c.version || '')}`)}${(c.extended_by || []).length ? row('확장 모듈', c.extended_by.map(esc).join(', ')) : ''}</div></div>`;
   }
 
   // ---- 용어 사전: what people call each definition, the words that mean the same, the pairs that must not be swapped ----

@@ -149,6 +149,23 @@ class Library:
         return m, report
 
 
+    def import_definitions(self, docs: list[dict], name: str, *, label: str = "", version: str = "0.1.0",
+                           namespace: str = "", requires: list[str] = (), vocabulary: str = "") -> tuple[list[Module], Any]:
+        """Definitions drafted outside (Objects, Entities, rules by layer, named values, a glossary) as this library's
+        modules. They are composed once before any is written, so a draft that does not fit leaves the folder as it was."""
+        from ontlas.exchange.definitions import from_definitions
+        from ontlas.modules import compose
+
+        modules, report = from_definitions(docs, name, label=label, version=version, namespace=namespace,
+                                           requires=list(requires), vocabulary=vocabulary)
+        comp = compose(OverlayLibrary(self, modules).resolve([m.name for m in modules]), namespace=namespace)
+        if comp.issues:
+            raise ModuleError("; ".join(comp.issues))
+        for m in modules:
+            self.save(m)
+        return modules, report
+
+
 class OverlayLibrary(Library):
     """Modules held in memory over a library folder (or over nothing), e.g. a draft that has not been saved. The
     folder is never written: a module saved here is kept in memory, as the newest version of its name."""

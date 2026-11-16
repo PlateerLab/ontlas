@@ -24,11 +24,11 @@ LAYER_TEXT = {
     "standard": "공통 기본 규칙입니다.",
 }
 CARD_TYPES = {"decide": "판정", "compute": "계산", "transition": "전이", "restore": "복원", "order": "순서",
-              "display": "표시", "watch": "감시"}
+              "display": "표시", "watch": "감시", "duty": "의무", "ban": "금지", "limit": "제한"}
 CARD_STATUS = {"draft": "초안", "review": "검토 중", "approved": "승인"}
 LEGAL_REVIEW = {"none": "해당 없음", "pending": "검토 대기", "done": "검토 완료"}
 CARD_FIELDS = ("id", "type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner",
-               "status", "legal_review", "layer", "implements", "check")
+               "status", "legal_review", "layer", "implements", "check", "risk", "verification")
 STATE_WORD = {"fired": "적용", "passed": "통과", "none": "해당 없음", "held": "선행 규칙 적용"}
 REF_KINDS = ("decision", "function", "action", "object", "property", "link", "parameter", "query", "metric", "role",
              "states")
@@ -112,7 +112,10 @@ def card_spec(card: Any, kind: str = "domain") -> dict:
             "conditions": _strings(card.get("conditions")), "result": str(card.get("result") or ""),
             "exceptions": _strings(card.get("exceptions")), "params": dict(params), "source": str(card.get("source") or ""),
             "owner": str(card.get("owner") or ""), "status": status, "legal_review": legal, "layer": layer,
-            "implements": implements, "check": check}
+            "implements": implements, "check": check,
+            # what breaking it costs, and how far its source was checked (read in the text, held against the text)
+            "risk": " ".join(str(card.get("risk") or "").split()),
+            "verification": " ".join(str(card.get("verification") or "").split())}
 
 
 # ---- composition ------------------------------------------------------------------------------------------------

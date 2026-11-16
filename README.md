@@ -548,6 +548,7 @@ the rest.
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
 | Policy text, in any document format | `ontlas policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
 | An OWL or RDFS ontology | `ontlas import-owl` | A starting definition |
+| Definitions drafted as tables (Objects, Entities, rules by layer, named values, a glossary; YAML or JSON) | `ontlas library import-definitions` | A domain module, an `axiom` module for the rules marked AXIOM, a `customer` module for those marked Custom |
 | Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
 | Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
 
@@ -872,9 +873,10 @@ Every decision rule belongs to the layer of the module that wrote it, and a tabl
 | Standard | any other module | The common defaults |
 
 A module also carries `rule_cards`: the record of each rule, whether a decision row runs it or something else carries it
-out (`type`: decide, compute, transition, restore, order, display, watch). A card has a statement, what it applies to,
-conditions, result, exceptions, source, owner, `status` (draft, review, approved), `legal_review` (none, pending, done)
-and `implements` (`decision:returnEligibility#in-window`, `function:refundEstimate`, ...). An AXIOM card's
+out (`type`: decide, compute, transition, restore, order, display, watch, and for what is not run at all duty, ban,
+limit). A card has a statement, what it applies to, conditions, result, exceptions, source, owner, `status` (draft,
+review, approved), `legal_review` (none, pending, done), what breaking it costs (`risk`), how far its source was checked
+(`verification`) and `implements` (`decision:returnEligibility#in-window`, `function:refundEstimate`, ...). An AXIOM card's
 `check: {parameter: return_window_days, min: 7}` holds on the final values, so a module, an attach or a workspace edit
 that sets the return window to 5 is refused with the card, the value, the bound and who set it. A card of any layer may
 bound a property instead (`check: {property: OrderItem.unit_price, min: 0}`, a price is never negative), and each value a
@@ -1319,6 +1321,7 @@ ontlas openapi --server https://space.example > openapi.json      # the REST API
 ontlas library list examples/library                              # every package, its kind, versions and requirements
 ontlas library create my-lib energy --kind domain --label "에너지 설비" --requires core
 ontlas library import-owl my-lib schema-orders.ttl schema-orders --requires core
+ontlas library import-definitions my-lib shop objects.yaml entities.yaml rules.yaml glossary.yaml --requires core
 ontlas library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
 ontlas library compose examples/library commerce-operations-bindings -o ontology.yaml
 ontlas modules examples/library/studio.yaml --impact fashion      # what detaching it would take away

@@ -206,6 +206,7 @@ class StudioTools:
         if k:
             cards = cards[:max(1, min(int(k), 200))]
         keep = ("id", "layer", "layer_label", "type", "type_label", "statement", "conditions", "result", "exceptions",
+                "risk", "verification",
                 "params", "source", "owner", "status", "status_label", "legal_review", "legal_review_label", "check",
                 "module", "module_label", "version")
         return {"layers": [{"layer": x["layer"], "label": x["label"], "order": x["order"], "cards": x["cards"]} for x in view["layers"]],
