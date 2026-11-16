@@ -106,12 +106,15 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
     namespace = namespace or f"https://example.org/{name}#"  # as a new studio's and a draft's from files
     merged: dict[str, list] = {}
     notes: dict[str, Any] = {}
+    notation: list[str] = []  # how each file says its names are written: one of them names the vocabulary
     for doc in docs:
         if not isinstance(doc, dict):
             raise ValueError("a definition draft is a mapping of sections (objects, entities, rules, terms ...)")
         for k, v in doc.items():
             if k == "meta" and isinstance(v, dict):
-                notes.update(v)
+                notes = {**v, **notes}  # the first file's title stands
+                said = v.get("notation")
+                notation += [str(x) for x in (said.values() if isinstance(said, dict) else [said] if said else [])]
             elif k == "relations" and isinstance(v, dict):  # {object_level: [...], entity_level: [...]}
                 for level, rows in v.items():
                     merged.setdefault("entity_relations" if "entity" in level else "object_relations", []).extend(rows or [])
@@ -122,8 +125,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
             elif isinstance(v, list):
                 merged.setdefault(k, []).extend(v)
     if not vocabulary:
-        said = " ".join(str(x) for x in (notes.get("notation") or {}).values()) if isinstance(notes.get("notation"), dict) else ""
-        found = re.search(r"https?://[^\s)]+", said)
+        found = re.search(r"https?://[^\s)]+", " ".join(notation))
         vocabulary = found.group(0) if found else ""
     if vocabulary and not vocabulary.endswith(("/", "#")):
         vocabulary += "/"

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.1
+
+- **A draft of several files keeps the vocabulary one of them names.** `import-definitions` read how names are written
+  from the last file's `meta` alone, so a draft whose glossary came after its Entities and named no vocabulary lost
+  the alignment of every standard name (no Object, Entity, property or relation was aligned). Every file's notation
+  is read now, and the first file's title stands as the modules' description.
+
 ## 0.23.0
 
 - **Definitions drafted outside come in as modules.** A team that writes its Objects, Entities, rules and glossary as

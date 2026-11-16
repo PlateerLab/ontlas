@@ -53,6 +53,7 @@ RULES = {
     "laws": [{"key": "가게법"}],
 }
 GLOSSARY = {
+    "meta": {"title": "가게 용어", "notation": {"접두어 없음": "표준"}},  # a later file that names no vocabulary takes none away
     "terms": [{"term": "선물 포장", "english": "shop:giftWrap", "concept": "주문 › 주문", "definition": "선물로 싸 주는 것", "synonyms": ["포장 서비스"]}],
     "relations": [
         {"relation": "혼동주의", "standard": "주문 줄@shop:OrderLine", "expressions": ["주문"], "note": "주문은 묶음, 주문 줄은 그 안의 한 줄"},
@@ -135,6 +136,7 @@ def test_the_modules_compose_and_a_library_takes_them_in_and_gives_them_up(tmp_p
     lib = Library(tmp_path)
     modules, _ = lib.import_definitions([DRAFT, RULES, GLOSSARY], "shop", label="가게 표준")
     assert lib.names() == ["shop", "shop-axiom", "shop-custom"] and modules[0].label == "가게 표준"
+    assert modules[0].description == "가게 표준 초안"  # the first file's title, whatever the later files call themselves
     comp = compose(lib.resolve(["shop", "shop-axiom", "shop-custom"]))
     assert not comp.issues and {c["layer"] for c in comp.cards} == {"axiom", "standard", "custom"} and len(comp.ontology.objects) == 3
     with pytest.raises(Exception):  # a draft whose modules are there already is not written over
