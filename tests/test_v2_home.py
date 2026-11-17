@@ -10,6 +10,9 @@ from ontlas.web import routes
 from ontlas.web.api import StudioSession
 from ontlas.web.team import NEEDS
 
+pytest.importorskip("yaml")
+pytest.importorskip("rdflib")  # the example studio projects a graph
+
 ROOT = Path(__file__).resolve().parent.parent
 SHOP = ROOT / "examples" / "library" / "studio.yaml"
 FILES = ROOT / "examples" / "files"

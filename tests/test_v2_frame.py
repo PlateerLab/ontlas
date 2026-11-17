@@ -16,6 +16,8 @@ SHOP = ROOT / "examples" / "library" / "studio.yaml"
 
 @pytest.fixture()
 def session():
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     routes.load()
     return StudioSession(load_studio(SHOP))
 

@@ -4,6 +4,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("yaml")
+pytest.importorskip("rdflib")  # the example studio projects a graph
+
 SHOP = Path(__file__).resolve().parent.parent / "examples" / "library" / "studio.yaml"
 
 

@@ -8,6 +8,9 @@ from ontlas.config import load_studio
 from ontlas.web import routes
 from ontlas.web.api import StudioSession
 
+pytest.importorskip("yaml")
+pytest.importorskip("rdflib")  # the example studio projects a graph
+
 ROOT = Path(__file__).resolve().parent.parent
 SHOP = ROOT / "examples" / "library" / "studio.yaml"
 
