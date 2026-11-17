@@ -175,7 +175,7 @@
       const rows = MENU.filter((r) => r[1] === id && known(r[0]));
       if (!rows.length) return '';
       const open = S.nopen[id] === undefined ? !!(here && here[1] === id) : S.nopen[id];
-      return `<div class="k-navg"><a class="k-nav sec${open ? ' open' : ''}" href="#${S.seen[rows[0][0]] || rows[0][0]}" data-act="nfold" data-k="${id}" aria-expanded="${open}">${ki(icon, 18)}<span>${word}</span>${ki(open ? 'chevD' : 'chevR', 16, 1.75)}</a>${open ? rows.map(item).join('') : ''}</div>`;
+      return `<div class="k-navg"><a class="k-nav part${open ? ' open' : ''}" href="#${S.seen[rows[0][0]] || rows[0][0]}" data-act="nfold" data-k="${id}" aria-expanded="${open}">${ki(icon, 18)}<span>${word}</span>${ki(open ? 'chevD' : 'chevR', 16, 1.75)}</a>${open ? rows.map(item).join('') : ''}</div>`;
     };
     return `<div class="k-navs">${top('home', '홈', 'home')}${top('ai', 'AI 초안 생성', 'spark')}${PARTS.map(part).join('')}</div>${maturityFoot()}`;
   }
