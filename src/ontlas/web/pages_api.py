@@ -510,7 +510,8 @@ class PagesMixin:
                 if was is not None and now is not None and (now > was if g["condition"].startswith("max_") else now < was):
                     worse.append({"label": GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]), "was": was, "now": now,
                                   "rate": not g["condition"].startswith("max_")})
-            items.append({"kind": "change", "id": c.id, "title": f"{self._change_label(c)} {rv.get('base_version') or ''} → {c.version}".replace("  ", " "),
+            moved = f"{rv['base_version']} → {c.version}" if rv.get("base_version") else c.version  # a module's first version comes from none
+            items.append({"kind": "change", "id": c.id, "title": f"{self._change_label(c)} {moved}",
                           "module": c.module, "by": c.requested_by, "mine": c.requested_by == self.who, "at": c.at,
                           "passed": rv.get("passed"), "gates": [met["met"], met["all"]], "unmeasured": met.get("unmeasured", 0),
                           "diff": {k: len(v) for k, v in (rv.get("diff") or {}).items()}, "worse": worse})
@@ -535,7 +536,7 @@ class PagesMixin:
         ws = self.workspace
         if ws is not None and ws.dirty:
             items.append({"kind": "workspace", "id": "workspace", "title": f"정의 관리 변경 {len(ws.edits)}건",
-                          "detail": ", ".join(e.target for e in ws.edits[-4:]), "mine": True})
+                          "detail": ", ".join(dict.fromkeys(self._element_label(e.target) if ":" in str(e.target) else str(e.target) for e in ws.edits[-4:])), "mine": True})  # by name, not code
         # one visitor plays both sides on their own page, so what they asked for is theirs to settle too
         alone = bool(self.studio.changes.self_approve)
         counts = {"assigned": len(items) if alone else sum(not x["mine"] for x in items), "mine": sum(x["mine"] for x in items),
@@ -800,10 +801,16 @@ class PagesMixin:
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
                    "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
                    "area": "Object", "layer": "계층", "owner": "담당", "status": "상태", "transform": "변환식",
-                   "source_type": "원천 자료형", "labels": "코드 변환표", "columns": "키 컬럼"}
+                   "source_type": "원천 자료형", "labels": "코드 변환표", "columns": "키 컬럼", "from": "시작 Entity",
+                   "to": "끝 Entity", "initial": "초기 상태", "transitions": "허용 전이", "property": "Property",
+                   "inputs": "입력값", "outputs": "출력", "name": "이름", "english": "영문 표기", "definition": "정의"}
+    # a stored code as the screens say it; a status not written is the one in use
+    VALUE_WORDS = {"status": {"active": "사용 중", "draft": "초안", "deprecated": "폐기 예정", "review": "확인 필요"},
+                   "cardinality": {"many_to_one": "N : 1", "one_to_many": "1 : N", "one_to_one": "1 : 1", "many_to_many": "N : M"}}
 
-    def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
-        """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""
+    def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None, limit: int = 16) -> list[dict]:
+        """What differs, one field at a time, in a person's words: a rule's condition by its input's name. With
+        `limit` 0, every field."""
         from ontlas.decide.words import cell_words, input_label, labels_of, unit_of
 
         def flat(d: Any, pre: str = "") -> dict[str, Any]:
@@ -834,16 +841,22 @@ class PagesMixin:
                 return self.FIELD_WORDS.get(f, f)
             return f"{self.FIELD_WORDS.get(head, head)} · {'사유' if rest == 'reason' else rest}"
 
-        def said(f: str, cell: Any) -> Any:  # a condition as a person reads it: "<= 7" is 7일 이하
+        def said(f: str, cell: Any, side: dict | None) -> Any:  # a condition as a person reads it: "<= 7" is 7일 이하
             rest = f.partition(".")[2]
+            if f in self.VALUE_WORDS and side is not None:
+                v = cell if cell is not None else ("active" if f == "status" else None)
+                return self.VALUE_WORDS[f].get(v, v) if v is not None else None
+            if isinstance(cell, list) and all(isinstance(x, (str, int, float)) for x in cell):
+                return ", ".join(str(x) for x in cell) if cell else None
             if cell is None or table is None or not f.startswith("when.") or rest not in table.inputs:
                 return None
             return cell_words(cell, table.named, unit=unit_of(onto, table, rest), labels=labels_of(onto, table, rest))
 
         keys = sorted(set(fa) | set(fb), key=lambda k: (not k.startswith("when."), not k.startswith("then."), k))
-        return [{"field": k, "label": word(k), "before": fa.get(k), "after": fb.get(k),
-                 "said": [said(k, fa.get(k)), said(k, fb.get(k))]}
-                for k in keys if fa.get(k) != fb.get(k) and k not in ("id",)][:16]
+        out = [{"field": k, "label": word(k), "before": fa.get(k), "after": fb.get(k),
+                "said": [said(k, fa.get(k), a), said(k, fb.get(k), b)]}
+               for k in keys if fa.get(k) != fb.get(k) and k not in ("id",)]
+        return out[:limit] if limit else out
 
     def _readers(self, el: str) -> list[str]:
         """What in the definition reads an element now, so a reviewer sees what a change to it reaches."""

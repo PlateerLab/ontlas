@@ -103,12 +103,33 @@ class HomeMixin:
         rv = cr.review or {}
         if rv.get("issues"):
             return f"정의 오류 {len(rv['issues'])}건"
-        diff = rv.get("diff") or {}
-        said = [f"{self._element_label(el)} {word}" for k, word in (("changed", "변경"), ("added", "추가"), ("removed", "제거"))
+        diff, kept = rv.get("diff") or {}, rv.get("elements") or {}
+
+        def named(el: str) -> str:  # as the request read when it was filed: a later rename does not rewrite the record
+            a, b = kept.get(el) or (None, None)
+            return str((b or {}).get("label") or (a or {}).get("label") or "") or self._element_label(el)
+
+        said = [f"{named(el)} {word}" for k, word in (("changed", "변경"), ("added", "추가"), ("removed", "제거"))
                 for el in diff.get(k) or []]
         if not said:
-            return f"라이브러리에 {cr.version} 저장" if rv.get("mode") == "library" else "바뀐 요소 없음"
+            if rv.get("mode") == "library":
+                return f"온톨로지에 {cr.version} 저장"
+            n = self._terms_changed(cr)
+            return f"용어 {n}건 변경" if n else "변경 항목 없음"
         return ", ".join(said[:3]) + (f" 외 {len(said) - 3}건" if len(said) > 3 else "")
+
+    def _terms_changed(self, cr) -> int:
+        """How many terms a request adds, rewrites or takes out: a term is no element, so its diff does not count it.
+        Read as 용어 사전 reads a request's terms."""
+        try:
+            from ontlas.web.areas.ont2 import _elsewhere, _replaced, _sides, _terms
+
+            new, old = _replaced(self.studio, cr)
+            nt, ot, kept = _terms(new), _terms(old), []
+            other = lambda: kept[0] if kept else (kept.append(_elsewhere(self.studio, cr.module)) or kept[0])  # noqa: E731
+            return sum(1 for tid in dict.fromkeys([*nt[0], *nt[1], *ot[0], *ot[1]]) if _sides(tid, nt, ot, other) is not None)
+        except Exception:  # a request whose file no longer reads, or a page without 용어 사전
+            return 0
 
     def _version_row(self, cr, number: int | None) -> dict:
         from ontlas.web.api import CHANGE_STATUS

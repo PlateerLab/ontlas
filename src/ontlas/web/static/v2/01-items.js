@@ -6,17 +6,18 @@
   //   load      async () => {}          makes the data ready          find  (id) => x | null
   //   code      (x) => 'ST-CL-004'      name   (x) => its name        element (x) => 'rule:table.id' (history, uses)
   //   draft     (x | null) => d         the form's values             form  (d, x) => the cards of the left column
-  //   checks    (d, x) => [{ say, sub, tone: 'ok' | 'note' | 'warn' | 'bad', word }]     tone 'bad' stops the save
+  //   checks    (d, x) => [{ say, sub, tone: 'ok' | 'note' | 'warn' | 'bad', word, error }]     tone 'bad' stops the save, said as error
   //   valid     (d, x) => '' | what is missing                         save  async (d, x) => ({ go }) | nothing
   //   side      (d, x) => cards under 저장 전 검사                        saves (d, x) => [[word, html]] in place of 저장하면
   //   uses      async (x) => [{ say, sub, href }]                      remove async (x, { mode, reason }) => ({ go })
   //   disable   true where 사용 중지 can be chosen                       history async (x) => entries   revert async (x, e)
+  //   can       () => '' | why nothing can be saved here (the form is then not drawn, as a state with no save button)
   // In a form an input says which value it is with data-in="itf" data-k="<key>" (add data-re to draw the form again).
   const ITEM = {};
   S.it = { key: '' };
   const itemParam = (k) => new URLSearchParams(location.hash.split('?')[1] || '').get(k) || '';
   const itemHref = (kind, what, id) => `#${kind}-${what}${id ? `?id=${encodeURIComponent(id)}` : ''}`;
-  const ITEM_PARTICLE = { Object: '를', Entity: '를', Relation: '을' };
+  const ITEM_PARTICLE = { Object: '를', Entity: '를', Relation: '을', Action: '을', Mapping: '을', Binding: '을' };
   const itemObj = (word) => word + (ITEM_PARTICLE[word] || josa(word, '을', '를'));
 
   function item(kind, def) {
@@ -73,15 +74,16 @@
     if (!el) return [];
     const r = await api('item/history?element=' + encodeURIComponent(el));
     const WORD = { added: '추가', changed: '변경', removed: '삭제' };
-    const flat = (d, pre = '') => Object.entries(d || {}).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? flat(v, `${pre}${k}.`) : [[`${pre}${k}`, v]]));
     return r.entries.map((e) => ({ ver: e.version ? `v${e.version}` : '', mark: e.status_label, cp: e.change, at: e.at, who: e.by, deployed: e.deployed,
       say: (e.notes || []).map((n) => n.text).join(' · ') || e.reason || `${def.word} ${WORD[e.kind] || '변경'}`,
       rows: e.fields.map((f) => ({ label: f.label, before: f.said && f.said[0] != null ? f.said[0] : f.before, after: f.said && f.said[1] != null ? f.said[1] : f.after })),
-      all: flat(e.after || e.before).map(([k, v]) => ({ label: k, value: v })) }));
+      all: e.all || [] }));  // every field as the item read then, in words
   }
 
   const itemWait = () => '<section class="k-card pad"><p class="k-p s">불러오는 중</p></section>';
   const itemGone = (def) => kEmpty(`${itemObj(def.word)} 찾을 수 없습니다`, '', `<a class="k-btn pri" href="#${def.list}">목록으로</a>`);
+  // reading failed: what was said, a way to read again, and the way back
+  const itemFailed = (def, it) => kEmpty('불러오지 못했습니다', it.err, `<button class="k-btn pri" data-act="itreload">다시 불러오기</button><a class="k-btn" href="#${def.list}">목록으로</a>`);
   const itemNamed = (def, it, acts) => `<div class="k-bar"><span class="k-s">${esc(def.word)}</span>${def.code ? `<span class="k-code k-ink">${esc(def.code(it.x))}</span>` : ''}<span class="k-14">${esc(def.name(it.x))}</span><span class="k-push">${acts}</span></div>`;
   const CHECK_TONE = { ok: ['ok', '통과'], note: ['b', '참고'], warn: ['warn', '확인'], bad: ['bad', '수정 필요'] };
   const itemChecks = (def, it) => (def.checks ? def.checks(it.d, it.x) : []).map((c) => { const [tone, word] = CHECK_TONE[c.tone] || CHECK_TONE.ok;
@@ -91,11 +93,13 @@
     const def = ITEM[kind], it = itemState(kind, 'form'), isNew = !it.id;
     const lead = (def.lead && def.lead.form) || `${itemObj(def.word)} 추가하거나 편집합니다.`;
     const saveWord = def.saveWord || (def.direct ? '저장' : '변경 요청에 저장');
-    const head = kHead(`${def.word} 추가 · 편집`, lead, `<a class="k-btn" href="#${def.list}">취소</a>${it.ready && !it.missing && canEdit() ? `<button class="k-btn pri" data-act="itsave"${it.busy ? ' disabled' : ''}>${esc(it.busy ? '저장 중' : saveWord)}</button>` : ''}`);
+    const shut = def.can ? def.can() : '';  // a form that cannot be saved on this server shows that state alone
+    const head = kHead(`${def.word} 추가 · 편집`, lead, `<a class="k-btn" href="#${def.list}">취소</a>${it.ready && !it.missing && !it.err && !shut && canEdit() ? `<button class="k-btn pri" data-act="itsave"${it.busy ? ' disabled' : ''}>${esc(it.busy ? '저장 중' : saveWord)}</button>` : ''}`);
     if (!it.ready) return head + itemWait();
-    if (it.err) return head + kEmpty('불러오지 못했습니다', it.err, `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
-    if (!canEdit()) return head + kEmpty('편집 권한이 없습니다', '편집자 이상 역할이 필요합니다.', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (!canEdit()) return head + kEmpty('편집 권한이 없습니다', '', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (shut) return head + kEmpty(shut, '', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
     const seg = `<div class="k-h g12"><div class="k-seg" role="group" aria-label="추가 또는 편집"><a href="${itemHref(kind, 'form')}" class="${isNew ? 'on' : ''}"${isNew ? ' aria-current="true"' : ''}>추가</a><a ${isNew ? 'aria-disabled="true"' : `href="${itemHref(kind, 'form', it.id)}" aria-current="true"`} class="${isNew ? '' : 'on'}">편집</a></div></div>`;
     const bar = isNew ? '' : itemNamed(def, it, itemActs(kind, it.id, { edit: false }));
     const rows = (def.saves && def.saves(it.d, it.x)) || (def.direct
@@ -115,9 +119,9 @@
     const head = kHead(`${def.word} 삭제`, (def.lead && def.lead.delete) || `사용처를 확인하고 삭제를 요청합니다.`,
       it.ready && !it.missing ? `<a class="k-btn" href="${itemHref(kind, 'history', it.id)}">${ki('history', 16, 1.75)}이력</a>${canEdit() ? `<a class="k-btn" href="${itemHref(kind, 'form', it.id)}">편집</a>` : ''}` : '');
     if (!it.ready) return head + itemWait();
-    if (it.err) return head + kEmpty('불러오지 못했습니다', it.err, `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
-    if (!canEdit()) return head + kEmpty('삭제 권한이 없습니다', '편집자 이상 역할이 필요합니다.', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (!canEdit()) return head + kEmpty('삭제 권한이 없습니다', '', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
     const code = def.code ? def.code(it.x) : def.name(it.x);
     const uses = (it.uses || []).map((u) => `<${u.href ? `a href="#${u.href}"` : 'div'} class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(u.say)}</span>${u.sub ? `<span class="k-s">${esc(u.sub)}</span>` : ''}</span>${u.href ? ki('chevR', 16, 1.75) : ''}</${u.href ? 'a' : 'div'}>`).join('')
       || '<div class="k-row"><span class="k-s">사용처 없음</span></div>';
@@ -139,7 +143,7 @@
     const head = kHead(`${def.word} 이력`, (def.lead && def.lead.history) || `${def.word}의 변경 이력을 조회합니다.`,
       `<a class="k-btn" href="#${def.list}">목록으로</a>${it.ready && !it.missing && canEdit() ? `<a class="k-btn pri" href="${itemHref(kind, 'form', it.id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}`);
     if (!it.ready) return head + itemWait();
-    if (it.err) return head + kEmpty('불러오지 못했습니다', it.err, `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
     const all = it.hist || [], list = it.hdep ? all.filter((e) => e.deployed) : all;
     const sel = list[Math.min(it.hsel, Math.max(list.length - 1, 0))];
@@ -152,7 +156,7 @@
       ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">항목</th><th scope="col">값</th></tr></thead><tbody>${sel.all.map((r) => `<tr><td class="b">${esc(r.label)}</td><td>${said(r.value)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">항목</th><th scope="col">이전</th><th scope="col">이후</th></tr></thead><tbody>${sel.rows.map((r) => `<tr><td class="b">${esc(r.label)}</td><td class="k-bad">${said(r.before)}</td><td class="k-ok">${said(r.after)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">변경 항목 없음</td></tr>'}</tbody></table></div>`;
     const detail = !sel ? '<p class="k-cf">선택된 변경이 없습니다.</p>' : `${table}${kKv('변경자', esc(sel.who || '-'))}${kKv('시각', when(sel.at) || '-')}${sel.cp ? kKv('변경 요청', `<a href="#changes?id=${encodeURIComponent(sel.cp)}">${esc(sel.cp)}</a>`) : ''}${kKv('사유', esc(sel.say))}
-      ${def.revert && canEdit() && sel.deployed ? `<div class="k-cb" style="padding-top:12px"><div class="k-h"><button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button></div></div>` : ''}`;
+      ${def.revert && canEdit() && sel.deployed && sel !== all[0] ? `<div class="k-cb" style="padding-top:12px"><div class="k-h"><button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button></div></div>` : ''}`;
     return `${head}${bar}<div class="k-cols"><div class="k-c2"><section class="k-card"><div class="k-ch"><h2>변경 이력</h2><span class="k-s">${all.length}건</span><div class="k-push"><div class="k-seg"><button class="${it.hdep ? '' : 'on'}" data-act="ithdep" data-v="">전체</button><button class="${it.hdep ? 'on' : ''}" data-act="ithdep" data-v="1">배포</button></div></div></div>${rows}</section></div>
       <div class="k-c3"><section class="k-card"><div class="k-ch"><h2>${sel ? `${esc([sel.ver, sel.mark].filter(Boolean).join(' ') || '선택한 변경')} 변경 내용` : '변경 내용'}</h2>${sel ? `<div class="k-push"><div class="k-seg"><button class="${it.hall ? '' : 'on'}" data-act="ithall" data-v="">변경 항목</button><button class="${it.hall ? 'on' : ''}" data-act="ithall" data-v="1">전체 항목</button></div></div>` : ''}</div>${detail}</section>
       </div></div>`;
@@ -174,6 +178,8 @@
     itreason: (t) => { S.it.reason = t.value; itemArm(); },
     itconfirm: (t) => { S.it.confirm = t.value; itemArm(); },
   });
+  // an edit that leaves every value as the item has it: nothing to file, only the reason would be kept
+  const itemSame = (def, it) => { const plain = (d) => JSON.stringify({ ...d, reason: '' }); try { return plain(it.d) === plain(def.draft(it.x)); } catch (_) { return false; } };
   function itemArm() {  // the delete button wakes when there is a reason and the name is typed
     const it = S.it, def = ITEM[it.kind], b = $('#itremove');
     if (b) b.disabled = !(it.reason.trim() && it.confirm.trim() === (def.code ? def.code(it.x) : def.name(it.x))) || it.busy;
@@ -182,10 +188,13 @@
   Object.assign(ACT, {
     itsave: async () => {
       const it = S.it, def = ITEM[it.kind];
-      if (!it.d || it.busy) return;
+      clearTimeout(itemTimer);  // a check waiting on what was typed would read the screen the save leaves
+      if (!it.d || it.busy || (def.can && def.can())) return;
       const missing = def.valid ? def.valid(it.d, it.x) : '';
       const stop = (def.checks ? def.checks(it.d, it.x) : []).find((c) => c.tone === 'bad');
-      if (missing || stop) { toast(missing || `저장 전 검사를 통과하지 못해 저장하지 못했습니다. ${stop.say}`, true); return; }
+      // a check says its own sentence (error); else it is said in the one form, with what it names
+      if (missing || stop) { toast(missing || stop.error || `저장 전 검사에서 ${stop.say}${stop.sub ? ` · ${stop.sub}` : ''} 항목이 확인되어 저장하지 못했습니다. 이 항목을 고쳐 주세요.`, true); return; }
+      if (it.id && !def.direct && itemSame(def, it)) { toast('변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.', true); return; }
       if (it.id && !def.direct && !def.noReason && !String(it.d.reason || '').trim()) { toast('변경 사유가 없어 저장하지 못했습니다. 변경 사유를 입력해 주세요.', true); return; }
       it.busy = true; render();
       try {
@@ -216,6 +225,7 @@
     itrevert: async () => {
       const it = S.it, def = ITEM[it.kind], list = it.hdep ? it.hist.filter((e) => e.deployed) : it.hist, e = list[it.hsel];
       if (!e || !def.revert) return;
-      try { const out = (await def.revert(it.x, e)) || {}; S.it = { key: '' }; toast('이전 값으로 되돌리는 변경 요청을 생성했습니다.'); location.hash = '#' + (out.go || 'changes'); } catch (err) { fail(err); }
+      try { const out = (await def.revert(it.x, e)) || {}; S.it = { key: '' }; toast(out.said || '작성 중인 변경 요청에 되돌리기를 저장했습니다.'); location.hash = '#' + (out.go || 'changes'); } catch (err) { fail(err); }
     },
+    itreload: () => { const it = S.it; if (it.kind) { S.it = { key: '' }; render(); } },  // the screen reads its item again
   });

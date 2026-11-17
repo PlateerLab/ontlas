@@ -65,6 +65,56 @@ def test_the_settings_say_what_the_ontology_is_called_and_how_its_names_are_writ
     assert prop["style"] == "snake_case" and 0 < prop["follow"] <= prop["total"]
     assert "schema.org" in [v["name"] for v in d["vocabularies"]]
     assert d["approval"] == {"self_approve": True, "apply_needs": "approver", "decide_needs": "approver"}
+    assert d["model_state"] == "off"  # no model: 미연결, and a model set but not yet called is not said to be 연결됨
+
+
+def _gate(session, stage, cond):
+    return (session.flow_settings()["settings"]["gates"].get(stage) or {}).get(cond)
+
+
+def test_a_quality_target_is_saved_alone_and_kept_in_the_audit_with_who(session, routes, people, tmp_path):
+    from ontlas.journal import Journal
+
+    session.studio.changes.keep(Journal(tmp_path / "journal.jsonl"))
+    root, save = people.users.users["root1"], routes.POST["admin/targets"]
+    found, accuracy = _gate(session, "index", "min_found"), _gate(session, "check", "min_accuracy")
+    out = save(session, {"changes": [{"stage": "check", "condition": "min_accuracy", "was": accuracy, "value": 0.88}]}, root)
+    assert out["ok"] and _gate(session, "check", "min_accuracy") == 0.88 and _gate(session, "index", "min_found") == found
+    rows = [r for r in routes.GET["admin/audit"](session, {}, root)["rows"] if r["kind"] == "setting"]
+    assert len(rows) == 1 and rows[0]["by"] == "관리 하나" and rows[0]["text"].startswith("품질 목표 변경 · 정답률 ")
+    assert rows[0]["text"].endswith("→ 88%") and not [r for r in routes.GET["admin/audit"](session, {}, root)["rows"] if r["kind"] == "note"]
+    assert any(json.loads(x)["kind"] == "admin" and json.loads(x)["what"] == "setting"
+               for x in (tmp_path / "journal.jsonl").read_text(encoding="utf-8").splitlines())  # a restart does not forget it
+    from ontlas.web.team import NEEDS
+
+    assert NEEDS["admin/targets"] == "admin"
+
+
+def test_two_admins_saving_targets_do_not_put_back_each_others(session, routes, people):
+    root, save = people.users.users["root1"], routes.POST["admin/targets"]
+    found, accuracy = _gate(session, "index", "min_found"), _gate(session, "check", "min_accuracy")
+    # both read the same conditions; one saves 문서 검색 적중률, the other 정답률 after it
+    assert save(session, {"changes": [{"stage": "index", "condition": "min_found", "was": found, "value": 0.6}]}, root)["ok"]
+    assert save(session, {"changes": [{"stage": "check", "condition": "min_accuracy", "was": accuracy, "value": 0.88}]}, root)["ok"]
+    assert _gate(session, "index", "min_found") == 0.6 and _gate(session, "check", "min_accuracy") == 0.88
+    # the same target changed by both: the later save is said back with the value it found, nothing is overwritten
+    out = save(session, {"changes": [{"stage": "index", "condition": "min_found", "was": found, "value": 0.7}]}, root)
+    assert not out["ok"] and "문서 검색 적중률" in out["error"] and "60%" in out["error"] and _gate(session, "index", "min_found") == 0.6
+    assert out["settings"]["gates"]["index"]["min_found"] == 0.6
+    # a target emptied stays empty: the stage is kept with no condition, its default does not come back
+    assert save(session, {"changes": [{"stage": "index", "condition": "min_found", "was": 0.6, "value": None}]}, root)["ok"]
+    assert _gate(session, "index", "min_found") is None
+
+
+def test_a_quality_target_that_is_not_a_number_of_its_kind_is_refused(session, routes, people):
+    root, save = people.users.users["root1"], routes.POST["admin/targets"]
+    errors = _gate(session, "bind", "max_errors")
+    for change in ({"stage": "bind", "condition": "max_errors", "value": 1.5}, {"stage": "bind", "condition": "max_errors", "value": -1},
+                   {"stage": "check", "condition": "min_accuracy", "value": 1.5}, {"stage": "check", "condition": "min_accuracy", "value": "0.8"},
+                   {"stage": "check", "condition": "min_accuracy", "value": True}, {"stage": "check", "condition": "nothing", "value": 0.5}):
+        with pytest.raises(ValueError, match="저장하지 못했습니다"):
+            save(session, {"changes": [{**change, "was": None}]}, root)
+    assert _gate(session, "bind", "max_errors") == errors
 
 
 def test_names_are_counted_by_the_way_they_are_written():
@@ -94,6 +144,7 @@ def test_what_a_role_may_do_is_read_from_what_the_server_asks_of_each_route(sess
     assert edit["needs"] == NEEDS["manage/edit"] and edit["may"] == {"viewer": False, "editor": True, "approver": True, "admin": True}
     assert decide["may"] == {"viewer": False, "editor": False, "approver": True, "admin": True}
     assert users["may"] == {"viewer": False, "editor": False, "approver": False, "admin": True}
+    assert "초기화" not in rows  # a team's shared space is never reset, so no role is said to reset it
     assert d["team"] is False and d["users"] == []  # nobody signs in to this server
     owners = {a["name"]: a["owner"] for a in d["areas"]}
     assert set(owners) == set(session.studio.onto.areas) and any(owners.values())
@@ -213,7 +264,7 @@ def test_what_was_done_to_users_outlives_a_restart_where_there_is_a_journal(sess
     lines = [json.loads(x) for x in (tmp_path / "journal.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [x["kind"] for x in lines] == ["admin"] and lines[0]["what"] == "user" and "new-password-5" not in json.dumps(lines)
     d = routes.GET["admin/audit"](session, {}, root)
-    assert d["kept"] and [r["text"] for r in d["rows"] if r["kind"] == "user"] == ["사용자 새로 다섯(new5) 추가 · 역할 조회"]
+    assert d["kept"] and [r["text"] for r in d["rows"] if r["kind"] == "user"] == ["사용자 새로 다섯(new5) 추가 · 역할 조회자"]
     assert routes.GET["admin/overview"](session, {}, root)["recent"][0]["by"] == "관리 하나"
 
 
@@ -248,7 +299,7 @@ def test_a_user_is_added_changed_and_removed_and_the_file_keeps_it(session, rout
     drop(session, {"id": "new1"}, admin)
     assert "new1" not in Users.load(tmp_path / "users.yaml").users and people.user(token) is None  # signed out at once
     said = [r["text"] for r in routes.GET["admin/audit"](session, {}, admin)["rows"] if r["kind"] == "user"]
-    assert len(said) == 4 and "폐기" in said[0] and "추가 · 역할 조회, 편집" in said[-1] and all("관리 하나" == r["by"] for r in routes.GET["admin/audit"](session, {}, admin)["rows"] if r["kind"] == "user")
+    assert len(said) == 4 and "폐기" in said[0] and "추가 · 역할 조회자 · 편집자" in said[-1] and all("관리 하나" == r["by"] for r in routes.GET["admin/audit"](session, {}, admin)["rows"] if r["kind"] == "user")
 
 
 def test_a_user_that_cannot_be_saved_is_refused_with_the_reason(session, routes, people):
@@ -258,13 +309,15 @@ def test_a_user_that_cannot_be_saved_is_refused_with_the_reason(session, routes,
     for wrong in ({"id": "a b"}, {"id": ""}, {"roles": []}, {"roles": ["owner"]}, {"password": "short"}, {"id": "maker1"}):
         with pytest.raises(ValueError):
             save(session, {**ok, **wrong}, admin)
-    with pytest.raises(LookupError):
+    with pytest.raises(ValueError, match="찾을 수 없어 저장하지 못했습니다"):
         save(session, {**ok, "new": False}, admin)
+    with pytest.raises(ValueError, match=r"아이디 maker1이\(가\) 이미 있어"):
+        save(session, {**ok, "id": "maker1"}, admin)
     with pytest.raises(ValueError, match="마지막 관리자"):
         save(session, {"id": "root1", "name": "관리 하나", "roles": ["editor"], "password": "", "new": False}, admin)
     with pytest.raises(ValueError, match="본인"):
         drop(session, {"id": "root1"}, admin)
-    with pytest.raises(LookupError):
+    with pytest.raises(ValueError, match="찾을 수 없어 폐기하지 못했습니다"):
         drop(session, {"id": "nobody"}, admin)
     assert sorted(people.users.users) == ["maker1", "reader1", "root1"]
 

@@ -3,7 +3,7 @@
   // form of the request being written. 45-ont2b.js is 온톨로지, 45-ont2c.js 용어사전, 45-ont2d.js 개념 초안.
 
   S.o2 = {
-    ch: { tab: '', sel: '', synced: '', more: null, dm: null, dmFor: null, busy: false },  // 변경 요청 · 버전
+    ch: { tab: '', sel: '', synced: '', more: null, dm: null, dmFor: null, busy: false, terms: null, titem: '', seen: -1 },  // 변경 요청 · 버전
     lib: { kind: 'all', sem: null },                                                          // 온톨로지
     lx: { kind: 'all', q: '', rel: 'all', rq: '', rsel: '', imp: null },                      // 용어사전
     cc: { kind: 'all', sel: '', set: false },                                                 // 개념 초안
@@ -12,17 +12,19 @@
     query: '질의', question: '검증 질문', function: '함수', identity: '식별 통합', parameter: '기준값', metric: '지표', term: '용어', terms: '용어집' };
   const O2_SCREEN = { area: 'objmgr', object: 'objects', property: 'objects', link: 'model', rule: 'semrules', decision: 'semrules', action: 'actions', role: 'roles',
     query: 'query', question: 'check', function: 'semrules', parameter: 'semrules', metric: 'semrules', term: 'lexicon', terms: 'lexicon' };
-  const O2_OP = { ...OP_WORD, add_object: 'Entity 추가', update_object: 'Entity 변경', delete_object: 'Entity 제외', add_property: 'Property 추가', update_property: 'Property 변경',
-    delete_property: 'Property 제외', add_link: 'Relation 추가', update_link: 'Relation 변경', delete_link: 'Relation 제외', add_area: 'Object 추가', update_area: 'Object 변경',
-    delete_area: 'Object 제외', add_term: '용어 추가', update_term: '용어 변경', delete_term: '용어 제외', import_terms: '용어집 가져오기', add_rule_card: '규칙 카드 추가',
-    update_rule_card: '규칙 카드 변경', delete_rule_card: '규칙 카드 제외', add_parameter: '기준값 추가', delete_parameter: '기준값 제외', add_metric: '지표 추가',
-    update_metric: '지표 변경', delete_metric: '지표 제외', add_function: '함수 추가', update_function: '함수 변경', delete_function: '함수 제외', add_query: '질의 추가',
-    update_decision: '결정표 변경', move_rule: '규칙 순서 변경', add_role: '접근 정책 추가', update_role: '접근 정책 변경', delete_role: '접근 정책 제외' };
+  const O2_OP = { ...OP_WORD, add_object: 'Entity 추가', update_object: 'Entity 변경', delete_object: 'Entity 삭제', add_property: 'Property 추가', update_property: 'Property 변경',
+    delete_property: 'Property 삭제', add_link: 'Relation 추가', update_link: 'Relation 변경', delete_link: 'Relation 삭제', add_area: 'Object 추가', update_area: 'Object 변경',
+    delete_area: 'Object 삭제', add_term: '용어 추가', update_term: '용어 변경', delete_term: '용어 삭제', import_terms: '용어집 가져오기', add_rule_card: '규칙 카드 추가',
+    update_rule_card: '규칙 카드 변경', delete_rule_card: '규칙 카드 삭제', add_parameter: '기준값 추가', delete_parameter: '기준값 삭제', add_metric: '지표 추가',
+    update_metric: '지표 변경', delete_metric: '지표 삭제', add_function: '함수 추가', update_function: '함수 변경', delete_function: '함수 삭제', add_query: '질의 추가',
+    update_decision: '결정표 변경', move_rule: '규칙 순서 변경', add_role: '접근 정책 추가', update_role: '접근 정책 변경', delete_role: '접근 정책 삭제' };
   const o2Split = (id) => { const [k, ...r] = String(id).split(':'); return [k, r.join(':')]; };
   const o2ElWord = (id) => { const [k, n] = o2Split(id); return `${O2_KIND[k] || k} ${n}`; };
+  const o2EditName = (target) => { const [k, n] = o2Split(target); return k === 'term' ? n.split('@')[0] : n; };  // a term by its word, not by what it names
+  const O2_WS = 'workspace';  // the module the edits of these screens are sent as: no module of its own to a person
   const o2When = (at) => (at ? esc(String(at).slice(5, 16).replace('-', '/').replace('T', ' ').replace(/^0/, '')) : '-');
   const o2Wait = () => '<section class="k-card pad"><p class="k-p s">불러오는 중</p></section>';
-  const o2Seg = (label, items, cur, act) => `<div class="k-seg" role="group" aria-label="${esc(label)}">${items.map(([k, w]) => `<button class="${cur === k ? 'on' : ''}" data-act="${act}" data-k="${esc(k)}" aria-pressed="${cur === k}">${esc(w)}</button>`).join('')}</div>`;
+  const o2Seg = (label, items, cur, act, cls = '') => `<div class="k-seg${cls ? ` ${cls}` : ''}" role="group" aria-label="${esc(label)}">${items.map(([k, w]) => `<button class="${cur === k ? 'on' : ''}" data-act="${act}" data-k="${esc(k)}" aria-pressed="${cur === k}">${esc(w)}</button>`).join('')}</div>`;
 
   // the menu loads the definition for its maturity and draws only itself; a screen that reads it waits here
   function o2NeedManage(tab) {
@@ -40,6 +42,14 @@
     try { more = await api('ont2/versions'); } catch (e) { more = { rollbacks: [], kept: 0 }; }
     S.ver = v; S.o2.ch.more = more;
     if (['changes', 'library'].includes(S.tab)) render();
+  }
+
+  // the terms a request writes, read once for each request opened
+  async function o2LoadTerms(id) {
+    const c = S.o2.ch;
+    Object.assign(c, { termsFor: id, termsAt: S.changes });  // again when the requests are read again (another ontology)
+    try { c.terms = await api(`ont2/change/terms?id=${encodeURIComponent(id)}`); } catch (e) { c.terms = { id, terms: [] }; }
+    if (S.tab === 'changes' && c.sel === id) render();
   }
 
   // the request being written: its title, and the number it would be deployed as
@@ -88,8 +98,8 @@
   // ---- 변경 요청 · 버전 ----------------------------------------------------------------------------------------------
   function o2Changes() {
     const c = S.o2.ch;
-    if (S.land && S.land.id) { c.sel = S.land.id; c.tab = ''; }  // a link names the request to open: #changes?id=C3
-    else if (S.chg.sel && S.chg.sel !== c.synced) { c.sel = S.chg.sel; c.tab = ''; }  // another screen chose one before coming here
+    if (S.land && S.land.id) Object.assign(c, { sel: S.land.id, tab: '', landed: S.land.id, missing: '' });  // a link names the request to open: #changes?id=C3
+    else if (S.chg.sel && S.chg.sel !== c.synced) Object.assign(c, { sel: S.chg.sel, tab: '', missing: '' });  // another screen chose one before coming here
     const head = kHead('변경 요청 · 버전', '정의 · 규칙 · 접근 정책의 변경 요청과 버전을 관리합니다.',
       `<button class="k-btn" data-act="o2jump" data-to="o2vers">버전 비교</button>${canEdit() ? `<a class="k-btn pri" href="${itemHref('change', 'form')}">${ki('plus', 16, 1.75)}변경 요청 만들기</a>` : ''}`);
     const all = S.changes && S.changes.changes, v = S.ver && S.ver.current ? S.ver : null;
@@ -101,10 +111,17 @@
     const state = (x) => (x.status === 'approved' && hist[x.id] && !hist[x.id].applied ? 'filed' : x.status);
     const open = all.filter((x) => x.status === 'pending'), done = all.filter((x) => x.status === 'approved'), no = all.filter((x) => x.status === 'rejected');
     const tabOf = (id) => { if (id === 'draft') return 'open'; const x = all.find((y) => y.id === id); return !x ? '' : x.status === 'pending' ? 'open' : x.status === 'approved' ? 'done' : 'no'; };
+    if (c.sel === 'draft' && !draft && c.seen >= 0 && all.length > c.seen) {  // the request being written was sent: the request it became
+      const made = all.reduce((m, x) => (Number(x.id.replace(/\D/g, '')) > Number(m.id.replace(/\D/g, '')) ? x : m));
+      Object.assign(c, { sel: made.id, tab: '' });
+    }
+    c.seen = all.length;
+    if (c.landed) { c.missing = c.sel === c.landed && !all.some((x) => x.id === c.landed) ? c.landed : ''; c.landed = ''; }  // a link to no request says so
     if (c.sel && !(c.sel === 'draft' ? draft : all.some((x) => x.id === c.sel))) c.sel = '';
+    if (c.sel && c.sel !== 'draft' && c.tab && tabOf(c.sel) !== c.tab) c.tab = tabOf(c.sel);  // one approved or rejected here stays open, under its new state
     if (!c.tab) c.tab = (c.sel && tabOf(c.sel)) || (draft || open.length ? 'open' : done.length ? 'done' : no.length ? 'no' : 'open');
     const rows = c.tab === 'open' ? [...(draft ? ['draft'] : []), ...open] : c.tab === 'done' ? done : no;
-    if (!c.sel || tabOf(c.sel) !== c.tab) c.sel = rows.length ? (rows[0] === 'draft' ? 'draft' : rows[0].id) : '';
+    if (!c.missing && (!c.sel || tabOf(c.sel) !== c.tab)) c.sel = rows.length ? (rows[0] === 'draft' ? 'draft' : rows[0].id) : '';
     if (c.sel && c.sel !== 'draft' && S.chg.sel !== c.sel) Object.assign(S.chg, { sel: c.sel, det: null, item: '', text: '' });
     c.synced = S.chg.sel;
     const cur = v.current, next = `버전 ${cur.number + 1} 초안`, more = c.more || { rollbacks: [], kept: cur.number };
@@ -124,7 +141,7 @@
     };
     const list = `<nav class="k-card" aria-label="변경 요청 목록" style="flex:1 1 300px"><div style="padding:12px">${o2Seg('상태', [['open', `열림 ${open.length + (draft ? 1 : 0)}`], ['done', '배포됨'], ['no', '반려']], c.tab, 'o2chtab')}</div>
       ${rows.map(item).join('') || `<p class="k-cf line">${c.tab === 'open' ? '열린 변경 요청이 없습니다.' : c.tab === 'done' ? '배포된 변경 요청이 없습니다.' : '반려된 변경 요청이 없습니다.'}</p>`}</nav>`;
-    const detail = !c.sel ? `<div class="k-v g16" style="flex:2 1 560px;min-width:0">${kEmpty('선택된 변경 요청이 없습니다', '')}</div>`
+    const detail = !c.sel ? `<div class="k-v g16" style="flex:2 1 560px;min-width:0">${kEmpty(c.missing ? `변경 요청 ${c.missing}${josa(c.missing, '을', '를')} 찾을 수 없습니다` : '선택된 변경 요청이 없습니다', '')}</div>`
       : c.sel === 'draft' ? o2DraftDetail(ws, dm, cur) : o2ChangeDetail(cur, hist[c.sel]);
     return `${head}${stats}<div class="k-cols">${list}${detail}</div>${o2VersionTable(v, more, draft ? ws : null, open)}
       ${kNext([['library', '모듈 라이브러리'], ...(isSysAdmin() ? [['sys-packs', '도메인 팩']] : []), ['inbox', '할 일 · 알림']])}`;
@@ -138,7 +155,7 @@
     const terms = ws.edits.filter((e) => /^terms?:/.test(e.target)).length;
     const elRow = ([e, change]) => { const [k] = o2Split(e), to = O2_SCREEN[k];
       return `<${to && known(to) ? `a href="#${to}"` : 'div'} class="k-row"><span class="k-col"><span class="k-ink k-14">${o2Sign(change)} ${esc(o2ElWord(e))}</span></span>${to && known(to) ? ki('chevR', 16, 1.75) : ''}</${to && known(to) ? 'a' : 'div'}>`; };
-    const edits = ws.edits.map((e, i) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(O2_OP[e.op] || e.op)} · ${esc(o2ElWord(e.target).replace(/^용어집 /, ''))}</span>${e.took_out.length ? `<span class="k-s">함께 제외 · ${esc(e.took_out.map(o2ElWord).join(', '))}</span>` : ''}</span>${canEdit() ? `<button class="k-lnk" data-act="mdrevert" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>되돌리기</button>` : ''}</div>`).join('');
+    const edits = ws.edits.map((e, i) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(O2_OP[e.op] || e.op)} · ${esc(o2EditName(e.target))}</span>${e.took_out.length ? `<span class="k-s">함께 제외 · ${esc(e.took_out.map(o2ElWord).join(', '))}</span>` : ''}</span>${canEdit() ? `<button class="k-lnk" data-act="mdrevert" data-i="${i}"${S.mg.busy ? ' disabled' : ''}>되돌리기</button>` : ''}</div>`).join('');
     const yaml = `<div class="k-cb"><pre class="o2-yaml k-x">${esc(ws.yaml)}</pre></div>`;
     const issues = ws.issues.length ? `<div class="k-cb"><p class="k-note bad">${ws.issues.slice(0, 6).map(esc).join('<br>')}</p></div>` : '';
     const test = tr && tr.busy ? '<p class="k-cf line">회귀 테스트 실행 중</p>' : tr && tr.error ? `<div class="k-cb"><p class="k-note bad">${esc(tr.error)}</p></div>`
@@ -151,7 +168,7 @@
         ${view === 'yaml' ? yaml : `${els.map(elRow).join('')}${issues}<div class="o2-sub"><span class="k-b k-13">저장 순서 ${ws.edits.length}건</span>${canEdit() ? `<span class="k-push k-h">${ws.edits.length ? '<button class="k-lnk" data-act="mdundo">마지막 변경 되돌리기</button>' : ''}${ws.redo ? '<button class="k-lnk" data-act="mdredo">다시 적용</button>' : ''}</span>` : ''}</div>${edits || '<p class="k-cf line">이전 변경 · YAML 비교 참조</p>'}`}</section>
       <section class="k-card"><div class="k-ch"><h2>회귀 테스트</h2><span class="k-push">${canEdit() ? `<button class="k-btn sm" data-act="mgreview"${(tr && tr.busy) || ws.issues.length ? ' disabled' : ''}>${ki('play', 16, 1.75)}${tried ? '다시 실행' : '지금 실행'}</button>` : ''}${known('flow') ? `<a class="k-lnk" href="#flow">검증 결과${ki('chevR', 14, 1.75)}</a>` : ''}</span></div>${test}</section>
       <section class="k-card"><div class="k-ch"><h2>검토 요청</h2></div><div class="k-cb">
-        ${canEdit() ? `<div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn dan" data-act="mgdiscard"${S.mg.busy ? ' disabled' : ''}>폐기</button><button class="k-btn pri" data-act="mgpropose"${S.mg.busy || ws.issues.length || (tr && tr.busy) ? ' disabled' : ''}>${S.mg.busy ? '등록 중' : selfApply() ? `버전 ${cur.number + 1} 배포` : '검토 요청'}</button></div>` : ''}</div></section></div>`;
+        ${canEdit() ? `<div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn dan" data-act="o2discard"${S.mg.busy ? ' disabled' : ''}>폐기</button><button class="k-btn pri" data-act="mgpropose"${S.mg.busy || ws.issues.length || (tr && tr.busy) ? ' disabled' : ''}>${S.mg.busy ? '등록 중' : selfApply() ? `버전 ${cur.number + 1} 배포` : '검토 요청'}</button></div>` : ''}</div></section></div>`;
   }
 
   // a request that was sent: what it changes element by element, what it does to the answers, and the review
@@ -172,26 +189,36 @@
       const notes = x.comments.map((m) => `<div class="o2-note"><b class="k-b">${esc(m.by)}</b> <span class="k-s">${esc(dayOf(m.at))}</span><div>${esc(m.text)}</div></div>`).join('');
       return `<div class="o2-open">${fields}
         ${x.readers.length ? `<div class="k-h g6"><span class="k-s">사용처</span>${x.readers.map((r) => kChip(r)).join('')}</div>` : ''}
-        ${notes}<div class="k-h"><label class="k-search k-g0" style="flex:1 1 220px"><span class="k-hide">댓글</span><input type="text" id="chgtext" data-in="chgtext" value="${esc(c.text)}" placeholder="댓글"></label><button class="k-btn" data-act="chgcomment" data-el="${esc(x.element)}">등록</button>
-          ${d.can_mark ? `<button class="k-btn${x.mark === 'fix' ? ' dan' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'fix' ? '' : 'fix'}">${x.mark === 'fix' ? '수정 요청 취소' : '수정 요청'}</button><button class="k-btn${x.mark === 'ok' ? ' pri' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'ok' ? '' : 'ok'}">${x.mark === 'ok' ? '승인됨' : '항목 승인'}</button>` : ''}
+        ${notes}<div class="k-h">${canEdit() ? `<label class="k-search k-g0" style="flex:1 1 220px"><span class="k-hide">댓글</span><input type="text" id="chgtext" data-in="chgtext" value="${esc(c.text)}" placeholder="댓글"></label><button class="k-btn" data-act="chgcomment" data-el="${esc(x.element)}">등록</button>` : ''}
+          ${d.can_mark && canApprove() ? `<button class="k-btn${x.mark === 'fix' ? ' dan' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'fix' ? '' : 'fix'}">${x.mark === 'fix' ? '수정 요청 취소' : '수정 요청'}</button><button class="k-btn${x.mark === 'ok' ? ' pri' : ''}" data-act="chgmark" data-el="${esc(x.element)}" data-mark="${x.mark === 'ok' ? '' : 'ok'}">${x.mark === 'ok' ? '승인됨' : '항목 승인'}</button>` : ''}
           ${to && known(to) ? `<a class="k-lnk" href="#${to}">화면 열기${ki('chevR', 14, 1.75)}</a>` : ''}</div></div>`;
     };
     const row = (x) => { const on = c.item === x.element, m = MARK_WORD[x.mark];
       return `<button class="k-row${on ? ' on' : ''}" data-act="o2chitem" data-el="${esc(x.element)}" aria-expanded="${on}"><span class="k-col"><span class="k-ink k-14">${o2Sign(x.change)} ${esc(O2_KIND[x.kind] || x.kind)} ${esc(x.label)}</span><span class="k-s">${esc(x.fields.map((f) => f.label).join(' · ') || { added: '추가', removed: '삭제', changed: '변경' }[x.change] || '')}${x.comments.length ? ` · 댓글 ${x.comments.length}` : ''}</span></span>
         <span class="k-h end">${m ? `<span class="k-chip ${m[0]}">${m[1]}</span>` : ''}</span>${ki(on ? 'chevD' : 'chevR', 16, 1.75)}</button>${on ? open(x) : ''}`; };
+    // the terms it writes: no element of the definition, so read beside them
+    const terms = c.sel && S.o2.ch.terms && S.o2.ch.terms.id === c.sel ? S.o2.ch.terms.terms : [];
+    const trow = (x) => { const on = S.o2.ch.titem === x.id, name = x.english ? `${x.term}@${x.english}` : x.term;
+      const box = on ? `<div class="o2-open">${x.fields.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">항목</th><th scope="col">이전</th><th scope="col">이후</th></tr></thead><tbody>${x.fields.map((f) => `<tr><td class="b nw">${esc(f.label)}</td><td class="k-bad">${said(f.before)}</td><td class="k-ok">${said(f.after)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+        ${known('lexicon') ? `<div class="k-h"><a class="k-lnk" href="#lexicon">화면 열기${ki('chevR', 14, 1.75)}</a></div>` : ''}</div>` : '';
+      return `<button class="k-row${on ? ' on' : ''}" data-act="o2chterm" data-id="${esc(x.id)}" aria-expanded="${on}"><span class="k-col"><span class="k-ink k-14">${o2Sign(x.change)} 용어 ${esc(name)}</span><span class="k-s">${esc(x.fields.map((f) => f.label).join(' · ') || { added: '추가', removed: '삭제', changed: '변경' }[x.change] || '')}</span></span>${ki(on ? 'chevD' : 'chevR', 16, 1.75)}</button>${box}`; };
     const lines = (d.yaml || []).map(([t, l]) => `<span class="${t === '+' ? 'k-ok' : t === '-' ? 'k-bad' : ''}">${t === ' ' ? ' ' : t} ${esc(l) || ' '}</span>`).join('\n');
-    const ready = d.can_decide && !sent && done === items.length;
-    const why = !d.can_decide ? (d.self_approve ? '' : '본인 요청 승인 불가') : sent ? `수정 요청 항목 ${sent}개` : done < items.length ? `미검토 항목 ${items.length - done}개` : '전 항목 검토 완료';
+    // where it goes: the version it becomes, and the module only where it is one of the library's own
+    const from = d.from_version || d.base_version;
+    const goes = [d.status === 'pending' ? `대상 ${cur.label} → 버전 ${cur.number + 1}` : h && h.number ? `버전 ${h.number} 배포` : d.status === 'approved' ? '라이브러리 저장' : '',
+      d.module === O2_WS ? '' : `모듈 ${d.module_label} ${from ? `${from} → ${d.version}` : `${d.version} 추가`}`].filter(Boolean);
+    const decide = d.can_decide && canApprove(), ready = decide && !sent && done === items.length;
+    const why = !canApprove() ? '승인 권한 없음' : !d.can_decide ? (d.self_approve ? '' : '본인 요청 승인 불가') : sent ? `수정 요청 항목 ${sent}개` : done < items.length ? `미검토 항목 ${items.length - done}개` : '전 항목 검토 완료';
     const review = d.status === 'pending'
       ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.who || '검토자')}${d.who && d.who === d.requested_by ? ' · 작성자' : ''}</span><span class="k-s">검토 요청 ${o2When(d.at)} · 항목 ${done} / ${items.length} 승인${sent ? ` · 수정 요청 ${sent}` : ''}</span></span><span class="k-h end"><span class="k-chip warn">대기</span></span></div>
-         <div class="k-cb" style="padding-top:12px"><div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn" data-act="chgdecide" data-yes="0"${d.can_decide ? '' : ' disabled'}>반려</button><button class="k-btn pri" data-act="chgdecide" data-yes="1"${ready ? '' : ' disabled'}>승인 후 버전 ${cur.number + 1} 배포</button></div>
+         <div class="k-cb" style="padding-top:12px">${decide ? `<label class="k-f">반려 사유<textarea class="k-in" rows="2" data-in="o2why" maxlength="500">${esc(S.o2.ch.why || '')}</textarea></label>` : ''}<div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn" data-act="o2reject"${decide ? '' : ' disabled'}>반려</button><button class="k-btn pri" data-act="chgdecide" data-yes="1"${ready ? '' : ' disabled'}>승인 후 버전 ${cur.number + 1} 배포</button></div>
            <span class="k-s">${esc(why)}</span></div>`
       : `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.decided_by || '-')}</span><span class="k-s">${d.status === 'approved' ? '승인' : '반려'} ${o2When(d.decided_at)}${d.reason ? ` · ${esc(d.reason)}` : ''}</span></span><span class="k-h end"><span class="k-chip${d.status === 'approved' ? ' ok' : ''}">${d.status === 'approved' ? '승인' : '반려'}</span></span></div>`;
     return `<div class="k-v g16" style="flex:2 1 560px;min-width:0">
       <section class="k-card"><div class="k-ch"><h2><span class="k-code k-mut">${esc(d.id)}</span> ${esc(o2Title(d))}</h2><span class="k-push"><span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span></span></div>
-        <div class="k-cb">${o2Steps(d.status === 'approved' ? (applied ? 5 : 4) : 3)}<p class="k-p">${h && h.summary && h.summary !== o2Title(d) ? `${esc(h.summary)}. ` : ''}요청 ${esc(d.requested_by || '-')}${d.decided_by ? ` · ${d.status === 'approved' ? '승인' : '반려'} ${esc(d.decided_by)}` : ''} · ${esc(d.module_label)} ${esc(d.from_version || d.base_version || '새 모듈')} → ${esc(d.version)}${h && h.number ? ` · 버전 ${h.number}` : ''}</p></div></section>
-      <section class="k-card"><div class="k-ch"><h2>변경 항목</h2><span class="k-s">추가 ${n('added')} · 수정 ${n('changed')} · 삭제 ${n('removed')}</span><span class="k-push">${o2Seg('보기', [['fields', '요약'], ['yaml', 'YAML 비교']], view, 'chgview')}</span></div>
-        ${view === 'yaml' ? `<div class="k-cb"><pre class="o2-yaml k-x">${lines || '비교할 파일이 없습니다.'}</pre><span class="k-s">${d.base_version ? '모듈 파일 전체 비교' : '첫 버전 · 전체 추가'}</span></div>` : (items.map(row).join('') || '<p class="k-cf line">변경 항목 없음 · YAML 비교 참조</p>')}
+        <div class="k-cb">${o2Steps(d.status === 'approved' ? (applied ? 5 : 4) : 3)}<p class="k-p">${h && h.summary && h.summary !== o2Title(d) ? `${esc(h.summary)}. ` : ''}요청 ${esc(d.requested_by || '-')}${d.decided_by ? ` · ${d.status === 'approved' ? '승인' : '반려'} ${esc(d.decided_by)}` : ''}${goes.map((w) => ` · ${esc(w)}`).join('')}</p></div></section>
+      <section class="k-card"><div class="k-ch"><h2>변경 항목</h2><span class="k-s">추가 ${n('added')} · 수정 ${n('changed')} · 삭제 ${n('removed')}${terms.length ? ` · 용어 ${terms.length}` : ''}</span><span class="k-push">${o2Seg('보기', [['fields', '요약'], ['yaml', 'YAML 비교']], view, 'chgview')}</span></div>
+        ${view === 'yaml' ? `<div class="k-cb"><pre class="o2-yaml k-x">${lines || '비교할 파일이 없습니다.'}</pre><span class="k-s">${d.base_version ? '모듈 파일 전체 비교' : '첫 버전 · 전체 추가'}</span></div>` : (`${items.map(row).join('')}${terms.map(trow).join('')}` || '<p class="k-cf line">변경 항목 없음 · YAML 비교 참조</p>')}
         ${(d.affected || []).length ? `<div class="o2-sub"><span class="k-b k-13">영향 범위 ${d.affected.length}</span></div><div class="k-cb"><div class="k-h g6">${d.affected.map((r) => kChip(r)).join('')}</div></div>` : ''}</section>
       <section class="k-card"><div class="k-ch"><h2>회귀 테스트</h2><span class="k-push"><span class="k-chip ${d.passed ? 'ok' : 'bad'}">${d.passed ? '통과' : '미통과'}</span>${known('flow') ? `<a class="k-lnk" href="#flow">검증 결과${ki('chevR', 14, 1.75)}</a>` : ''}</span></div>
         ${o2Regression(d.regression, d.gates, d.before)}${d.issues.length ? `<div class="k-cb" style="padding-top:12px"><p class="k-note bad">${d.issues.map(esc).join('<br>')}</p></div>` : ''}</section>
@@ -203,18 +230,17 @@
   function o2VersionTable(v, more, ws, open) {
     const cur = v.current, c = S.o2.ch;
     const applied = v.history.filter((x) => x.applied).sort((a, b) => b.number - a.number);
-    const back = Object.fromEntries(more.rollbacks.map((b) => [b.change, b]));
     const roll = canApprove() && cur.change && !ws ? `<button class="k-lnk" data-act="o2rollback" data-id="${esc(cur.change)}"${c.busy ? ' disabled' : ''}>롤백</button>` : '';
     const rows = [];
     if (ws || open.length) rows.push(`<tr><td><span class="k-code k-ink">버전 ${cur.number + 1} 초안</span></td><td><span class="k-chip b">미리보기</span></td><td>${[ws ? '작성 중인 변경 요청' : '', ...open.map((x) => esc(x.id))].filter(Boolean).join(' · ')}</td><td>-</td><td>-</td>
       <td>${ws ? '<button class="k-lnk" data-act="o2chsel" data-id="draft">변경 항목 보기</button>' : `<button class="k-lnk" data-act="o2chsel" data-id="${esc(open[0].id)}">검토</button>`}</td></tr>`);
     applied.forEach((x) => rows.push(`<tr><td><span class="k-code k-ink">버전 ${x.number}</span></td><td>${x.number === cur.number ? '<span class="k-chip ok">운영</span>' : '<span class="k-chip">보관</span>'}</td>
-      <td>${esc(x.id)} · ${esc(o2Title(x))}${x.summary && x.summary !== o2Title(x) ? ` · ${esc(x.summary)}` : ''}${back[x.id] ? ` · ${esc(back[x.id].restored)} 롤백` : ''}</td><td class="nw">${o2When(x.decided_at)}</td><td>${esc(x.decided_by || '-')}</td>
+      <td>${esc(x.id)} · ${esc(o2Title(x))}${x.summary && x.summary !== o2Title(x) ? ` · ${esc(x.summary)}` : ''}</td><td class="nw">${o2When(x.decided_at)}</td><td>${esc(x.decided_by || '-')}</td>
       <td><button class="k-lnk" data-act="o2chsel" data-id="${esc(x.id)}">비교</button>${x.number === cur.number ? '<a class="k-lnk" href="/api/export/library" download>내보내기</a>' : ''}${x.number === cur.number - 1 ? roll : ''}</td></tr>`));
     rows.push(`<tr><td><span class="k-code k-ink">버전 1</span></td><td>${cur.number === 1 ? '<span class="k-chip ok">운영</span>' : '<span class="k-chip">보관</span>'}</td><td>처음 구성</td><td>-</td><td>-</td>
       <td>${cur.number === 1 ? '<a class="k-lnk" href="/api/export/library" download>내보내기</a>' : ''}${cur.number === 2 ? roll : ''}</td></tr>`);
     return `<section class="k-card" id="o2vers" aria-labelledby="o2vers-h"><div class="k-ch"><h2 id="o2vers-h">버전 이력</h2></div>
-      <div class="k-x"><table class="k-t end"><thead><tr><th scope="col">버전</th><th scope="col">환경</th><th scope="col">포함</th><th scope="col">배포</th><th scope="col">배포자</th><th scope="col"></th></tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
+      <div class="k-x"><table class="k-t end o2-vt"><thead><tr><th scope="col">버전</th><th scope="col">환경</th><th scope="col">포함</th><th scope="col">배포</th><th scope="col">배포자</th><th scope="col"></th></tr></thead><tbody>${rows.join('')}</tbody></table></div></section>`;
   }
 
   screen('changes', {
@@ -225,8 +251,12 @@
       if (!S.changes) loadChanges();
       if (!S.ver) o2LoadVersions();
       if (S.mg.st && o2DraftStale()) o2LoadDraft();
-      if (S.changes && S.changes.changes && c.sel && c.sel !== 'draft' && (!S.chg.det || S.chg.det.id !== c.sel) && !S.chg.busy) loadChange(c.sel);
-      if (c.jump && $('#o2vers')) { c.jump = false; $('#o2vers').scrollIntoView({ block: 'start' }); }
+      const real = S.changes && S.changes.changes && S.changes.changes.some((x) => x.id === c.sel);  // a request a link names may not be there
+      if (real && (!S.chg.det || S.chg.det.id !== c.sel) && !S.chg.busy) loadChange(c.sel);
+      if (real && (c.termsFor !== c.sel || c.termsAt !== S.changes)) o2LoadTerms(c.sel);
+      // the versions are reached once what stands above them is drawn: a detail read later would push them down again
+      const above = !c.sel || c.sel === 'draft' || (S.chg.det && S.chg.det.error) || ((S.chg.det && S.chg.det.id === c.sel) && (c.terms && c.terms.id === c.sel));
+      if (c.jump && $('#o2vers') && above && (c.sel !== 'draft' || c.dm)) { c.jump = false; $('#o2vers').scrollIntoView({ block: 'start' }); }
     },
   });
   // the older address of the version list leads to the same screen, at its versions
@@ -235,12 +265,28 @@
 
   Object.assign(ACT, {
     o2jump: (t) => { const box = document.getElementById(t.dataset.to); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
-    o2chtab: (t) => { Object.assign(S.o2.ch, { tab: t.dataset.k, sel: '' }); render(); },
-    o2chsel: (t) => { Object.assign(S.o2.ch, { sel: t.dataset.id, tab: '' }); S.chg.view = 'fields'; render(); $('#main').scrollTop = 0; },
+    o2chtab: (t) => { Object.assign(S.o2.ch, { tab: t.dataset.k, sel: '', missing: '', why: '' }); render(); },
+    o2chsel: (t) => { Object.assign(S.o2.ch, { sel: t.dataset.id, tab: '', missing: '', why: '' }); S.chg.view = 'fields'; render(); $('#main').scrollTop = 0; },
+    o2reject: async () => {
+      const c = S.o2.ch, id = S.chg.sel, why = String(c.why || '').trim();
+      if (!why) { toast('반려 사유가 없어 반려하지 못했습니다. 반려 사유를 입력해 주세요.', true); return; }
+      try {
+        const r = await api('change/decide', { id, approve: false, reason: why });
+        if (!r.ok) throw new Error(r.error);
+        c.why = '';
+        Object.assign(S, { changes: null, impact: null, agree: null, ver: null });
+        Object.assign(S.home, { box: null, ov: null });
+        S.chg.det = null;
+        stale();
+        await load();
+        toast(`변경 요청 ${id}${josa(id, '을', '를')} 반려했습니다.`);
+      } catch (e) { render(); fail(e); }
+    },
     o2chitem: (t) => { S.chg.item = S.chg.item === t.dataset.el ? '' : t.dataset.el; S.chg.text = ''; render(); },
+    o2chterm: (t) => { S.o2.ch.titem = S.o2.ch.titem === t.dataset.id ? '' : t.dataset.id; render(); },
     o2rollback: async (t) => {
       const c = S.o2.ch, cur = S.ver.current;
-      if (!window.confirm(`${cur.label}을(를) 롤백합니다. 이전 정의로 새 버전을 생성합니다.`)) return;
+      if (!window.confirm(`${cur.label}${josa(cur.label, '을', '를')} 롤백해 이전 정의로 버전 ${cur.number + 1}${josa(String(cur.number + 1), '을', '를')} 생성합니다.`)) return;
       c.busy = true; render();
       try {
         const r = await api('ont2/rollback', { change: t.dataset.id });
@@ -249,7 +295,7 @@
         stale();
         Object.assign(c, { sel: r.change.id, tab: '' });
         await load();
-        toast(r.pending ? `롤백 요청 ${r.change.id}을(를) 등록했습니다.` : `이전 정의로 롤백했습니다.`);
+        toast(r.pending ? `롤백 요청 ${r.change.id}${josa(r.change.id, '을', '를')} 등록했습니다.` : '이전 정의로 롤백했습니다.');
       } catch (e) { c.busy = false; render(); fail(e); }
     },
   });
@@ -283,9 +329,10 @@
     checks: (d) => {
       const ws = S.mg.st && !S.mg.st.error ? S.mg.st.workspace : null, n = ws ? ws.edits.length : 0, bad = ws ? ws.issues.length : 0;
       return [!String(d.title).trim() ? { say: '제목 없음', tone: 'bad' } : { say: '제목 있음', tone: 'ok' },
-        n ? { say: bad ? `포함 항목 ${n}개 · 정의 오류 ${bad}건` : `포함 항목 ${n}개 · 정의 검사 통과`, tone: bad ? 'warn' : 'ok', word: bad ? '확인' : '' } : { say: '포함 항목 없음', tone: 'note' }];
+        n ? { say: bad ? `포함 항목 ${n}개 · 정의 오류 ${bad}건` : `포함 항목 ${n}개 · 정의 검사 통과`, tone: bad ? 'warn' : 'ok', word: bad ? '확인' : '' } : { say: '포함 항목 없음', tone: 'bad' }];
     },
-    valid: (d) => (String(d.title).trim() ? '' : '제목이 없어 저장하지 못했습니다. 제목을 입력해 주세요.'),
+    valid: (d) => (!(S.mg.st && !S.mg.st.error && S.mg.st.workspace.dirty) ? '포함 항목이 없어 저장하지 못했습니다. 정의나 용어를 먼저 편집해 주세요.'
+      : String(d.title).trim() ? '' : '제목이 없어 저장하지 못했습니다. 제목을 입력해 주세요.'),
     save: async (d) => {
       S.o2.ch.dm = await api('ont2/draft', { title: d.title, description: d.description });
       S.o2.ch.dmFor = S.mg.st;
@@ -293,9 +340,15 @@
       Object.assign(S.o2.ch, { sel: S.mg.st.workspace.dirty ? 'draft' : '', tab: '' });
     },
   });
+  Object.assign(INPUT, { o2why: (t) => { S.o2.ch.why = t.value; } });
   Object.assign(ACT, {
     o2discard: async () => {
       if (!window.confirm('작성 중인 변경 요청과 포함 항목을 모두 폐기합니다.')) return;
-      try { S.mg.st = await api('manage/discard', {}); S.md.trial = null; S.lx.st = null; S.it = { key: '' }; toast('작성 중인 변경 요청을 폐기했습니다.'); location.hash = '#changes'; } catch (e) { fail(e); }
+      try {
+        S.mg.st = await api('manage/discard', {});
+        Object.assign(S.mg, { form: null, sel: '', review: null }); S.md.trial = null; S.lx.st = null; S.it = { key: '' };
+        toast('작성 중인 변경 요청을 폐기했습니다.');
+        if (S.tab === 'changes') render(); else location.hash = '#changes';
+      } catch (e) { fail(e); }
     },
   });

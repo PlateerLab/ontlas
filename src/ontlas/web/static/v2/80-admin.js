@@ -2,23 +2,25 @@
   // What these screens show is read from the server as it runs: its users file, what each route asks of a role,
   // its connections, its limits and the records it keeps. What this version does not have (groups, LDAP, licences,
   // backups) is not drawn. The few things that can be set here are the pass conditions and the users.
-  S.adm = { at: '', d: {}, busy: {}, err: {}, flow: null, flowBusy: false, gates: null, dirty: false, saving: false,
-    uq: '', aq: '', akind: 'all', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false };
+  S.adm = { at: '', d: {}, busy: {}, err: {}, flow: null, flowBusy: false, gates: null, typed: {}, dirty: false, saving: false,
+    uq: '', mq: '', aq: '', akind: 'all', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false, seen: '', st: null };
 
   const admSig = () => `${S.st.library_id}|${S.st.pipeline}`;
   // what was read belongs to the ontology it was read from: another one starts empty
   function admFresh() {
     const A = S.adm;
-    if (A.at !== admSig()) Object.assign(A, { at: admSig(), d: {}, err: {}, flow: null, gates: null, dirty: false, psel: '', vsel: '', test: null });
+    if (A.at !== admSig()) Object.assign(A, { at: admSig(), d: {}, err: {}, flow: null, gates: null, typed: {}, dirty: false, psel: '', vsel: '', test: null });
     return A;
   }
-  function admNeed(key, path) {
+  // again: the screen was just come to, so what it shows is read again (the last reading stays drawn until then)
+  function admNeed(key, path, again = false) {
     const A = admFresh(), at = A.at, tab = S.tab;
-    if (A.d[key] || A.busy[key] || A.err[key]) return;
+    if (A.busy[key] || (!again && (A.d[key] || A.err[key]))) return;
     A.busy[key] = true;
-    api(path).then((x) => { if (S.adm.at === at) S.adm.d[key] = x; }, (e) => { if (S.adm.at === at) S.adm.err[key] = e.message || String(e); })
+    api(path).then((x) => { if (S.adm.at === at) { S.adm.d[key] = x; delete S.adm.err[key]; } }, (e) => { if (S.adm.at === at) S.adm.err[key] = e.message || String(e); })
       .then(() => { A.busy[key] = false; if (S.tab === tab) render(); });  // drawn again only for the screen that asked
   }
+  window.addEventListener('hashchange', () => { S.adm.seen = ''; });  // runs before the page draws the screen it goes to
   const admGot = (key) => admFresh().d[key];
   const admAgain = (key) => { const A = admFresh(); delete A.d[key]; delete A.err[key]; };
   // the version installed, at the foot of the admin menu
@@ -34,6 +36,9 @@
   // one thing that is so on this server, with a word at the right for how it stands
   const admFact = (say, sub, tone = '', word = '') => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(say)}</span>${sub ? `<span class="k-s">${esc(sub)}</span>` : ''}</span><span class="k-h end">${word ? kChip(word, tone) : ''}</span></div>`;
   const admWhen = (at) => (at ? String(at).slice(5, 16).replace('-', '/').replace('T', ' ') : '-');
+  // a row picked by its name: the whole row takes a click, the name also takes the keyboard
+  const admPick = (act, n, word, on) => `<button class="adm-pick${on ? ' k-b' : ''}" data-act="${act}" data-n="${esc(n)}"${on ? ' aria-current="true"' : ''}>${esc(word)}</button>`;
+  const admRefocus = (act, n) => { const b = [...document.querySelectorAll(`#main button[data-act="${act}"]`)].find((x) => x.dataset.n === n); if (b) b.focus(); };
   const admRoles = (roles) => ['admin', 'approver', 'editor', 'viewer'].filter((r) => (roles || []).includes(r)).map((r) => kChip(WORK_ROLE[r], r === 'admin' || r === 'approver' ? 'b' : '')).join(' ');
   const admCode = (text) => `<div class="k-h nw"><pre class="k-pre k-g0">${esc(text)}</pre><button class="k-btn" data-act="copycode" data-v="${esc(text)}" aria-label="명령 복사">${ki('copy', 16, 1.75)}복사</button></div>`;
   // a server nobody signs in to: said once, with the way to start it for a team
@@ -54,15 +59,26 @@
   // the pass conditions a person sets here: [stage, condition, the word for it, what the number is]
   const ADM_TARGETS = [['check', 'min_accuracy', '정답률', '% 이상'], ['check', 'min_grounded', '근거 제시율', '% 이상'], ['decide', 'min_agreement', '판정 일치율', '% 이상 · 데이터 소스 연결 시'],
     ['index', 'min_found', '문서 검색 적중률', '% 이상'], ['query', 'min_agree', '저장소 간 결과 일치율', '% 이상'], ['bind', 'max_errors', 'Binding 검사 오류', '건 이하']];
-  function admFlow() {
+  // again: read the targets again, keeping what was typed and not saved; moved: the space itself was read again
+  // (초기화 puts its conditions back), so what was typed goes with what it was typed over
+  function admFlow(again = false, moved = false) {
     const A = admFresh(), at = A.at, tab = S.tab;
-    if (A.flow || A.flowBusy) return;
+    if (A.flowBusy || (A.flow && !(again && (moved || !A.dirty)))) return;
     A.flowBusy = true;
-    api('flow/settings').then((x) => { if (S.adm.at === at) Object.assign(S.adm, { flow: x, gates: JSON.parse(JSON.stringify(x.settings.gates || {})), dirty: false }); },
+    api('flow/settings').then((x) => { if (S.adm.at === at) Object.assign(S.adm, { flow: x, gates: JSON.parse(JSON.stringify(x.settings.gates || {})), typed: {}, dirty: false }); },
       (e) => { if (S.adm.at === at) S.adm.flow = { error: e.message || String(e) }; }).then(() => { A.flowBusy = false; if (S.tab === tab) render(); });
   }
-  const admGate = (stage, cond) => { const v = ((S.adm.gates || {})[stage] || {})[cond]; return v === undefined || v === null ? '' : cond.startsWith('min_') ? String(Math.round(v * 1000) / 10) : String(v); };
+  const admGate = (stage, cond) => {  // what was typed and not saved is shown as typed, a wrong number too
+    const typed = (S.adm.typed || {})[`${stage}.${cond}`], v = ((S.adm.gates || {})[stage] || {})[cond];
+    return typed !== undefined ? typed : v === undefined || v === null ? '' : cond.startsWith('min_') ? String(Math.round(v * 1000) / 10) : String(v); };
+  // what a target box holds: a share typed as a percent up to 100, a count as a whole number; anything else is NaN
+  // and stops the save (Number() would take 0x50 for 80 and 1e1 for 10)
+  const admRead = (cond, text) => (text === '' ? undefined : cond.startsWith('min_')
+    ? (/^\d{1,3}(\.\d+)?$/.test(text) && Number(text) <= 100 ? Math.round(Number(text) * 10) / 1000 : NaN)
+    : /^\d{1,6}$/.test(text) ? Number(text) : NaN);
   const admStyle = (n) => (n.total ? `${n.style} · ${n.follow} / ${n.total}` : '-');
+  // the model as its last call left it: set and not yet called is 설정됨, not 연결됨
+  const ADM_MODEL = { ok: '연결됨', bad: '응답 없음', idle: '설정됨', off: '미연결' };
 
   function admSettings() {
     const A = admFresh(), f = A.flow;
@@ -81,7 +97,7 @@
           ${ro('표기', '한글@영어')}${ro('Entity 영문', admStyle(d.naming.entity))}${ro('Property 영문', admStyle(d.naming.property))}${ro('Relation', admStyle(d.naming.link))}</div>
           <div class="k-h g16">${known('lexicon') ? '<a class="k-lnk flat" href="#lexicon">용어 사전</a>' : ''}${known('sys-vocab') && isSysAdmin() ? '<a class="k-lnk flat" href="#sys-vocab">기준 어휘</a>' : ''}</div></div></section>`;
       const ai = `<section class="k-card"><div class="k-ch"><h2>AI 초안</h2></div>
-          ${admFact('AI 초안 생성', d.model ? '언어 모델 연결됨' : '언어 모델 미연결', d.model ? 'ok' : '', d.model ? '사용' : '사용 안 함')}
+          ${admFact('AI 초안 생성', `언어 모델 ${ADM_MODEL[d.model_state] || '미연결'}`, d.model_state === 'ok' ? 'ok' : d.model_state === 'bad' ? 'bad' : '', d.model ? '사용' : '사용 안 함')}
           ${known('ai') ? '<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ai">AI 초안 생성</a></div>' : ''}</section>`;
       const targets = !f ? admWait() : f.error ? `<section class="k-card"><div class="k-ch"><h2>품질 목표</h2></div><p class="k-cf">${esc(f.error)}</p></section>`
         : `<section class="k-card"><div class="k-ch"><h2>품질 목표</h2></div><div class="k-cb"><div class="adm-g3">${ADM_TARGETS.map(([s, c, word, unit]) => `<label class="k-f">${word}<input class="k-in" type="text" inputmode="decimal" data-in="admGate" data-s="${s}" data-c="${c}" value="${esc(admGate(s, c))}" placeholder="조건 없음"><span class="k-hint">${unit}</span></label>`).join('')}</div>
@@ -97,7 +113,7 @@
       const danger = `<section class="k-card"><div class="k-ch"><h2>위험 구역</h2></div>
           ${risk('다른 서버로 이전', '온톨로지 파일 내보내기', '<a class="k-btn dan" href="/api/export/library">내보내기</a>')}
           ${d.made ? risk('삭제', '세션 생성 온톨로지 · 복구 불가', `<button class="k-btn dan" data-act="libdrop" data-id="${esc(d.id)}">삭제</button>`) : ''}
-          ${risk('초기화', S.st.data.kept ? '변경 내용 삭제 · 레포지토리 파일 유지' : '업로드 자료 · 변경 내용 삭제', '<button class="k-btn dan" data-act="reset">초기화</button>')}
+          ${inTeam() ? '' : risk('초기화', S.st.data.kept ? '변경 내용 삭제 · 레포지토리 파일 유지' : '업로드 자료 · 변경 내용 삭제', '<button class="k-btn dan" data-act="reset">초기화</button>')}
           ${known('ontologies') ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ontologies">온톨로지 선택${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
       return `<div class="k-cols"><div class="k-c3 wide">${basic}${naming}${ai}${targets}</div><div class="k-c2 wide">${approval}${out}${danger}</div></div>
         ${kNext([['members', '멤버 · 권한'], ['sys-gov', '거버넌스 정책'], ['changes', '변경 요청 · 버전'], ['home', '홈']])}`;
@@ -106,7 +122,7 @@
 
   // ---- SET-02 멤버 · 권한 -------------------------------------------------------------------------------------------
   const admUserHit = (u, q) => !q || `${u.name} ${u.id}`.toLowerCase().includes(q.toLowerCase());
-  const admMemberRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => `<tr><td><b class="k-b">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td>${u.signed_in ? kChip('로그인 중', 'ok') : '<span class="k-mut">-</span>'}</td>
+  const admMemberRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.mq)).map((u) => `<tr><td><b class="k-b">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td>${u.signed_in ? kChip('로그인 중', 'ok') : '<span class="k-mut">-</span>'}</td>
     <td class="r">${d.managed && isSysAdmin() && V2['user-form'] ? `<a class="k-lnk" href="${itemHref('user', 'form', u.id)}">편집</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">검색 결과가 없습니다.</td></tr>';
   const admMatrix = (rows) => `<div class="k-x"><table class="k-t adm-mid"><thead><tr><th scope="col">작업</th>${['admin', 'approver', 'editor', 'viewer'].map((r) => `<th scope="col" class="c">${WORK_ROLE[r]}</th>`).join('')}</tr></thead>
     <tbody>${rows.map((m) => `<tr><td>${esc(m.label)}</td>${['admin', 'approver', 'editor', 'viewer'].map((r) => `<td class="c">${m.may[r] ? `<span class="k-blue" aria-label="${WORK_ROLE[r]} 가능">${ki('check', 16, 1.75)}</span>` : `<span class="k-mut" aria-label="${WORK_ROLE[r]} 불가">-</span>`}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -122,7 +138,7 @@
         ${admStat('작업 역할', String(d.levels.length), ['admin', 'approver', 'editor', 'viewer'].map((r) => WORK_ROLE[r]).join(' · '))}${admStat('영역 담당 지정', d.areas.length ? `${owned} / ${d.areas.length}` : '-', '담당자 지정 Object')}
         ${admStat('Agent · API 키', d.rest ? String(d.clients.length) : '-', d.rest ? `쓰기 허용 ${d.clients.filter((c) => c.write).length}` : '외부 API 사용 안 함')}</section>`;
       const people = !d.team ? admAlone() : !d.managed ? kEmpty('사용자 목록을 불러오지 못했습니다', '서버 응답에 사용자 목록이 없어 표시하지 못했습니다. 서버를 다시 시작해 주세요.')
-        : `<section class="k-card"><div class="k-h g12" style="padding:16px 20px"><h2 class="k-h2">멤버</h2><label class="k-search k-push" style="flex:0 1 260px">${ki('search', 15, 1.75)}<input type="search" placeholder="이름 · 아이디 검색" aria-label="사용자 검색" data-in="admUq" data-box="admmembers" value="${esc(S.adm.uq)}"></label></div>
+        : `<section class="k-card"><div class="k-h g12" style="padding:16px 20px"><h2 class="k-h2">멤버</h2><label class="k-search k-push" style="flex:0 1 260px">${ki('search', 15, 1.75)}<input type="search" placeholder="이름 · 아이디 검색" aria-label="사용자 검색" data-in="admUq" data-box="admmembers" value="${esc(S.adm.mq)}"></label></div>
           <div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">이름</th><th scope="col">아이디</th><th scope="col">작업 역할</th><th scope="col">로그인</th><th scope="col"></th></tr></thead><tbody id="admmembers">${admMemberRows(d)}</tbody></table></div>
           <p class="k-cf">${d.users.length}명</p></section>`;
       const matrix = `<section class="k-card" style="flex:3 1 600px"><div class="k-h g12" style="padding:16px 20px"><h2 class="k-h2">작업 역할별 권한</h2></div>${admMatrix(d.matrix)}</section>`;
@@ -206,18 +222,30 @@
       const got = admGot('users') || { users: [], password_min: 10 };
       const roles = ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]);
       const admins = got.users.filter((u) => u.roles.includes('admin') && (!x || u.id !== x.id)).length;
+      const taken = !x && got.users.some((u) => u.id === d.id.trim());
       return [
-        x ? null : { say: '같은 아이디의 사용자 없음', tone: !d.id.trim() ? 'note' : got.users.some((u) => u.id === d.id.trim()) ? 'bad' : 'ok', word: !d.id.trim() ? '입력 대기' : '' },
+        x ? null : { say: taken ? '이미 사용 중인 아이디' : '아이디 중복 없음', tone: !d.id.trim() ? 'note' : taken ? 'bad' : 'ok', word: !d.id.trim() ? '입력 대기' : '' },
         { say: `비밀번호 ${got.password_min}자 이상`, tone: !d.password ? (x ? 'note' : 'warn') : d.password.length < got.password_min ? 'bad' : 'ok', word: !d.password ? (x ? '변경 안 함' : '입력 대기') : '' },
         { say: '역할 1개 이상', tone: roles.length ? 'ok' : 'bad' },
         x && x.roles.includes('admin') ? { say: '관리자 1명 이상 유지', tone: d.r_admin || admins ? 'ok' : 'bad' } : null,
       ].filter(Boolean);
     },
-    valid: (d, x) => (!d.name.trim() ? '이름을 입력해 주세요.' : !d.id.trim() ? '아이디를 입력해 주세요.' : !x && !d.password ? '비밀번호를 입력해 주세요.' : ''),
+    // what stops a save is said as the cause and what to do, the same sentence the server would answer with
+    valid: (d, x) => {
+      const got = admGot('users') || { users: [], password_min: 10 }, min = got.password_min;
+      const admins = got.users.filter((u) => u.roles.includes('admin') && (!x || u.id !== x.id)).length;
+      return !d.name.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.id.trim() ? '아이디가 없어 저장하지 못했습니다. 아이디를 입력해 주세요.'
+        : !x && got.users.some((u) => u.id === d.id.trim()) ? `아이디 ${d.id.trim()}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.`
+          : !x && !d.password ? '비밀번호가 없어 저장하지 못했습니다. 비밀번호를 입력해 주세요.'
+            : d.password && d.password.length < min ? `비밀번호가 ${min}자보다 짧아 저장하지 못했습니다. ${min}자 이상 입력해 주세요.`
+              : !['viewer', 'editor', 'approver', 'admin'].some((r) => d[`r_${r}`]) ? '역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.'
+                : x && x.roles.includes('admin') && !d.r_admin && !admins ? '마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.' : '';
+    },
     saves: () => [['적용', '저장 즉시'], ['기록', V2['sys-audit'] ? '<a href="#sys-audit">감사 로그</a>' : '감사 로그']],
     save: async (d, x) => {
       await api('admin/user/save', { id: d.id.trim(), name: d.name.trim(), password: d.password, roles: ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]), new: !x });
       admAgain('users'); admAgain('members'); admAgain('audit'); admAgain('overview');
+      return { said: x ? '사용자를 저장했습니다.' : '사용자를 추가했습니다.' };
     },
     side: (d, x) => (!x ? '' : `<section class="k-card"><div class="k-ch"><h2>계정 폐기</h2></div><div class="k-cb"><p class="k-s" style="margin:0">즉시 로그아웃 · 감사 로그 기록</p>
         <div class="k-wrap g8">${x.id === (admGot('users') || {}).me ? '<span class="k-s">본인 계정 폐기 불가</span>' : `<button class="k-btn dan" data-act="admUserDrop" data-id="${esc(x.id)}" data-name="${esc(x.name)}">폐기</button>`}${V2['sys-audit'] ? `<a class="k-lnk" href="#sys-audit">감사 로그${ki('chevR', 14, 1.75)}</a>` : ''}</div></div></section>`),
@@ -260,8 +288,8 @@
     if (!rows.length) return head + kEmpty('등록된 도메인 팩이 없습니다', '');
     const seg = `<div class="k-x"><div class="k-seg" role="group" aria-label="팩 종류"><button class="${A.pkind === 'all' ? 'on' : ''}" data-act="admPkind" data-k="all">전체 ${rows.length}</button>${kinds.map((k) => `<button class="${A.pkind === k ? 'on' : ''}" data-act="admPkind" data-k="${esc(k)}">${esc(k)} ${rows.filter((r) => r.kind_label === k).length}</button>`).join('')}</div></div>`;
     const state = (r) => (!r.on ? kChip('미적용') : r.version !== r.latest ? kChip(`새 버전 ${r.latest}`, 'b') : kChip('최신', 'ok'));
-    const table = `<section class="k-card" style="flex:3 1 600px"><div class="k-ch"><h2>도메인 팩</h2></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">팩</th><th scope="col">종류</th><th scope="col">버전</th><th scope="col">포함</th><th scope="col">적용</th><th scope="col">상태</th></tr></thead>
-      <tbody>${shown.map((r) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="admPsel" data-n="${esc(r.name)}"><td>${sel && r.name === sel.name ? `<b class="k-b">${esc(r.label || r.name)}</b>` : esc(r.label || r.name)}</td><td class="nw">${esc(r.kind_label)}</td><td><span class="k-code k-mut">${esc(r.version)}</span></td><td>${esc(admHolds(r.counts))}</td><td class="nw">${r.on ? '적용' : '<span class="k-mut">-</span>'}</td><td>${state(r)}</td></tr>`).join('')}</tbody></table></div>
+    const table = `<section class="k-card" style="flex:3 1 600px"><div class="k-ch"><h2>도메인 팩</h2></div><div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">팩</th><th scope="col">종류</th><th scope="col">버전</th><th scope="col">포함</th><th scope="col">적용</th><th scope="col">상태</th></tr></thead>
+      <tbody>${shown.map((r) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="admPsel" data-n="${esc(r.name)}"><td>${admPick('admPsel', r.name, r.label || r.name, sel && r.name === sel.name)}</td><td class="nw">${esc(r.kind_label)}</td><td><span class="k-code k-mut">${esc(r.version)}</span></td><td>${esc(admHolds(r.counts))}</td><td class="nw">${r.on ? '적용' : '<span class="k-mut">-</span>'}</td><td>${state(r)}</td></tr>`).join('')}</tbody></table></div>
       </section>`;
     const detail = !sel ? '' : `<div class="k-v g24" style="flex:2 1 360px;min-width:0"><section class="k-card"><div class="k-ch"><h2>${esc(sel.label || sel.name)} · 구성</h2></div>
       ${ADM_COUNT.filter(([k]) => sel.counts[k]).map(([k, w]) => kKv(w, `<span class="k-code k-ink">${sel.counts[k]}</span>`)).join('') || '<p class="k-cf line">포함된 정의가 없습니다.</p>'}
@@ -279,7 +307,7 @@
       const sel = d.vocabularies.find((v) => v.name === S.adm.vsel) || d.vocabularies[0];
       const table = `<section class="k-card" style="flex:3 1 600px"><div class="k-ch"><h2>참조 어휘</h2></div>
         ${d.vocabularies.length ? `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">어휘</th><th scope="col">Object</th><th scope="col">Entity</th><th scope="col">Property</th><th scope="col">Relation</th></tr></thead>
-        <tbody>${d.vocabularies.map((v) => `<tr class="${sel && v.name === sel.name ? 'on' : ''}" data-act="admVsel" data-n="${esc(v.name)}"><td>${sel && v.name === sel.name ? `<b class="k-b">${esc(v.name)}</b>` : esc(v.name)}</td>${['Object', 'Entity', 'Property', 'Relation'].map((k) => `<td>${v.counts[k] || '<span class="k-mut">-</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <tbody>${d.vocabularies.map((v) => `<tr class="${sel && v.name === sel.name ? 'on' : ''}" data-act="admVsel" data-n="${esc(v.name)}"><td>${admPick('admVsel', v.name, v.name, sel && v.name === sel.name)}</td>${['Object', 'Entity', 'Property', 'Relation'].map((k) => `<td>${v.counts[k] || '<span class="k-mut">-</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
         <p class="k-cf">전체 정의 Object ${d.defined.Object} · Entity ${d.defined.Entity} · Property ${d.defined.Property} · Relation ${d.defined.Relation}</p>` : '<p class="k-cf line">표준 어휘에 정렬된 개념이 없습니다.</p>'}</section>`;
       const rule = (word, n) => admFact(word, n.total ? `${n.follow} / ${n.total}` : '대상 없음', '', n.style || '-');
       const naming = `<section class="k-card"><div class="k-ch"><h2>명명 규칙</h2></div>${rule('Entity 영문', d.naming.entity)}${rule('Property 영문', d.naming.property)}${rule('Relation', d.naming.link)}
@@ -315,10 +343,10 @@
   const LLM_KIND_WORD = { openai: 'OpenAI 호환 API' };
 
   // ---- SYS-07 감사 로그 ---------------------------------------------------------------------------------------------
-  const ADM_KIND = { change: '정의 · 배포', action: '판정 · 처리', api: 'API', user: '사용자', note: '활동' };
+  const ADM_KIND = { change: '정의 · 배포', action: '판정 · 처리', api: 'API', user: '사용자', setting: '설정', note: '활동' };
   const admAuditHit = (r) => (S.adm.akind === 'all' || r.kind === S.adm.akind) && (!S.adm.aq || `${r.by} ${r.text}`.toLowerCase().includes(S.adm.aq.toLowerCase()));
   const admAuditRows = (d) => d.rows.filter(admAuditHit).slice(0, 200).map((r) => `<tr><td><span class="k-code k-mut">${esc(admWhen(r.at))}</span></td><td>${r.by ? esc(r.by) : '<span class="k-mut">-</span>'}</td><td>${kChip(ADM_KIND[r.kind] || r.kind)}</td><td>${esc(r.text)}</td></tr>`).join('')
-    || '<tr><td colspan="4" class="mut">검색 결과가 없습니다.</td></tr>';
+    || `<tr><td colspan="4" class="mut">${d.rows.length ? '검색 결과가 없습니다.' : '기록이 없습니다.'}</td></tr>`;
   const admAuditFoot = (d) => `${Math.min(d.rows.filter(admAuditHit).length, 200)} / ${d.total}건 · ${d.kept ? '저널 보관' : '메모리 보관'}`;
   function admAudit() {
     const d0 = admGot('audit'), A = S.adm;
@@ -358,27 +386,33 @@
     });
   }
 
-  const ADM_SCREENS = [['settings', '온톨로지 설정', () => isOntoAdmin(), admSettings, () => { admNeed('settings', 'admin/settings'); admFlow(); }], ['members', '멤버 · 권한', () => isOntoAdmin(), admMembers, () => admNeed('members', 'admin/members')],
-    ['sys-overview', '관리 현황', () => isSysAdmin(), admOverview, () => admNeed('overview', 'admin/overview')], ['sys-users', '사용자 · 그룹', () => isSysAdmin(), admUsers, () => admNeed('users', 'admin/users')],
-    ['sys-auth', '인증 · 보안', () => isSysAdmin(), admAuth, () => admNeed('security', 'admin/security')], ['sys-packs', '도메인 팩', () => isSysAdmin(), admPacks, () => {}],
-    ['sys-vocab', '기준 어휘', () => isSysAdmin(), admVocab, () => admNeed('vocab', 'admin/vocab')], ['sys-ai', 'AI 운영', () => isSysAdmin(), admAi, () => admNeed('ai', 'admin/ai')],
-    ['sys-audit', '감사 로그', () => isSysAdmin(), admAudit, () => admNeed('audit', 'admin/audit')], ['sys-system', '시스템', () => isSysAdmin(), admSystem, () => admNeed('system', 'admin/system')]];
-  ADM_SCREENS.forEach(([key, word, may, view, need]) => screen(key, { area: 'admin', word, may, view, after: () => { admVersion(); need(); } }));
+  const ADM_SCREENS = [['settings', '온톨로지 설정', () => isOntoAdmin(), admSettings, (again, moved) => { admNeed('settings', 'admin/settings', again); admFlow(again, moved); }], ['members', '멤버 · 권한', () => isOntoAdmin(), admMembers, (again) => admNeed('members', 'admin/members', again)],
+    ['sys-overview', '관리 현황', () => isSysAdmin(), admOverview, (again) => admNeed('overview', 'admin/overview', again)], ['sys-users', '사용자 · 그룹', () => isSysAdmin(), admUsers, (again) => admNeed('users', 'admin/users', again)],
+    ['sys-auth', '인증 · 보안', () => isSysAdmin(), admAuth, (again) => admNeed('security', 'admin/security', again)], ['sys-packs', '도메인 팩', () => isSysAdmin(), admPacks, () => {}],
+    ['sys-vocab', '기준 어휘', () => isSysAdmin(), admVocab, (again) => admNeed('vocab', 'admin/vocab', again)], ['sys-ai', 'AI 운영', () => isSysAdmin(), admAi, (again) => { if (again) S.adm.test = null; admNeed('ai', 'admin/ai', again); }],
+    ['sys-audit', '감사 로그', () => isSysAdmin(), admAudit, (again) => admNeed('audit', 'admin/audit', again)], ['sys-system', '시스템', () => isSysAdmin(), admSystem, (again) => admNeed('system', 'admin/system', again)]];
+  // a screen is read again when it is come to, and when the page read the space again (초기화, a file taken in):
+  // what it showed was read from the space as it was
+  ADM_SCREENS.forEach(([key, word, may, view, need]) => screen(key, { area: 'admin', word, may, view,
+    after: () => { const moved = S.adm.st !== S.st, again = moved || S.adm.seen !== key; S.adm.seen = key; S.adm.st = S.st; admVersion(); need(again, moved); } }));
 
   Object.assign(INPUT, {
     admGate: (t) => {
       const A = S.adm, s = t.dataset.s, c = t.dataset.c, text = t.value.trim();
       if (!A.gates) return;
       A.gates[s] = A.gates[s] || {};
-      if (text === '') delete A.gates[s][c]; else A.gates[s][c] = c.startsWith('min_') ? Number(text) / 100 : Number(text);
+      const v = admRead(c, text);
+      A.typed[`${s}.${c}`] = t.value;
+      if (v === undefined) delete A.gates[s][c]; else A.gates[s][c] = v;
       A.dirty = true;
       const b = $('#admsave');
       if (b) b.disabled = false;
     },
-    admUq: (t) => {
-      S.adm.uq = t.value;
-      const box = $(`#${t.dataset.box}`), d = admGot(t.dataset.box === 'admusers' ? 'users' : 'members');
-      if (box && d) box.innerHTML = t.dataset.box === 'admusers' ? admUserRows(d) : admMemberRows(d);
+    admUq: (t) => {  // 사용자 · 그룹 and 멤버 · 권한 each keep their own search
+      const users = t.dataset.box === 'admusers';
+      S.adm[users ? 'uq' : 'mq'] = t.value;
+      const box = $(`#${t.dataset.box}`), d = admGot(users ? 'users' : 'members');
+      if (box && d) box.innerHTML = users ? admUserRows(d) : admMemberRows(d);
     },
     admAq: (t) => {
       S.adm.aq = t.value;
@@ -392,17 +426,22 @@
     admSave: async () => {
       const A = S.adm;
       if (!A.flow || A.saving) return;
-      const wrong = ADM_TARGETS.find(([s, c]) => { const v = (A.gates[s] || {})[c]; return v !== undefined && (!Number.isFinite(v) || v < 0 || (c.startsWith('min_') && v > 1)); });
-      if (wrong) { toast(`${wrong[2]} 값의 형식이 맞지 않아 저장하지 못했습니다. ${wrong[1].startsWith('min_') ? '0에서 100 사이의 숫자' : '0 이상의 숫자'}를 입력해 주세요.`, true); return; }
+      const wrong = ADM_TARGETS.find(([s, c]) => Number.isNaN((A.gates[s] || {})[c]));
+      if (wrong) { toast(`${wrong[2]} 값의 형식이 맞지 않아 저장하지 못했습니다. ${wrong[1].startsWith('min_') ? '0에서 100 사이의 숫자' : '0 이상의 정수'}를 입력해 주세요.`, true); return; }
+      // only the targets changed here are sent, with what they were when read: another admin's change in the meantime
+      // stays, and the same target changed by both is said back instead of overwritten
+      const was = A.flow.settings.gates || {}, at = (g, s, c) => { const v = (g[s] || {})[c]; return v === undefined ? null : v; };
+      const changes = ADM_TARGETS.map(([s, c]) => ({ stage: s, condition: c, was: at(was, s, c), value: at(A.gates, s, c) })).filter((x) => x.was !== x.value);
+      if (!changes.length) { A.dirty = false; render(); return; }
       A.saving = true; render();
       try {
-        const gates = Object.fromEntries(Object.entries(A.gates).filter(([, v]) => Object.keys(v).length));
-        const out = await api('flow/save', { settings: { ...A.flow.settings, gates } });
+        const out = await api('admin/targets', { changes });
         A.flow.settings = out.settings;
         A.gates = JSON.parse(JSON.stringify(out.settings.gates || {}));
-        A.dirty = false;
+        A.typed = {}; A.dirty = false;
         S.flset = null; S.fl = null; S.home.ov = null;  // the screens that read the pass conditions read them again
-        toast('품질 목표를 저장했습니다.');
+        admAgain('audit'); admAgain('overview');
+        toast(out.ok ? '품질 목표를 저장했습니다.' : out.error, !out.ok);
       } catch (e) { fail(e); }
       A.saving = false; render();
     },
@@ -411,10 +450,10 @@
       location.hash = '#settings';
     },
     admPkind: (t) => { S.adm.pkind = t.dataset.k; S.adm.psel = ''; render(); },
-    admPsel: (t) => { S.adm.psel = t.dataset.n; render(); },
-    admVsel: (t) => { S.adm.vsel = t.dataset.n; render(); },
+    admPsel: (t) => { S.adm.psel = t.dataset.n; render(); if (t.tagName === 'BUTTON') admRefocus('admPsel', t.dataset.n); },
+    admVsel: (t) => { S.adm.vsel = t.dataset.n; render(); if (t.tagName === 'BUTTON') admRefocus('admVsel', t.dataset.n); },
     admAkind: (t) => { S.adm.akind = t.dataset.k; render(); },
-    admUsersCsv: () => { const d = admGot('users'); if (d) admCsv('ontlas-users.csv', ['아이디', '이름', '역할'], d.users.map((u) => [u.id, u.name, u.roles.map((r) => WORK_ROLE[r] || r).join(' · ')])); },
+    admUsersCsv: () => { const d = admGot('users'); if (d) admCsv('ontlas-users.csv', ['아이디', '이름', '역할'], d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => [u.id, u.name, u.roles.map((r) => WORK_ROLE[r] || r).join(' · ')])); },
     admAuditCsv: () => { const d = admGot('audit'); if (d) admCsv('ontlas-audit.csv', ['시각', '사람', '종류', '내용'], d.rows.filter(admAuditHit).map((r) => [r.at, r.by, ADM_KIND[r.kind] || r.kind, r.text])); },
     admDiag: () => {
       const d = admGot('system');

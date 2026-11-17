@@ -3,7 +3,15 @@
   // and a run under an access policy. A question in plain words or a query typed by hand is run at the foot.
   const BND_Q_LEAD = '등록 질의를 정의하고 저장소 언어 변환과 실행 결과를 확인합니다.';
   // what the caches of these screens were read from: another ontology, other data or another edit makes them old
-  const bndSig = () => `${S.st.library_id}|${S.st.pipeline}|${S.st.stats.queries}|${S.st.changes}|${S.mg.st && S.mg.st.workspace ? S.mg.st.workspace.edits.length : 0}`;
+  // (the edits by their text, not their number: an edit taken back and another made leaves the number as it was)
+  let bndWsSeen = null, bndWsSig = '';
+  function bndWs() {
+    const ws = S.mg.st && S.mg.st.workspace;
+    if (!ws) return '';
+    if (ws !== bndWsSeen) { let h = 0; const y = ws.yaml || ''; for (let i = 0; i < y.length; i += 1) h = (h * 31 + y.charCodeAt(i)) | 0; bndWsSeen = ws; bndWsSig = `${ws.edits.length}:${h}`; }
+    return bndWsSig;
+  }
+  const bndSig = () => `${S.st.library_id}|${S.st.pipeline}|${S.st.stats.queries}|${S.st.changes}|${bndWs()}`;
 
   function bndQLoad(force) {  // one read at a time: whoever asks while it runs waits for the same answer
     const Q = S.bnd.q, sig = bndSig();
@@ -21,7 +29,7 @@
   function bndQResults(r) {
     if (!r) return '';
     if (r.ok === false) return `<p class="k-note bad">${esc(r.error || '실행하지 못했습니다.')}</p>`;
-    const none = r.no_source ? `<p class="k-note">${esc(r.note || '데이터 소스가 연결되지 않아 질의를 실행하지 못했습니다.')}</p>` : '';
+    const none = r.no_source ? '<p class="k-note">연결된 데이터 소스가 없어 결과를 조회하지 못했습니다. 데이터 소스를 연결해 주세요.</p>' : '';
     const agree = (r.results || []).filter((b) => b.ok).length < 2 ? '' : r.agree ? '<span class="k-chip ok">저장소 간 결과 일치</span>' : '<span class="k-chip warn">저장소 간 결과 불일치</span>';
     const one = (b) => {
       const head = `<div class="k-h" style="padding:12px 20px"><span class="k-b k-14">${esc(b.backend)}</span><span class="k-chip">${esc(String(b.language || '').toUpperCase())} · ${esc(b.dialect || '')}</span>${b.ok ? `<span class="k-s k-push">${b.rows.length}행</span>` : ''}</div>`;
@@ -92,7 +100,7 @@
     const list = `<nav class="k-card" aria-label="등록 질의" style="flex:1 1 300px"><div style="padding:12px"><label class="bnd-find" style="margin:0">${ki('search', 16, 1.75)}<span class="k-hide">질의 검색</span><input type="search" placeholder="질의 검색" data-in="bndQFind" value="${esc(Q.find)}"></label></div>
       <div id="bndqlist">${rows.map((y) => `<button class="bnd-qrow${x && y.name === x.name ? ' on' : ''}" data-act="bndQSel" data-q="${esc(y.name)}" data-row="query:${esc(y.name)}"${x && y.name === x.name ? ' aria-current="true"' : ''}><b>${esc(y.label)}</b><span class="k-code k-mut">${esc(y.name)}</span></button>`).join('') || '<p class="k-cf line">검색 결과가 없습니다.</p>'}</div>
       <p class="k-s" style="margin:0;padding:8px 16px;border-top:1px solid var(--row)">등록 질의 ${all.length} · 검증 질문 사용 ${all.filter((y) => y.questions.length).length}${Q.st.removed.length ? ` · 삭제 요청 ${Q.st.removed.length}` : ''}</p></nav>`;
-    if (!x) return bndPg(`${head}${noSource() ? bndNoSource('데이터 소스가 연결되지 않아 질의 결과를 조회할 수 없습니다.') : ''}
+    if (!x) return bndPg(`${head}${noSource() ? bndNoSource() : ''}
       ${kEmpty('등록된 질의가 없습니다', '', canEdit() ? `<a class="k-btn pri" href="${itemHref('queryitem', 'form')}">${ki('plus', 16, 1.75)}질의</a>` : '')}${bndQAdhoc()}`);
     const ro = (word, value) => `<label class="k-f">${word}<input class="k-in" type="text" value="${esc(value)}" readonly></label>`;
     const one = (word, value) => `<label class="k-f">${word}<select class="k-in" aria-readonly="true"><option>${esc(value)}</option></select></label>`;  // shown as the form shows it; it is changed in the form
@@ -103,7 +111,7 @@
       ${x.description ? `<p class="k-p">${esc(x.description)}</p>` : ''}
       <div class="bnd-two">${one('시작', `${x.start_label}@${x.start}`)}${one('경유 Relation', bndQHops(x))}${ro('입력값', bndQParams(x))}${ro('반환', x.returns.map((r) => r.label).join(' · '))}</div>
       <div class="k-13" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="k-s">사용처</span>${used}</div></section>`;
-    return bndPg(`${head}${itemBar('queryitem', x.name, x.name, x.label)}${noSource() ? bndNoSource('데이터 소스가 연결되지 않아 질의 결과를 조회할 수 없습니다.') : ''}
+    return bndPg(`${head}${itemBar('queryitem', x.name, x.name, x.label)}${noSource() ? bndNoSource() : ''}
       <div class="k-cols">${list}<div class="k-v g16" style="flex:2 1 560px;min-width:0">${detail}${bndQTranslate(x)}${bndQRun(x)}</div></div>${bndQAdhoc()}
       ${kNext([['sources', 'Mapping'], ['actions', 'Action'], ['connect', '연동 · API'], ['roles', '접근 정책'], ['check', '검증 질문']])}`);
   }
@@ -126,7 +134,7 @@
     bndQFind: (t) => { S.bnd.q.find = t.value; const box = $('#bndqlist'), tmp = document.createElement('div'); tmp.innerHTML = bndQView(); const now = tmp.querySelector('#bndqlist'); if (box && now) box.innerHTML = now.innerHTML; },
     bndQParam: (t) => { S.bnd.q.params[t.dataset.k] = t.value; },
     bndQPrincipal: (t) => { S.bnd.q.principal[t.dataset.k] = t.value; },
-    bndQRole: (t) => { S.bnd.q.role = t.value; S.bnd.q.principal = {}; render(); },
+    bndQRole: (t) => { Object.assign(S.bnd.q, { role: t.value, principal: {}, run: null }); render(); },  // a result is of the policy it was run under
     bndQAsk: (t) => { S.bnd.q.adhoc.question = t.value; },
     bndQText: (t) => { S.bnd.q.adhoc.text = t.value; },
     bndQTextLang: (t) => { S.bnd.q.adhoc.lang = t.value; },
@@ -141,7 +149,7 @@
       Q.running = true; render();
       const ctx = { role: Q.role, principal: Q.principal };
       let r;
-      try { r = x.new ? await api('text', { language: 'ir', text: JSON.stringify(x.ir), ...ctx }) : await api('query', { name: x.name, params: Q.params, ...ctx }); } catch (e) { r = { ok: false, error: e.message }; }
+      try { r = await api(x.new ? 'bnd/query/run' : 'query', { ...(x.new ? { query: x.ir } : { name: x.name }), params: Q.params, ...ctx }); } catch (e) { r = { ok: false, error: e.message }; }
       Q.run = { ...r, name: x.name }; Q.running = false; render();
     },
     bndQNl: () => { const A = S.bnd.q.adhoc; if (A) A.mode = 'ask'; render(); const el = $('#bnd-adhoc'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); const i = $('#bndask'); if (i) i.focus({ preventScroll: true }); },
@@ -149,7 +157,7 @@
     bndQAdGo: async () => {
       const A = S.bnd.q.adhoc;
       if (A.busy) return;
-      if (A.mode === 'ask' ? !A.question.trim() : !A.text.trim()) { toast(A.mode === 'ask' ? '질문을 입력해 주세요.' : '질의를 입력해 주세요.', true); return; }
+      if (A.mode === 'ask' ? !A.question.trim() : !A.text.trim()) { toast(A.mode === 'ask' ? '질문이 없어 실행하지 못했습니다. 질문을 입력해 주세요.' : '질의가 없어 실행하지 못했습니다. 질의를 입력해 주세요.', true); return; }
       A.busy = true; render();
       try { A.res = A.mode === 'ask' ? await api('ask', { question: A.question }) : await api('text', { language: A.lang, text: A.text }); } catch (e) { A.res = { ok: false, error: e.message }; }
       A.busy = false; render();

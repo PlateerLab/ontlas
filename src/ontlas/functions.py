@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import re
+from datetime import datetime
 from dataclasses import replace
 from typing import Any, Callable
 
@@ -263,7 +264,7 @@ def run_function(studio, name: str, key: Any = None, params: dict | None = None,
     out = {"function": name, "label": f.label or name, "version": f.version, "owner": f.owner, "runtime": f.runtime,
            "target": f.target, "key": "" if key is None else str(key), "inputs": values, "outputs": outputs, "evidence": evidence}
     if log:  # a page that only shows a value it computes keeps no record of having computed it
-        studio.function_log.append({"at": studio.now().isoformat(timespec="seconds"), "by": by or role or "", **{
+        studio.function_log.append({"at": datetime.now().isoformat(timespec="seconds"), "by": by or role or "", **{
             k: out[k] for k in ("function", "version", "key", "inputs", "outputs")}})
     return out
 

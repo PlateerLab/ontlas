@@ -66,6 +66,29 @@ def said(e: Exception | str) -> str:
     return text
 
 
+_GONE = object()
+
+
+def _merged(base, mine, now):
+    """Settings as one person saves them over what is stored now: where their value is the one they read, the stored
+    one stays; where they changed it, theirs is written. Dicts are merged key by key, anything else is one value."""
+    if isinstance(base, dict) and isinstance(mine, dict) and isinstance(now, dict):
+        out = dict(now)
+        for k in set(base) | set(mine):
+            b, m = base.get(k, _GONE), mine.get(k, _GONE)
+            if m is _GONE:  # taken out by this person: out of the stored one too, unless someone changed it since
+                if out.get(k, _GONE) == b:
+                    out.pop(k, None)
+                continue
+            v = _merged(b, m, out.get(k, _GONE))
+            if v is _GONE:
+                out.pop(k, None)
+            else:
+                out[k] = v
+        return out
+    return now if mine == base else mine
+
+
 STATUS_WORD = {"pending": "승인 대기", "stale": "실행 전 재검사 실패", "rejected": "반려", "executed": "실행",
                "failed": "외부 호출 실패", "rolled_back": "되돌림"}
 EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
@@ -110,7 +133,7 @@ INGEST_ERROR = {
     "needs_extra": "문서 읽기 모듈이 설치되지 않아 파일을 처리하지 못했습니다. DOCX 또는 TXT로 저장해 업로드해 주세요.",
     "export_needed": "암호가 걸렸거나 지원하지 않는 형식이라 내용을 읽지 못했습니다. 암호를 해제하거나 {export_to} 파일로 내보내 다시 업로드해 주세요.",
 }
-MODULE_TEXT_MAX = 48 * 1024
+MODULE_TEXT_MAX = 512 * 1024  # a library's own modules run to a few hundred KB: one of them opened in the editor is checked whole
 ASK_RETRY_WITHIN = 45.0  # seconds into a natural-language question after which no further attempt starts
 DRAFT_RETRY_WITHIN = 100.0  # the same for a policy draft, which no page request waits on: at most 5 minutes in all
 POLICY_MAX = 12000  # characters of policy text a draft reads
@@ -127,8 +150,8 @@ LIBRARY_FILES = {".yaml": "definitions", ".yml": "definitions", ".json": "defini
                  ".ttl": "turtle", ".owl": "xml", ".rdf": "xml"}
 # what an import says it adjusted or left out, by the kind of thing it was: the page counts them under these names
 IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자 추가"),
-                ("^parameter .* kept as text", "기준값을 글로"),
-                ("kept as text|-> string", "값 형식을 글로"),
+                ("^parameter .* kept as text", "기준값 텍스트 보관"),
+                ("kept as text|-> string", "값 형식 텍스트 보관"),
                 ("read as \\w+ on both", "형식 통일"),
                 ("it goes by", "Entity 이름을 붙여 분리"),
                 ("already reads as", "용어 표기 중복"),
@@ -481,6 +504,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.pending = None  # (draft, the database it was drawn from, the tables loaded into it, the rules)
         self.draft_request: dict | None = None  # an editor's request that an approver apply the pending draft
         self.who = "방문자"  # the person behind the requests; a team studio sets it from the login
+        self._flow_seen: dict[str, dict] = {}  # by person: the flow settings their form was last read with
         self.self_approve = True  # one visitor is both sides of a change; a team studio turns this off
         self.store = None  # a library folder approved changes are written to (ontlas serve --library-write)
         self.workspace = None  # the management screens' pending edits (manage.Workspace), until filed
@@ -832,8 +856,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         gen = IRGenerator(self.studio.onto, llm, role=role or None, terms=self._terms(),
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
-            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. " + self._failed(gen.attempts, tries)
-                                          + " 질문을 바꿔 다시 입력해 주세요."}
+            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. "
+                                          + self._failed(gen.attempts, tries, "질문을 바꿔 다시 입력해 주세요.")}
         out = self.run_query(gen.registered or gen.query, gen.params, role=role, principal=principal)
         out["attempts"] = len(gen.attempts)
         return out
@@ -861,13 +885,17 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return llm, tries
 
     @staticmethod
-    def _failed(attempts: list, tries: list) -> str:
-        """Why the model's attempts came to nothing: what it last said wrong, or that it never finished an answer."""
+    def _failed(attempts: list, tries: list, fix: str) -> str:
+        """Why the model's attempts came to nothing, and what to do: its server did not answer at all, it never
+        finished an answer, or what it last said was wrong (then `fix`, what the person can change)."""
         answered = [a for a in attempts if a.raw]  # what the model last said, not the attempt time stopped
         if not answered:
-            return "언어 모델이 답변을 끝내지 못했습니다."
+            said_back = " ".join(i for a in attempts for i in a.issues)
+            if re.search(r"HTTPError|URLError|Connection|RemoteDisconnected|gaierror|SSLError", said_back):
+                return "언어 모델 서버가 응답하지 않았습니다. 언어 모델 서버 상태를 확인한 뒤 다시 시도해 주세요."
+            return "언어 모델이 답변을 끝내지 못했습니다. " + fix
         late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(attempts) else ""
-        return " / ".join(answered[-1].issues[:3]) + late
+        return " / ".join(answered[-1].issues[:3]) + late + " " + fix
 
     def _policy_files(self) -> list[Path]:
         d = self.data.policies
@@ -939,8 +967,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             text, target=target, name=str(name or ""))
         late = len(tries) < len(d.attempts)
         if d.module is None:
-            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. " + self._failed(d.attempts, tries)
-                                          + " 정책서 내용을 줄이거나 대상을 바꿔 다시 시도해 주세요."}
+            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. "
+                                          + self._failed(d.attempts, tries, "정책서 내용을 줄이거나 대상을 바꿔 다시 시도해 주세요.")}
         (dname, table), = d.module.body["decisions"].items()
         return plain({
             "ok": True, "module": d.module.name, "label": d.module.label, "decision": dname, "target": table["target"],
@@ -1081,9 +1109,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         p = self.studio.actions.request(action, key, params, actor=actor)
         if p.status == "executed":  # inside its limits it ran at once
             self._reproject()
-        state = {"pending": "승인 대기 중입니다.", "executed": "자동 승인 기준을 충족해 실행했습니다."}.get(p.status, "검사를 통과하지 못해 반려되었습니다.")
-        self._note("request", f"요청 접수: {actor.id}, {self._obj_label(p.target)} {key} {self._proposal(p)['label']}. "
-                   f"{state}")
+        state = {"pending": "접수했습니다", "executed": "자동 승인했습니다"}.get(p.status, "반려했습니다")
+        self._note("request", f"{actor.id}의 {self._obj_label(p.target)} {key} {self._proposal(p)['label']} 요청을 {state}.",
+                   proposal=p.id)
         return {"ok": True, "proposal": self._proposal(p)}
 
     def _approver(self) -> Actor:
@@ -1099,7 +1127,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except (ActionError, PermissionError) as e:
             return {"ok": False, "error": f"되돌릴 수 없는 상태라 되돌리지 못했습니다. {e}"}
         proj = self._reproject()
-        self._note("approve", f"요청 {p.id}: 실행 전 값으로 되돌렸습니다.", projection=proj)
+        self._note("approve", f"{self._proposal(p)['label']} 요청을 실행 전 값으로 되돌렸습니다.", projection=proj, proposal=p.id)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def pending_actions(self) -> dict:
@@ -1134,9 +1162,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except (PermissionError, ValueError, RuntimeError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
-        verb = {"executed": "승인 후 원천 DB에 반영했습니다", "failed": "외부 호출이 실패해 원천 DB를 실행 전 값으로 복원했습니다"
-                }.get(p.status, "반려했습니다")
-        self._note("approve", f"요청 {p.id}: {verb}.", projection=proj)
+        said = {"executed": "요청을 승인했습니다", "failed": "요청의 외부 호출이 실패해 실행 전 값으로 복원했습니다"}.get(p.status, "요청을 반려했습니다")
+        self._note("approve", f"{self._proposal(p)['label']} {said}.", projection=proj, proposal=p.id)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def function_run(self, name: str, key: str, params: dict) -> dict:
@@ -1383,7 +1410,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         target = next((x for x in self.libraries if x["id"] == lid), None)
         if target is None:
-            raise LookupError(f"라이브러리 {lid}")
+            raise LookupError(f"온톨로지 {lid}")
         if lid == self.library_id:
             return {"ok": True}
         self._stash()
@@ -1439,6 +1466,17 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if kind == "definitions":
             entry["doc"] = doc = _definition_doc(name, text)
             entry["sections"] = {str(k): n for k, v in doc.items() if k != "meta" and (n := _rows_in(v))}
+        else:  # OWL: read now as the import reads it, so a file that is not one is refused here, not when the ontology is made
+            try:
+                import rdflib
+            except ImportError:
+                rdflib = None  # the import says so when the ontology is made
+            if rdflib is not None:
+                try:
+                    rdflib.Graph().parse(data=text, format=kind)
+                except Exception:
+                    word = "Turtle" if kind == "turtle" else "RDF/XML"
+                    raise ValueError(f"{name} 파일이 {word} 형식이 아니어서 추가하지 못했습니다. 파일 내용을 확인해 다시 선택해 주세요.") from None
         self._library_files[name] = entry
         return self.library_files()
 
@@ -1457,11 +1495,11 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if not label:
             raise ValueError("이름이 없어 만들지 못했습니다. 이름을 입력해 주세요.")
         if any(x["label"] == label for x in self.libraries):
-            raise ValueError(f"같은 이름의 라이브러리({label})가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
+            raise ValueError(f"같은 이름의 온톨로지({label})가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
         made = [x for x in self.libraries if x.get("made")]
         if len(made) >= LIBRARIES_MADE_MAX:
-            raise ValueError(f"만든 라이브러리가 {LIBRARIES_MADE_MAX}개 한도에 도달해 만들지 못했습니다. "
-                             "만든 라이브러리를 삭제한 뒤 다시 만들어 주세요.")
+            raise ValueError(f"만든 온톨로지가 {LIBRARIES_MADE_MAX}개 한도에 도달해 만들지 못했습니다. "
+                             "만든 온톨로지를 삭제한 뒤 다시 만들어 주세요.")
         n = 1 + max([int(x["id"][1:]) for x in made] or [0])
         key = re.sub(r"[^A-Za-z0-9_-]+", "-", str(key or "")).strip("-").lower()[:40] or f"library-{n}"
         namespace, report = f"https://example.org/{key}#", None
@@ -1470,7 +1508,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         elif start == "base":
             cur, comp = self.studio.library, self.studio.composition
             if cur is None or comp is None:
-                raise ValueError("열려 있는 라이브러리가 모듈로 구성되지 않아 기반으로 쓰지 못했습니다. 다른 시작 방법을 선택해 주세요.")
+                raise ValueError("열려 있는 온톨로지가 모듈로 구성되지 않아 기반으로 쓰지 못했습니다. 다른 시작 방법을 선택해 주세요.")
             lib = OverlayLibrary(cur.base, list(cur.extra.values()))  # its own copy: edits made there later stay there
             lib.held = {k: dict(v) for k, v in cur.held.items()}
             wanted = [str(x) for x in (modules or [])] or [m.name for m in comp.modules]
@@ -1501,11 +1539,13 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         lib, mods, reps = OverlayLibrary(None, []), [], []
         docs = [f["doc"] for f in files if f["kind"] == "definitions"]
         owls = [f for f in files if f["kind"] != "definitions"]
+        at = "정의 초안"  # the file being read, for what is said if it cannot be
         try:
             if docs:
                 got, rep = lib.import_definitions(docs, key, label=label, namespace=namespace)
                 mods, reps = [*got], [rep]
             for i, f in enumerate(owls, 1):
+                at = f["name"]
                 stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(f["name"]).stem).strip("-").lower()
                 alone = not docs and len(owls) == 1
                 m, rep = lib.import_owl(f["text"], key if alone else f"{key}-{stem or i}",
@@ -1515,10 +1555,10 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except ImportError:
             raise ValueError("OWL 을 읽는 모듈(rdflib)이 서버에 없어 가져오지 못했습니다. 정의 초안(YAML · JSON)으로 가져오거나 "
                              "서버에 rdf 추가 모듈을 설치해 주세요.") from None
-        except ModuleError as e:
-            raise ValueError(f"정의가 서로 맞지 않아 가져오지 못했습니다. 파일 내용을 확인해 주세요. {e}") from None
-        except Exception as e:  # a row that is not shaped as the draft's others: said with what the reader met
-            raise ValueError(f"파일을 정의로 읽지 못했습니다. 파일 내용을 확인해 주세요. {type(e).__name__}: {e}"[:400]) from None
+        except ModuleError:
+            raise ValueError(f"{at}의 정의가 서로 맞지 않아 온톨로지를 만들지 못했습니다. 파일 내용을 확인해 주세요.") from None
+        except Exception:  # a row that is not shaped as the draft's others
+            raise ValueError(f"{at}을(를) 정의로 읽을 수 없어 온톨로지를 만들지 못했습니다. 파일 내용을 확인해 주세요.") from None
         if not any(m.elements() or m.body.get("rule_cards") or m.terms for m in mods):
             raise ValueError("파일에서 읽은 정의가 없어 만들지 못했습니다. 구역 이름(objects · entities · rules · parameters · terms)을 "
                              "확인해 주세요.")
@@ -1527,9 +1567,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def library_drop(self, lid: str) -> dict:
         target = next((x for x in self.libraries if x["id"] == lid), None)
         if target is None:
-            raise LookupError(f"라이브러리 {lid}")
+            raise LookupError(f"온톨로지 {lid}")
         if not target.get("made"):
-            raise ValueError("서버가 제공하는 라이브러리는 삭제할 수 없습니다. 이 화면에서 만든 라이브러리만 삭제합니다.")
+            raise ValueError("서버가 제공하는 온톨로지라 삭제하지 못했습니다. 만든 온톨로지를 선택해 주세요.")
         if lid == self.library_id:
             self.library_use(self.libraries[0]["id"])
         self._library_held.pop(lid, None)
@@ -1548,7 +1588,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         comp, o = self.studio.composition, self.studio.onto
         if comp is None:
-            raise ValueError("이 라이브러리는 모듈로 구성되지 않아 내려받지 못했습니다. OWL 내보내기를 사용해 주세요.")
+            raise ValueError("모듈로 구성된 온톨로지가 아니어서 내려받지 못했습니다. OWL 내보내기를 사용해 주세요.")
         label = o.label or next(x["label"] for x in self.libraries if x["id"] == self.library_id)
         folder = re.sub(r"[^A-Za-z0-9_.-]+", "-", o.name or "").strip("-") or "library"
         spec = {"library": "library", "name": o.name or folder, **({"label": label} if label else {}),
@@ -2175,7 +2215,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def _standard(self, names: list) -> tuple[list[Module], Any]:
         lib = self.studio.library
         if lib is None:
-            raise ValueError("라이브러리가 없어 표준에 연결하지 못했습니다.")
+            raise ValueError("모듈 라이브러리가 없어 표준에 연결하지 못했습니다.")
         names = [str(n) for n in names or []]
         if not names:
             raise ValueError("연결할 표준 모듈을 선택하지 않아 제안을 만들지 못했습니다. 표준 모듈을 선택해 주세요.")
@@ -2497,7 +2537,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         import yaml
 
         if len(text.encode("utf-8")) > MODULE_TEXT_MAX:
-            raise ValueError("정의 파일 크기가 48KB 한도를 초과해 읽지 못했습니다. 모듈을 나누어 저장해 주세요.")
+            raise ValueError(f"정의 파일 크기가 {MODULE_TEXT_MAX >> 10}KB 한도를 초과해 읽지 못했습니다. 모듈을 나누어 저장해 주세요.")
         try:
             d = yaml.safe_load(text)
         except yaml.YAMLError as e:
@@ -2605,9 +2645,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                 raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
             bumped, m.version = m.version, _next_version(lib.versions(m.name))
         cr = self.studio.changes.propose(m, by=self.who, attach=attach)
-        extra = f" 버전 {bumped} 이(가) 이미 있어 {m.version} (으)로 올렸습니다." if bumped else ""
-        state = "흐름 통과 조건을 모두 충족합니다" if cr.review.get("passed") else "흐름 통과 조건을 충족하지 못했습니다"
-        self._note("change", f"{m.label or m.name} {m.version} 변경을 요청했습니다. {state}.{extra}")
+        self._file_notes(((cr.review or {}).get("elements") or {}).keys(), cr.id)
+        self._note("change", f"{m.label or m.name} {m.version} 변경 요청을 등록했습니다.", change=cr.id)  # passing and the version are in the request
         return {"ok": True, "change": self._change(cr), "bumped": bumped}
 
     def changes_state(self) -> dict:
@@ -2642,8 +2681,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             self._library_rows = self.studio.library.list()
             if cr.module == WORKSPACE:
                 self.workspace = None  # the edits are in the studio now; the next ones start from there
-        verb = "승인하고 적용했습니다" if cr.status == "approved" else "반려했습니다"
-        self._note("change", f"{self._label(cr.module)} {cr.version} 변경을 {verb}.", projection=proj)
+        verb = "승인했습니다" if cr.status == "approved" else "반려했습니다"
+        self._note("change", f"{self._label(cr.module)} {cr.version} 변경 요청을 {verb}.", projection=proj, change=cr.id)
         return {"ok": True, "change": self._change(cr), "projection": proj}
 
     # ---- management: objects, properties, relations, questions as one pending overlay module --------------------
@@ -3058,7 +3097,23 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                 if r.get("kind") == "comment" and r.get("element"):
                     self._element_notes.setdefault(r["element"], []).append(
                         {k: r.get(k) for k in ("at", "by", "text")})
+                elif r.get("kind") == "comment_filed" and r.get("element"):
+                    self._file_notes_of(r["element"], str(r.get("change") or ""))
         return self._element_notes
+
+    def _file_notes_of(self, element: str, change: str) -> None:
+        for n in self._notes().get(element, []):
+            n.setdefault("change", change)
+
+    def _file_notes(self, elements, change: str) -> None:
+        """The reasons left on items while their edits were being written go with the change request they are filed in
+        (or with none, '', when the edits are thrown away), so an item's history shows each reason at its own change."""
+        journal = self.studio.changes.journal
+        for el in elements:
+            if any("change" not in n for n in self._notes().get(el, [])):
+                self._file_notes_of(el, change)
+                if journal is not None:
+                    journal.write("comment_filed", {"element": el, "change": change})
 
     _element_notes: dict | None = None
 
@@ -3131,6 +3186,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return {"ok": True, "added": added, "failed": failed, **self.manage_state()}
 
     def manage_discard(self) -> dict:
+        self._file_notes([el for el, ns in self._notes().items() if any("change" not in n for n in ns)], "")
         self.workspace = None
         return {"ok": True, **self.manage_state()}
 
@@ -3171,23 +3227,39 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             stage, cond = ref.split(".")
             raised.append({"stage": stage, "condition": cond, "value": st.composition.gates[stage][cond], "module": m,
                            "module_label": self._label(m)})
-        return plain({"settings": st.own_flow.to_dict(), "raised": raised,
+        seen = plain(st.own_flow.to_dict())
+        self._flow_seen[self.who] = copy.deepcopy(seen)  # what this person's form starts from, for their save
+        return plain({"settings": seen, "raised": raised,
                       "stages": [{"id": s, "label": STAGE_LABEL[s]} for s in STAGES],
                       "functions": [{"name": x.name, "label": x.label or x.name, "outputs": list(x.outputs)} for x in self.studio.onto.functions.values()],
                       "conditions": {s: [{"id": c, "label": GATE_LABEL[(s, c)]} for c in cs]
                                      for s, cs in GATES.items()},
                       "queries": qs, "decisions": ds})
 
-    def save_flow(self, settings: dict) -> dict:
+    def save_flow(self, settings: dict, base: dict | None = None) -> dict:
+        """The form sends every value it shows. Only what this person changed from what they read (`base`, or the
+        settings last read for them) is written, so a value another admin saved in between stays; a person whose read
+        is not known writes the form as sent."""
         from ontlas.review import FlowSettings
 
+        base = base if isinstance(base, dict) else self._flow_seen.get(self.who)
+        if base is not None:
+            settings = _merged(base, settings, plain(self.studio.own_flow.to_dict()))
         try:
             fs = FlowSettings.from_dict(settings)
         except ValueError:
             raise ValueError("흐름 설정 값이 올바르지 않아 저장하지 못했습니다. 비율은 0에서 100 사이의 숫자로 입력해 주세요.") from None
         self.studio.settings["flow"] = fs.to_dict()
-        self._note("flow", "흐름 단계와 통과 조건을 저장했습니다.")
-        return {"ok": True, "settings": fs.to_dict()}
+        saved = plain(fs.to_dict())
+        self._flow_seen[self.who] = copy.deepcopy(saved)
+        text = "품질 목표와 흐름 단계를 저장했습니다."
+        journal = self.studio.changes.journal
+        if journal is not None:  # kept with the admin screens' records, with the person, across a restart
+            journal.write("admin", {"at": datetime.now().isoformat(timespec="seconds"), "by": self.who, "what": "setting", "text": text})
+            self.event("flow", text)
+        else:
+            self._note("flow", text)
+        return {"ok": True, "settings": saved}
 
     def agreement(self, pending: bool = False) -> dict:
         """Past cases decided again; with `pending`, by the tables as the workspace's unfiled edits leave them."""

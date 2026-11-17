@@ -89,8 +89,38 @@ def test_a_call_is_tried_as_the_policy_picked_would_make_it(session, ops):
 def test_a_try_stays_within_reading_and_deciding(session, ops):
     with pytest.raises(ValueError):
         ops.try_call(session, {"path": "/v1/actions", "body": {}}, None)
-    with pytest.raises(LookupError):
+    with pytest.raises(ValueError, match="접근 정책 nobody"):
         ops.try_call(session, {"path": "/v1/decide", "policy": "nobody", "body": {}}, None)
+
+
+def test_a_policy_with_row_rules_is_tried_with_the_caller_attributes_it_compares_with(session, ops):
+    body = {"decision": "returnEligibility", "key": "I1001"}  # an item of order O1, which customer C001 placed
+    asked = ops.try_call(session, {"path": "/v1/decide", "policy": "customer_agent", "body": body}, None)
+    assert asked["status"] == 403 and "customer_id" in asked["body"]["error"]
+    mine = ops.try_call(session, {"path": "/v1/decide", "policy": "customer_agent", "principal": {"customer_id": "C001"},
+                                  "body": body}, None)
+    other = ops.try_call(session, {"path": "/v1/decide", "policy": "customer_agent", "principal": {"customer_id": "C002"},
+                                   "body": body}, None)
+    assert mine["status"] == 200 and other["status"] == 403
+
+
+def test_a_policy_the_change_request_adds_or_changes_is_tried_as_written(session, ops):
+    body = {"decision": "returnEligibility", "values": VALUES}
+    session.manage_edit("add_role", {"name": "fresh_policy", "label": "새 정책", "read": ["*"], "run": ["returnEligibility"]})
+    fresh = ops.try_call(session, {"path": "/v1/decide", "policy": "fresh_policy", "body": body}, None)
+    assert fresh["status"] == 200 and fresh["draft"] is True
+    assert "fresh_policy" not in session.studio.onto.roles  # tried on a copy: nothing was deployed
+    before = ops.try_call(session, {"path": "/v1/decide", "policy": "support_agent", "body": body}, None)
+    assert before["status"] == 403 and before["draft"] is False
+    run = list(session.studio.onto.roles["support_agent"].run)
+    session.manage_edit("update_role", {"name": "support_agent", "run": [*run, "returnEligibility"]})
+    after = ops.try_call(session, {"path": "/v1/decide", "policy": "support_agent", "body": body}, None)
+    assert after["status"] == 200 and after["draft"] is True
+    same = ops.try_call(session, {"path": "/v1/decide", "policy": "customer_agent", "body": body}, None)
+    assert same["draft"] is False  # a policy the change request leaves as it is goes on the deployed definition
+    session.manage_edit("delete_role", {"name": "fresh_policy"})
+    with pytest.raises(ValueError, match="접근 정책 fresh_policy"):
+        ops.try_call(session, {"path": "/v1/decide", "policy": "fresh_policy", "body": body}, None)
 
 
 def test_every_passage_is_embedded_again(session, ops):

@@ -256,7 +256,7 @@ def _bindings(s, bind: dict, alert: bool) -> list[dict]:
 
 def _open_for(q) -> dict:
     if not (q.decision or q.query):  # a question on what a word means reads neither: its row is where it is seen
-        return {"tab": "check", "row": f"q:{q.id}"}
+        return {"tab": "flow", "row": f"q:{q.id}"}
     return {"tab": "mgrules", "decision": q.decision} if q.decision else {"tab": "query", "query": q.query}
 
 
@@ -273,7 +273,7 @@ def _query(s, conf: dict, gate: dict) -> dict:
         failed = any(o.get("error") for o in r["outcomes"].values())
         items.append({"element": f"query:{r['name']}", "name": r["name"], "label": (q.label if q else "") or r["name"], "row": f"conf:{r['name']}",
                       "say": "원천 DB 실행 실패" if failed and (r["outcomes"].get(s.studio.source) or {}).get("error") else "실행 실패" if failed else "저장소 결과 불일치",
-                      "evidence": " · ".join(f"{b} {outcome(o)}" for b, o in r["outcomes"].items()), "near": "", "go": {"tab": "check", "row": f"conf:{r['name']}"}})
+                      "evidence": " · ".join(f"{b} {outcome(o)}" for b, o in r["outcomes"].items()), "near": "", "go": {"tab": "flow", "row": f"conf:{r['name']}"}})
     errors = any("실행 실패" in x["say"] for x in items)
     fixes = []
     if items:
@@ -312,11 +312,11 @@ def _accuracy(s, check: dict, gate: dict) -> dict:
         q = next((x for x in onto.questions if x.id == w["id"]), None)
         items.append({"element": f"question:{w['id']}", "name": w["id"], "label": w.get("text") or w["id"], "row": f"q:{w['id']}", "near": "",
                       "say": "실행 실패" if w.get("error") else f"기대 {_short(w.get('expected'))}", "evidence": w.get("error") or f"결과 {_short(w.get('got'))}", "error": w.get("error") or "",
-                      "go": _open_for(q) if q else {"tab": "check", "row": f"q:{w['id']}"}})
+                      "go": _open_for(q) if q else {"tab": "flow", "row": f"q:{w['id']}"}})
     if items:
         fixes.append(_fix("규칙 · 질의 열기", "here", "이 질문이 읽는 규칙이나 질의를 엽니다.", "열기", go=items[0]["go"], steps=_steps(items), recommended=True))
         fixes.append(_fix("의도한 변경이면 정답 갱신", "here", "검증 화면의 이 질문 행에서 현재 결과를 정답으로 바꿉니다.", "질문 보기",
-                          go={"tab": "check", "row": items[0]["row"]}))
+                          go={"tab": "flow", "row": items[0]["row"]}))
     return _issue("gate:check.min_accuracy", "check.accuracy", "bad", "verify", f"검증 질문 정답률 {_pct(check.get('accuracy'))}",
                   f"기준 {_pct(gate['limit'])} · 틀린 질문 {len(items)}개", key="gate:check.min_accuracy", items=items, fixes=fixes)
 
@@ -327,7 +327,7 @@ def _grounded(s, check: dict, gate: dict) -> dict:
     for qid, gaps in (check.get("ungrounded") or {}).items():
         q = next((x for x in onto.questions if x.id == qid), None)
         items.append({"element": f"question:{qid}", "name": qid, "label": (q.text if q else "") or qid, "row": f"q:{qid}", "near": "", "say": "근거 부족",
-                      "evidence": ", ".join(gaps), "go": _open_for(q) if q else {"tab": "check", "row": f"q:{qid}"}})
+                      "evidence": ", ".join(gaps), "go": _open_for(q) if q else {"tab": "flow", "row": f"q:{qid}"}})
     fixes = [_fix("규칙 · 질의 열기", "here", "근거가 빠진 질문이 읽는 규칙이나 질의를 엽니다.", "열기", go=items[0]["go"], steps=_steps(items), recommended=True)] if items else []
     return _issue("gate:check.min_grounded", "check.grounded", "bad", "verify", f"근거 제시율 {_pct(check.get('grounded'))}",
                   f"기준 {_pct(gate['limit'])} · 근거가 빠진 질문 {len(items)}개", key="gate:check.min_grounded", items=items, fixes=fixes)
@@ -338,14 +338,14 @@ def _values(s, check: dict, gate: dict) -> dict:
     if err:
         m = re.search(r"no such column: (\S+)", err)
         said = f"원천 DB에 {m.group(1).split('.')[-1]} 컬럼이 없습니다." if m else err
-        items = [{"element": "", "name": "values", "label": "거래 값 대조", "say": "실행 실패", "evidence": said, "near": "", "row": "values", "go": {"tab": "check", "row": "values"}}]
+        items = [{"element": "", "name": "values", "label": "거래 값 대조", "say": "실행 실패", "evidence": said, "near": "", "row": "values", "go": {"tab": "flow", "row": "values"}}]
         title, detail = "거래 값 대조 실행 실패", said
     else:
         items = [{"element": "", "name": str(w.get("key")), "label": f"{v.get('label')} · {w.get('key')}", "say": f"온톨로지 {_short(w.get('answer'))}", "near": "",
-                  "evidence": f"거래 시스템 {_short(w.get('truth'))}", "row": "values", "go": {"tab": "check", "row": "values"}}
+                  "evidence": f"거래 시스템 {_short(w.get('truth'))}", "row": "values", "go": {"tab": "flow", "row": "values"}}
                  for v in check.get("values") or [] for w in v.get("mismatches") or []]
         title, detail = f"거래 값 오류 {check.get('value_errors')}건", f"기준 {gate['limit']}건 · 대조 {check.get('value_cases', 0):,}건"
-    fixes = [_fix("대조 결과 열기", "here", "검증 화면의 거래 값 정확도로 이동합니다.", "결과 열기", go={"tab": "check", "row": "values"}, recommended=not err),
+    fixes = [_fix("대조 결과 열기", "here", "검증 화면의 거래 값 정확도로 이동합니다.", "결과 열기", go={"tab": "flow", "row": "values"}, recommended=not err),
              _fix("대조 항목 설정 열기", "here", "흐름 설정의 거래 값 대조로 이동합니다.", "설정 열기", go={"tab": "flow", "row": "values"})]
     return _issue("gate:check.max_value_errors", "check.values", "bad", "verify", title, detail, key="gate:check.max_value_errors", items=items, fixes=fixes)
 
@@ -426,7 +426,7 @@ def build(s, watch: dict) -> list[dict]:
     out = _gather(s, out, measured)
     for x in out:
         if not x["effects"] and x.get("readers"):
-            x["effects"] = [{"label": r, "say": "이 항목을 읽습니다"} for r in x["readers"]]
+            x["effects"] = [{"label": r, "say": "읽는 항목"} for r in x["readers"]]
     return out
 
 
@@ -453,13 +453,13 @@ def waiting(s, *, dirty: bool, changes: int, actions: int) -> list[dict]:
         if not c.open:
             continue
         says = [{"label": a.source, "say": ", ".join(f"{k} {v}" for k, v in a.says.items())} for a in c.answers]
-        fixes = [_fix(f"{a.source} 고르기", "here", "고른 출처는 대기 중인 변경에 기록되고 변경 요청을 거쳐 반영됩니다.", "고르기",
+        fixes = [_fix(f"{a.source} 고르기", "here", "변경 요청에 기록", "고르기",
                       run={"route": "conflict/pick", "body": {"id": c.id, "source": a.source}}) for a in c.answers]
-        fixes.append(_fix("규칙 화면에서 보기", "here", "출처 충돌 목록의 이 항목으로 이동합니다.", "화면 열기", go={"tab": "rules", "row": f"conflict:{c.id}"}))
+        fixes.append(_fix("규칙 화면에서 보기", "here", "출처 충돌 목록", "화면 열기", go={"tab": "rules", "row": f"conflict:{c.id}"}))
         d = st.onto.decisions.get(c.decision)
         x = _issue(f"conflict:{c.id}", "conflict", "warn", "use", c.label or c.id, "출처끼리 답이 다릅니다", key=f"conflict:{c.id}",
                    items=[{"element": "", "name": a["label"], "label": a["label"], "say": a["say"], "evidence": "", "near": "", "row": "", "go": {"tab": "rules", "row": f"conflict:{c.id}"}} for a in says],
                    fixes=fixes, alert=False)
-        x["effects"] = [{"label": f"결정 {(d.label if d else '') or c.decision}" if c.decision else "판정", "say": "고를 때까지 기존 규칙으로 판정합니다"}]
+        x["effects"] = [{"label": f"결정 {(d.label if d else '') or c.decision}" if c.decision else "판정", "say": "선택 전 기존 규칙 적용"}]
         out.append(x)
     return out

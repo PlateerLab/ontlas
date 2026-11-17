@@ -16,7 +16,8 @@ FOUND_MAX = 40
 JOBS_MAX = 30
 # what a found entry is called on the page, and the screen that shows it
 FOUND = {"object": ("Entity", "def", "objects"), "query": ("질의", "def", "query"), "action": ("Action", "def", "actions"),
-         "rule": ("규칙", "rule", "semrules"), "document": ("자료", "doc", "evidence"), "term": ("용어", "term", "lexicon")}
+         "rule": ("규칙", "rule", "semrules"), "card": ("규칙", "rule", "semrules"), "document": ("자료", "doc", "evidence"),
+         "term": ("용어", "term", "lexicon")}
 
 
 def _materials(s) -> dict:
@@ -94,7 +95,7 @@ def _steps(s, ov: dict, mats: dict, waiting: dict, changes: dict) -> list[dict]:
         {"id": "questions", "state": "done" if qa["counts"]["questions"] else "todo", "questions": qa["counts"]["questions"],
          "accuracy": qa.get("accuracy"), "failed": qa["counts"]["failed"]},
         {"id": "version", "state": "done" if entities else "todo", "label": ov["version"]["label"], "number": ov["version"]["number"]},
-        {"id": "agents", "state": "done" if rest else "todo", "rest": rest},
+        {"id": "agents", "state": "done" if rest and entities else "todo", "rest": rest},  # an API with nothing defined serves nothing
         {"id": "source", "state": "done" if source.get("connected") else "optional", "kind": source.get("kind") or ""},
     ]
 
@@ -124,9 +125,11 @@ def find(s, a, who) -> dict:
     """Everything a search or a question touches, as one list: the Entities, queries and actions it names, the rules
     it reaches, the terms it uses, and the passages of the documents. Each says what it is and where it is shown."""
     from ontlas.backends.base import NoSource
+    from ontlas.embed import shared_wording
     from ontlas.tools import StudioTools
 
     text = " ".join(str(a.get("q") or "").split())[:300]
+    folder = str(a.get("folder") or "")  # the scope the question was asked in: only that folder's passages
     if not text:
         raise ValueError("검색어가 없어 검색하지 못했습니다. 검색어를 입력해 주세요.")
     s._sync_space()
@@ -146,9 +149,20 @@ def find(s, a, who) -> dict:
         out.append({"id": f"term:{m['id']}", "kind": "term", "word": FOUND["term"][0], "group": "term", "title": m.get("term") or "",
                     "sub": " · ".join(x for x in ("표준 용어", str(said)) if x), "go": "lexicon", "element": m.get("concept") or ""})
     try:
-        found = tools.knowledge().find(text, FOUND_MAX)
+        index = tools.knowledge(folder)
+        found = index.find(text, FOUND_MAX)
     except Exception:  # a store that cannot be reached leaves the terms to answer; the page says nothing was found there
-        found = []
+        index, found = None, []
+    if index is not None:
+        # the index fills its list with what is near in letters and what is tied to that; an entry belongs to the question
+        # when it has the question's wording, is what a matched term stands for, or is a passage a store of meanings
+        # found, and a definition also when it is tied to one of those (the Entities a matched rule reads)
+        meaning = bool(getattr(getattr(s.space, "embedder", None), "semantic", False))
+        named = {m.get("concept") for m in matched} - {None, ""}
+        said = {f["id"] for f in found if f.get("element") in named or (meaning and f["kind"] == "document")
+                or shared_wording(text, f"{f['title']} {f.get('text') or ''}") > 0}
+        tied = {x for a, _, b in index.links for x, y in ((a, b), (b, a)) if y in said}
+        found = [f for f in found if f["id"] in said or (f["kind"] != "document" and f["id"] in tied)]
     for f in found:
         kind = f["kind"]
         if kind not in FOUND:
@@ -161,7 +175,16 @@ def find(s, a, who) -> dict:
         else:
             title, sub = f["title"], " ".join(str(f.get("text") or "").split())[:120]
         out.append({"id": f["id"], "kind": kind, "word": word, "group": group, "title": title, "sub": sub, "go": _go(kind, f),
-                    "element": f.get("element") or "", "score": f.get("score", 0)})
+                    "element": f.get("element") or "", "score": f.get("score", 0),
+                    **({"document": f.get("document") or ""} if kind == "document" else {})})
+    # the rule cards that are written down only: the index above holds the rows of the decision tables, not these
+    # (a text with no word of two letters or more matches every card there, so it asks for none)
+    worded = any(len(w) >= 2 for w in text.split())
+    cards = tools.find_rules(text, k=FOUND_MAX)["rules"] if s.studio.composition is not None and worded else []
+    for c in cards:
+        word, group, go = FOUND["card"]
+        out.append({"id": f"card:{c['id']}", "kind": "card", "word": word, "group": group, "title": f"{c['id']} · {c['statement']}",
+                    "sub": " · ".join(str(x) for x in (c.get("layer_label"), c.get("source")) if x), "go": go, "element": ""})
     counts: dict[str, int] = {"def": 0, "rule": 0, "term": 0, "doc": 0}
     for x in out:
         counts[x["group"]] += 1
@@ -176,6 +199,8 @@ def _jobs(s) -> list[dict]:
 
 def _job_state(s, job: dict) -> tuple[str, str]:
     """Where a draft made here stands now: still waiting for review, filed as a change request, or done with."""
+    if job.get("error"):
+        return "failed", "실패"
     if job["kind"] == "concepts":
         d = s.pending[0] if s.pending else None
         if d is not None and d.label == job.get("label") and len(d.objects) == job["made"].get("objects"):
@@ -232,14 +257,18 @@ def ai(s, a, who) -> dict:
 @post("home/ai/job", needs="editor")
 def ai_job(s, a, who) -> dict:
     """Record a draft that was just made, from what the studio holds of it: a draft from files (the Entities and
-    relations it made, the tables it left out) or a rule draft from a policy (its rules, and what its check found)."""
+    relations it made, the tables it left out) or a rule draft from a policy (its rules, and what its check found).
+    A making that failed is recorded with why, so the screen does not show the one before it as the last."""
     from ontlas.web.api import plain
 
     kind = str(a.get("kind") or "")
     now = datetime.now().isoformat(timespec="minutes")
     base: dict[str, Any] = {"at": now, "by": s.who or "", "kind": kind, "model": getattr(s.llm, "kind", "") if s.llm else "",
                             "files": _materials(s)["included"]}
-    if kind == "concepts":
+    error = " ".join(str(a.get("error") or "").split())[:300]
+    if error and kind in ("concepts", "rules"):
+        job = {**base, "label": "", "scope": str(a.get("scope") or "")[:200], "error": error, "made": {"all": 0, "excluded": 0}}
+    elif kind == "concepts":
         if not s.pending:
             raise ValueError("생성된 초안이 없어 기록하지 못했습니다. 초안을 먼저 생성해 주세요.")
         d = s.pending[0]

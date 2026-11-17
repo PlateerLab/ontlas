@@ -44,4 +44,13 @@
 .ont-wsbar { display:flex; align-items:center; gap:8px; padding:8px 16px; background:#fff; border-bottom:1px solid var(--line); flex:none; }
 @media (max-width:640px) { .ont-tree { flex:1 1 100%; } }
 
-#ontkg { flex:1; min-height:520px; border-radius:12px; }
+/* the graph keeps its height whatever is picked: the side beside it takes the graph's height and scrolls, the bar
+   above it is there with or without a pick */
+#ontkg { min-height:520px; border-radius:12px; }
+#ontside { contain:size; min-height:320px; overflow-y:auto; }
+#ontgbar > .k-bar { min-height:54px; box-sizing:border-box; }  /* as tall as a bar with its buttons: 36 + 8 + 8 + 2 */
+#ontgbar > .k-bar > span:not(.k-push) { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:640px) {  /* on a phone two rows, the names and then the buttons, with or without a pick */
+  #ontgbar > .k-bar { display:grid; grid-template-columns:minmax(0, auto) minmax(0, auto) minmax(0, 1fr); grid-template-rows:auto 36px; }
+  #ontgbar > .k-bar > .k-push { grid-column:1 / -1; margin-left:0; }
+}

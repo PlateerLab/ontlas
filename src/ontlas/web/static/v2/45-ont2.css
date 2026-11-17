@@ -28,8 +28,15 @@
 .k-main > .card.editor { margin:0; }
 
 @media (max-width:640px) {
+  .o2-menu > .k-pop.right { left:0; right:auto; }  /* the head's buttons wrap to the left: the list opens to the right of them */
   .o2-env { grid-template-columns:minmax(0, 1fr); }
   .o2-env > div + div { border-left:0; border-top:1px solid var(--row); }
+  /* a choice of many on a narrow screen: its buttons wrap instead of hiding past the edge */
+  .k-seg.o2-wrap { flex-wrap:wrap; overflow:visible; }
+  /* the versions on a narrow screen: when and by whom give way, so the actions stay in sight */
+  .o2-vt th:nth-child(4), .o2-vt td:nth-child(4), .o2-vt th:nth-child(5), .o2-vt td:nth-child(5) { display:none; }
+  .o2-vt td:last-child { white-space:normal; }
+  .o2-vt td:last-child .k-lnk { display:inline-flex; margin:2px 8px 2px 0; }
 }
 
 /* 용어사전: the count that asks for a look */

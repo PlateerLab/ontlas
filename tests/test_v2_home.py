@@ -90,7 +90,8 @@ def test_find_lists_everything_a_question_touches_with_what_each_is(session):
     assert "rule" in groups and "doc" in groups
     for x in out["found"]:
         assert x["title"] and x["word"] and x["go"]
-        assert x["group"] == {"object": "def", "query": "def", "action": "def", "rule": "rule", "document": "doc", "term": "term"}[x["kind"]]
+        assert x["group"] == {"object": "def", "query": "def", "action": "def", "rule": "rule", "card": "rule", "document": "doc",
+                              "term": "term"}[x["kind"]]
     rule = next(x for x in out["found"] if x["kind"] == "rule")
     assert rule["id"].startswith("rule:") and "." in rule["id"] and rule["word"] == "규칙" and rule["go"] == "semrules"
     doc = next(x for x in out["found"] if x["kind"] == "document")
@@ -104,6 +105,42 @@ def test_find_names_a_term_the_lexicon_holds(session):
     hit = [x for x in out["found"] if x["kind"] == "term"]
     assert hit and hit[0]["title"] == word and hit[0]["go"] == "lexicon"
     assert out["counts"]["term"] == len(hit)
+
+
+def test_find_lists_the_rule_cards_that_are_written_down_only(session):
+    stated = [c for c in session.semantic_state()["cards"] if c["kind"] == "stated"]
+    card = stated[0]
+    word = next(w for w in card["statement"].split() if len(w) >= 2)
+    out = get(session, "home/find", q=word)
+    hit = [x for x in out["found"] if x["kind"] == "card"]
+    assert f"card:{card['id']}" in [x["id"] for x in hit]
+    assert all(x["group"] == "rule" and x["word"] == "규칙" and x["go"] == "semrules" for x in hit)
+    assert out["counts"]["rule"] == sum(1 for x in out["found"] if x["group"] == "rule")
+    # a text with no word of two letters or more names no card, rather than every one
+    assert not [x for x in get(session, "home/find", q="a")["found"] if x["kind"] == "card"]
+
+
+def test_find_keeps_the_passages_to_the_folder_asked_in(session):
+    session.catalog_upload("정책/교환정책서.md", (ROOT / "examples" / "policies" / "교환정책서.md").read_bytes())
+    docs = lambda out: {x["title"].split(" › ")[0] for x in out["found"] if x["kind"] == "document"}  # noqa: E731
+    everywhere = docs(get(session, "home/find", q="교환 기간"))
+    kept = docs(get(session, "home/find", q="교환 기간", folder="정책"))
+    assert kept == {"교환정책서"} and len(everywhere) > 1
+
+
+def test_find_keeps_only_what_the_question_names_and_what_is_tied_to_it(session):
+    # nothing of a question that names nothing here is in the definitions, so the index's near letters are no result
+    assert get(session, "home/find", q="zzqx 화성 날씨")["total"] == 0
+    out = get(session, "home/find", q="반품 기간")
+    kinds = {x["kind"] for x in out["found"]}
+    assert {"rule", "document", "object"} <= kinds  # the Entities the 반품 rules read stay with them
+    # a term's concept is kept although its own words differ (회원 is the standard word for 고객)
+    assert "object:Customer" in [x["id"] for x in get(session, "home/find", q="회원")["found"]]
+
+
+def test_a_passage_found_names_its_document(session):
+    doc = next(x for x in get(session, "home/find", q="반품 기간")["found"] if x["kind"] == "document")
+    assert doc["document"] and doc["title"].startswith(doc["document"])
 
 
 def test_find_without_words_says_so(session):
@@ -165,3 +202,23 @@ def test_a_rule_draft_is_recorded_with_what_its_check_found_and_follows_its_chan
 def test_a_kind_that_is_neither_draft_is_refused(session):
     with pytest.raises(ValueError):
         post(session, "home/ai/job", kind="terms")
+    with pytest.raises(ValueError):
+        post(session, "home/ai/job", kind="terms", error="x")
+
+
+def test_a_draft_that_failed_is_recorded_as_failed_with_why(session):
+    out = post(session, "home/ai/job", kind="rules", scope="예시 정책서", error="언어 모델이 답변을 끝내지 못했습니다.")
+    job = out["jobs"][0]
+    assert job["kind"] == "rules" and job["scope"] == "예시 정책서" and job["error"] == "언어 모델이 답변을 끝내지 못했습니다."
+    assert (job["state"], job["state_label"]) == ("failed", "실패") and job["made"] == {"all": 0, "excluded": 0}
+    assert out["month"] == {"jobs": 1, "made": 0, "excluded": 0}
+
+
+def test_the_api_step_waits_for_something_defined(session):
+    session.data.rest = True
+    steps = {x["id"]: x for x in get(session, "home/summary")["steps"]}
+    assert steps["agents"]["state"] == "done" and steps["agents"]["rest"] is True
+    session.library_new("빈 온톨로지", "empty")
+    steps = {x["id"]: x for x in get(session, "home/summary")["steps"]}
+    assert steps["agents"]["state"] == "todo" and steps["agents"]["rest"] is True
+    assert not [x for x in steps.values() if x["state"] == "done"]

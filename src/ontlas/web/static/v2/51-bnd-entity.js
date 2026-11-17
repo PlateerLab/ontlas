@@ -53,7 +53,7 @@
     const links = m.links.filter((l) => l.source === o.name || l.target === o.name);
     const area = o.area ? m.areas.find((a) => a.name === o.area) : null;
     const status = !d.table ? ['', '테이블 미지정'] : !on ? ['b', 'L2 · 명세'] : real ? ['ok', 'L2 · 실제 스키마'] : ['warn', '테이블 없음'];
-    const head = `<p class="k-h g6 k-s" style="margin:0">${area ? `${BND_OBJ}<a class="k-ink k-b" href="#objmgr">${esc(`${area.label || area.name}@${area.name}`)}</a><span aria-hidden="true">›</span>` : ''}<span class="bnd-ent">Entity</span><span>${esc(bndEnt(o))}</span></p>
+    const head = `<p class="k-h g6 k-s" style="margin:0">${area ? `${BND_OBJ}<a class="k-ink k-b" href="#objmgr?area=${encodeURIComponent(area.name)}">${esc(`${area.label || area.name}@${area.name}`)}</a><span aria-hidden="true">›</span>` : ''}<span class="bnd-ent">Entity</span><span>${esc(bndEnt(o))}</span></p>
       <div class="k-pha"><h2 class="bnd-h" id="bnd-bd-h">${esc(bndEnt(o))} Binding</h2><span class="k-chip${status[0] ? ` ${status[0]}` : ''}">${status[1]}</span></div>
       <div class="k-seg self" role="tablist" aria-label="Binding 종류"><button type="button" role="tab" aria-selected="true" class="on">기본 Binding</button><button type="button" role="tab" aria-selected="false" data-act="bndBindRel">Relation Binding ${links.length}</button></div>`;
     const tables = m.sources.source.tables;
@@ -62,7 +62,8 @@
     const step1 = `<div class="k-h base"><span class="k-num">1</span><h3 class="bnd-step">소스</h3></div>
       <div class="k-wrap"><label class="k-f" style="flex:2 1 240px">데이터 소스<select class="k-in" disabled><option>${esc(on ? `${(S.st.origin || {}).detail || src.name} · ${BACKEND_KIND[src.kind] || src.kind} · 연결됨` : '미연결')}</option></select></label>
         <label class="k-f" style="flex:2 1 200px">테이블${tableField}</label></div>`;
-    if (!d.table) return `<section class="k-card pad k-navs" aria-labelledby="bnd-bd-h">${head}${step1}<p class="k-note">테이블이 지정되지 않았습니다.</p></section>`;
+    const save = `${dirty ? '<button class="k-btn" data-act="bndBindReset">되돌리기</button>' : ''}<button class="k-btn pri" data-act="bndBindSave"${dirty && !B.saving ? '' : ' disabled'}>${B.saving ? '저장 중' : '저장 · 변경 요청에 추가'}</button>`;
+    if (!d.table) return `<section class="k-card pad k-navs" aria-labelledby="bnd-bd-h">${head}${step1}<p class="k-note">테이블이 지정되지 않았습니다.</p>${canEdit() && dirty ? `<div class="k-h end">${save}</div>` : ''}</section>`;
     const keyCols = key ? (key.name in d.cols ? [d.cols[key.name] || key.name] : bndCols(key)) : [];
     const dup = (by[`object:${o.name}`] || []).concat(key ? by[`property:${o.name}.${key.name}`] || [] : []).find((f) => f.kind === 'key');
     const step2 = `<div class="k-h base"><span class="k-num">2</span><h3 class="bnd-step">Entity 키</h3><span class="k-s">문자열 · 정수 컬럼</span></div>
@@ -71,7 +72,7 @@
     // rows: the source's columns when its table is known, the Properties when it is only named
     const typeWord = (p) => `${TYPE_WORD[p.type] || p.type} · ${esc(p.label || p.name)}`;
     const how = (p) => (key && p.name === key.name ? (keyCols.length > 1 ? `키 ${keyCols.length}컬럼` : '키') : p.transform ? '변환식' : (p.values || []).length ? '코드 → 값' : '컬럼 그대로');
-    let rows = '', bound = 0, wait = 0, out = 0, total = 0;
+    let rows = '', bound = 0, wait = 0, out = 0, plus = 0, total = 0;
     const free = () => props.filter((p) => !real || !real.columns.some((c) => c.name.toLowerCase() === colOf(p).toLowerCase()));
     if (real) {
       total = real.columns.length;
@@ -80,7 +81,7 @@
         const p = mine.find((x) => x.name in d.cols) || mine[0], adding = !!d.add[c.name];
         const bad = p ? (by[`property:${o.name}.${p.name}`] || [])[0] : null;
         const mark = adding ? ['b', '추가 예정'] : !p ? ['', '제외'] : bad ? ['warn', FINDING[bad.kind] || '컬럼 확인'] : ['ok', '연결됨'];
-        if (p && !bad) bound += 1; else if (p) wait += 1; else out += 1;
+        if (adding) plus += 1; else if (p && !bad) bound += 1; else if (p) wait += 1; else out += 1;
         const opts = `${p ? '' : `<option value=""${adding ? '' : ' selected'}>연결 안 함</option><option value="+"${adding ? ' selected' : ''}>새 Property 추가</option>`}${p ? `<option value="${esc(p.name)}" selected>${esc(p.name)}</option>` : ''}${free().filter((x) => !p || x.name !== p.name).map((x) => `<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('')}`;
         return `<tr><td class="nw"><span class="k-code">${esc(c.name)}</span><br><span class="k-s">${esc(c.type || '')}${real.key.includes(c.name) ? ' · 키' : ''}</span></td><td class="bnd-arrow">${ki('arrow', 16, 1.75)}</td>
           <td><select class="bnd-sel" data-in="bndBindProp" data-c="${esc(c.name)}" aria-label="${esc(c.name)}의 Property"${canEdit() ? '' : ' disabled'}>${opts}</select>${p ? `<span class="k-s" style="display:block;margin-top:4px">${typeWord(p)}</span>` : ''}</td>
@@ -100,8 +101,8 @@
       <div class="k-x bnd-box"><table class="k-t s"><thead><tr><th scope="col">소스 컬럼</th><th scope="col" class="bnd-arrow"><span class="k-hide">방향</span></th><th scope="col">Property · 타입</th><th scope="col">변환</th><th scope="col">상태</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="mut">컬럼 Property가 없습니다.</td></tr>'}</tbody></table></div>
       ${loose.length ? `<div class="k-pha"><span class="k-s">미연결 Property ${loose.length}</span>${loose.map((p) => `<span class="k-chip"><span class="k-code">${esc(p.name)}</span>${esc(p.label || '')}</span>`).join('')}</div>` : ''}
       ${calc.length ? `<div class="k-pha"><span class="k-s">계산 Property ${calc.length}</span>${calc.map((p) => `<span class="k-chip dash"><span class="k-code">${esc(p.name)}</span>${esc(p.label || '')}</span>`).join('')}</div>` : ''}
-      <div class="k-pha" style="padding-top:12px;border-top:1px solid var(--row)"><span class="k-s">${real ? `컬럼 ${total}개 · 연결 ${bound} · 컬럼 확인 ${wait} · 제외 ${out}` : `Property ${total}개 · ${on ? '원천 테이블 없음' : '명세'}`}</span>
-        ${canEdit() ? `<span class="k-wrap g8 k-push">${real && out ? `<button class="k-btn" data-act="bndBindAddAll">${ki('plus', 16, 1.75)}컬럼에서 Property 추가</button>` : ''}${dirty ? '<button class="k-btn" data-act="bndBindReset">되돌리기</button>' : ''}<button class="k-btn pri" data-act="bndBindSave"${dirty && !B.saving ? '' : ' disabled'}>${B.saving ? '저장 중' : '저장 · 변경 요청에 추가'}</button></span>` : ''}</div>`;
+      <div class="k-pha" style="padding-top:12px;border-top:1px solid var(--row)"><span class="k-s">${real ? `컬럼 ${total}개 · 연결 ${bound} · 컬럼 확인 ${wait}${plus ? ` · 추가 예정 ${plus}` : ''} · 제외 ${out}` : `Property ${total}개 · ${on ? '원천 테이블 없음' : '명세'}`}</span>
+        ${canEdit() ? `<span class="k-wrap g8 k-push">${real && out ? `<button class="k-btn" data-act="bndBindAddAll">${ki('plus', 16, 1.75)}컬럼에서 Property 추가</button>` : ''}${save}</span>` : ''}</div>`;
     return `<section class="k-card pad k-navs" aria-labelledby="bnd-bd-h">${head}${step1}${step2}${step3}</section>`;
   }
 
@@ -123,14 +124,15 @@
     else if (lost.length) add(false, `컬럼이 없는 Property ${lost.length}개`, lost.map((p) => p.name).join(' · '));
     else if (t) add(true, '모든 Property 컬럼 확인됨', `${o.table} · ${t.columns.length}컬럼`);
     m.links.filter((l) => (l.source === o.name || l.target === o.name) && !l.on && !l.via).forEach((l) => add(false, `Relation ${l.name} 소스 없음`, '연결 테이블 미지정'));
-    [`object:${o.name}`, ...props.map((p) => `property:${o.name}.${p.name}`)].flatMap((el) => by[el] || []).filter((f) => f.kind !== 'type').forEach((f) => add(false, `${FINDING[f.kind] || f.kind} · ${f.element.split(':')[1]}`, f.detail));
+    // a missing column is said once, by the line above; the check's other findings each get a line
+    [`object:${o.name}`, ...props.map((p) => `property:${o.name}.${p.name}`)].flatMap((el) => by[el] || []).filter((f) => f.kind !== 'type' && !(t && f.kind === 'column')).forEach((f) => add(false, `${FINDING[f.kind] || f.kind} · ${f.element.split(':')[1]}`, f.detail));
     return list;
   }
 
   function bndBindPreview(o) {
     const B = S.bnd.bind, on = !noSource();
     if (!on) return '<div class="bnd-prev"><p class="k-b k-14" style="margin:0">데이터 미리보기</p><p class="k-s" style="margin:0">데이터 소스 미연결</p><a class="k-push k-13" href="#db">데이터 소스 연결</a></div>';
-    const p = B.prof && B.prof.name === o.name ? B.prof : null;
+    const p = B.prof && B.prof.name === o.name && B.prof.sig === bndSig() ? B.prof : null;
     if (!p || p.busy) return '<div class="bnd-prev"><p class="k-b k-14" style="margin:0">데이터 미리보기</p><p class="k-s" style="margin:0">불러오는 중입니다.</p></div>';
     if (!p.ok) return `<div class="bnd-prev"><p class="k-b k-14" style="margin:0">데이터 미리보기</p><p class="k-s" style="margin:0">${esc(p.error || '')}</p></div>`;
     const keyStat = p.stats.find((s) => s.name === o.key);
@@ -142,12 +144,17 @@
       <div class="k-x"><table class="k-t s"><thead><tr>${p.stats.map((s) => `<th scope="col">${esc(s.label)}</th>`).join('')}</tr></thead><tbody>${p.rows.slice(0, 5).map((r) => `<tr>${r.map((v) => `<td class="nw">${show(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   }
 
+  // where a finding is mended: a Property's column on its Mapping, an Entity's table on its Binding, a Relation on its form
+  const bndFixHref = (el) => { const [kind, ...rest] = el.split(':'), id = rest.join(':');
+    return kind === 'property' ? itemHref('map', 'form', id) : kind === 'object' ? itemHref('binding', 'form', id) : kind === 'link' && ITEM.relation ? itemHref('relation', 'form', id) : ''; };
+
   function bndBindView() {
     const wait = bndWait('Entity Binding', BND_BIND_LEAD);
     if (wait) return wait;
     const m = bndM(), B = S.bnd.bind, by = bndFound(), on = !noSource();
-    const asked = itemParam('entity');
-    if (asked && bndObj(m, asked) && B.asked !== asked) { B.asked = asked; B.sel = asked; }
+    const row = itemParam('row').split(':'), about = row[0] === 'bind' && ['object', 'property'].includes(row[1]) ? (row[2] || '').split('.')[0] : '';
+    const asked = itemParam('entity') || about;
+    if (asked && bndObj(m, asked) && B.asked !== asked) { B.asked = asked; B.sel = asked; B.d = null; }
     if (!bndObj(m, B.sel)) B.sel = (m.objects.find((o) => o.table) || m.objects[0] || {}).name || '';
     const o = bndObj(m, B.sel);
     const acts = `<a class="k-btn" href="#sources">Mapping</a><button class="k-btn" data-act="bndCheckNow"${S.bind && S.bind.busy ? ' disabled' : ''}>${ki('reload', 16, 1.75)}${S.bind && S.bind.busy ? '검사 중' : 'Binding 검사'}</button>${canEdit() ? `<a class="k-btn pri" href="${itemHref('binding', 'form')}">${ki('plus', 16, 1.75)}Binding</a>` : ''}`;
@@ -159,17 +166,18 @@
     const lostP = allP.filter(([x, p]) => bndState(m, x, p) === 'missing');
     const rel = m.links.map((l) => bndLinkRow(m, l, by));
     const noSrc = rel.filter((r) => r.mark[1] === '소스 없음');
-    const need = lostP.length + noSrc.length + Object.values(by).flat().length;
+    // each place to mend once: a column the source lacks is also what the check found there
+    const need = new Set([...lostP.map(([x, p]) => `property:${x.name}.${p.name}`), ...noSrc.map((r) => `link:${r.l.name}`), ...Object.keys(by)]).size;
     const area = o.area ? m.areas.find((a) => a.name === o.area) : null;
     const total = bndStored(m, o.name).length;
     const bar = `<div class="k-bar" role="toolbar" aria-label="선택한 Binding"><span class="k-s">선택한 Binding</span>${area ? `${BND_OBJ}<span class="k-s">${esc(`${area.label || area.name}@${area.name}`)} ›</span>` : ''}<span class="k-code k-ink">${esc(bndEnt(o))}</span><span class="k-14">${o.table ? `${esc(o.table)} · Property ${bndBound(m, o)} / ${total}` : '테이블 미지정'}</span>
-      <span class="k-push"><a class="k-btn" href="${elementTo(`object:${o.name}`)}">${ki('doc', 16, 1.75)}Entity</a>${canEdit() ? `<a class="k-btn" href="${itemHref('binding', 'form', o.name)}">${ki('doc', 16, 1.75)}편집</a>` : ''}<a class="k-btn" href="${itemHref('binding', 'history', o.name)}">${ki('history', 16, 1.75)}이력</a>${canEdit() && o.table ? `<a class="k-btn dan" href="${itemHref('binding', 'delete', o.name)}">Binding 해제</a>` : ''}</span></div>`;
+      <span class="k-push"><a class="k-btn" href="#objects?entity=${encodeURIComponent(o.name)}">${ki('doc', 16, 1.75)}Entity</a>${canEdit() ? `<a class="k-btn" href="${itemHref('binding', 'form', o.name)}">${ki('doc', 16, 1.75)}편집</a>` : ''}<a class="k-btn" href="${itemHref('binding', 'history', o.name)}">${ki('history', 16, 1.75)}이력</a>${canEdit() && o.table ? `<a class="k-btn dan" href="${itemHref('binding', 'delete', o.name)}">Binding 해제</a>` : ''}</span></div>`;
     const stat = (title, big, of, sub) => `<div class="k-card bnd-stat s5"><p class="k-s" style="margin:0">${title}</p><p class="k-big">${big}${of ? ` <span class="k-mut k-14" style="font-weight:400">/ ${of}</span>` : ''}</p><p class="k-s k-cut" style="margin:4px 0 0">${sub}</p></div>`;
     const stats = `<section class="k-wrap" aria-label="Binding 현황">${stat('연결 Entity', boundE.length, ents.length, boundE.length ? esc(boundE.slice(0, 3).map((x) => x.label || x.name).join(' · ')) : '없음')}
       ${stat('연결 Property', boundP.length, allP.length, 'Mapping 명세')}${stat('Relation Binding', rel.filter((r) => r.bound).length, rel.length, '연결 테이블 지정')}
       ${on && bndChecked() ? stat('실제 값 확인', S.bind.checked.columns, '', `테이블 ${S.bind.checked.tables} · 데이터 점검 ${S.bind.checked.data_checks}건`) : `<div class="bnd-stat s5 dash"><p class="k-s" style="margin:0">실제 값 확인</p><p class="k-big mut">-</p><p class="k-s" style="margin:4px 0 0">${on ? 'Binding 검사 전' : '데이터 소스 미연결'}</p></div>`}
       <div class="bnd-stat s5${need ? ' warn' : ' k-card'}"><p class="k-s" style="margin:0">확인 필요</p><p class="k-big${need ? ' warn' : ''}">${need}</p><p class="${need ? 'k-warn' : 'k-mut'} k-13" style="margin:4px 0 0">컬럼 확인 ${lostP.length} · 소스 없음 ${noSrc.length}</p></div></section>`;
-    const sql = B.sql && B.sql.entity === o.name ? B.sql : null;
+    const sql = B.sql && !B.sql.busy && B.sql.entity === o.name && B.sql.sig === bndSig() ? B.sql : null;
     const sqlCard = !o.table ? '' : `<section class="k-card" aria-labelledby="bnd-sq-h"><div class="k-h" style="padding:16px 20px"><h2 class="k-h2" id="bnd-sq-h">생성 SQL</h2><span class="k-chip">읽기 전용</span>${sql && sql.sql ? `<button class="k-lnk k-push" data-act="copycode" data-v="${esc(sql.sql)}">복사</button>` : ''}</div>
       ${sql && sql.sql ? `<pre class="bnd-sql">${esc(sql.sql)}</pre>` : `<p class="k-cf line">${esc(sql ? sql.error || 'SQL을 생성하지 못했습니다.' : '불러오는 중입니다.')}</p>`}
       </section>`;
@@ -179,13 +187,13 @@
       ${o.table ? bndBindPreview(o) : ''}</section>`;
     const mine = rel.filter((r) => r.l.source === o.name || r.l.target === o.name);
     const lab = (x, name) => (x ? (x.name === o.name ? x.label || x.name : bndEnt(x)) : name);
-    const relCard = `<section class="k-card" id="bnd-rel" aria-labelledby="bnd-rb-h"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="bnd-rb-h">Relation Binding</h2><span class="k-chip">${mine.length}</span><a class="k-btn k-push" href="#model">그래프 탐색</a></div>
+    const relCard = `<section class="k-card" id="bnd-rel" aria-labelledby="bnd-rb-h"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="bnd-rb-h">Relation Binding</h2><span class="k-chip">${mine.length}</span><a class="k-btn k-push" href="#model?entity=${encodeURIComponent(o.name)}">그래프 탐색</a></div>
       ${mine.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Relation</th><th scope="col">시작 → 끝</th><th scope="col">소스 테이블</th><th scope="col">시작 키 컬럼</th><th scope="col">끝 키 컬럼</th><th scope="col">상태</th></tr></thead><tbody>
         ${mine.map((r) => `<tr data-row="bind:link:${esc(r.l.name)}"><td class="k-code">${esc(r.l.name)}</td><td>${esc(lab(r.s, r.l.source))} → ${esc(lab(r.t, r.l.target))}</td><td class="k-code">${esc(r.table || '-')}</td><td class="k-code">${esc(r.a || '-')}</td><td class="k-code">${esc(r.b || '-')}</td><td><span class="k-chip${r.mark[0] ? ` ${r.mark[0]}` : ''}">${esc(r.mark[1])}</span></td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">Relation이 없습니다.</p>'}
       </section>`;
     const found = on && bndChecked() ? S.bind.findings : [];
     const foundCard = found.length ? `<section class="k-card" aria-labelledby="bnd-fd-h"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="bnd-fd-h">Binding 검사 결과</h2><span class="k-chip warn">${found.length}</span></div>
-      <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">심각도</th><th scope="col">종류</th><th scope="col">항목</th><th scope="col">조치</th><th scope="col"></th></tr></thead><tbody>${found.map((f) => `<tr data-row="bind:${esc(f.element)}"><td><span class="k-chip ${f.severity === 'error' ? 'bad' : 'warn'}">${f.severity === 'error' ? '오류' : '주의'}</span></td><td class="nw">${esc(FINDING[f.kind] || f.kind)}</td><td class="k-code">${esc(f.element.split(':').slice(1).join(':'))}</td><td>${esc(FIX[f.kind] || '')}<br><span class="k-s">${esc(f.detail || '')}</span></td><td>${canEdit() ? `<button class="k-lnk" data-act="issel" data-el="${esc(f.element)}">수정</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`
+      <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">심각도</th><th scope="col">종류</th><th scope="col">항목</th><th scope="col">조치</th><th scope="col"></th></tr></thead><tbody>${found.map((f) => `<tr data-row="bind:${esc(f.element)}"><td><span class="k-chip ${f.severity === 'error' ? 'bad' : 'warn'}">${f.severity === 'error' ? '오류' : '주의'}</span></td><td class="nw">${esc(FINDING[f.kind] || f.kind)}</td><td class="k-code">${esc(f.element.split(':').slice(1).join(':'))}</td><td>${esc(FIX[f.kind] || '')}<br><span class="k-s">${esc(f.detail || '')}</span></td><td>${canEdit() && bndFixHref(f.element) ? `<a class="k-lnk" href="${bndFixHref(f.element)}">편집</a>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`
       : on && bndChecked() ? `<section class="k-card pad k-h"><span class="k-ok">${ki('check', 16, 1.75)}</span><span class="k-14">정의와 원천 DB 일치 · 테이블 ${S.bind.checked.tables} · 컬럼 ${S.bind.checked.columns} · 데이터 점검 ${S.bind.checked.data_checks}건</span></section>` : '';
     return bndPg(`${head}${bar}${stats}<div class="k-cols">${bndBindTree(m, o.name)}<div class="k-v g16" style="flex:3 1 640px;min-width:0">${bndBindCard(m, o, by)}${sqlCard}${checkCard}</div></div>${relCard}${foundCard}
       ${kNext([['sources', 'Mapping'], ['db', '데이터 소스'], ['objects', 'Entity'], ['query', '질의'], ['records', '레코드 탐색']])}`);
@@ -196,14 +204,18 @@
     bndNeed();
     const m = bndM(), B = S.bnd.bind, o = m && bndObj(m, B.sel);
     if (!m || !o) return;
-    if (!noSource() && !S.bind) { S.bind = { busy: true }; api('bindings', {}).then((r) => { S.bind = r; }).catch((e) => { S.bind = { error: e.message }; }).finally(() => { if (S.tab === 'bind') render(); }); }
-    if (o.table && (!B.sql || B.sql.entity !== o.name)) {
-      B.sql = { entity: o.name, sql: '', error: '', busy: true };
-      api('bnd/binding?entity=' + encodeURIComponent(o.name)).then((r) => { if (B.sql && B.sql.entity === r.entity) B.sql = r; }).catch((e) => { B.sql = { entity: o.name, sql: '', error: e.message }; }).finally(() => { if (S.tab === 'bind' && B.sel === o.name) render(); });
+    if (!noSource() && (!S.bind || (!S.bind.busy && S.bind.sig !== bndSig()))) bndCheckRun().finally(() => { if (S.tab === 'bind') render(); });
+    // both are of the definition as it stands: another Entity, an edit or an edit taken back reads them again
+    const sig = bndSig();
+    if (o.table && (!B.sql || B.sql.entity !== o.name || B.sql.sig !== sig)) {
+      B.sql = { entity: o.name, sig, sql: '', error: '', busy: true };
+      api('bnd/binding?entity=' + encodeURIComponent(o.name)).then((r) => { if (B.sql && B.sql.entity === r.entity && B.sql.sig === sig) B.sql = { ...r, sig }; })
+        .catch((e) => { if (B.sql && B.sql.sig === sig) B.sql = { entity: o.name, sig, sql: '', error: e.message }; }).finally(() => { if (S.tab === 'bind' && B.sel === o.name) render(); });
     }
-    if (o.table && !noSource() && (!B.prof || B.prof.name !== o.name)) {
-      B.prof = { name: o.name, busy: true };
-      api('object/profile?name=' + encodeURIComponent(o.name)).then((r) => { B.prof = { name: o.name, ...r }; }).catch((e) => { B.prof = { name: o.name, ok: false, error: e.message }; }).finally(() => { if (S.tab === 'bind' && B.sel === o.name) render(); });
+    if (o.table && !noSource() && (!B.prof || B.prof.name !== o.name || B.prof.sig !== sig)) {
+      B.prof = { name: o.name, sig, busy: true };
+      api('object/profile?name=' + encodeURIComponent(o.name)).then((r) => { if (B.prof && B.prof.sig === sig && B.prof.name === o.name) B.prof = { name: o.name, sig, ...r }; })
+        .catch((e) => { if (B.prof && B.prof.sig === sig) B.prof = { name: o.name, sig, ok: false, error: e.message }; }).finally(() => { if (S.tab === 'bind' && B.sel === o.name) render(); });
     }
   }
 
@@ -232,7 +244,11 @@
       render(); },
   });
   Object.assign(ACT, {
-    bndBindSel: (t) => { const B = S.bnd.bind; B.sel = t.dataset.name; B.d = null; render(); $('#main').scrollTop = 0; },
+    bndBindSel: (t) => {  // the card of the Entity picked comes into view where it is not (under the tree on a narrow screen)
+      const B = S.bnd.bind; B.sel = t.dataset.name; B.d = null; render();
+      const card = $('#bnd-bd-h'), box = card && card.closest('section'), main = $('#main');
+      if (box && main) { const top = box.getBoundingClientRect().top, view = main.getBoundingClientRect(); if (top < view.top || top > view.top + view.height * 0.6) box.scrollIntoView({ block: 'start' }); }
+    },
     bndBindFold: (t) => { const B = S.bnd.bind, a = t.dataset.a; B.fold[a] = t.getAttribute('aria-expanded') === 'true'; render(); },
     bndBindRel: () => { const el = $('#bnd-rel'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
     bndBindReset: () => { S.bnd.bind.d = null; render(); },

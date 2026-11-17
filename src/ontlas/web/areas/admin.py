@@ -10,6 +10,7 @@ from __future__ import annotations
 import inspect
 import platform
 import re
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -37,9 +38,12 @@ CAPABILITIES = [
     ("검증 통과 조건 저장", "flow/save"),
     ("온톨로지 만들기 · 삭제", "library/new"),
     ("사용자 추가 · 변경", "admin/user/save"),
-    ("초기화", "reset"),
-]
-ROLE_WORD = {"viewer": "조회", "editor": "편집", "approver": "영역 담당", "admin": "관리자"}  # as the screens name the roles
+]  # 초기화 is not a role's: a team's shared space is never reset (team.TeamSessions.reset)
+ROLE_WORD = {"viewer": "조회자", "editor": "편집자", "approver": "승인자", "admin": "관리자"}  # as the screens name the roles
+# the quality targets 온톨로지 설정 sets, by the pass condition each one is: what the screen calls it
+TARGETS = {("check", "min_accuracy"): "정답률", ("check", "min_grounded"): "근거 제시율", ("decide", "min_agreement"): "판정 일치율",
+           ("index", "min_found"): "문서 검색 적중률", ("query", "min_agree"): "저장소 간 결과 일치율", ("bind", "max_errors"): "Binding 검사 오류"}
+_targets_lock = threading.Lock()  # two admins saving at once each lay their change on what the other saved
 CHANGE_EVENT = {"proposed": "변경 요청", "approved": "승인 · 배포", "rejected": "반려", "marked": "항목 검토", "commented": "댓글"}
 # the screens the language model works behind: [what it does there, the screen]
 MODEL_USES = [("질문 답변 · 자연어 질의", "search"), ("AI 초안 생성", "ai"), ("정책서 규칙 초안", "ruleagent"),
@@ -132,7 +136,7 @@ def _write(users) -> None:
 
 
 def _said(roles: list[str]) -> str:
-    return ", ".join(ROLE_WORD.get(r, r) for r in roles)
+    return " · ".join(ROLE_WORD.get(r, r) for r in roles)
 
 
 def _admins(users, without: str = "") -> int:
@@ -165,9 +169,9 @@ def user_save(s, a, who) -> dict:
         raise ValueError("역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.")
     roles = [lv for lv in LEVELS if lv in roles]
     if new and uid in store.users:
-        raise ValueError(f"아이디 {uid} 이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.")
+        raise ValueError(f"아이디 {uid}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.")
     if not new and uid not in store.users:
-        raise LookupError(f"사용자 {uid}")
+        raise ValueError(f"사용자 {uid}을(를) 찾을 수 없어 저장하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.")
     if (new or password) and len(password) < PASSWORD_MIN:
         raise ValueError(f"비밀번호가 {PASSWORD_MIN}자보다 짧아 저장하지 못했습니다. {PASSWORD_MIN}자 이상 입력해 주세요.")
     if not new and "admin" in store.users[uid].roles and "admin" not in roles and not _admins(store, without=uid):
@@ -196,7 +200,7 @@ def user_drop(s, a, who) -> dict:
         raise ValueError("사용자 파일이 지정되지 않아 사용자를 폐기하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
     uid = str(a.get("id") or "")
     if uid not in store.users:
-        raise LookupError(f"사용자 {uid}")
+        raise ValueError(f"사용자 {uid}을(를) 찾을 수 없어 폐기하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.")
     if who is not None and who.id == uid:
         raise ValueError("본인 계정은 폐기할 수 없어 처리하지 못했습니다. 다른 관리자에게 요청해 주세요.")
     if "admin" in store.users[uid].roles and not _admins(store, without=uid):
@@ -286,7 +290,66 @@ def settings(s, a, who) -> dict:
             "aligned": aligned, "defined": len(o.objects) + len(o.areas),
             "approval": {"self_approve": bool(st.changes.self_approve), "apply_needs": NEEDS.get("draft/apply", "viewer"),
                          "decide_needs": NEEDS.get("change/decide", "viewer")},
-            "model": s.llm is not None, "kept": st.changes.journal is not None, "writes_folder": st.changes.store is not None}
+            "model": s.llm is not None, "model_state": _model_state(s),
+            "kept": st.changes.journal is not None, "writes_folder": st.changes.store is not None}
+
+
+def _model_state(s) -> str:
+    """How the language model stands, by how its last call went, as the sidebar reads it (no call is made here)."""
+    last = getattr(s, "_llm_last", None)
+    return "off" if s.llm is None else "idle" if last is None else "ok" if last.get("ok") else "bad"
+
+
+def _target_word(cond: str, v) -> str:
+    if v is None:
+        return "조건 없음"
+    return f"{round(v * 100, 1):g}%" if cond.startswith("min_") else f"{int(v)}건"
+
+
+@post("admin/targets", needs="admin")
+def targets(s, a, who) -> dict:
+    """The quality targets an admin changed on 온톨로지 설정, laid on the pass conditions as they stand now: a target
+    another admin saved in the meantime stays, and one both changed is not overwritten but said back with its value."""
+    from ontlas.review import FlowSettings
+
+    asked = []
+    for c in a.get("changes") or []:
+        c = c if isinstance(c, dict) else {}
+        stage, cond = str(c.get("stage") or ""), str(c.get("condition") or "")
+        word, value = TARGETS.get((stage, cond)), c.get("value")
+        if word is None:
+            raise ValueError("알 수 없는 품질 목표가 있어 저장하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.")
+        share = cond.startswith("min_")
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                  or not (0 <= value <= 1 if share else value >= 0 and float(value).is_integer())):
+            raise ValueError(f"{word} 값의 형식이 맞지 않아 저장하지 못했습니다. "
+                             f"{'0에서 100 사이의 숫자' if share else '0 이상의 정수'}를 입력해 주세요.")
+        if value != c.get("was"):
+            asked.append((stage, cond, word, value if value is None or share else int(value), c.get("was")))
+    with _targets_lock:
+        now = s.studio.own_flow.to_dict()
+        gates = now.setdefault("gates", {})
+        for stage, cond, word, _, was in asked:
+            current = (gates.get(stage) or {}).get(cond)
+            if current != was:
+                return {"ok": False, "settings": now, "error": f"다른 관리자가 {word}을(를) 먼저 {_target_word(cond, current)}(으)로 "
+                                                               "바꿔 저장하지 못했습니다. 바뀐 값을 확인한 뒤 다시 입력해 주세요."}
+        said = []
+        for stage, cond, word, value, was in asked:
+            held = gates.setdefault(stage, {})  # a stage left with no condition stays, empty: left out, its default comes back
+            if value is None:
+                held.pop(cond, None)
+            else:
+                held[cond] = value
+            said.append(f"{word} {_target_word(cond, was)} → {_target_word(cond, value)}")
+        if not said:
+            return {"ok": True, "settings": now}
+        kept = FlowSettings.from_dict(now).to_dict()
+        s.studio.settings["flow"] = kept
+    text = "품질 목표 변경 · " + " · ".join(said)
+    _note(s, who, "setting", text)
+    s.event("flow", text)
+    return {"ok": True, "settings": kept}
 
 
 @get("admin/members")
@@ -377,7 +440,7 @@ def audit(s, a, who) -> dict:
         del r["n"]
     journal = st.changes.journal
     return {"rows": rows[:LOG_MAX], "total": len(rows), "kept": journal is not None,
-            "counts": {k: sum(1 for r in rows if r["kind"] == k) for k in ("change", "action", "api", "user", "note")}}
+            "counts": {k: sum(1 for r in rows if r["kind"] == k) for k in ("change", "action", "api", "user", "setting", "note")}}
 
 
 @get("admin/version")

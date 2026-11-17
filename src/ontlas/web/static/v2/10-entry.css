@@ -2,6 +2,9 @@
 .ent-narrow { max-width:760px; width:100%; align-self:center; }
 .ent-auth { width:100%; max-width:440px; align-self:center; display:flex; flex-direction:column; gap:16px; }
 .ent-form { padding:24px; display:flex; flex-direction:column; gap:16px; }
+.ent-foot { margin:0; font-size:14px; text-align:center; }
+.ent-foot a { color:var(--muted); }
+.ent-foot a:hover { color:var(--ink); }
 .ent-card { flex:1 1 380px; max-width:620px; }
 .k-t td.ent-pack { min-width:200px; }
 .ent-kvs { display:flex; flex-direction:column; gap:6px; padding:12px 0; border-top:1px solid var(--row); border-bottom:1px solid var(--row); }

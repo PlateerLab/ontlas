@@ -8,10 +8,69 @@
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ontlas.web.api import TARGETS, plain
 from ontlas.web.routes import get, post
+
+# what the query checker and the compilers say, in the words these screens use; a reason not listed is said as the
+# store's language refusing the query
+_COMPILE_SAID = [
+    (r"alias '(\w+)': unknown object type '([^']*)'", r"Entity 없음 · \2"),
+    (r"(\w+) \('\w+'\) has no property '([^']*)'", r"Property 없음 · \1.\2"),
+    (r"(\w+) has no property '([^']*)'", r"Property 없음 · \1.\2"),
+    (r"unknown link '([^']*)'", r"Relation 없음 · \1"),
+    (r"link '([^']*)' goes (\w+) -> (\w+); it cannot join", r"Relation 방향 불일치 · \1 \2 → \3"),
+    (r"(?:unknown alias|uses an alias that is not matched|is not connected by any edge|touches no earlier alias)", "별칭 연결 오류"),
+    (r"(\w+) has no source table and no bound subtype", r"테이블 미지정 Entity · \1"),
+    (r"link (\w+) has no source binding", r"Relation 소스 미지정 · \1"),
+    (r"(\w+)\.(\w+) is computed, so", r"계산 Property · \1.\2"),
+    (r"missing parameters \[([^\]]*)\]", r"입력값 없음 · \1"),
+    (r"'match' maps aliases to object types", "match 형식 오류"),
+    (r"'return' lists at least one column", "반환 Property 없음"),
+    (r"a query is an object", "질의 정의 형식 오류"),
+    (r"expected 'alias\.property', got '?([^']*)'?", r"Property 형식 오류 · \1"),
+    (r"unknown filter '?(\w+)'?", r"알 수 없는 조건 · \1"),
+    (r"cannot compare (\w+) with (\w+)", r"비교할 수 없는 타입 · \1 ↔ \2"),
+    (r"is not a valid (\w+)", r"값 형식 오류 · \1"),
+    (r"limit must be positive", "건수 오류"),
+    (r"order by '([^']*)' is not a returned column", r"정렬 기준 오류 · \1"),
+]
+
+
+def _compile_said(msg: str, other: str = "이 저장소 언어로 변환 불가") -> str:
+    """A refusal of the query as the screens say it: each reason found, joined; the engine's own words are not shown."""
+    said: list[str] = []
+    for pattern, word in _COMPILE_SAID:
+        for m in re.finditer(pattern, msg):
+            text = m.expand(word).replace("'", "")
+            if text not in said:
+                said.append(text)
+    return " · ".join(said) or other
+
+
+def _finding_said(f) -> str:
+    """What a binding check found, as the screens say it: the place and what is wrong there."""
+    d = f.data or {}
+    where = ".".join(x for x in (d.get("table"), d.get("column")) if x)
+    shown = lambda xs: ", ".join(str(x) for x in list(xs or [])[:5])  # noqa: E731
+    if f.kind == "table":
+        named = re.search(r"'([^']*)'", f.detail)
+        return f"{d.get('table') or (named.group(1) if named else '')} 테이블 없음" if d else f"{named.group(1) if named else ''} 식별 정보 미확정"
+    if f.kind == "column":
+        return f"{where} 컬럼 없음"
+    if f.kind == "type":
+        return f"{where} {d.get('sql_type') or '?'} · Property {d.get('type', '')}"
+    if f.kind == "key":
+        return f"중복 키 {shown(d.get('keys'))}"
+    if f.kind == "required":
+        return f"빈 값 {d.get('count', 0)}행 · {shown(d.get('keys'))}"
+    if f.kind == "enum":
+        return f"정의에 없는 값 {shown(d.get('extra'))}"
+    if f.kind == "orphan":
+        return f"대상 없는 값 {d.get('count', 0)}행 · {shown(d.get('values'))}"
+    return f.detail
 
 
 def _said(col: Any) -> str:
@@ -95,16 +154,15 @@ def query_check(s, a, who) -> dict:
     try:
         q = Query.from_dict(a.get("query"))
     except (IRError, TypeError, ValueError, KeyError, AttributeError) as e:
-        return {"ok": False, "error": f"질의 정의 형식이 맞지 않아 읽지 못했습니다. {str(e).splitlines()[0] if str(e) else type(e).__name__}",
-                "translations": []}
+        return {"ok": False, "error": _compile_said(str(e), "질의 정의 형식 오류"), "translations": []}
     out, params = [], set()
     for target, label in TARGETS:
         try:
             c = compiler_for(onto, target).compile(q)
-            params |= set(c.params)
+            params |= set(c.params) - set(c.literals)  # a value the compiler lifts out of the query itself is no input
             out.append({"target": target, "label": label, "ok": True, "text": c.text})
         except (CompileError, KeyError, ValueError) as e:
-            out.append({"target": target, "label": label, "ok": False, "error": str(e).splitlines()[0][:200]})
+            out.append({"target": target, "label": label, "ok": False, "error": _compile_said(str(e))})
     masked = []  # a returned column an access policy may hide, said before the query is saved
     for c in q.columns:
         ref = c.expr if isinstance(c.expr, Ref) else getattr(c.expr, "ref", None)
@@ -162,8 +220,51 @@ def binding(s, a, who) -> dict:
         out["sql"] = compiler_for(onto, target).compile(
             Query.from_dict({"match": {"x": name}, "return": [f"x.{p}" for p in props]})).text
     except (CompileError, KeyError, ValueError) as e:
-        out["error"] = str(e).splitlines()[0][:300]
+        out["error"] = f"SQL 생성 불가 · {_compile_said(str(e))}"
     return plain(out)
+
+
+@post("bnd/check", needs="viewer")
+def check(s, a, who) -> dict:
+    """The definition as the pending edits leave it, against the source's tables, columns, types, keys and values: what
+    Mapping and Entity Binding show is what is checked."""
+    from ontlas.bindings import Finding, check_bindings
+    from ontlas.check import columns_of, stored_props
+
+    st = s.studio
+    if not st.source:
+        return {"ok": False, "no_source": True, "error": "연결된 데이터 소스가 없어 대조하지 못했습니다. 데이터 소스를 연결해 주세요."}
+    onto, pending = s._pending_onto()
+    backend = st.backend()
+    rep = check_bindings(onto, backend)
+    findings, checked = list(rep.findings), dict(rep.checked)
+    # a Property an Entity takes from the one it specialises is read from the Entity's own table (as bnd/columns and the
+    # queries read it), and the engine's check reads only the Entity's own Properties: those are checked here
+    for o in onto.objects.values():
+        have = backend.columns(o.table) if o.table else None
+        if have is None:  # no table, or one the engine's check already named
+            continue
+        for p in stored_props(onto, o.name):
+            if p in o.properties or p == o.key:
+                continue
+            for col in columns_of(onto, o.name, p):
+                checked["columns"] = checked.get("columns", 0) + 1
+                if col.lower() not in have:
+                    findings.append(Finding("error", "column", f"property:{o.name}.{p}", f"column '{o.table}.{col}' does not exist",
+                                            {"table": o.table, "column": col}))
+    return plain({"ok": not any(f.severity == "error" for f in findings), "checked": checked, "backend": st.source, "pending": pending,
+                  "findings": [{**f.__dict__, "detail": _finding_said(f)} for f in findings]})
+
+
+@post("bnd/query/run", needs="viewer")
+def query_run(s, a, who) -> dict:
+    """A query not yet deployed, run on the values given for its inputs, under an access policy if one is named."""
+    q = a.get("query")
+    if not isinstance(q, dict):
+        raise ValueError("질의 정의가 없어 실행하지 못했습니다. 질의를 선택해 주세요.")
+    params = a.get("params") if isinstance(a.get("params"), dict) else {}
+    principal = a.get("principal") if isinstance(a.get("principal"), dict) else None
+    return s.run_query(q, {k: v for k, v in params.items() if v not in ("", None)}, role=str(a.get("role") or ""), principal=principal)
 
 
 def _outputs_said(detail: str) -> str:

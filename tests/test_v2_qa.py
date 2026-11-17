@@ -61,6 +61,23 @@ def test_a_decision_question_needs_values_or_a_key_and_an_expected_verdict(s):
     assert q["decision"] == "returnEligibility" and q["key"] == "I1001" and q["holdout"] and q["expect"] == {"eligible": True}
 
 
+def test_a_question_graded_by_keywords_is_refused_without_keywords_before_it_is_written(s):
+    save = routes().find("POST", "qa/question/save")
+    base = {"new": True, "type": "definition", "text": "반품 기간은 얼마인가요?", "expect": "14일", "grading": "keywords"}
+    with pytest.raises(ValueError, match="^키워드가 없어 저장하지 못했습니다"):
+        save(s, {**base, "keywords": " , "}, None)
+    assert not s.manage_state()["workspace"]["dirty"]
+    assert save(s, {**base, "keywords": "14일"}, None)["ok"]
+
+
+def test_a_decision_question_keeps_the_inputs_it_gives_and_no_others(s):
+    """Some inputs given and the rest left to the table: saved as given, none filled in as 값 없음."""
+    save = routes().find("POST", "qa/question/save")
+    out = save(s, {"new": True, "type": "decision", "text": "주문 금액 3만 원이면 배송비는?", "decision": "shippingFee",
+                   "values": {"order_total": 30000}, "expect": {"fee": 3000}}, None)
+    assert pending(s, out["id"])["values"] == {"order_total": 30000}
+
+
 def test_an_id_already_used_is_refused_for_a_new_question(s):
     save = routes().find("POST", "qa/question/save")
     with pytest.raises(ValueError, match="이미 있어"):
@@ -108,6 +125,7 @@ def test_a_question_is_tried_as_the_check_asks_it_and_nothing_is_kept(s):
             "expect": q["expect"]}
     right = attempt(s, args, None)
     assert right["ok"] and right["measured"] and right["passed"] is True
+    assert right["unmeasured"] == "" and "note" not in right  # why one is not measured is said by its reason, in the screen's words
     wrong = attempt(s, {**args, "expect": {k: (not v if isinstance(v, bool) else v) for k, v in q["expect"].items()}}, None)
     assert wrong["passed"] is False
     assert s.studio.onto.questions == held and not s.manage_state()["workspace"]["dirty"]
@@ -143,6 +161,19 @@ def test_the_log_lists_change_requests_and_measurements_newest_first(s):
     change = next(r for r in out["rows"] if r["kind"] == "변경 요청")
     assert change["change"] and change["versions"][0]["version"]
     assert len(log(s, {"limit": 1}, None)["rows"]) == 1
+
+
+def test_every_table_the_quality_screens_read_is_declared_in_the_page():
+    """A table of words read by name and declared nowhere stops the screen that reads it (검증 drew nothing once a
+    wrong answer came in, when the table of diagnoses it read had been taken out of the page)."""
+    import re
+
+    static = Path(__file__).resolve().parent.parent / "src" / "ontlas" / "web" / "static"
+    mine = (static / "v2" / "60-qa.js").read_text(encoding="utf-8")
+    page = "".join(p.read_text(encoding="utf-8") for p in [static / "app.js", *sorted((static / "v2").glob("*.js"))])
+    declared = set(re.findall(r"\b(?:const|let|function)\s+([A-Z][A-Z0-9_]*)\b", page)) | {"JSON"}
+    read = set(re.findall(r"(?<![\w$.'\"-])([A-Z][A-Z0-9_]{2,})(?=\[|\.)", re.sub(r"//[^\n]*", "", mine)))
+    assert read and not read - declared, sorted(read - declared)
 
 
 def test_evidence_says_how_many_entities_of_an_object_each_document_names(s):

@@ -312,7 +312,7 @@ class ActionService:
     def note(self, actor: Actor, event: str, action: str, target: str, key: str, proposal: str = "", *,
              p: Proposal | None = None, **detail) -> None:
         """One line of the audit trail. A decision, an answer or a function an agent asked for is written here too."""
-        entry = AuditEntry(self.studio.now().isoformat(timespec="seconds"), actor.id, actor.kind, event,
+        entry = AuditEntry(dt.datetime.now().isoformat(timespec="seconds"), actor.id, actor.kind, event,  # when it happened
                            action, target, key, proposal, detail, self.versions())
         self.audit.append(entry)
         if self.journal is not None:

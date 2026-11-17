@@ -1,10 +1,13 @@
   // ==== 온톨로지 매니저 · 오브젝트 관리, 엔티티 관리, 그래프 탐색, and the screens of an Object, an Entity, a state
   //      machine and a Relation. Object is an area of the definition, Entity an object type, Relation a link. =========
-  S.ont = { oq: '', otier: 'all', osel: '',  // 오브젝트 관리: what is searched, the tier shown, the Object picked
-    esel: '', ewant: '', eq: '', eopen: {}, etab: 'def', einfo: {}, euses: null, eyaml: null, enotes: null, enote: '', edef: null, ssel: '',  // 엔티티 관리
+  S.ont = { oq: '', otier: 'all', osel: '', owant: '',  // 오브젝트 관리: what is searched, the tier shown, the Object picked
+    esel: '', ewant: '', eq: '', eopen: {}, qopen: {}, etab: 'def', einfo: {}, euses: null, eyaml: null, enotes: null, enote: '', edef: null, ssel: '',  // 엔티티 관리
     g: { want: '', node: '', rel: '', pos: {}, show: { object: true, entity: true, member: true, rule: false }, all: false, rd: null },  // 그래프 탐색
     semBusy: false };
   const ONT_TABS = ['objmgr', 'objects', 'model'];
+  // an address that names an Object, an Entity or a Relation is taken once a visit: the picks made after it stay, and
+  // coming back by the same address picks it again (this runs before the page draws the screen it goes to)
+  window.addEventListener('hashchange', () => { Object.assign(S.ont, { owant: '', ewant: '' }); S.ont.g.want = ''; });
   const ontName = (x) => `${x.label || x.name}@${x.name}`;
   const ontClip = (text, n) => { const s = String(text || ''); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
   const ontVer = (x) => { const lib = (S.st.library || []).find((r) => r.name === x.module); return lib ? `v${lib.version}` : ''; };
@@ -58,7 +61,7 @@
     const st = S.ont;
     return shown.map((a) => {
       const ents = areaEntities(a), cards = ontCards(ents.map((o) => o.name));
-      return `<tr class="${a.name === st.osel ? 'on' : ''}" data-act="ontOpick" data-name="${esc(a.name)}"><td class="b nw">${esc(a.label || a.name)}<span class="k-mut" style="font-weight:400">@${esc(a.name)}</span>${a.new ? ' <span class="k-chip ok">새 Object</span>' : a.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td>
+      return `<tr class="${a.name === st.osel ? 'on' : ''}" data-act="ontOpick" data-name="${esc(a.name)}" tabindex="0"${a.name === st.osel ? ' aria-current="true"' : ''}><td class="b nw">${esc(a.label || a.name)}<span class="k-mut" style="font-weight:400">@${esc(a.name)}</span>${a.new ? ' <span class="k-chip ok">새 Object</span>' : a.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td>
         <td><span class="ont-clamp" title="${esc(a.description || '')}">${esc(a.description || '-')}</span></td><td class="r">${ents.length}</td><td class="r">${cards ? cards.length : '-'}</td><td>${ontAreaLevel(a)}</td><td class="nw">${esc(a.owner || '-')}</td></tr>`;
     }).join('') || `<tr><td colspan="6" class="mut">${S.ont.oq ? '검색 결과가 없습니다.' : '등록된 Object가 없습니다.'}</td></tr>`;
   }
@@ -86,13 +89,33 @@
         ${ontKv('근거', a.cite ? `<span class="k-m12"><span aria-hidden="true">§</span> ${esc(a.cite)}</span>` : '-')}
         ${ontKv('담당자 · 버전', `${esc(a.owner || '-')} · ${esc(ontVer(a) || a.module_label || '-')}`)}</div></aside>`;
   }
+  const ontObar = (a) => (a ? itemBar('object', a.name, ontName(a), ontClip(a.description, 70)) : '');
+  function ontOpaint() {  // the rows that match, without drawing the screen again: the box keeps its place, and a pick no longer among the rows moves to the first
+    const st = S.ont, shown = ontAreaShown(), box = $('#ontorows');
+    if (!shown.some((a) => a.name === st.osel)) {
+      st.osel = (shown[0] || {}).name || '';
+      const sel = mgArea(st.osel), bar = $('#ontobar'), side = $('#ontoside');
+      if (bar) bar.innerHTML = ontObar(sel);
+      if (side) side.innerHTML = ontAreaSide(sel);
+    }
+    if (box) box.innerHTML = ontAreaRows(shown);
+  }
+  // on a narrow screen the detail sits under the list: a pick brings it into view
+  function ontReveal(detail, list) {
+    const el = $(detail), l = $(list);
+    if (!el || !l) return;
+    const a = el.getBoundingClientRect(), b = l.getBoundingClientRect();
+    if (a.top >= b.bottom - 1 && (a.top > innerHeight - 120 || a.top < 0)) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
   function ontObjects() {
     const lead = 'Ontology의 최상위 분류인 Object를 관리합니다.';
     const wait = ontWait('Object', lead);
     if (wait) return wait;
     const m = S.mg.st, st = S.ont, areas = m.areas || [];
+    const want = itemParam('area');
+    if (want && want !== st.owant && areas.some((a) => a.name === want)) Object.assign(st, { osel: want, owant: want, oq: '', otier: 'all' });  // the Object asked for is among the rows
     const shown = ontAreaShown();
-    if (!st.osel || !areas.some((a) => a.name === st.osel)) st.osel = (shown[0] || areas[0] || {}).name || '';
+    if (!shown.some((a) => a.name === st.osel)) st.osel = (shown[0] || {}).name || '';  // the pick is one of the rows shown, or none
     const sel = areas.find((a) => a.name === st.osel);
     const tiers = [...new Set(areas.map((a) => a.tier).filter((x) => x !== undefined && x !== null && x !== ''))].sort((x, y) => x - y);
     const unfiled = m.objects.filter((o) => !o.area && !o.concept);
@@ -100,7 +123,7 @@
     const from = [...new Set(drafts.map((a) => a.module_label).filter(Boolean))];
     const head = kHead('Object', lead,
       `${known('settings') && isOntoAdmin() ? '<a class="k-btn" href="#settings">명명 규칙</a>' : ''}${canEdit() ? `<a class="k-btn pri" href="${itemHref('object', 'form')}">${ki('plus', 16, 1.75)}Object</a>` : ''}`);
-    const bar = sel ? itemBar('object', sel.name, ontName(sel), ontClip(sel.description, 70)) : '';
+    const bar = `<div id="ontobar">${ontObar(sel)}</div>`;
     const seg = tiers.length ? `<div class="k-seg" role="group" aria-label="차수">${[['all', `전체 ${areas.length}`], ...tiers.map((x) => [String(x), `${x}차 ${areas.filter((a) => String(a.tier) === String(x)).length}`])].map(([k, w]) => `<button class="${st.otier === k ? 'on' : ''}" data-act="ontOtier" data-k="${esc(k)}">${esc(w)}</button>`).join('')}</div>` : '';
     const find = `<div class="k-pha"><label class="k-search ont-find">${ki('search', 16, 1.75)}<span class="k-hide">Object 검색</span><input type="search" placeholder="Object 검색" data-in="ontOq" value="${esc(st.oq)}"></label>${seg}</div>`;
     const table = `<section class="k-card" aria-label="Object 목록" style="flex:3 1 600px"><div class="k-x"><table class="k-t end"><thead><tr><th scope="col">Object</th><th scope="col">정의</th><th scope="col" class="r">Entity</th><th scope="col" class="r">규칙</th><th scope="col">성숙도</th><th scope="col">담당자</th></tr></thead><tbody id="ontorows">${ontAreaRows(shown)}</tbody></table></div>
@@ -113,15 +136,11 @@
 
   Object.assign(ACT, {
     ontReload: () => { S.mg.st = null; loadManage(); render(); },
-    ontOpick: (t) => { S.ont.osel = t.dataset.name; render(); },
+    ontOpick: (t) => { S.ont.osel = t.dataset.name; render(); ontReveal('#ontoside', '#ontorows'); },
     ontOtier: (t) => { S.ont.otier = t.dataset.k; render(); },
   });
   Object.assign(INPUT, {
-    ontOq: (t) => {  // the rows that match, without drawing the screen again: the box keeps its place
-      S.ont.oq = t.value;
-      const box = $('#ontorows');
-      if (box) box.innerHTML = ontAreaRows(ontAreaShown());
-    },
+    ontOq: (t) => { S.ont.oq = t.value; ontOpaint(); },
   });
 
   // ---- ONT-02 엔티티 관리 ---------------------------------------------------------------------------------------
@@ -136,11 +155,17 @@
     if (loose.length) groups.push({ key: '', word: AREA_NONE, all: loose });
     return groups.map((g) => ({ ...g, rows: g.all.filter(hit) })).filter((g) => !q || g.rows.length);
   }
+  // a group is open as it was left; while a search is typed every group with a match opens, and a press folds it until the search changes
+  function ontEgOpen(key) {
+    const st = S.ont, sel = ontObj(st.esel);
+    if (st.eq.trim()) return st.qopen[key] === undefined ? true : st.qopen[key];
+    return st.eopen[key] === undefined ? !!(sel && (sel.area || '') === key) : st.eopen[key];
+  }
   function ontEntTree() {
-    const st = S.ont, m = S.mg.st, q = st.eq.trim(), sel = ontObj(st.esel);
+    const st = S.ont, m = S.mg.st;
     const groups = ontEntGroups();
     const body = groups.map((g) => {
-      const open = q ? true : st.eopen[g.key] === undefined ? !!(sel && (sel.area || '') === g.key) : st.eopen[g.key];
+      const open = ontEgOpen(g.key);
       return `<button class="ont-grp" data-act="ontEfold" data-k="${esc(g.key)}" aria-expanded="${open}">${ki(open ? 'chevD' : 'chevR', 16, 1.75)}${g.key ? ontDk('Object') : ''}<span class="k-cut">${esc(g.word)}</span><span class="n">Entity ${g.all.length}</span></button>
         ${open ? `<div class="ont-ents" role="group" aria-label="${esc(g.word)}의 Entity">${g.rows.map((o) => `<button class="ont-ent${o.name === st.esel ? ' on' : ''}" data-act="ontEpick" data-name="${esc(o.name)}"${o.name === st.esel ? ' aria-current="true"' : ''}><span>${esc(ontName(o))}</span>${ontLvTag(o)}</button>`).join('') || '<span class="k-s" style="padding:8px">Entity가 없습니다.</span>'}</div>` : ''}`;
     }).join('') || '<p class="k-p s" style="margin:8px">검색 결과가 없습니다.</p>';
@@ -160,7 +185,7 @@
       if (info.busy) return '<p class="k-p s">불러오는 중입니다.</p>';
       const docs = info.documents || [];
       return docs.length ? `<div class="k-v g12">${docs.map((d) => `<div class="k-v g4"><span class="k-h g6"><span class="k-m12"><span aria-hidden="true">§</span> ${esc(d.document)}</span><span class="k-s">${esc(d.section || '')}</span><span class="k-chip">${d.count}회</span></span><p class="k-p s">${esc(ontClip(d.text, 220))}</p></div>`).join('')}${known('evidence') ? `<a class="k-lnk flat" href="#evidence">근거 지도${ki('chevR', 14, 1.75)}</a>` : ''}</div>`
-        : '<p class="k-p s">이 Entity를 언급한 자료가 없습니다.</p>';
+        : '<p class="k-p s">근거 자료가 없습니다.</p>';
     }
     if (st.etab === 'uses') {
       const u = st.euses && st.euses.id === id ? st.euses.list : null;
@@ -201,7 +226,7 @@
     const tabs = [['def', '정의', ''], ['docs', '근거', info.documents ? info.documents.length || '' : ''], ['uses', '사용처', uses], ['yaml', 'YAML', ''], ['notes', '댓글', notes || '']]
       .map(([k, w, n]) => `<button class="${st.etab === k ? 'on' : ''}" role="tab" aria-selected="${st.etab === k}" data-act="ontEtab" data-k="${k}">${w}${n ? ` ${n}` : ''}</button>`).join('');
     const ver = ontVer(o);
-    const head = `<section class="k-card pad k-v" aria-labelledby="ont-en-h"><p class="k-h g6 k-s" style="margin:0">${area ? `${ontDk('Object')}<a class="k-ink k-b" href="#objmgr">${esc(ontName(area))}</a><span aria-hidden="true">›</span>` : ''}<span class="ont-etag">Entity</span><span>${esc(ontName(o))}</span></p>
+    const head = `<section class="k-card pad k-v" aria-labelledby="ont-en-h"><p class="k-h g6 k-s" style="margin:0">${area ? `${ontDk('Object')}<a class="k-ink k-b" href="#objmgr?area=${encodeURIComponent(area.name)}">${esc(ontName(area))}</a><span aria-hidden="true">›</span>` : ''}<span class="ont-etag">Entity</span><span>${esc(ontName(o))}</span></p>
       <div class="k-pha"><h2 id="ont-en-h" class="ont-h24">${esc(ontName(o))}</h2><span class="k-chip b">${LV[o.level || 0]} · ${esc(LV_WORD[o.level || 0].slice(3))}</span>${ver ? `<span class="k-chip">${esc(ver)}${o.status === 'draft' ? ' 초안' : o.status === 'deprecated' ? ' 폐기 예정' : ''}</span>` : ''}${o.new ? '<span class="k-chip ok">새 Entity</span>' : o.pending ? '<span class="k-chip warn">변경 대기</span>' : ''}</div>
       <div class="k-seg self" role="tablist" aria-label="Entity 상세">${tabs}</div>${ontEntTab(o)}</section>`;
     const bound = (p) => (p.expr ? '<span class="k-chip">계산</span>' : !noSource() && o.table && p.column ? `<span class="k-chip ok"><span class="k-code" style="font-size:12px">${esc(p.column)}</span></span>` : '<span class="k-chip">미연결</span>');
@@ -237,7 +262,7 @@
     const acts = (s) => [...new Set(s.transitions.map((t) => t.action).filter(Boolean))].map((a) => { const x = m.actions.find((y) => y.name === a); return `<a href="#actions">${esc(x ? x.label : a)}</a>`; }).join(', ') || '-';
     const bar = sel ? `<div class="k-bar" role="toolbar" aria-label="선택한 상태 전이"><span class="k-s">선택한 상태 전이</span><span class="k-code k-ink">${esc(sel.label)} · ${esc(ontFlow(sel).prop)}</span><span class="k-14">${esc(ontClip(ontFlow(sel).text, 80))}</span><span class="k-push">${itemActs('state', sel.object)}</span></div>` : '';
     return `${bar}<section class="k-card" aria-labelledby="ont-sm-h"><div class="k-ch"><h2 id="ont-sm-h">상태 전이</h2><span class="k-chip">${list.length}</span>${canEdit() ? `<a class="k-btn k-push" href="${itemHref('state', 'form')}">${ki('plus', 16, 1.75)}상태 전이</a>` : ''}</div>
-      ${list.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Entity · Property</th><th scope="col">상태 흐름</th><th scope="col">전이 Action</th></tr></thead><tbody>${list.map((s) => `<tr class="${s.object === st.ssel ? 'on' : ''}" data-act="ontSpick" data-name="${esc(s.object)}"><td class="b">${esc(s.label)} · ${esc(ontFlow(s).prop)}${s.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td>${ontFlow(s).html}</td><td>${acts(s)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">등록된 상태 전이가 없습니다.</p>'}</section>`;
+      ${list.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Entity · Property</th><th scope="col">상태 흐름</th><th scope="col">전이 Action</th></tr></thead><tbody>${list.map((s) => `<tr class="${s.object === st.ssel ? 'on' : ''}" data-act="ontSpick" data-name="${esc(s.object)}" tabindex="0"${s.object === st.ssel ? ' aria-current="true"' : ''}><td class="b">${esc(s.label)} · ${esc(ontFlow(s).prop)}${s.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td>${ontFlow(s).html}</td><td>${acts(s)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">등록된 상태 전이가 없습니다.</p>'}</section>`;
   }
   function ontEntities() {
     const lead = 'Object 하위의 Entity와 Property, 상태 전이를 관리합니다.';
@@ -277,10 +302,20 @@
   screen('objects', { area: 'work', word: 'Entity', view: ontEntities, after: ontEntitiesAfter });
 
   Object.assign(ACT, {
-    ontEfold: (t) => { const st = S.ont, k = t.dataset.k, sel = ontObj(st.esel); st.eopen[k] = !(st.eopen[k] === undefined ? !!(sel && (sel.area || '') === k) : st.eopen[k]); $('#ontetree').innerHTML = ontEntTree(); },
-    ontEpick: (t) => { Object.assign(S.ont, { esel: t.dataset.name, etab: 'def', edef: null, enote: '' }); render(); },
+    ontEfold: (t) => {
+      const st = S.ont, k = t.dataset.k;
+      (st.eq.trim() ? st.qopen : st.eopen)[k] = !ontEgOpen(k);
+      $('#ontetree').innerHTML = ontEntTree();
+      const again = [...document.querySelectorAll('#ontetree [data-act=ontEfold]')].find((x) => x.dataset.k === k);  // the press keeps the focus
+      if (again) again.focus();
+    },
+    ontEpick: (t) => { Object.assign(S.ont, { esel: t.dataset.name, etab: 'def', edef: null, enote: '' }); render(); ontReveal('#ontedetail', '.ont-tree'); },
     ontEtab: (t) => { S.ont.etab = t.dataset.k; render(); },
-    ontSpick: (t) => { S.ont.ssel = t.dataset.name; render(); },
+    ontSpick: (t, ev) => {  // a row picks its state machine; an Action named in it opens Action
+      const a = ev && ev.target.closest('a[href]');
+      if (a) { location.hash = a.getAttribute('href'); return; }
+      S.ont.ssel = t.dataset.name; render();
+    },
     ontEdefSave: async () => {
       const st = S.ont, o = ontObj(st.esel);
       if (!o || !st.edef) return;
@@ -296,13 +331,13 @@
     ontEyamlReset: () => { const y = S.ont.eyaml; if (y) y.text = y.was; render(); },
     ontEnoteSave: async () => {
       const st = S.ont, o = ontObj(st.esel);
-      if (!o || !st.enote.trim()) { toast('댓글 내용을 입력해 주세요.', true); return; }
+      if (!o || !st.enote.trim()) { toast('댓글 내용이 없어 등록하지 못했습니다. 댓글 내용을 입력해 주세요.', true); return; }
       try { const x = await api('element/comment', { id: `object:${o.name}`, text: st.enote }); st.enotes = { id: `object:${o.name}`, list: x.comments }; st.enote = ''; (S.mg.st.comments = S.mg.st.comments || {})[`object:${o.name}`] = x.comments.length; } catch (e) { fail(e); }
       render();
     },
   });
   Object.assign(INPUT, {
-    ontEq: (t) => { S.ont.eq = t.value; const box = $('#ontetree'); if (box) box.innerHTML = ontEntTree(); },
+    ontEq: (t) => { S.ont.eq = t.value; S.ont.qopen = {}; const box = $('#ontetree'); if (box) box.innerHTML = ontEntTree(); },
     ontEdef: (t) => { const o = ontObj(S.ont.esel); S.ont.edef = { name: o.name, text: t.value }; const b = $('#ontdefsave'); if (b) b.hidden = t.value === (o.description || ''); },
     ontEyaml: (t) => { const y = S.ont.eyaml; if (!y) return; y.text = t.value; const b = $('#ontyamlsave'); if (b) b.disabled = y.text === y.was; },
     ontEnote: (t) => { S.ont.enote = t.value; },
@@ -392,7 +427,7 @@
     const [kind, name] = [g.node.slice(0, 1), g.node.slice(2)];
     if (kind === 'e' && ontObj(name)) return itemBar('entity', name, name, ontObj(name).label || name);
     if (kind === 'a' && mgArea(name)) return itemBar('object', name, name, mgArea(name).label || name);
-    return '';
+    return kBar('선택한 항목', '', '없음', '');  // the bar keeps its place while nothing is picked: the graph under it does not move
   }
   function ontRelSide(l) {
     const g = S.ont.g, m = S.mg.st;
@@ -416,7 +451,7 @@
     const near = g.node && g.node.startsWith('e:') ? m.links.filter((l) => l.source === g.node.slice(2) || l.target === g.node.slice(2))
       : g.node && g.node.startsWith('a:') ? m.links.filter((l) => [l.source, l.target].some((n) => (ontObj(n) || {}).area === g.node.slice(2))) : m.links;
     const list = g.all || !g.node ? m.links : near;
-    const rows = list.map((l) => `<tr class="${l.name === g.rel ? 'on' : ''}" data-act="ontGrel" data-name="${esc(l.name)}"><td class="k-code">${esc(l.name)}</td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="nw">${esc(CARD_WORD[l.cardinality] || l.cardinality)}</td><td>${esc(l.label || '-')}${l.required ? ' · 필수' : ''}${l.new ? ' <span class="k-chip ok">새</span>' : l.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td></tr>`).join('');
+    const rows = list.map((l) => `<tr class="${l.name === g.rel ? 'on' : ''}" data-act="ontGrel" data-name="${esc(l.name)}" tabindex="0"${l.name === g.rel ? ' aria-current="true"' : ''}><td class="k-code">${esc(l.name)}</td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="nw">${esc(CARD_WORD[l.cardinality] || l.cardinality)}</td><td>${esc(l.label || '-')}${l.required ? ' · 필수' : ''}${l.new ? ' <span class="k-chip ok">새</span>' : l.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td></tr>`).join('');
     return `<section class="k-card" aria-labelledby="ont-dict-h" id="ontrels"><div class="k-ch"><h2 id="ont-dict-h">관계 유형</h2><span class="k-chip">${list.length === m.links.length ? m.links.length : `${list.length} / ${m.links.length}`}</span>
       <div class="k-push"><div class="k-seg"><button class="${g.all || !g.node ? '' : 'on'}" data-act="ontGlist" data-v=""${g.node ? '' : ' disabled'}>선택 항목</button><button class="${g.all || !g.node ? 'on' : ''}" data-act="ontGlist" data-v="1">전체 ${m.links.length}</button></div></div></div>
       ${list.length ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">관계 유형</th><th scope="col">시작 Entity → 끝 Entity</th><th scope="col">카디널리티</th><th scope="col">설명</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="k-cf line">등록된 Relation이 없습니다.</p>'}</section>`;
@@ -435,8 +470,9 @@
     return `${head}<div id="ontgbar">${ontGraphBar()}</div><div class="k-pha"><div class="k-h g6">${chip('object', 'Object')}${chip('entity', 'Entity')}${chip('member', '소속 표시')}${chip('rule', 'Restriction 표시')}</div></div>
       <div class="k-wrap g16" style="align-items:stretch">${graph}${ontSide()}</div>${ontDict()}${kNext([['query', '질의'], ['concepts', '개념 초안']])}`;
   }
+  const ontWsWord = () => (S.md.view === 'table' ? 'Property · Relation 표' : '다이어그램 작업 공간');  // what the workspace shows: the diagram or the tables
   function ontWorkspace() {  // the diagram's workspace as it was: the tree, the diagram and the tables, the forms, the trial and the request
-    return `${fixBar()}<div class="ont-wsbar"><a class="k-lnk" href="#model">${ki('chevR', 14, 1.75).replace('<svg', '<svg style="transform:rotate(180deg)"')}그래프 탐색</a><span class="k-14 k-b">다이어그램 작업 공간</span><a class="k-lnk k-push" href="#onto">전체 보기${ki('chevR', 14, 1.75)}</a></div>${viewModel()}`;
+    return `${fixBar()}<div class="ont-wsbar"><a class="k-lnk" href="#model">${ki('chevR', 14, 1.75).replace('<svg', '<svg style="transform:rotate(180deg)"')}그래프 탐색</a><span class="k-14 k-b">${ontWsWord()}</span><a class="k-lnk k-push" href="#onto">전체 보기${ki('chevR', 14, 1.75)}</a></div>${viewModel()}`;
   }
   function ontWorkspaceAfter() {
     if (S.md.view === 'diagram') mountEr();
@@ -446,7 +482,7 @@
     if (S.mg.st && !S.mg.st.error && !S.iss.list && !S.iss.busy) loadIssues().then(() => { if (S.tab === 'model') render(); });
   }
   screen('model', { area: 'work', word: '그래프 탐색', get bleed() { return ontWs(); }, view: () => (ontWs() ? ontWorkspace() : ontGraph()),
-    crumb: () => ['Ontology', '그래프 탐색', ...(ontWs() ? [S.md.view === 'table' ? 'Property · Relation 표' : '다이어그램 작업 공간'] : [])],
+    crumb: () => ['Ontology', '그래프 탐색', ...(ontWs() ? [ontWsWord()] : [])],
     after: () => { if (ontWs()) ontWorkspaceAfter(); else { ontSem(); ontKgMount(); } } });
 
   Object.assign(ACT, {
@@ -486,6 +522,15 @@
       if (b) b.disabled = d.source === l.source && d.target === l.target && d.cardinality === l.cardinality;
     },
   });
+  // a row of the Objects, the state machines or the Relations is picked with Enter or Space as with a click, and keeps the focus
+  document.addEventListener('keydown', (ev) => {
+    const t = ev.target, act = t && t.tagName === 'TR' && t.dataset ? t.dataset.act : '';
+    if (!['ontOpick', 'ontSpick', 'ontGrel'].includes(act) || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+    ev.preventDefault();
+    ACT[act](t, ev);
+    const again = [...document.querySelectorAll(`#main tr[data-act=${act}]`)].find((x) => x.dataset.name === t.dataset.name);
+    if (again) again.focus({ preventScroll: true });
+  });
 
   // ---- the screens of an Object, an Entity, a state machine and a Relation: 추가 · 편집, 삭제, 히스토리 -------------
   const ONT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -500,13 +545,32 @@
   const ontBasic = (body) => `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">${body}</div></div></section>`;
   const ontNamed = (name, word = '영문 이름') => (!name ? ['warn', `${word} 미입력`] : ONT_NAME.test(name) ? null : ['bad', `${word} 형식 오류 · 영문자로 시작, 영문자 · 숫자 · _ 사용`]);
   const ontChanged = (d, was, keys) => Object.fromEntries(keys.filter((k) => String(d[k] ?? '') !== String(was[k] ?? '')).map((k) => [k, d[k]]));
-  const ontNothing = () => { throw new Error('변경된 내용이 없어 저장하지 않았습니다.'); };
+  const ontNothing = () => { throw new Error('변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.'); };
+  // a change in the words of the forms: their field names, a status and a cardinality in words, and a status left unsaid
+  // (an item in use keeps no status) read as 사용 중
+  const ONT_FIELD = { label: '한글 이름', description: '정의', owner: '담당자', cite: '근거 자료', tier: '차수', status: '상태', area: '소속 Object',
+    key: '식별 키 후보', table: '소스 후보', parent: '상위 Entity', from: '시작 Entity', to: '끝 Entity', source: '시작 Entity', target: '끝 Entity',
+    cardinality: '카디널리티', inverse: '역방향 이름', required: '필수' };
+  function ontEntries(entries, word, rel) {
+    const WORD = { added: '추가', changed: '변경', removed: '삭제' };
+    const field = (f, label) => (rel && f === 'label' ? '설명' : ONT_FIELD[f] || label);
+    const said = (f, v, kept) => (f === 'status' ? (STATUS_WORD[v ?? (kept ? 'active' : '')] || [0, v])[1] : f === 'cardinality' ? CARD_WORD[v] || v : v);
+    return entries.map((e) => ({ ver: e.version ? `v${e.version}` : '', mark: e.status_label, cp: e.change, at: e.at, who: e.by, deployed: e.deployed,
+      say: (e.notes || []).map((n) => n.text).join(' · ') || e.reason || `${word} ${WORD[e.kind] || '변경'}`,
+      rows: e.rows.map((r) => ({ label: field(r.field, r.label), before: said(r.field, r.before, e.kind !== 'added'), after: said(r.field, r.after, e.kind !== 'removed') }))
+        .filter((r) => r.before !== r.after),
+      all: (e.all || []).map((r) => ({ label: field(r.label, r.label), value: said(r.label, r.value, false) })) }));
+  }
   // how a kind of item came to read as it does, from the area's own route (an Entity with its Properties, a state machine)
   async function ontHistory(kind, name, word) {
     const r = await api(`ont/history?kind=${kind}&name=${encodeURIComponent(name)}`);
-    const WORD = { added: '추가', changed: '변경', removed: '삭제' };
-    return r.entries.map((e) => ({ ver: e.version ? `v${e.version}` : '', mark: e.status_label, cp: e.change, at: e.at, who: e.by, deployed: e.deployed,
-      say: (e.notes || []).map((n) => n.text).join(' · ') || e.reason || `${word} ${WORD[e.kind] || '변경'}`, rows: e.rows, all: e.all }));
+    return ontEntries(r.entries, word);
+  }
+  async function ontItemHistory(el, word, rel) {  // an Object's or a Relation's, from the route every item reads
+    const r = await api(`item/history?element=${encodeURIComponent(el)}`);
+    const flat = (d, pre = '') => Object.entries(d || {}).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? flat(v, `${pre}${k}.`) : [[`${pre}${k}`, v]]));
+    return ontEntries(r.entries.map((e) => ({ ...e, rows: e.fields.map((f) => ({ field: f.field, label: f.label, before: f.before, after: f.after })),
+      all: flat(e.after || e.before).map(([k, v]) => ({ label: k, value: v })) })), word, rel);
   }
 
   // -- Object
@@ -529,8 +593,10 @@
     checks: (d, a) => {
       const m = S.mg.st, name = d.name.trim(), bad = ontNamed(name);
       const dup = !a && m.areas.some((x) => x.name === name), same = d.label.trim() && m.areas.some((x) => x.name !== (a || {}).name && x.label === d.label.trim());
+      const tier = String(d.tier ?? '').trim();  // the server takes a whole number from 1
       return [dup ? { say: '영문 이름 중복', tone: 'bad' } : same ? { say: '한글 이름 중복', tone: 'warn' } : { say: '이름 중복 없음', tone: 'ok' },
-        bad ? { say: bad[1], tone: bad[0] } : !d.label.trim() ? { say: '한글 이름 미입력', tone: 'warn' } : { say: '명명 규칙 준수', tone: 'ok' }];
+        bad ? { say: bad[1], tone: bad[0] } : !d.label.trim() ? { say: '한글 이름 미입력', tone: 'warn' } : { say: '명명 규칙 준수', tone: 'ok' },
+        tier && !(/^\d+$/.test(tier) && Number(tier) >= 1) ? { say: '차수 형식 오류 · 1 이상의 정수', tone: 'bad' } : null].filter(Boolean);
     },
     valid: (d) => (!d.label.trim() ? '한글 이름이 없어 저장하지 못했습니다. 한글 이름을 입력해 주세요.' : !d.name.trim() ? '영문 이름이 없어 저장하지 못했습니다. 영문 이름을 입력해 주세요.' : ''),
     save: async (d, a) => {
@@ -557,11 +623,12 @@
     },
     remove: async (a) => {
       const ents = areaEntities(a);
-      if (ents.length) throw new Error(`Entity ${ents.length}개가 이 Object 아래에 있어 삭제를 요청하지 못했습니다. Entity를 다른 Object로 옮기거나 먼저 삭제해 주세요.`);
+      if (ents.length) throw new Error(`소속 Entity가 ${ents.length}개 있어 삭제를 요청하지 못했습니다. Entity를 다른 Object로 옮기거나 먼저 삭제해 주세요.`);
       await ontEdit('delete_area', { name: a.name });
       S.ont.osel = '';
       return {};
     },
+    history: (a) => ontItemHistory(`area:${a.name}`, 'Object'),
   });
 
   // -- Entity, with its Properties
@@ -643,10 +710,14 @@
       const m = S.mg.st, rels = m.links.filter((l) => l.source === o.name || l.target === o.name), kids = m.objects.filter((x) => x.parent === o.name), cards = ontCards([o.name]) || [];
       const others = [...new Set(rels.map((l) => mgLabel(l.source === o.name ? l.target : l.source)))];
       const r = await api('item/uses?element=' + encodeURIComponent(`object:${o.name}`));
+      // a rule table's rows are rule cards already counted: only a table none of whose rows is among them is said apart
+      const counted = (label) => { const t = m.decisions.find((x) => x.label === label || x.name === label); return !!t && cards.some((c) => String(c.id).startsWith(`${t.name}#`)); };
+      const uses = r.uses.map((u) => (u.kind === '결정' ? { ...u, names: u.names.filter((x) => !counted(x)) } : u)).filter((u) => u.names.length);
+      const ruled = [...cards].sort((x, y) => (y.layer === 'axiom') - (x.layer === 'axiom'));  // the AXIOM rules, which hold a delete, first
       return [rels.length ? { say: `Relation ${rels.length}개`, sub: `${others.slice(0, 3).join(', ')}${others.length > 3 ? ` 외 ${others.length - 3}` : ''}`, href: `model?entity=${encodeURIComponent(o.name)}` } : null,
         kids.length ? { say: `하위 Entity ${kids.length}개`, sub: kids.map((x) => x.label).join(', '), href: 'objects' } : null,
-        cards.length ? { say: `규칙 ${cards.length}개`, sub: cards.slice(0, 3).map((c) => c.id).join(', ') + (cards.length > 3 ? ` 외 ${cards.length - 3}` : ''), href: 'semrules' } : null,
-        ...r.uses.filter((u) => u.kind !== '결정').map((u) => ({ say: `${ONT_KIND[u.kind] || u.kind} ${u.names.length}개`, sub: u.names.slice(0, 3).join(', ') + (u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''), href: u.screen })),
+        cards.length ? { say: `규칙 ${cards.length}개${ontLayers(cards) ? ` · ${ontLayers(cards)}` : ''}`, sub: ruled.slice(0, 3).map((c) => c.id).join(', ') + (cards.length > 3 ? ` 외 ${cards.length - 3}` : ''), href: 'semrules' } : null,
+        ...uses.map((u) => ({ say: `${ONT_KIND[u.kind] || u.kind} ${u.names.length}개`, sub: u.names.slice(0, 3).join(', ') + (u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''), href: u.screen })),
         o.table && !noSource() ? { say: 'Mapping 1개', sub: `${o.table} 테이블 · Property ↔ 컬럼`, href: 'sources' } : null,
         o.states ? { say: '상태 전이 1개', sub: '', href: 'objects' } : null].filter(Boolean);
     },
@@ -712,9 +783,11 @@
         off.length ? { say: `Action 처리 후 상태 불일치 · ${off.join(', ')}`, tone: 'warn' } : d.transitions.some((t) => t.action) ? { say: 'Action 처리 후 상태 일치', tone: 'ok' } : null].filter(Boolean);
     },
     valid: (d) => (!d.object ? 'Entity가 선택되지 않아 저장하지 못했습니다. Entity를 선택해 주세요.' : !d.property ? '상태 Property가 선택되지 않아 저장하지 못했습니다. 상태 Property를 선택해 주세요.' : ontStateList(d).length < 2 ? '상태 값이 부족해 저장하지 못했습니다. 상태 값을 2개 이상 입력해 주세요.' : ''),
-    save: async (d) => {
-      const states = ontStateList(d);
-      await ontEdit('update_states', { object: d.object, property: d.property, states, initial: states.includes(d.initial) ? d.initial : states[0], transitions: d.transitions });
+    save: async (d, s) => {
+      const states = ontStateList(d), initial = states.includes(d.initial) ? d.initial : states[0];
+      const moves = (list) => JSON.stringify(list.map((t) => [t.from, t.to, t.action || '']));
+      if (s && s.property === d.property && states.join('|') === s.states.join('|') && initial === (s.initial || s.states[0]) && moves(d.transitions) === moves(s.transitions)) ontNothing();
+      await ontEdit('update_states', { object: d.object, property: d.property, states, initial, transitions: d.transitions });
       S.ont.ssel = d.object;
       return { element: `object:${d.object}` };
     },
@@ -731,8 +804,8 @@
     ontTadd: () => {
       const d = S.it.d;
       if (!d) return;
-      if (!d.from || !d.to) { toast('시작 상태와 끝 상태를 선택해 주세요.', true); return; }
-      if (d.transitions.some((t) => t.from === d.from && t.to === d.to)) { toast('동일한 전이가 있어 추가하지 못했습니다.', true); return; }
+      if (!d.from || !d.to) { toast('시작 · 끝 상태가 선택되지 않아 전이를 추가하지 못했습니다. 시작 상태와 끝 상태를 선택해 주세요.', true); return; }
+      if (d.transitions.some((t) => t.from === d.from && t.to === d.to)) { toast('동일한 전이가 있어 추가하지 못했습니다. 다른 시작 · 끝 상태를 선택해 주세요.', true); return; }
       d.transitions.push({ from: d.from, to: d.to, action: d.action || '' });
       Object.assign(d, { from: '', to: '', action: '' });
       render();
@@ -753,8 +826,9 @@
         : { source: src, target: '', name: '', cardinality: 'many_to_one', inverse: '', label: '', cite: '', status: 'active', required: false };
       const out = { ...d, was: { ...d }, reason: '' };
       if (l) api('item/history?element=' + encodeURIComponent(`link:${l.name}`)).then((r) => {  // what the list does not carry: where the Relation is said
-        if (S.it.d !== out || !r.now || !r.now.cite) return;
-        out.cite = r.now.cite; out.was.cite = r.now.cite;
+        const draft = (r.entries || []).find((e) => e.status === 'draft'), now = (draft && draft.after) || r.now;  // the edits not yet sent come first
+        if (S.it.d !== out || !now || !now.cite) return;
+        out.cite = now.cite; out.was.cite = now.cite;
         if (S.tab === 'relation-form') render();
       }).catch(() => {});
       return out;
@@ -775,7 +849,11 @@
       const m = S.mg.st, name = d.name.trim(), bad = ontNamed(name, '관계 유형');
       const dup = !l && m.links.some((x) => x.name === name || x.inverse === name);
       const pair = m.links.filter((x) => x.name !== (l || {}).name && x.source === d.source && x.target === d.target);
+      // an inverse name is a name of its own: no Relation, no other inverse and no Entity has it (the definition's check)
+      const inv = d.inverse.trim(), self = l ? l.name : name;
+      const taken = inv && (inv === self || m.links.some((x) => x.name !== self && (x.name === inv || x.inverse === inv)) || m.objects.some((o) => o.name === inv));
       return [dup ? { say: '관계 유형 중복', tone: 'bad' } : bad ? { say: bad[1], tone: bad[0] } : { say: '관계 유형 중복 없음', tone: 'ok' },
+        !inv ? null : taken ? { say: '역방향 이름 중복', tone: 'bad' } : { say: '역방향 이름 중복 없음', tone: 'ok' },
         !d.source || !d.target ? { say: '시작 · 끝 Entity 미선택', tone: 'warn' } : d.source === d.target ? { say: '자기 참조 Relation', tone: 'note' } : { say: '순환 참조 없음', tone: 'ok' },
         pair.length ? { say: `같은 Entity 쌍의 다른 Relation ${pair.length}개`, sub: pair.map((x) => x.name).join(', '), tone: 'note' } : null].filter(Boolean);
     },
@@ -795,4 +873,5 @@
       return { go: `model?rel=${encodeURIComponent(l.name)}` };
     },
     remove: async (l) => { await ontEdit('delete_link', { name: l.name }); Object.assign(S.ont.g, { rel: '', rd: null, lay: null }); return {}; },
+    history: (l) => ontItemHistory(`link:${l.name}`, 'Relation', true),
   });

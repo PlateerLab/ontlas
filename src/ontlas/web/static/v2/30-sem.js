@@ -68,6 +68,7 @@
     return out;
   }
   const smrAreaWord = (name) => { const a = (S.mg.st.areas || []).find((y) => y.name === name); return a ? a.label || a.name : name; };
+  const smrPropWord = (path) => { const [t, p] = String(path).split('.'); const hit = S.mg.st.properties.find((y) => y.object === t && y.name === p); return `${mgLabel(t)} · ${hit ? hit.label || p : p}`; };
   // what a rule applies to, in the words of the definition
   function smrApplies(c) {
     if (c.applies_to_labels && c.applies_to_labels.length) return c.applies_to_labels;
@@ -76,7 +77,7 @@
       const [kind, ...rest] = String(ref).split(':'), name = rest.join(':');
       if (kind === 'object') return mgLabel(name);
       if (kind === 'area') return `Object ${smrAreaWord(name)}`;
-      if (kind === 'property') { const [t, p] = name.split('.'); const hit = m.properties.find((y) => y.object === t && y.name === p); return `${mgLabel(t)} · ${hit ? hit.label || p : p}`; }
+      if (kind === 'property') return smrPropWord(name);
       if (kind === 'parameter') { const hit = m.parameters.find((y) => y.name === name); return hit ? hit.label : `@${name}`; }
       return ref;
     });
@@ -114,7 +115,7 @@
       <span class="k-code k-mut">${l.order}</span><span class="k-col">${kLayer(l.layer)}<span class="k-s">${LY_SAY[l.layer] || esc(l.description)}</span></span><span class="smr-n">${count(l.rules + l.cards)}</span></button>`).join('')}</section>`;
     const shown = cards.slice(0, x.more);
     const owner = (c) => (c.legal_review === 'pending' ? '<span class="k-chip warn">법무 검토 중</span>' : `${esc(c.owner || '-')}${c.status !== 'approved' ? ` <span class="k-chip ${SMR_STATUS[c.status] || ''}">${esc(c.status_label || c.status)}</span>` : ''}`);
-    const tr = (c) => `<tr class="${c.ref === x.sel ? 'on' : ''}" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-selected="true"' : ''}><td class="k-code smr-id${c.ref === x.sel ? ' b' : ''}">${esc(c.id).replace('#', '#<wbr>')}</td><td class="${c.ref === x.sel ? 'b' : ''}">${esc(c.statement)}</td><td>${kLayer(c.layer)}</td><td>${smrCite(c.source)}</td><td class="k-code">${esc(smrVer(c))}</td><td>${owner(c)}</td></tr>`;
+    const tr = (c) => `<tr class="${c.ref === x.sel ? 'on' : ''}" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-selected="true"' : ''}><td class="k-code smr-id${c.ref === x.sel ? ' b' : ''}"><button type="button" class="smr-pickb" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-current="true"' : ''}>${esc(c.id).replace('#', '#<wbr>')}</button></td><td class="${c.ref === x.sel ? 'b' : ''}">${esc(c.statement)}</td><td>${kLayer(c.layer)}</td><td>${smrCite(c.source)}</td><td class="k-code">${esc(smrVer(c))}</td><td>${owner(c)}</td></tr>`;
     const picks = `<select class="smr-pick${x.area ? ' on' : ''}" data-in="smrArea" aria-label="영역"><option value="">영역 · 전체</option>${areas.map((a) => `<option value="${esc(a)}"${a === x.area ? ' selected' : ''}>영역 · ${esc(smrAreaWord(a))}</option>`).join('')}</select>
       <select class="smr-pick${x.layer ? ' on' : ''}" data-in="smrLayerPick" aria-label="계층"><option value="">계층 · 전체</option>${st.layers.map((l) => `<option value="${esc(l.layer)}"${l.layer === x.layer ? ' selected' : ''}>계층 · ${esc(l.label)}</option>`).join('')}</select>`;
     const pending = st.cards.filter((c) => c.pending || c.new).length;
@@ -132,17 +133,16 @@
     const lines = (xs) => (xs || []).map(esc).join('<br>');
     const ref = (r) => `<span class="k-chip${r.found === false ? ' warn' : ''}">${esc(r.label || r.ref)}</span>`;
     const fact = (k, v) => (v ? `<span class="k-s">${k}</span><span class="k-14">${v}</span>` : '');
-    const params = Object.entries(c.params || {}).map(([k, v]) => `<span class="k-code">@${esc(k)}</span> ${esc(String(v))}`).join(' · ');
-    const check = c.check ? `${esc(c.check.parameter ? `@${c.check.parameter}` : c.check.property)}${c.check.min !== undefined && c.check.min !== null ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined && c.check.max !== null ? ` ${esc(String(c.check.max))} 이하` : ''}` : '';
+    const params = Object.entries(c.params || {}).map(([k, v]) => `<span class="k-code">@${esc(k)}</span> ${yesNo(v)}`).join(' · ');
+    const check = c.check ? `${esc(c.check.parameter ? `@${c.check.parameter}` : smrPropWord(c.check.property))}${c.check.min !== undefined && c.check.min !== null ? ` ${esc(String(c.check.min))} 이상` : ''}${c.check.max !== undefined && c.check.max !== null ? ` ${esc(String(c.check.max))} 이하` : ''}` : '';
     const state = `${esc(c.type_label || c.type)} · <span class="k-chip ${SMR_STATUS[c.status] || ''}">${esc(c.status_label || c.status)}</span>${c.legal_review && c.legal_review !== 'none' ? ` <span class="k-chip">법무 검토 ${esc(c.legal_review_label || c.legal_review)}</span>` : ''}`;
     const where = `${esc(c.module_label || c.module || '-')}${(c.extended_by || []).length ? ` · 확장 ${c.extended_by.map(esc).join(', ')}` : ''}`;
     const facts = [fact('유형 · 상태', state), fact('적용 대상', smrApplies(c).map(esc).join(', ')), fact('기준값', params), fact('위반 시', esc(c.risk || '')), fact('근거 확인', esc(c.verification || '')),
       fact('실행 위치', (c.implements || []).map(ref).join(' ')), fact('사용처', (c.used_by || []).map(ref).join(' ')), fact(c.check && c.check.property ? '값 범위' : 'AXIOM 검사', check), fact('정의 모듈', where)].join('');
     const open = c.kind === 'executable' ? `<a class="k-lnk flat" href="#mgrules?decision=${encodeURIComponent(c.decision)}">결정표 ${esc(c.decision_label || c.decision)} 편집${ki('chevR', 14, 1.75)}</a>` : '';
-    const why = smrEditable(c) ? '' : `<p class="k-s" style="margin:0">AXIOM 결정표 규칙 · <a href="#library">모듈 라이브러리</a>에서 편집</p>`;
     return `<section class="k-card pad k-v g12" aria-labelledby="smr-rc"><div class="k-pha"><span class="k-code k-mut">${esc(c.id)}</span><h2 class="k-h2" id="smr-rc">${esc(c.statement)}</h2>${kLayer(c.layer)}</div>
       <div class="k-g2" style="gap:8px">${box('조건', lines(c.conditions))}${box('결과', esc(c.result || ''))}${box('예외', lines(c.exceptions))}${box('근거 · 버전 · 담당자', [c.source, smrVer(c), c.owner].filter(Boolean).map(esc).join(' · '))}</div>
-      <div class="smr-facts">${facts}</div>${open}${why}</section>`;
+      <div class="smr-facts">${facts}</div>${open}</section>`;
   }
 
   // 판정 테스트: values typed in are decided by the table as the pending edits leave it; no source is read unless a record is picked
@@ -242,7 +242,7 @@
     const range = (p) => (p.min !== null && p.min !== undefined && p.max !== null && p.max !== undefined ? ` · 범위 ${p.min}~${p.max}` : p.min !== null && p.min !== undefined ? ` · 범위 ${p.min} 이상` : p.max !== null && p.max !== undefined ? ` · 범위 ${p.max} 이하` : '');
     const uses = (xs) => (xs && xs.length ? `${xs.slice(0, 2).join(' · ')}${xs.length > 2 ? ` 외 ${xs.length - 2}` : ''}` : '-');
     const run = (k) => (RUNTIME.find((y) => y[0] === k) || [k, k])[1];
-    return m.parameters.map((p) => ({ id: `parameter:${p.name}`, kind: '기준값', code: `@${p.name}`, label: p.label, say: `${show(p.value)}${esc(p.unit || '')}${esc(range(p))}`, uses: uses(p.readers), who: [p.module_label, of(p.module)].filter(Boolean).join(' · '), x: p }))
+    return m.parameters.map((p) => ({ id: `parameter:${p.name}`, kind: '기준값', code: `@${p.name}`, label: p.label, say: `${yesNo(p.value)}${esc(p.unit || '')}${esc(range(p))}`, uses: uses(p.readers), who: [p.module_label, of(p.module)].filter(Boolean).join(' · '), x: p }))
       .concat(m.metrics.map((y) => ({ id: `metric:${y.name}`, kind: '지표', code: y.name, label: y.label, say: esc(said[y.name] ? `${said[y.name].formula}${said[y.name].denominator ? ` · 분모 ${said[y.name].denominator}` : ''}` : y.description || '-'), uses: y.unit ? `단위 ${y.unit}` : '-', who: [y.owner || y.module_label, of(y.module)].filter(Boolean).join(' · '), x: y })))
       .concat(m.functions.map((f) => ({ id: `function:${f.name}`, kind: '함수', code: f.name, label: f.label, say: esc(`${run(f.runtime)} · ${f.expr || f.decision || f.query || f.entry || (f.call || {}).url || '-'}`), uses: f.target ? `대상 ${mgLabel(f.target)}` : '-', who: [f.owner || f.module_label, f.version ? `v${f.version}` : ''].filter(Boolean).join(' · '), x: f })));
   }
@@ -254,7 +254,7 @@
     const bar = sel ? kBar('선택한 기준값 · 지표 · 함수', sel.code, sel.label, itemActs('param', sel.id)) : '';
     const add = (type, word) => `<a class="k-btn" href="#param-form" data-act="smrNew" data-kind="param" data-type="${type}">${ki('plus', 16, 1.75)}${word}</a>`;
     const shown = rows.slice(0, x.pmore);
-    const tr = (r) => `<tr class="${r.id === x.psel ? 'on' : ''}" data-act="smrPickValue" data-id="${esc(r.id)}"><td><span class="k-chip">${r.kind}</span>${r.x.new ? ' <span class="k-chip warn">새로 추가</span>' : r.x.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td>${esc(r.label)}<br><span class="k-code k-mut">${esc(r.code)}</span></td><td>${r.say}</td><td>${esc(r.uses)}</td><td>${esc(r.who || '-')}</td></tr>`;
+    const tr = (r) => `<tr class="${r.id === x.psel ? 'on' : ''}" data-act="smrPickValue" data-id="${esc(r.id)}"><td><span class="k-chip">${r.kind}</span>${r.x.new ? ' <span class="k-chip warn">새로 추가</span>' : r.x.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td><button type="button" class="smr-pickb" data-act="smrPickValue" data-id="${esc(r.id)}"${r.id === x.psel ? ' aria-current="true"' : ''}>${esc(r.label)}<br><span class="k-code k-mut">${esc(r.code)}</span></button></td><td>${r.say}</td><td>${esc(r.uses)}</td><td>${esc(r.who || '-')}</td></tr>`;
     const more = [S.mg.st.metrics.length ? '<a class="k-lnk" href="#rules">지표 계산 · 출처 충돌</a>' : '<a class="k-lnk" href="#rules">출처 충돌 · 기한 전이</a>', S.mg.st.functions.length ? '<a class="k-lnk" href="#mgfuncs">함수 실행</a>' : ''].join('');
     return `${bar}<section class="k-card" aria-labelledby="smr-prm"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="smr-prm">기준값 · 지표 · 함수</h2>${can ? `<div class="k-push k-h">${add('parameter', '기준값')}${add('metric', '지표')}${add('function', '함수')}</div>` : ''}</div>
       <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">종류</th><th scope="col">이름</th><th scope="col">값 · 산식</th><th scope="col">사용처</th><th scope="col">담당 · 버전</th></tr></thead><tbody>${shown.map(tr).join('') || '<tr><td colspan="5" class="mut">등록된 기준값 · 지표 · 함수가 없습니다.</td></tr>'}</tbody></table></div>
@@ -330,10 +330,9 @@
       <div class="k-h"><label class="k-f" style="flex:0 1 260px">대상 Entity<select class="k-in" data-in="smrTarget"><option value="">자동</option>${nodes.map((nd) => `<option value="${esc(nd.id)}"${nd.id === x.target ? ' selected' : ''}>${esc(nd.label)}</option>`).join('')}</select></label>${S.st.data.policy_sample ? '<button class="k-btn" data-act="smrSample" style="align-self:flex-end">예시 정책서 불러오기</button>' : ''}</div></div></details>`;
     const last = res ? (res.ok ? `<span class="k-s">마지막 생성 · 결정표 ${esc(res.label || res.decision)} · 규칙 ${count(res.rules.length)} · 모델 시도 ${count(res.attempts)}회</span><span class="k-push k-h g6"><span class="k-chip ${res.issues.length ? 'warn' : 'ok'}">${res.issues.length ? `초안 검사 오류 ${res.issues.length}` : '초안 검사 통과'}</span><span class="k-chip warn">조항 LLM 초안</span></span>` : `<span class="k-bad k-13">${esc(res.error)}</span>`)
       : `<span class="k-s">${x.gen ? '초안 생성 중 · 최대 5분' : x.genNote ? esc(x.genNote) : '생성 이력 없음'}</span>`;
-    return `<section class="k-card" aria-labelledby="smr-src"><div class="k-h g12 smr-line"><span class="smr-tile">${ki('doc', 18, 1.75)}</span><div style="flex:1 1 320px;min-width:0"><h2 class="k-h2" id="smr-src">바탕 자료</h2></div>
+    return `<section class="k-card" aria-labelledby="smr-src"><div class="k-h g12 smr-line"><span class="smr-tile">${ki('doc', 18, 1.75)}</span><div class="k-h g8" style="flex:1 1 320px;min-width:0"><h2 class="k-h2" id="smr-src">바탕 자료</h2>${ask ? '' : '<span class="k-chip warn">언어 모델 미연결</span>'}</div>
         ${can ? `<a class="k-btn" href="#catalog">${ki('plus', 16, 1.75)}자료 업로드</a><button class="k-btn" type="button" data-act="smrGen"${ready ? '' : ' disabled'}>${ki('play', 16, 1.75)}${x.gen ? '초안 생성 중' : '초안 생성'}</button>` : ''}</div>
-      ${ask ? '' : '<p class="k-note" style="margin:12px 20px 0">언어 모델이 연결되지 않아 초안을 생성할 수 없습니다.</p>'}
-      <div class="k-wrap g8 smr-line" role="group" aria-label="추출할 자료">${pills || '<span class="k-s">업로드한 문서가 없습니다.</span>'}<a class="k-lnk" href="#${known('evidence') ? 'evidence' : 'docs'}">전체 자료 ${count(docs.length)} · ${known('evidence') ? '근거 지도' : '문서'}${ki('chevR', 14, 1.75)}</a></div>
+      <div class="k-wrap g8 smr-line" role="group" aria-label="추출할 자료">${pills || '<span class="k-s">등록된 문서가 없습니다.</span>'}<a class="k-lnk" href="#${known('evidence') ? 'evidence' : 'docs'}">전체 자료 ${count(docs.length)} · ${known('evidence') ? '근거 지도' : '문서'}${ki('chevR', 14, 1.75)}</a></div>
       ${can && ask ? `<div class="smr-line">${typed}</div>` : ''}<div class="k-14 k-h g16" style="padding:12px 20px">${last}</div></section>`;
   }
 
@@ -351,7 +350,7 @@
       : `<div class="smr-ground"><span class="k-chip${r.verification ? ` ${/필요/.test(r.verification) ? 'warn' : 'b'}` : ''}" style="align-self:flex-start">${esc(r.verification || '근거')}</span><b>${esc(r.source || '근거 없음')}</b><span class="k-i3 k-13">${esc([r.module_label, r.version ? `v${r.version}` : '', r.owner ? `담당 ${r.owner}` : ''].filter(Boolean).join(' · '))}</span>${r.kind === 'executable' ? `<a class="k-13" href="#mgrules?decision=${encodeURIComponent(r.decision)}">결정표 열기</a>` : ''}</div>${r.risk ? `<div class="smr-ground"><span class="k-chip" style="align-self:flex-start">위반 시</span><span class="k-i3 k-13">${esc(r.risk)}</span></div>` : ''}`;
     let foot;
     if (r.made) {
-      foot = `<span class="k-s" style="flex:1 1 220px">결정표 ${esc(S.pol.res.label || S.pol.res.decision)} · 규칙 ${count(S.pol.res.rules.length)}개 · 결정표 단위 승인</span>
+      foot = `<span class="k-s" style="flex:1 1 220px">결정표 ${esc(S.pol.res.label || S.pol.res.decision)} · 규칙 ${count(S.pol.res.rules.length)}개</span>
         <button class="k-btn" type="button" data-act="smrMadeDrop">거절</button><button class="k-btn" type="button" data-act="smrMadeEdit">수정 후 승인</button><button class="k-btn pri" type="button" data-act="smrMadeFile"${canEdit() && !x.drBusy ? '' : ' disabled'}>승인</button>`;
     } else if (r.state !== 'waiting') {
       foot = `<span class="k-s" style="flex:1 1 220px">${r.state === 'approved' ? '승인 · 작성 중인 변경 요청에 반영' : '거절 · 작성 중인 변경 요청에서 제외'} · <a href="#changes">변경 요청 · 버전</a></span>`;
@@ -360,7 +359,7 @@
     } else if (!canApprove()) {
       foot = '<span class="k-s" style="flex:1 1 220px">승인 권한 필요 · 영역 담당 이상</span>';
     } else {
-      foot = `<span class="k-s" style="flex:1 1 220px">승인 시 ${r.kind === 'executable' ? `결정표 규칙 ${esc(r.rule)}` : `규칙 카드 ${esc(r.id)}`} 상태 변경 · 작성 중인 변경 요청에 추가</span>
+      foot = `<span class="k-s" style="flex:1 1 220px">${r.kind === 'executable' ? `결정표 규칙 ${esc(r.rule)}` : `규칙 카드 ${esc(r.id)}`}</span>
         <button class="k-btn" type="button" data-act="smrDrDecide" data-v="reject"${open ? '' : ' disabled'}>거절</button><button class="k-btn" type="button" data-act="smrDrDecide" data-v="edit"${open && e ? '' : ' disabled'}>수정 후 승인</button><button class="k-btn pri" type="button" data-act="smrDrDecide" data-v="approve"${open ? '' : ' disabled'}>승인</button>`;
     }
     const fixed = r.made || r.kind === 'executable' ? ' readonly' : lock;
@@ -383,6 +382,9 @@
   // ---- a rule's own screens ---------------------------------------------------------------------------------------
 
   const SMR_TYPES = () => ((S.sem.st || {}).types || []).map((t) => [t.type, t.label]);
+  // a save empties what the screens read before the page moves on: a form or its checks drawn in between read nothing
+  const smrSem = () => S.sem.st || { cards: [], parameters: [] };
+  const smrFound = () => (S.ru || {}).findings || [];
   const smrTable = (name) => S.mg.st.decisions.find((t) => t.name === name);
   const smrOpt = (k, w, cur) => `<option value="${esc(k)}"${String(k) === String(cur ?? '') ? ' selected' : ''}>${esc(w)}</option>`;
   const smrIn = (k, v, more = '', cls = '') => `<input class="k-in${cls}" type="text" data-in="itf" data-k="${k}" value="${esc(v ?? '')}" ${more}>`;
@@ -401,35 +403,34 @@
   function smrRuleForm(d, c) {
     const m = S.mg.st, fresh = !c;
     const kinds = fresh ? `<div class="k-full k-h g12"><div class="k-seg" role="group" aria-label="규칙의 종류"><button type="button" class="${d.kind === 'stated' ? 'on' : ''}" data-act="smrKind" data-k="stated">규칙 카드</button><button type="button" class="${d.kind === 'executable' ? 'on' : ''}" data-act="smrKind" data-k="executable"${m.decisions.length ? '' : ' disabled'}>결정표 규칙</button></div></div>` : '';
-    const locked = c && !smrEditable(c) ? `<p class="k-note warn k-full">정의 모듈의 AXIOM 규칙이어서 저장할 수 없습니다. 모듈 라이브러리에서 모듈 파일을 편집해 주세요.</p>` : '';
     if (d.kind === 'executable') {
-      const t = smrTable(d.decision);
+      const t = smrTable(d.decision), off = c && !smrEditable(c) ? ' disabled' : '';  // an AXIOM row is read here, not written
       const conds = t ? t.inputs.map((i) => {
         const part = d.when[i.name] || { op: 'any', value: '' };
         const ops = part.op === 'raw' ? ['raw'] : opsOf(i.type);
-        const at = `data-in="smrWhen" data-k="${esc(i.name)}" data-p="value"`;
+        const at = `data-in="smrWhen" data-k="${esc(i.name)}" data-p="value"${off}`;
         const value = ['any', 'null', 'notnull'].includes(part.op) ? '' : i.type === 'boolean' ? `<select class="k-in" ${at}>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, part.value)).join('')}</select>`
           : (i.values || []).length && ['eq', 'ne'].includes(part.op) ? `<select class="k-in" ${at}>${i.values.map((v) => smrOpt(v, (i.labels || {})[v] || v, part.value)).join('')}</select>`
             : `<input class="k-in" type="text" ${at} value="${esc(part.value ?? '')}" placeholder="${esc(cellHint(i, part.op))}">`;
-        return `<div class="smr-cond"><span class="k-14">${esc(i.label)}</span><select class="k-in" data-in="smrWhen" data-k="${esc(i.name)}" data-p="op" data-re="1" aria-label="${esc(i.label)} 비교">${ops.map((o) => smrOpt(o, CELL_OPS[o], part.op)).join('')}</select>${value}</div>`;
+        return `<div class="smr-cond"><span class="k-14">${esc(i.label)}</span><select class="k-in" data-in="smrWhen" data-k="${esc(i.name)}" data-p="op" data-re="1" aria-label="${esc(i.label)} 비교"${off}>${ops.map((o) => smrOpt(o, CELL_OPS[o], part.op)).join('')}</select>${value}</div>`;
       }).join('') : '';
       const outs = t ? t.outputs.map((o) => {
         const cur = d.then[o.name], word = outWord(t, o.name);
-        return `<label class="k-f">${esc(word)}${o.type === 'boolean' ? `<select class="k-in" data-in="smrThen" data-k="${esc(o.name)}" data-t="boolean"><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, cur === undefined ? '' : String(cur))).join('')}</select>` : `<input class="k-in" type="text" data-in="smrThen" data-k="${esc(o.name)}" data-t="${esc(o.type)}" value="${esc(cur ?? '')}">`}</label>`;
+        return `<label class="k-f">${esc(word)}${o.type === 'boolean' ? `<select class="k-in" data-in="smrThen" data-k="${esc(o.name)}" data-t="boolean"${off}><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, cur === undefined ? '' : String(cur))).join('')}</select>` : `<input class="k-in" type="text" data-in="smrThen" data-k="${esc(o.name)}" data-t="${esc(o.type)}" value="${esc(cur ?? '')}"${off}>`}</label>`;
       }).join('') : '';
-      return `<section class="k-card" aria-labelledby="smr-f1"><div class="k-ch"><h2 id="smr-f1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${kinds}${locked}
+      return `<section class="k-card" aria-labelledby="smr-f1"><div class="k-ch"><h2 id="smr-f1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${kinds}
           <label class="k-f">규칙 ID${smrIn('id', d.id, fresh ? 'placeholder="예: gold-window"' : 'disabled')}<span class="k-hint">영문자로 시작 · 영문자, 숫자, _, - 사용</span></label>
-          <label class="k-f">결정표<select class="k-in" data-in="itf" data-k="decision" data-re="1"${fresh ? '' : ' disabled'}>${m.decisions.map((y) => smrOpt(y.name, y.label, d.decision)).join('')}</select><span class="k-hint">Custom 계층</span></label>
+          <label class="k-f">결정표<select class="k-in" data-in="smrDecision"${fresh ? '' : ' disabled'}>${m.decisions.map((y) => smrOpt(y.name, y.label, d.decision)).join('')}</select><span class="k-hint">Custom 계층</span></label>
           <div class="k-full k-v"><span class="k-s">조건</span>${conds || '<span class="k-s">선택된 결정표가 없습니다.</span>'}</div>
           <div class="k-full k-g2"><span class="k-s k-full">결과</span>${outs}</div>
-          <label class="k-f">근거 자료 · 절${smrIn('source', d.source, 'placeholder="예: 반품 정책서 v1.2 3조" list="smr-docs"')}</label>
-          <label class="k-f">담당자${smrIn('owner', d.owner, 'list="smr-owners"')}</label>
+          <label class="k-f">근거 자료 · 절${smrIn('source', d.source, `placeholder="예: 반품 정책서 v1.2 3조" list="smr-docs"${off}`)}</label>
+          <label class="k-f">담당자${smrIn('owner', d.owner, `list="smr-owners"${off}`)}</label>
           ${fresh ? `<label class="k-ck mid k-full"><input type="checkbox" data-in="itf" data-k="first"${d.first ? ' checked' : ''}>기존 규칙보다 먼저 적용</label>` : ''}</div></div>${smrLists()}</section>`;
     }
     // a value a card names is a named value of the definition (it follows that value) or a value written on the card itself
-    const linked = d.params.map((y) => { const p = m.parameters.find((q) => q.name === y.name); return `<tr><td class="k-code">${p ? '@' : ''}${esc(y.name)}</td><td>${p ? `${show(p.value)}${esc(p.unit || '')}` : `${show(y.value)} <span class="k-s">직접 입력 값</span>`}</td><td>${esc(p && p.readers.length ? p.readers.join(' · ') : '-')}</td><td class="r"><button class="k-lnk" type="button" data-act="smrParamDrop" data-name="${esc(y.name)}">삭제</button></td></tr>`; }).join('');
+    const linked = d.params.map((y) => { const p = m.parameters.find((q) => q.name === y.name); return `<tr><td class="k-code">${p ? '@' : ''}${esc(y.name)}</td><td>${p ? `${yesNo(p.value)}${esc(p.unit || '')}` : `${yesNo(y.value)} <span class="k-s">직접 입력 값</span>`}</td><td>${esc(p && p.readers.length ? p.readers.join(' · ') : '-')}</td><td class="r"><button class="k-lnk" type="button" data-act="smrParamDrop" data-name="${esc(y.name)}">삭제</button></td></tr>`; }).join('');
     const free = m.parameters.filter((p) => !d.params.some((y) => y.name === p.name));
-    return `<section class="k-card" aria-labelledby="smr-f1"><div class="k-ch"><h2 id="smr-f1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${kinds}${locked}
+    return `<section class="k-card" aria-labelledby="smr-f1"><div class="k-ch"><h2 id="smr-f1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${kinds}
         <label class="k-f">규칙 ID${smrIn('id', d.id, fresh ? 'placeholder="예: CU-CL-001"' : 'disabled')}<span class="k-hint">영문자로 시작 · 영문자, 숫자, _, - 사용</span></label>
         <label class="k-f">규칙 이름${smrIn('statement', d.statement)}</label>
         <label class="k-f">계층<select class="k-in" disabled aria-label="계층"><option>${esc(c ? c.layer_label || c.layer : 'Custom')}</option></select></label>
@@ -444,18 +445,20 @@
         <div class="k-x"><table class="k-t"><thead><tr><th scope="col">키</th><th scope="col">값</th><th scope="col">사용 규칙</th><th scope="col"></th></tr></thead><tbody>${linked || '<tr><td colspan="4" class="mut">연결된 기준값이 없습니다.</td></tr>'}</tbody></table></div></section>`;
   }
   // what a person may pick a source and an owner from: the documents of the space and the owners rules already name
-  const smrLists = () => `<datalist id="smr-docs">${(S.mg.st.documents || []).map((n) => `<option value="${esc(n)}">`).join('')}</datalist><datalist id="smr-owners">${[...new Set(S.sem.st.cards.map((c) => c.owner).filter(Boolean))].map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`;
+  const smrLists = () => `<datalist id="smr-docs">${(S.mg.st.documents || []).map((n) => `<option value="${esc(n)}">`).join('')}</datalist><datalist id="smr-owners">${[...new Set(smrSem().cards.map((c) => c.owner).filter(Boolean))].map((n) => `<option value="${esc(n)}">`).join('')}</datalist>`;
 
   function smrRuleChecks(d, c) {
-    const out = [], st = S.sem.st, fresh = !c;
-    if (c && !smrEditable(c)) return [{ say: 'AXIOM 결정표 규칙 · 모듈 파일에서 편집', tone: 'bad', word: '저장 불가' }];
+    const out = [], st = smrSem(), fresh = !c;
+    if (c && !smrEditable(c)) return [{ say: 'AXIOM 결정표 규칙', tone: 'bad', word: '저장 불가' }];
     if (d.kind === 'executable') {
       const t = smrTable(d.decision);
       if (fresh) out.push(!d.id ? { say: '규칙 ID 입력 필요', tone: 'warn' } : !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(d.id) ? { say: '규칙 ID는 영문자로 시작하고 영문자 · 숫자 · _ · - 만 사용', tone: 'bad' } : t && t.rules.some((r) => r.id === d.id) ? { say: `${t.label}에 같은 ID의 규칙이 있음`, tone: 'bad' } : { say: '규칙 ID 사용 가능', tone: 'ok' });
       const set = Object.values(d.when || {}).filter((p) => p && p.op && p.op !== 'any').length;
       out.push(set ? { say: `조건 ${set}개`, tone: 'ok' } : { say: '조건 없음 · 나머지 모든 경우 적용', tone: 'note' });
       if (t && !t.outputs.every((o) => d.then[o.name] !== undefined && d.then[o.name] !== '')) out.push({ say: '결과 입력 필요', tone: 'warn' });
-      const over = c ? [...new Set((S.ru.findings || []).filter((f) => f.decision === d.decision && ['overlap', 'tie'].includes(f.kind) && f.rules.includes(d.id)).flatMap((f) => f.rules).filter((id) => id !== d.id))] : [];
+      if (t) out.push(...smrCellChecks(d, t));
+      if (c && c.layer === 'standard') out.push({ say: '저장 후 계층 Standard → Custom', tone: 'note' });
+      const over = c ? [...new Set(smrFound().filter((f) => f.decision === d.decision && ['overlap', 'tie'].includes(f.kind) && f.rules.includes(d.id)).flatMap((f) => f.rules).filter((id) => id !== d.id))] : [];
       if (over.length) out.push({ say: `${over.join(', ')}와 조건 겹침 · ${POLICY_WORD[(t || {}).hit_policy] || ''} 적용`, tone: 'note' });
       out.push(d.source ? { say: '근거 자료 입력됨', tone: 'ok' } : { say: '근거 자료 없음', tone: 'warn' });
       const qs = S.st.questions.filter((q) => q.decision === d.decision).length;
@@ -468,6 +471,29 @@
     const named = d.params.filter((y) => S.mg.st.parameters.some((p) => p.name === y.name)).length;
     if (named) out.push({ say: `기준값 ${named}개 연결`, tone: 'ok' });
     if (d.params.length - named) out.push({ say: `직접 입력 값 ${d.params.length - named}개`, tone: 'note' });
+    return out;
+  }
+
+  // what the table would refuse or read as something else, in the words of the table: a number that is not one, a
+  // value its Property does not allow, a condition with nothing to compare
+  const SMR_NUM = ['integer', 'decimal', 'number', 'float'];
+  const smrNamed = (v) => /^@[A-Za-z_]\w*$/.test(v) && S.mg.st.parameters.some((p) => `@${p.name}` === v);
+  function smrCellChecks(d, t) {
+    const out = [];
+    t.inputs.forEach((i) => {
+      const part = d.when[i.name];
+      if (!part || ['any', 'null', 'notnull', 'raw'].includes(part.op)) return;
+      const v = String(part.value ?? '').trim();
+      if (!v) { out.push({ say: `${i.label} 조건 값 입력 필요`, tone: 'bad' }); return; }
+      const list = ['in', 'notin'].includes(part.op) ? v.split(',').map((y) => y.trim()).filter(Boolean) : [v];
+      const wrong = SMR_NUM.includes(i.type) ? list.filter((y) => !smrNamed(y) && Number.isNaN(Number(y)))
+        : (i.values || []).length ? list.filter((y) => !smrNamed(y) && !i.values.map(String).includes(y)) : [];
+      if (wrong.length) out.push({ say: `${i.label} 조건 값 · ${wrong.join(', ')}`, sub: SMR_NUM.includes(i.type) ? '숫자 또는 @기준값' : `허용값 ${i.values.map((y) => (i.labels || {})[y] || y).join(', ')}`, tone: 'bad' });
+    });
+    t.outputs.forEach((o) => {
+      const v = d.then[o.name];
+      if (SMR_NUM.includes(o.type) && v !== undefined && v !== '' && typeof v !== 'number' && !smrNamed(String(v).trim())) out.push({ say: `${outWord(t, o.name)} 결과 값 · ${v}`, sub: '숫자 또는 @기준값', tone: 'bad' });
+    });
     return out;
   }
 
@@ -528,10 +554,20 @@
       rows: e.fields.map((f) => ({ label: f.label, before: f.before, after: f.after })), all: Object.entries(e.all || {}).map(([k, v]) => ({ label: k, value: v })) }));
   }
 
+  // a rule the pending edits take out is gone from the list, and its history still says how it went
+  function smrGone(id) {
+    const [kind, ...rest] = String(id).split(':'), name = rest.join(':');
+    if (S.it.what !== 'history' || !(smrSem().removed || []).includes(name)) return null;
+    if (kind === 'card') return { kind: 'stated', ref: id, id: name, statement: name, layer: '', gone: true };
+    if (kind !== 'decision' || !name.includes('#')) return null;
+    const [decision, rule] = name.split('#'), t = smrTable(decision);
+    return { kind: 'executable', ref: id, id: name, decision, rule, statement: `${t ? t.label : decision} · ${rule}`, layer: '', gone: true };
+  }
+
   item('rule', {
     word: '규칙', under: 'semrules', list: 'semrules',
     load: smrLoadItem,
-    find: (id) => (S.sem.st && S.sem.st.cards ? S.sem.st.cards.find((c) => c.ref === id) || null : null),
+    find: (id) => (S.sem.st && S.sem.st.cards ? S.sem.st.cards.find((c) => c.ref === id) || smrGone(id) : null),
     code: (c) => c.id, name: (c) => c.statement,
     element: (c) => (c.kind === 'executable' ? `rule:${c.decision}.${c.rule}` : `rule_card:${c.id}`),
     draft: smrRuleDraft, form: smrRuleForm, checks: smrRuleChecks, valid: smrRuleValid, save: smrRuleSave,
@@ -548,6 +584,8 @@
   // ---- a named value's, a metric's, a function's own screens -------------------------------------------------------
 
   const SMR_VALUE = { parameter: '기준값', metric: '지표', function: '함수' };
+  const SMR_VERSION = /^\d+(\.\d+){0,2}([-.+][0-9A-Za-z.-]+)?$/;  // as the definition check reads a function's version
+  const smrFnBody = (d) => String({ expr: d.expr, decision: d.decision, query: d.query, python: d.entry, http: d.url }[d.runtime] || '').trim();
   const smrValueOf = (id) => { const [kind, ...rest] = String(id).split(':'), name = rest.join(':'), m = S.mg.st; const x = ({ parameter: m.parameters, metric: m.metrics, function: m.functions }[kind] || []).find((y) => y.name === name); return x ? { kind, name, x } : null; };
 
   function smrValueDraft(v) {
@@ -567,7 +605,7 @@
     }
     if (v.kind === 'function') {
       return { kind: 'function', name: y.name, label: y.label, runtime: y.runtime, target: y.target || '', expr: y.expr || '', decision: y.decision || '', query: y.query || '', entry: y.entry || '', url: (y.call || {}).url || '', method: (y.call || {}).method || 'POST', path: (y.call || {}).path || '', call: y.call || {},
-        fin: Object.entries(y.inputs || {}).map(([name, s]) => ({ name, label: (s || {}).label || '', type: (s || {}).type || 'string' })), fout: Object.entries(y.outputs || {}).map(([name, type]) => ({ name, type })),
+        fin: Object.entries(y.inputs || {}).map(([name, s]) => ({ name, label: (s || {}).label || '', type: (typeof s === 'string' ? s : (s || {}).type) || 'string', spec: s })), fout: Object.entries(y.outputs || {}).map(([name, type]) => ({ name, type })),
         version: y.version || '', owner: y.owner || '', status: y.status || 'active', depends: (y.depends || []).join(', '), description: y.description || '', cite: y.cite || '', reason: '' };
     }
     return { kind: 'parameter', name: y.name, label: y.label, type: y.type, value: y.value ?? '', unit: y.unit || '', min: y.min ?? '', max: y.max ?? '', description: y.description || '', cite: y.cite || '', reason: '' };
@@ -587,8 +625,14 @@
     let body;
     if (d.kind === 'metric') {
       const props = [['', '대상 자체'], ...mgProps(d.object).map((p) => [p.name, p.label || p.name])];
-      const conds = (list) => smrRowsOf(list, d[list], (r, i) => `${smrRowSel(list, i, 'property', props.slice(1), r.property, 'Property')}${smrRowSel(list, i, 'op', WHERE_OPS, r.op, '비교')}${smrRowIn(list, i, 'value', r.value, '값')}`);
-      const formula = d.raw ? '<p class="k-note k-full">여러 Entity를 잇는 산식이어서 대상과 조건을 편집할 수 없습니다. 모듈 라이브러리에서 모듈 파일을 편집해 주세요.</p>' : `
+      const value = (list, r, i) => {  // a Property that takes set values is compared with one of them
+        const p = mgProps(d.object).find((y) => y.name === r.property);
+        const set = p && p.type === 'boolean' ? [['true', '예'], ['false', '아니요']] : p && (p.values || []).length ? p.values.map((y) => [y, (p.labels || {})[y] || y]) : null;
+        return set ? smrRowSel(list, i, 'value', [['', '선택'], ...set], r.value, '값') : smrRowIn(list, i, 'value', r.value, '값');
+      };
+      const conds = (list) => smrRowsOf(list, d[list], (r, i) => `${smrRowSel(list, i, 'property', props.slice(1), r.property, 'Property')}${smrRowSel(list, i, 'op', WHERE_OPS, r.op, '비교')}${value(list, r, i)}`);
+      const said = (S.ru.metrics || []).find((y) => y.metric === d.name);
+      const formula = d.raw ? `<div class="k-f k-full"><span>산식</span><span class="k-h g8"><span class="k-14 k-code">${esc(said ? said.formula : '')}</span><span class="k-chip">여러 Entity 산식</span></span></div>` : `
         <label class="k-f">대상 Entity<select class="k-in" data-in="itf" data-k="object" data-re="1">${m.objects.filter((o) => !o.concept).map((o) => smrOpt(o.name, o.label, d.object)).join('')}</select></label>
         <div class="k-g2"><label class="k-f">집계<select class="k-in" data-in="itf" data-k="fn">${AGG_WORD.map(([k, w]) => smrOpt(k, w, d.fn)).join('')}</select></label><label class="k-f">집계 Property<select class="k-in" data-in="itf" data-k="prop">${props.map(([k, w]) => smrOpt(k, w, d.prop)).join('')}</select></label></div>
         <div class="k-full k-v"><span class="k-s">산식 조건</span>${conds('where')}</div>
@@ -613,13 +657,14 @@
         <label class="k-f">버전${smrIn('version', d.version)}</label><label class="k-f">상태<select class="k-in" data-in="itf" data-k="status">${FN_STATUS.map(([k, w]) => smrOpt(k, w, d.status)).join('')}</select></label>
         <label class="k-f">외부 의존${smrIn('depends', d.depends, 'placeholder="쉼표로 구분"')}</label>${cite}${tail}`;
     } else {
-      const ax = ((S.sem.st.parameters || []).find((p) => p.name === d.name) || {}).axiom;
+      const ax = ((smrSem().parameters || []).find((p) => p.name === d.name) || {}).axiom;
       const bound = ax ? `AXIOM 범위 ${ax.min !== null && ax.min !== undefined ? `${ax.min} 이상` : ''}${ax.min !== null && ax.min !== undefined && ax.max !== null && ax.max !== undefined ? ' · ' : ''}${ax.max !== null && ax.max !== undefined ? `${ax.max} 이하` : ''}` : '';
-      body = `${kind}${key('')}${name}
-        <label class="k-f">값 · 산식${smrIn('value', d.value)}</label>
-        ${fresh ? `<label class="k-f">자료형<select class="k-in" data-in="itf" data-k="type">${[['integer', '정수'], ['decimal', '소수'], ['string', '문자열'], ['boolean', '참 · 거짓']].map(([k, w]) => smrOpt(k, w, d.type)).join('')}</select></label>` : ''}
+      const value = d.type === 'boolean' ? `<label class="k-f">값<select class="k-in" data-in="itf" data-k="value"><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, w]) => smrOpt(k, w, String(d.value))).join('')}</select></label>`
+        : `<label class="k-f">값 · 산식${smrIn('value', d.value)}</label>`;
+      body = `${kind}${key('')}${name}${value}
+        ${fresh ? `<label class="k-f">자료형<select class="k-in" data-in="itf" data-k="type" data-re="1">${[['integer', '정수'], ['decimal', '소수'], ['string', '문자열'], ['boolean', '참 · 거짓']].map(([k, w]) => smrOpt(k, w, d.type)).join('')}</select></label>` : ''}
         <label class="k-f">단위${smrIn('unit', d.unit, 'list="smr-units"')}</label>
-        <div class="k-f"><span>허용 범위</span><div class="k-h nw">${smrIn('min', d.min, 'placeholder="최솟값" aria-label="최솟값" inputmode="decimal"')}<span class="k-s">~</span>${smrIn('max', d.max, 'placeholder="최댓값" aria-label="최댓값" inputmode="decimal"')}</div>${bound ? `<span class="k-hint">${esc(bound)}</span>` : ''}</div>${tail}${cite}`;
+        ${SMR_NUM.includes(d.type) ? `<div class="k-f"><span>허용 범위</span><div class="k-h nw">${smrIn('min', d.min, 'placeholder="최솟값" aria-label="최솟값" inputmode="decimal"')}<span class="k-s">~</span>${smrIn('max', d.max, 'placeholder="최댓값" aria-label="최댓값" inputmode="decimal"')}</div>${bound ? `<span class="k-hint">${esc(bound)}</span>` : ''}</div>` : ''}${tail}${cite}`;
     }
     return `<section class="k-card" aria-labelledby="smr-v1"><div class="k-ch"><h2 id="smr-v1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${body}</div></div>
       ${smrLists()}<datalist id="smr-units">${['일', '원', '%', '건', '회', '개'].map((u) => `<option value="${u}">`).join('')}</datalist></section>`;
@@ -629,14 +674,18 @@
     const out = [], m = S.mg.st;
     if (!v) {
       const taken = ({ parameter: m.parameters, metric: m.metrics, function: m.functions }[d.kind] || []).some((y) => y.name === d.name);
-      out.push(!d.name ? { say: '키 입력 필요', tone: 'warn' } : !IDENT.test(d.name) ? { say: '키는 영문자로 시작하고 영문자 · 숫자 · _ 만 사용', tone: 'bad' } : taken ? { say: `같은 키의 ${SMR_VALUE[d.kind]}이 있음`, tone: 'bad' } : { say: '키 사용 가능', tone: 'ok' });
+      out.push(!d.name ? { say: '키 입력 필요', tone: 'warn' } : !IDENT.test(d.name) ? { say: '키는 영문자로 시작하고 영문자 · 숫자 · _ 만 사용', tone: 'bad' } : taken ? { say: `같은 키의 ${SMR_VALUE[d.kind]}${josa(SMR_VALUE[d.kind], '이', '가')} 있음`, tone: 'bad' } : { say: '키 사용 가능', tone: 'ok' });
     }
     if (d.kind === 'parameter') {
-      const num = ['integer', 'decimal', 'number'].includes(d.type), val = Number(d.value), has = (y) => y !== '' && y !== null && y !== undefined;
-      const ax = ((S.sem.st.parameters || []).find((p) => p.name === d.name) || {}).axiom;
-      if (!has(d.value)) out.push({ say: '값 입력 필요', tone: 'warn' });
+      const num = SMR_NUM.includes(d.type), val = Number(d.value), has = (y) => y !== '' && y !== null && y !== undefined;
+      const ax = ((smrSem().parameters || []).find((p) => p.name === d.name) || {}).axiom;
+      const range = num ? ['min', 'max'].filter((k) => has(d[k]) && Number.isNaN(Number(d[k]))) : [];
+      if (range.length) out.push({ say: `허용 범위 ${range.map((k) => (k === 'min' ? '최솟값' : '최댓값')).join(' · ')}은 숫자`, tone: 'bad' });
+      if (!has(d.value)) out.push({ say: d.type === 'boolean' ? '값 선택 필요' : '값 입력 필요', tone: 'warn' });
+      else if (d.type === 'boolean' && !['true', 'false'].includes(String(d.value))) out.push({ say: '값 선택 필요', sub: '예 또는 아니요', tone: 'bad' });
       else if (num && Number.isNaN(val)) out.push({ say: '값은 숫자여야 함', tone: 'bad' });
-      else if (num) {
+      else if (num && d.type === 'integer' && !Number.isInteger(val)) out.push({ say: '값은 정수여야 함', tone: 'bad' });
+      else if (num && !range.length) {
         const low = has(d.min) && val < Number(d.min), high = has(d.max) && val > Number(d.max);
         out.push(low || high ? { say: `허용 범위 밖 · ${low ? `${d.min} 이상` : `${d.max} 이하`} 필요`, tone: 'bad' } : { say: '허용 범위 안', tone: 'ok' });
         if (ax) { const under = has(ax.min) && val < ax.min, over = has(ax.max) && val > ax.max; out.push(under || over ? { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 ${under ? `하한 ${ax.min}` : `상한 ${ax.max}`}을 벗어남`, tone: 'bad' } : { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 범위 안`, tone: 'ok' }); }
@@ -644,16 +693,58 @@
       const readers = v ? v.x.readers || [] : [];
       if (readers.length) out.push({ say: `참조 규칙 ${readers.length}개`, sub: readers.slice(0, 3).join(' · '), tone: 'note' });
     }
-    if (d.kind === 'metric' && !d.raw) out.push(d.object ? { say: `대상 ${mgLabel(d.object)} · ${(AGG_WORD.find((a) => a[0] === d.fn) || [0, d.fn])[1]}`, tone: 'ok' } : { say: '대상 Entity 선택 필요', tone: 'warn' });
-    if (d.kind === 'function') out.push({ expr: d.expr, decision: d.decision, query: d.query, python: d.entry, http: d.url }[d.runtime] ? { say: '실행 내용 입력됨', tone: 'ok' } : { say: '실행 내용 입력 필요', tone: 'warn' });
+    if (d.kind === 'metric') {  // what the definition check refuses, said before the save
+      if (!d.raw) out.push(d.object ? { say: `대상 ${mgLabel(d.object)} · ${(AGG_WORD.find((a) => a[0] === d.fn) || [0, d.fn])[1]}`, tone: 'ok' } : { say: '대상 Entity 선택 필요', tone: 'warn' });
+      if (!String(d.owner || '').trim()) out.push({ say: '담당자 입력 필요', tone: 'bad' });
+      if (!String(d.basis || '').trim()) out.push({ say: '기준 시각 입력 필요', tone: 'bad' });
+      if (!d.raw) {
+        [...d.where, ...(d.ratio ? d.den : [])].forEach((r) => {
+          const p = mgProps(d.object).find((y) => y.name === r.property), v = String(r.value ?? '').trim();
+          if (!p || ['not_null', 'is_null'].includes(r.op)) return;
+          const set = p.type === 'boolean' ? ['true', 'false'] : (p.values || []).map(String);
+          const wrong = !v ? '' : set.length ? (set.includes(v) ? '' : v) : SMR_NUM.includes(p.type) && Number.isNaN(Number(v)) ? v : '';
+          if (!v) out.push({ say: `${p.label || p.name} 조건 값 입력 필요`, tone: 'bad' });
+          else if (wrong) out.push({ say: `${p.label || p.name} 조건 값 · ${wrong}`, sub: set.length ? `허용값 ${(p.values || []).map((y) => (p.labels || {})[y] || y).join(', ') || '예, 아니요'}` : '숫자', tone: 'bad' });
+        });
+      }
+    }
+    if (d.kind === 'function') {
+      out.push(smrFnBody(d) ? { say: '실행 내용 입력됨', tone: 'ok' } : { say: '실행 내용 입력 필요', tone: 'warn' });
+      // what the definition check refuses, said before the save
+      const outs = d.fout.filter((p) => String(p.name || '').trim()).length, t = d.runtime === 'decision' ? smrTable(d.decision) : null;
+      if (d.runtime === 'expr' && !d.target) out.push({ say: '계산식 함수의 대상 Entity 선택 필요', tone: 'bad' });
+      if (d.runtime === 'expr' && outs !== 1) out.push({ say: `계산식 함수의 출력값 1개 필요 · 현재 ${outs}개`, tone: 'bad' });
+      if (t && d.target && t.target && t.target !== d.target) out.push({ say: `대상 Entity와 결정표 ${t.label}의 대상 ${mgLabel(t.target)}${josa(mgLabel(t.target), '이', '가')} 다름`, tone: 'bad' });
+      if (!SMR_VERSION.test(String(d.version || '').trim())) out.push({ say: '버전은 1.0.0 형식', tone: 'bad' });
+      d.fin.forEach((p) => { const { drop } = smrInputSpec(p); if (drop.length) out.push({ say: `입력값 ${p.label || p.name} 자료형 변경 · ${drop.map((k) => SMR_INPUT_WORD[k]).join(' · ')} 제외`, tone: 'warn' }); });
+    }
     out.push(String(d.label || '').trim() ? { say: '이름 입력됨', tone: 'ok' } : { say: '이름 입력 필요', tone: 'warn' });
     return out;
+  }
+
+  // what else a function's input says (required, default, min, max, values) stays when its type changes, where it still
+  // reads as the new type; what does not is named in the checks before the save
+  const SMR_INPUT_WORD = { default: '기본값', min: '최솟값', max: '최댓값', values: '허용값' };
+  const smrFits = (type, v) => (v === '' || v === null || v === undefined || typeof v === 'boolean' || typeof v === 'object' ? type === 'boolean' && typeof v === 'boolean'
+    : type === 'integer' ? Number.isInteger(Number(v)) : SMR_NUM.includes(type) ? !Number.isNaN(Number(v))
+      : ['date', 'datetime'].includes(type) ? /^\d{4}-\d{2}-\d{2}/.test(String(v)) : type === 'string' && typeof v === 'string');
+  function smrInputSpec(p) {
+    const was = p.spec && typeof p.spec === 'object' ? p.spec : {}, type = p.type || 'string', same = (was.type || 'string') === type, keep = {}, drop = [];
+    Object.entries(was).forEach(([k, v]) => {
+      if (k === 'type' || k === 'label') return;
+      if (same || !SMR_INPUT_WORD[k]) { keep[k] = v; return; }
+      const ranged = ['min', 'max'].includes(k) && ![...SMR_NUM, 'date', 'datetime'].includes(type);
+      if (ranged || !(k === 'values' ? Array.isArray(v) && v.every((y) => smrFits(type, y)) : smrFits(type, v))) { drop.push(k); return; }
+      keep[k] = SMR_NUM.includes(type) ? (k === 'values' ? v.map(Number) : Number(v)) : v;
+    });
+    return { spec: { ...keep, type, label: p.label || p.name }, drop };
   }
 
   function smrValueValid(d) {
     if (!String(d.name || '').trim()) return '키가 비어 있어 저장하지 못했습니다. 키를 입력해 주세요.';
     if (!String(d.label || '').trim()) return '이름이 비어 있어 저장하지 못했습니다. 이름을 입력해 주세요.';
     if (d.kind === 'parameter' && (d.value === '' || d.value === null || d.value === undefined)) return '값이 비어 있어 저장하지 못했습니다. 값을 입력해 주세요.';
+    if (d.kind === 'function' && !smrFnBody(d)) return '실행 내용이 비어 있어 저장하지 못했습니다. 실행 내용을 입력해 주세요.';
     return '';
   }
 
@@ -671,7 +762,7 @@
       }
       op = v ? 'update_metric' : 'add_metric';
     } else if (d.kind === 'function') {
-      const inputs = Object.fromEntries(d.fin.filter((p) => p.name).map((p) => [p.name, { type: p.type || 'string', label: p.label || p.name }]));
+      const inputs = Object.fromEntries(d.fin.filter((p) => p.name).map((p) => [p.name, smrInputSpec(p).spec]));
       const outputs = Object.fromEntries(d.fout.filter((p) => p.name).map((p) => [p.name, p.type || 'string']));
       const by = { expr: { expr: d.expr }, decision: { decision: d.decision }, query: { query: d.query }, python: { entry: d.entry }, http: { call: { ...(d.call || {}), url: d.url, method: d.method, ...(d.path ? { path: d.path } : {}) } } }[d.runtime] || {};
       args = { name, label: d.label, runtime: d.runtime, target: d.target || '', inputs, outputs, version: d.version, owner: d.owner || '', status: d.status, description: d.description || '', cite: d.cite || '',
@@ -687,8 +778,39 @@
     return { element: `${d.kind}:${name}` };
   }
 
+  // a function's history in the words of its form: 이름, 입력값 · 수수료율 소수 · 필수 · 기본값 0
+  const SMR_FN_WORD = { label: '이름', runtime: '실행 방식', target: '대상 Entity', expr: '값 · 산식', decision: '결정표', query: '등록 질의', entry: '등록 이름', inputs: '입력값', outputs: '출력값',
+    version: '버전', owner: '담당자', status: '상태', depends: '외부 의존', description: '설명', cite: '근거 자료 · 절', call: '호출', 'call.url': '호출 주소', 'call.method': '방식', 'call.path': '응답 경로' };
+  const smrPlain = (v) => (typeof v === 'boolean' ? yesNo(v) : v);
+  function smrFnField(field, v) {
+    const [head, ...rest] = String(field).split('.'), sub = rest.join('.');
+    if (head === 'inputs' && sub) {
+      const s = typeof v === 'string' ? { type: v } : v || {};
+      const range = s.min !== undefined || s.max !== undefined ? `${s.min ?? ''}~${s.max ?? ''}` : '';
+      return [`입력값 · ${s.label || sub}`, v === null || v === undefined ? v : [TYPE_WORD[s.type] || s.type, s.required ? '필수' : '', s.default !== undefined ? `기본값 ${smrPlain(s.default)}` : '', range ? `범위 ${range}` : '', (s.values || []).length ? `허용값 ${s.values.join(', ')}` : ''].filter(Boolean).join(' · ')];
+    }
+    if (head === 'outputs' && sub) return [`출력값 · ${sub}`, TYPE_WORD[v] || v];
+    const word = SMR_FN_WORD[field] || (sub ? `${SMR_FN_WORD[head] || head} · ${sub}` : field);
+    if (v === null || v === undefined || v === '') return [word, v];
+    if (field === 'runtime') return [word, (RUNTIME.find((y) => y[0] === v) || [v, v])[1]];
+    if (field === 'status') return [word, (FN_STATUS.find((y) => y[0] === v) || [v, v])[1]];
+    if (field === 'target') return [word, mgLabel(v)];
+    return [word, Array.isArray(v) ? v.join(', ') : smrPlain(v)];
+  }
+  async function smrFnHistory(v) {
+    const r = await api(`item/history?element=${encodeURIComponent(`function:${v.name}`)}`);
+    const WORD = { added: '추가', changed: '변경', removed: '삭제' };
+    const one = (d) => Object.entries(d || {}).flatMap(([k, x]) => (['inputs', 'outputs', 'call'].includes(k) && x && typeof x === 'object' && !Array.isArray(x) ? Object.entries(x).map(([y, z]) => [`${k}.${y}`, z]) : [[k, x]]));
+    return r.entries.map((e) => ({ ver: e.version ? `v${e.version}` : '', mark: e.status_label, cp: e.change, at: e.at, who: e.by, deployed: e.deployed,
+      say: (e.notes || []).map((n) => n.text).join(' · ') || e.reason || `함수 ${WORD[e.kind] || '변경'}`,
+      rows: e.fields.map((f) => ({ label: smrFnField(f.field, f.before ?? f.after)[0], before: smrFnField(f.field, f.before)[1], after: smrFnField(f.field, f.after)[1] })),
+      all: one(e.after || e.before).map(([k, x]) => { const [label, value] = smrFnField(k, x); return { label, value }; }) }));
+  }
+
+  // the screens of a named value, a metric or a function are called by the kind they show: 지표 추가 · 편집
+  const smrValueWord = () => { const id = itemParam('id'); return SMR_VALUE[id ? id.split(':')[0] : S.smr.newKind] || SMR_VALUE.parameter; };
   item('param', {
-    word: '기준값 · 지표 · 함수', under: 'semrules', list: 'semrules',
+    get word() { return smrValueWord(); }, under: 'semrules', list: 'semrules',
     load: smrLoadItem,
     find: smrValueOf,
     code: (v) => (v.kind === 'parameter' ? `@${v.name}` : v.name), name: (v) => v.x.label,
@@ -699,18 +821,33 @@
       const readers = v.kind === 'parameter' ? v.x.readers || [] : [];
       return readers.length ? [{ say: `규칙 · 계산 ${readers.length}개`, sub: `${readers.slice(0, 3).join(', ')}${readers.length > 3 ? ` 외 ${readers.length - 3}` : ''} · 참조 조건 변경 후 삭제 가능`, href: 'semrules' }] : [];
     },
-    history: (v) => (v.kind === 'function' ? itemHistoryOf(ITEM.param, v) : smrHistory(v.kind, v.name, SMR_VALUE[v.kind])),
-    remove: async (v) => { smrEdited(await api('manage/edit', { op: `delete_${v.kind}`, args: { name: v.name } })); },
+    history: (v) => (v.kind === 'function' ? smrFnHistory(v) : smrHistory(v.kind, v.name, SMR_VALUE[v.kind])),
+    remove: async (v) => {
+      const readers = v.kind === 'parameter' ? v.x.readers || [] : [];
+      if (readers.length) throw new Error(`규칙 · 계산 ${readers.length}개가 읽고 있어 삭제를 요청하지 못했습니다. 사용처의 참조를 바꾼 뒤 다시 요청해 주세요.`);
+      smrEdited(await api('manage/edit', { op: `delete_${v.kind}`, args: { name: v.name } }));
+    },
   });
+  [['form', '추가 · 편집'], ['delete', '삭제'], ['history', '이력']].forEach(([what, tail]) => Object.defineProperty(V2[`param-${what}`], 'word', { get: () => `${smrValueWord()} ${tail}` }));
 
   // ---- what is pressed and typed ------------------------------------------------------------------------------------
+
+  // a choice made from the keyboard keeps the focus on its button once the screen is drawn again
+  function smrRepaint(t) {
+    const on = t && t.tagName === 'BUTTON' && document.activeElement === t;
+    render();
+    if (!on) return;
+    const key = ['ref', 'id', 'k'].find((k) => t.dataset[k] !== undefined);
+    const b = $(`button[data-act="${t.dataset.act}"]${key ? `[data-${key}="${CSS.escape(t.dataset[key])}"]` : ''}`);
+    if (b) b.focus({ preventScroll: true });
+  }
 
   let smrTimer = 0;
   Object.assign(ACT, {
     smrRetry: () => { S.smr.err = ''; if (S.sem.st && S.sem.st.error) S.sem.st = null; if (S.mg.st && S.mg.st.error) S.mg.st = null; render(); },
-    smrPick: (t) => { S.smr.sel = t.dataset.ref; render(); },
-    smrPickValue: (t) => { S.smr.psel = t.dataset.id; render(); },
-    smrLayer: (t) => { S.smr.layer = S.smr.layer === t.dataset.k ? '' : t.dataset.k; S.smr.more = 40; render(); },
+    smrPick: (t) => { S.smr.sel = t.dataset.ref; smrRepaint(t); },
+    smrPickValue: (t) => { S.smr.psel = t.dataset.id; smrRepaint(t); },
+    smrLayer: (t) => { S.smr.layer = S.smr.layer === t.dataset.k ? '' : t.dataset.k; S.smr.more = 40; smrRepaint(t); },
     smrMore: (t) => { const k = t.dataset.k; S.smr[k] += { pmore: 30, drMore: 24 }[k] || 40; render(); },
     smrEdges: () => { S.smr.edges = !S.smr.edges; const b = $('#smr-tests'); if (b) b.innerHTML = smrTests(); },
     smrRerun: async () => {
@@ -728,8 +865,8 @@
     smrParamDrop: (t) => { const d = S.it.d; if (!d) return; d.params = d.params.filter((y) => y.name !== t.dataset.name); render(); },
     smrRowAdd: (t) => { const d = S.it.d; if (!d) return; d[t.dataset.list].push(t.dataset.list === 'fin' ? { name: '', label: '', type: 'string' } : t.dataset.list === 'fout' ? { name: '', type: 'decimal' } : { property: (mgProps(d.object)[0] || {}).name || '', op: 'eq', value: '' }); render(); },
     smrRowDel: (t) => { const d = S.it.d; if (!d) return; d[t.dataset.list].splice(Number(t.dataset.i), 1); render(); },
-    smrDrTab: (t) => { Object.assign(S.smr, { drTab: t.dataset.k, drSel: '', drEdit: null, drMore: 12 }); render(); },
-    smrDrPick: (t) => { S.smr.drSel = t.dataset.ref; S.smr.drEdit = null; render(); },
+    smrDrTab: (t) => { Object.assign(S.smr, { drTab: t.dataset.k, drSel: '', drEdit: null, drMore: 12 }); smrRepaint(t); },
+    smrDrPick: (t) => { S.smr.drSel = t.dataset.ref; S.smr.drEdit = null; smrRepaint(t); },
     smrDrDecide: async (t) => {
       const x = S.smr, r = x.dr.drafts.find((y) => y.ref === x.drSel), how = t.dataset.v;
       if (!r || x.drBusy) return;
@@ -787,8 +924,9 @@
         const out = await api('module/propose', { text: r.yaml, apply: true });
         S.pol.res = null; S.ed = null; S.changes = null;
         S.st = await api('state');
-        x.genNote = `결정표 ${r.label || r.decision}을 변경 요청 ${out.change.id}로 등록했습니다.`;
-        toast(out.change.passed ? `변경 요청 ${out.change.id}을(를) 등록했습니다.` : `변경 요청 ${out.change.id}을(를) 등록했습니다. 미통과 조건을 확인해 주세요.`, !out.change.passed);
+        const word = r.label || r.decision, id = out.change.id;
+        x.genNote = `결정표 ${word}${josa(word, '을', '를')} 변경 요청 ${id}${josa(id, '으로', '로')} 등록했습니다.`;
+        toast(`변경 요청 ${id}${josa(id, '을', '를')} ${out.change.passed ? '' : '미통과 상태로 '}등록했습니다.`, !out.change.passed);
       } catch (e) { fail(e); }
       x.drBusy = false; render();
     },
@@ -804,6 +942,8 @@
       if (!Object.keys(x.vals).length && x.res) x.res.inputs.forEach((i) => { if (i.value !== null && i.value !== undefined) x.vals[i.name] = String(i.value); });  // a record's values stay as the start
       x.vals[t.dataset.k] = t.value;
       x.key = '';
+      const rec = $('[data-in=smrKey]');
+      if (rec) rec.value = '';  // the values are typed now, not a record's
       clearTimeout(smrTimer);
       smrTimer = setTimeout(smrRun, t.tagName === 'SELECT' ? 0 : 350);
     },
@@ -844,5 +984,14 @@
       const box = $('#itchecks');
       if (box) box.innerHTML = itemChecks(ITEM.rule, S.it);
     },
-    smrRow: (t) => { const d = S.it.d; if (d && d[t.dataset.list][Number(t.dataset.i)]) d[t.dataset.list][Number(t.dataset.i)][t.dataset.f] = t.value; },
+    smrRow: (t) => {
+      const d = S.it.d, row = d && d[t.dataset.list][Number(t.dataset.i)];
+      if (!row) return;
+      row[t.dataset.f] = t.value;
+      if (t.dataset.f === 'property') { row.value = ''; render(); return; }  // the value is one the new Property takes
+      const box = $('#itchecks');
+      if (box) box.innerHTML = itemChecks(ITEM.param, S.it);
+    },
+    // another table: the conditions and results written for the last one go with it
+    smrDecision: (t) => { const d = S.it.d; if (!d) return; Object.assign(d, { decision: t.value, when: {}, then: {} }); render(); },
   });

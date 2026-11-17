@@ -566,8 +566,9 @@ class ChangeService:
         self.journal = journal
 
     def _now(self) -> str:
-        now = self.studio.now()
-        return (now if isinstance(now, datetime) else datetime.now()).isoformat(timespec="seconds")
+        # when a person asked, decided or commented: the machine's clock. The studio's clock is the date the rules read,
+        # and an example studio fixes it, so every request stamped by it would carry the same minute
+        return datetime.now().isoformat(timespec="seconds")
 
     def _library(self):
         lib = self.store if self.store is not None else self.studio.library

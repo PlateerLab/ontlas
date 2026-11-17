@@ -87,8 +87,52 @@ def test_a_query_being_written_is_read_into_every_language_and_nothing_is_run(se
     phone = post(session, "bnd/query/check", query={"match": {"c": "Customer"}, "return": ["c.customer_id", "c.phone"]})
     assert phone["masked"] == ["고객 · 연락처"]  # what an access policy would hide is said before it is saved
     bad = post(session, "bnd/query/check", query={"match": {"x": "Nope"}, "return": ["x.a"]})
-    assert not bad["ok"] and not any(t["ok"] for t in bad["translations"]) and "Nope" in bad["translations"][0]["error"]
-    assert not post(session, "bnd/query/check", query="not a query")["ok"]
+    assert not bad["ok"] and not any(t["ok"] for t in bad["translations"]) and bad["translations"][0]["error"] == "Entity 없음 · Nope"
+    lost = post(session, "bnd/query/check", query={"match": {"c": "Customer"}, "return": ["c.nope"]})
+    assert {t["error"] for t in lost["translations"]} == {"Property 없음 · Customer.nope"}  # the compiler's own words are not shown
+    wrong = post(session, "bnd/query/check", query="not a query")
+    assert not wrong["ok"] and wrong["error"] == "질의 정의 형식 오류"
+
+
+def test_a_value_a_compiler_lifts_out_of_the_query_is_not_an_input(session):
+    # Order.total is computed; one store's language carries a number of its formula as a value of its own
+    out = post(session, "bnd/query/check", query={"match": {"x": "OrderItem", "y": "Order"}, "edges": [["y", "hasItem", "x"]],
+                                                  "where": {"eq": ["x.item_status", {"param": "status"}]}, "return": ["x.item_id", "y.total"]})
+    assert out["ok"] and out["params"] == ["status"]
+
+
+def test_a_query_not_yet_deployed_runs_on_the_values_given(session):
+    assert NEEDS["bnd/query/run"] == "viewer"
+    session.manage_edit("new_query", {"name": "itemsByStatus", "label": "상태별 주문상품", "query": BY_STATUS})
+    out = post(session, "bnd/query/run", query=BY_STATUS, params={"status": "RETURNED"})
+    assert out["ok"] and out["params"] == {"status": "RETURNED"} and out["results"]
+    res = out["results"][0]
+    assert res["ok"] and res["rows"] and all(r[res["columns"].index("item_status")] == "RETURNED" for r in res["rows"])
+    empty = post(session, "bnd/query/run", query=BY_STATUS, params={"status": ""})  # an input left empty is not given
+    assert empty["params"] == {} and not all(r["ok"] for r in empty["results"])
+    with pytest.raises(ValueError, match="질의 정의가 없어"):
+        post(session, "bnd/query/run", query="nope")
+
+
+def test_the_check_is_of_the_definition_as_the_edits_leave_it(session):
+    assert NEEDS["bnd/check"] == "viewer"
+    clean = post(session, "bnd/check")
+    assert clean["ok"] is not None and not clean["pending"] and clean["checked"]["columns"] > 0
+    assert not any(f["element"] == "property:Customer.phone" for f in clean["findings"])
+    session.manage_edit("update_property", {"object": "Customer", "name": "phone", "column": "phone_no"})
+    out = post(session, "bnd/check")
+    assert out["pending"] and any(f["element"] == "property:Customer.phone" and f["kind"] == "column" for f in out["findings"])
+
+
+def test_the_check_reads_the_properties_taken_from_the_parent_and_says_each_in_words(session):
+    # Customer takes name and phone from Party and reads them from its own table: a table without them misses all three
+    session.manage_edit("update_object", {"name": "Customer", "table": "wishlists"})
+    out = post(session, "bnd/check")
+    lost = sorted(f["element"] for f in out["findings"] if f["kind"] == "column" and f["element"].startswith("property:Customer."))
+    assert lost == ["property:Customer.grade", "property:Customer.name", "property:Customer.phone"] and not out["ok"]
+    said = {f["element"]: f["detail"] for f in out["findings"]}
+    assert said["property:Customer.name"] == "wishlists.name 컬럼 없음"
+    assert not any("does not exist" in f["detail"] for f in out["findings"])
 
 
 def test_each_property_is_listed_with_the_column_it_is_read_from(session):

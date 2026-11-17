@@ -22,7 +22,7 @@ def _rows(s, name: str, sides: dict[str, list], states_only: bool) -> tuple[str,
         for f in s._field_diff(f"object:{name}", before, after):
             if states_only and not str(f["field"]).startswith("states"):
                 continue
-            rows.append({"label": f["label"], "before": f["before"], "after": f["after"]})
+            rows.append({"field": f["field"], "label": f["label"], "before": f["before"], "after": f["after"]})
     if states_only:
         return kind, rows
     for el, (before, after) in sorted(sides.items()):
@@ -59,7 +59,7 @@ def history(s, a, who) -> dict:
 
     name, kind = str(a.get("name") or ""), str(a.get("kind") or "entity")
     if not name or kind not in ("entity", "state"):
-        raise ValueError("Entity 이름이 없어 이력을 찾지 못했습니다.")
+        raise ValueError("Entity 이름이 없어 이력을 찾지 못했습니다. Entity를 선택한 뒤 다시 열어 주세요.")
     states_only = kind == "state"
 
     def entry(sides: dict, **about: Any) -> dict | None:

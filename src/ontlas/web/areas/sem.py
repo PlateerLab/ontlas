@@ -7,6 +7,7 @@ own module, so it is shown and not decided here.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ontlas.web.routes import get, post
@@ -21,6 +22,10 @@ VALUE_WORD = {"label": "이름", "value": "값", "type": "자료형", "unit": "�
               "params": "입력값"}
 STATUS_WORD = {"pending": "검토 중", "approved": "배포", "rejected": "반려"}
 SECTIONS = {"card": ("rule_cards", CARD_WORD), "parameter": ("parameters", VALUE_WORD), "metric": ("metrics", VALUE_WORD)}
+TYPE_WORD = {"integer": "정수", "decimal": "소수", "number": "숫자", "float": "소수", "string": "문자열", "boolean": "참 · 거짓",
+             "date": "날짜", "datetime": "일시"}
+AGG_WORD = {"count": "건수", "sum": "합계", "avg": "평균", "min": "최솟값", "max": "최댓값"}
+OP_WORD = {"eq": "같음", "ne": "다름", "lt": "미만", "lte": "이하", "gt": "초과", "gte": "이상", "not_null": "값 있음", "is_null": "값 없음"}
 
 
 # ---- the rules that wait ----------------------------------------------------------------------------------------
@@ -160,8 +165,8 @@ def decide(s, a, who) -> dict:
 # ---- how a rule card or a named value came to read as it does ------------------------------------------------------
 
 def _given(module, section: str, name: str) -> dict | None:
-    """What one version of a module says of an entry: its fields, the fields it gives another module's entry, or that it
-    takes the entry out. None where it says nothing of it."""
+    """What one version of a module says of an entry: its fields (marked _own where it defines the entry), the fields it
+    gives another module's entry, or that it takes the entry out. None where it says nothing of it."""
     if module is None:
         return None
     if name in (module.remove.get(section) or []):
@@ -173,17 +178,111 @@ def _given(module, section: str, name: str) -> dict | None:
         own = (held or {}).get(name)
         own = None if own is None else dict(own) if isinstance(own, dict) else {"value": own}
     if own is not None:
-        return own
+        return {**own, "_own": True}
     patch = (module.extend.get(section) or {}).get(name)
     if patch is None:
         return None
     return dict(patch) if isinstance(patch, dict) else {"value": patch}
 
 
-def _rows(before: dict | None, after: dict | None, words: dict) -> list[dict]:
+def _plain(v: Any) -> Any:
+    if isinstance(v, bool):
+        return "예" if v else "아니요"
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    return v
+
+
+def _prop_word(onto, entity: str, prop: str) -> str:
+    from ontlas.check import _find_prop
+
+    t = onto.objects.get(entity)
+    head = (t.label or t.name) if t is not None else entity
+    if not prop:
+        return head
+    p = _find_prop(onto, entity, prop) if t is not None else None
+    return f"{head} · {(p.label or prop) if p is not None else prop}"
+
+
+def _ref_word(onto, ref: str) -> str:
+    from ontlas.semantic import _ref
+
+    kind, _, name = str(ref).partition(":")
+    if kind == "area":
+        a = onto.areas.get(name)
+        return f"Object {(a.label or a.name) if a is not None else name}"
+    return _ref(onto, str(ref))["label"]
+
+
+def _formula_word(onto, f: dict, base: Any = None) -> str:
+    """A metric's formula or denominator as a person reads it: 주문상품 건수 · 조건 주문상품 · 상태 같음 RETURNED. A
+    denominator reads the formula's names."""
+    match = f.get("match") or (base.get("match") if isinstance(base, dict) else None) or {}
+
+    def prop(ref: Any) -> str:
+        alias, _, p = str(ref).partition(".")
+        return _prop_word(onto, str(match.get(alias, alias)), p)
+
+    value = f.get("value") or {}
+    fn = next(iter(value), "")
+    out = [f"{prop(value[fn])} {AGG_WORD.get(fn, fn)}"] if fn else []
+    where = f.get("where")
+    for c in (where.get("and") if isinstance(where, dict) and "and" in where else [where] if where else []):
+        op, arg = next(iter(c.items())) if isinstance(c, dict) and len(c) == 1 else ("", None)
+        if op in ("not_null", "is_null"):
+            out.append(f"조건 {prop(arg)} {OP_WORD[op]}")
+        elif op in OP_WORD and isinstance(arg, list) and len(arg) == 2:
+            out.append(f"조건 {prop(arg[0])} {OP_WORD[op]} {_plain(arg[1])}")
+        else:
+            out.append(f"조건 {_plain(c)}")
+    if f.get("edges"):
+        out.append(f"경유 Relation {len(f['edges'])}개")
+    if f.get("label"):
+        out.append(str(f["label"]))
+    return " · ".join(out)
+
+
+def _said(onto, section: str, field: str, v: Any, entry: dict) -> Any:
+    """A value of a change as a person reads it: the word for a code, the name of what a reference points at."""
+    from ontlas.semantic import CARD_STATUS, CARD_TYPES, LAYER_LABEL, LEGAL_REVIEW
+
+    if onto is None or v is None or v == "" or v == [] or v == {}:
+        return v
+    words = {"status": CARD_STATUS, "legal_review": LEGAL_REVIEW, "layer": LAYER_LABEL,
+             "type": CARD_TYPES if section == "rule_cards" else TYPE_WORD}.get(field)
+    if words is not None and isinstance(v, str):
+        return words.get(v, v)
+    if field in ("applies_to", "implements") and isinstance(v, list):
+        return ", ".join(_ref_word(onto, r) for r in v)
+    if field in ("conditions", "exceptions") and isinstance(v, list):
+        return "; ".join(str(x) for x in v)
+    if field == "params" and isinstance(v, dict):
+        return " · ".join(f"@{k} {_plain(x)}" for k, x in v.items())
+    if field in ("formula", "denominator") and isinstance(v, dict):
+        return _formula_word(onto, v, entry.get("formula"))
+    if field == "time" and isinstance(v, dict):
+        alias, _, p = str(v.get("property") or "").partition(".")
+        match = (entry["formula"].get("match") or {}) if isinstance(entry.get("formula"), dict) else {}
+        return " · ".join(str(x) for x in (v.get("basis"), _prop_word(onto, str(match.get(alias, alias)), p) if p else "") if x)
+    if field == "check" and isinstance(v, dict):
+        what = f"@{v['parameter']}" if v.get("parameter") else _prop_word(onto, *(str(v.get("property") or "").split(".", 1) + [""])[:2])
+        bound = [f"{v['min']} 이상" if v.get("min") is not None else "", f"{v['max']} 이하" if v.get("max") is not None else ""]
+        return " ".join([what, " · ".join(x for x in bound if x)]).strip()
+    return _plain(v)
+
+
+def _rows(before: dict | None, after: dict | None, words: dict, onto, section: str, held: dict | None = None) -> list[dict]:
+    """What differs, field by field, in words; `held` is the entry as the definition reads it, for the names a part
+    given alone does not carry (the Entity a metric's time Property is on)."""
     a, b = before or {}, after or {}
     keys = [k for k in dict.fromkeys([*a, *b]) if not k.startswith("_") and a.get(k) != b.get(k)]
-    return [{"field": k, "label": words.get(k, k), "before": a.get(k), "after": b.get(k)} for k in keys]
+    return [{"field": k, "label": words.get(k, k), "before": _said(onto, section, k, a.get(k), {**(held or {}), **a}),
+             "after": _said(onto, section, k, b.get(k), {**(held or {}), **b})} for k in keys]
+
+
+def _all(entry: dict | None, words: dict, onto, section: str, held: dict | None = None) -> dict:
+    e = {**(held or {}), **(entry or {})}
+    return {words.get(k, k): _said(onto, section, k, v, e) for k, v in (entry or {}).items() if not k.startswith("_")}
 
 
 def _composed(comp, onto, section: str, name: str) -> dict | None:
@@ -230,6 +329,7 @@ def history(s, a, who) -> dict:
     st = s.studio
     lib = st.changes.store or st.library
     entries = []
+    held = _composed(st.composition, st.onto, section, name) if st.composition is not None else None
     for cr in st.changes.requests.values():
         try:
             after = _given(Module.from_dict(yaml.safe_load(cr.text)), section, name)
@@ -242,13 +342,14 @@ def history(s, a, who) -> dict:
             before = None
         if after == before:
             continue
-        gone = bool(after and after.get("_removed"))
+        # taken out: said so, or no longer written in the module that defined it
+        gone = bool(after and after.get("_removed")) or (after is None and bool(before and before.get("_own")))
         entries.append({"change": cr.id, "version": cr.version, "module_label": s._change_label(cr), "status": cr.status,
                         "status_label": STATUS_WORD.get(cr.status, cr.status), "at": cr.decided_at or cr.at, "by": cr.requested_by,
                         "reason": cr.reason, "deployed": cr.status == "approved",
                         "kind": "removed" if gone else "added" if before is None else "changed",
-                        "fields": _rows(before, None if gone else after, words),
-                        "all": {} if gone else {words.get(k, k): v for k, v in (after or {}).items() if not k.startswith("_")}})
+                        "fields": _rows(before, None if gone else after, words, st.onto, section, held),
+                        "all": {} if gone else _all(after, words, st.onto, section, held)})
     entries.reverse()
     comp = st.composition
     if comp is not None:
@@ -257,20 +358,41 @@ def history(s, a, who) -> dict:
             try:
                 pending = ws.composed()
                 was, now = _composed(comp, st.onto, section, name), _composed(pending, pending.ontology, section, name)
+                said = pending.ontology
             except Exception:
-                was = now = None
+                was = now = said = None
             if was != now:
                 entries.insert(0, {"change": "", "version": "", "module_label": "", "status": "draft", "status_label": "작성 중",
                                    "at": "", "by": s.who, "reason": "", "deployed": False,
                                    "kind": "removed" if now is None else "added" if was is None else "changed",
-                                   "fields": _rows(was, now, words),
-                                   "all": {words.get(k, k): v for k, v in (now or {}).items()}})
+                                   "fields": _rows(was, now, words, said, section),
+                                   "all": _all(now, words, said, section)})
     _file_notes(entries, s._notes().get(f"{'rule_card' if kind == 'card' else kind}:{name}", []))
-    return {"kind": kind, "name": name, "now": _composed(comp, st.onto, section, name) if comp is not None else None,
-            "entries": entries}
+    return {"kind": kind, "name": name, "now": held, "entries": entries}
 
 
 AXIOM_CARD_FIELDS = ("type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner", "status")
+
+
+def _propose(s, body: dict) -> dict:
+    """Propose a module the server wrote from the library's own copy, as a module a person sends is proposed. It is
+    not a pasted file, so it is not held to a pasted file's size: the AXIOM module of a whole law runs past 48KB."""
+    from ontlas.modules import Module
+    from ontlas.web.api import _next_version
+
+    m = Module.from_dict(body)
+    issues = s._module_issues(m)
+    if issues:
+        raise ValueError("정의 검사에서 오류가 발견되어 변경을 요청하지 못했습니다. " + "; ".join(issues[:5]))
+    lib = s.studio.changes.store or s.studio.library
+    if m.version in lib.versions(m.name):
+        if {**lib.get(m.name).to_dict(), "version": ""} == {**m.to_dict(), "version": ""}:
+            raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
+        m.version = _next_version(lib.versions(m.name))
+    cr = s.studio.changes.propose(m, by=s.who)
+    state = "흐름 통과 조건을 모두 충족합니다" if cr.review.get("passed") else "흐름 통과 조건을 충족하지 못했습니다"
+    s._note("change", f"{m.label or m.name} {m.version} 변경을 요청했습니다. {state}.")
+    return s._change(cr)
 
 
 @post("sem/axiom/card", needs="editor")
@@ -301,6 +423,5 @@ def axiom_card(s, a, who) -> dict:
                     own.pop(k, None)
                 else:
                     own[k] = fields[k]
-    out = s.propose_module(yaml.safe_dump(module, allow_unicode=True, sort_keys=False))
-    return {"ok": True, "change": out["change"], "module": card["module"]}
+    return {"ok": True, "change": _propose(s, module), "module": card["module"]}
 

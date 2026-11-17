@@ -126,6 +126,22 @@ def test_another_modules_state_machine_is_removed_by_this_module_and_says_what_w
     assert "OrderItem" in [x["object"] for x in session.manage_state()["states"]]
 
 
+def test_a_relation_written_here_says_its_source_in_the_draft_entry_before_it_is_applied(session):
+    """The Relation form reads where a Relation is said from its history: one added in the request being written is
+    not in the applied definition yet, so its source is in the unsent entry, and after approval in what stands."""
+    from ontlas.web.routes import find
+
+    history = find("GET", "item/history")
+    session.manage_edit("add_link", {"name": "qaAbout", "source": "OrderItem", "target": "Order", "cardinality": "many_to_one"})
+    session.manage_edit("update_link", {"name": "qaAbout", "cite": "검수 자료"})
+    out = history(session, {"element": "link:qaAbout"}, None)
+    assert out["now"] is None
+    draft = next(e for e in out["entries"] if e["status"] == "draft")
+    assert draft["after"]["cite"] == "검수 자료"
+    assert session.manage_propose()["ok"]
+    assert history(session, {"element": "link:qaAbout"}, None)["now"]["cite"] == "검수 자료"
+
+
 def test_taking_out_states_that_are_not_there_is_refused(session):
     with pytest.raises(ValueError):
         session.manage_edit("delete_states", {"object": "Customer"})

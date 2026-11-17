@@ -164,6 +164,29 @@ def ontologies(s, a, who) -> dict:
                   "made_max": LIBRARIES_MADE_MAX})
 
 
+@get("entry/export")
+def export(s, a, who):
+    """One ontology's definitions as a zip, read by its id: the one in use stays in use, for the person and for the team.
+    One not in use asks as much as switching to it does. The zip is the one the open ontology exports (export/library)."""
+    from types import SimpleNamespace
+
+    from ontlas.web.team import NEEDS
+
+    x = next((y for y in s.libraries if y["id"] == str(a.get("id") or "")), None)
+    if x is None:
+        raise ValueError("온톨로지를 찾지 못해 내보내지 못했습니다. 온톨로지 목록을 다시 열어 주세요.")
+    if x["id"] != s.library_id:
+        routes.require(who, NEEDS["library"])
+    studio = _held_studio(s, x)
+    if studio is None:  # not opened yet: composed from its files, as the list reads it
+        light = _light(s, x) if x.get("path") else None
+        if light is None:
+            raise ValueError("온톨로지 파일을 읽지 못해 내보내지 못했습니다. 서버의 온톨로지 파일을 확인해 주세요.")
+        studio = SimpleNamespace(onto=light[0], composition=SimpleNamespace(modules=light[1]) if light[1] else None)
+    data, name = type(s).export_library(SimpleNamespace(studio=studio, libraries=s.libraries, library_id=x["id"]))
+    return 200, data, "application/zip", name
+
+
 @post("entry/ontology/new", needs="admin")
 def ontology_new(s, a, who) -> dict:
     """An ontology made here. `start` is pack (the modules chosen from an ontology's library), base (every module an
@@ -199,16 +222,24 @@ def ontology_new(s, a, who) -> dict:
 def _decided(s) -> list[dict]:
     """What was settled: change requests approved or rejected, action requests that ran or were turned down."""
     out: list[dict] = []
+    # a person's decision is dated by the clock it was made on, as its note in 알림 is; the engine's own stamp (an example
+    # studio keeps a fixed clock) is the date only where the note is gone
+    noted: dict[tuple, str] = {}
+    for n in reversed(list(s.log)):
+        for k in ("change", "proposal"):
+            if n.get(k):
+                noted[(k, n[k])] = n["at"]
     for cr in s.studio.changes.requests.values():
         if cr.status == "pending":
             continue
         row = s._version_row(cr, None)
-        out.append({"kind": "change", "id": cr.id, "title": f"{row['module_label']} {row['from']} → {row['to']}".replace("  ", " "),
+        moved = f"{row['from']} → {row['to']}" if row["from"] else row["to"]  # a module's first version comes from none
+        out.append({"kind": "change", "id": cr.id, "title": f"{row['module_label']} {moved}",
                     "status": cr.status, "status_label": row["status_label"], "by": cr.decided_by or "",
-                    "at": row["decided_at"] or cr.at, "detail": row["summary"]})
+                    "at": noted.get(("change", cr.id)) or row["decided_at"] or cr.at, "detail": row["summary"]})
     when: dict[str, str] = {}
     for e in s.studio.actions.audit:
-        when[e.proposal] = e.at
+        when[e.proposal] = noted.get(("proposal", e.proposal)) or e.at
     for p in s.studio.actions.proposals.values():
         if p.status == "pending":
             continue

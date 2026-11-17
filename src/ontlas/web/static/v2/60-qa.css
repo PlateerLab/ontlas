@@ -22,6 +22,8 @@
 .qa-gates { margin:0; padding:6px 20px 12px; list-style:none; }
 .qa-gates li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--row); }
 .qa-gates li:last-child { border-bottom:0; }
+.qa-fails { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
+.qa-fails li { display:flex; gap:8px; align-items:baseline; min-width:0; overflow-wrap:anywhere; }
 .qa-passfoot { padding:0 20px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
 .qa-g3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
 .qa-vrow { display:grid; grid-template-columns:minmax(120px, 1.2fr) repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:center; }

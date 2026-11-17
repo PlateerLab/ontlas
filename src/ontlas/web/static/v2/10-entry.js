@@ -27,13 +27,13 @@
   // one of the states above as a block to put where the screen's content would be. kind: empty, none, forbidden,
   // admin, missing, model, no-source, error. opt: { title, say } to say it in the screen's own words, { clear } the
   // action that clears a filter (none), { acts } buttons of the screen's own as [[target, word, 'pri'?, icon?]]
-  // where a target is '#hash' or '@action'.
+  // where a target is '#hash' or '@action'; { code: '' } leaves the status code out where the screen itself exists.
   function stateBlock(kind, opt = {}) {
-    const st = ENT_STATE[kind] || ENT_STATE.missing;
+    const st = ENT_STATE[kind] || ENT_STATE.missing, code = 'code' in opt ? opt.code : st.code;
     const acts = (opt.acts || st.acts(opt)).filter(Boolean).filter(([to]) => to[0] !== '#' || known(to.slice(1).split('?')[0]));
     const btn = ([to, word, tone, icon]) => { const cls = `k-btn${tone === 'pri' ? ' pri' : ''}`, mark = icon ? ki(icon, 16, 1.75) : '';
       return to[0] === '@' ? `<button class="${cls}" type="button" data-act="${esc(to.slice(1))}">${mark}${esc(word)}</button>` : `<a class="${cls}" href="${esc(to)}">${mark}${esc(word)}</a>`; };
-    return `<section class="k-empty">${st.code ? `<span class="k-code k-mut">${st.code}</span>` : ''}<h2>${esc(opt.title || st.title)}</h2>${opt.say || st.say ? `<p>${esc(opt.say || st.say)}</p>` : ''}${acts.length ? `<div class="k-wrap g8">${acts.map(btn).join('')}</div>` : ''}</section>`;
+    return `<section class="k-empty">${code ? `<span class="k-code k-mut">${code}</span>` : ''}<h2>${esc(opt.title || st.title)}</h2>${opt.say || st.say ? `<p>${esc(opt.say || st.say)}</p>` : ''}${acts.length ? `<div class="k-wrap g8">${acts.map(btn).join('')}</div>` : ''}</section>`;
   }
   screen('state', { area: 'bare', word: '안내', find: false, crumb: ['안내'],
     view: () => `<div class="ent-narrow">${stateBlock(ENT_STATE[itemParam('kind')] ? itemParam('kind') : 'missing')}</div>` });
@@ -80,6 +80,9 @@
   const entRole = () => { const w = workRole(); return `<span class="k-chip${w === '관리자' ? ' b' : ''}">${esc(w)}</span>`; };
   const entStatus = (o) => `${o.current ? '<span class="k-chip ok">사용 중</span>' : ''}${o.made ? '<span class="k-chip warn">세션 생성</span>' : o.current ? '' : '<span class="k-chip">서버 제공</span>'}`;
   const entManages = () => isOntoAdmin() && firstAdmin('onto');
+  // in a team everyone works in one ontology at a time, and the server lets an editor or above switch it: a viewer
+  // opens (and exports) only the one in use
+  const entCanOpen = (o) => o.id === S.st.library_id || canEdit();
   const entLine = (k, v) => `<span class="ent-kv k-14"><span class="k-mut">${esc(k)}</span><span>${v}</span></span>`;
 
   function entCard(o) {
@@ -87,7 +90,7 @@
       o.version && entLine('운영 버전', `<span class="k-code k-ink">v${esc(o.version)}</span>`), o.last && entLine('최근 활동', esc(`${entWhen(o.last.at)} · ${o.last.text}`))].filter(Boolean).join('');
     return `<section class="k-card pad k-v g12 ent-card${o.current ? ' sel' : ''}"><div class="k-pha"><h2 class="k-h2">${esc(o.label)}</h2><span class="k-chip${workRole() === '관리자' ? ' b' : ''}">역할 · ${esc(workRole())}</span>${o.current ? '<span class="k-chip ok">최근 사용</span>' : ''}</div>
       ${o.description ? `<p class="k-p ent-clip">${esc(o.description)}</p>` : ''}${rows ? `<div class="ent-kvs">${rows}</div>` : ''}
-      <div class="k-pha"><button class="k-btn pri" data-act="entOpen" data-id="${esc(o.id)}">열기${ki('arrow', 16, 1.75)}</button>${entManages() ? `<button class="k-btn" data-act="entOpen" data-id="${esc(o.id)}" data-go="${esc(entManages())}">${ki('sliders', 16, 1.75)}관리</button>` : ''}</div></section>`;
+      <div class="k-pha">${entCanOpen(o) ? `<button class="k-btn pri" data-act="entOpen" data-id="${esc(o.id)}">열기${ki('arrow', 16, 1.75)}</button>` : ''}${entManages() ? `<button class="k-btn" data-act="entOpen" data-id="${esc(o.id)}" data-go="${esc(entManages())}">${ki('sliders', 16, 1.75)}관리</button>` : ''}</div></section>`;
   }
 
   function entRows() {
@@ -96,12 +99,13 @@
     if (!list.length) return '<tr><td colspan="8" class="mut">조건에 맞는 온톨로지가 없습니다.</td></tr>';
     const acts = (o) => [entManages() && `<button class="k-lnk" data-act="entOpen" data-id="${esc(o.id)}" data-go="${esc(entManages())}">관리</button>`,
       canMakeLibrary() && o.modules.some((m) => m.on) && `<a class="k-lnk" href="#ontology-new?start=base&base=${encodeURIComponent(o.id)}">복제</a>`,
-      o.modules.some((m) => m.on) && `<button class="k-lnk" data-act="entExport" data-id="${esc(o.id)}">내보내기</button>`,
+      o.modules.some((m) => m.on) && entCanOpen(o) && `<button class="k-lnk" data-act="entExport" data-id="${esc(o.id)}">내보내기</button>`,
       o.made && canMakeLibrary() && `<button class="k-lnk bad" data-act="libdrop" data-id="${esc(o.id)}">삭제</button>`].filter(Boolean).join('');
-    return list.map((o) => `<tr${o.current ? ' class="on"' : ''}><td><button class="ent-name" data-act="entOpen" data-id="${esc(o.id)}"><b class="k-b">${esc(o.label)}</b></button>${o.description ? `<br><span class="k-s ent-clip1">${esc(o.description)}</span>` : ''}</td>
+    const name = (o) => (entCanOpen(o) ? `<button class="ent-name" data-act="entOpen" data-id="${esc(o.id)}"><b class="k-b">${esc(o.label)}</b></button>` : `<b class="k-b">${esc(o.label)}</b>`);
+    return list.map((o) => `<tr${o.current ? ' class="on"' : ''}><td>${name(o)}${o.description ? `<br><span class="k-s ent-clip1">${esc(o.description)}</span>` : ''}</td>
       <td class="ent-pack">${esc(entPack(o)) || '<span class="k-s">-</span>'}</td><td>${o.maturity ? `<span class="k-code ${o.maturity.low ? 'k-blue' : 'k-mut'}">${esc(entLevel(o.maturity))}</span>` : '<span class="k-s">-</span>'}</td>
       <td>${o.version ? `<span class="k-code k-mut">v${esc(o.version)}</span>` : '<span class="k-s">-</span>'}</td><td><span class="k-h g4">${entStatus(o)}</span></td><td>${entRole()}</td>
-      <td class="nw"><button class="k-lnk" data-act="entOpen" data-id="${esc(o.id)}">열기</button></td><td class="nw">${acts(o)}</td></tr>`).join('');
+      <td class="nw">${entCanOpen(o) ? `<button class="k-lnk" data-act="entOpen" data-id="${esc(o.id)}">열기</button>` : ''}</td><td class="nw">${acts(o)}</td></tr>`).join('');
   }
 
   // what the last ontology made here holds, and what its import adjusted or could not carry
@@ -132,15 +136,14 @@
     if (!e.onto) return `${head}<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>`;
     const all = e.onto.ontologies, made = all.filter((o) => o.made).length;
     const cur = all.find((o) => o.current), worked = entWorked().map((u) => all.find((o) => o.id === u.id)).filter((o) => o && o !== cur);
-    const cards = [cur, ...worked].filter(Boolean).slice(0, 3);
+    const cards = [cur, ...worked].filter((o) => o && entCanOpen(o)).slice(0, 3);
     const seg = made ? `<div class="k-seg" role="group" aria-label="온톨로지 종류">${[['all', `전체 ${all.length}`], ['server', `서버 제공 ${all.length - made}`], ['made', `세션 생성 ${made}`]].map(([k, w]) => `<button class="${e.kind === k ? 'on' : ''}" data-act="entKind" data-k="${k}">${w}</button>`).join('')}</div>` : '';
     const packs = isSysAdmin() && known('sys-packs') ? 'sys-packs' : known('library') ? 'library' : '';
     const tree = `<section class="k-card" style="flex:1 1 380px"><div class="k-ch"><h2>도메인 팩 · 기반 관계</h2></div><div class="k-cb"><div class="k-v">${entTree(all)}</div>
       ${packs ? `<a class="k-lnk flat" href="#${packs}">도메인 팩${ki('chevR', 14, 1.75)}</a>` : ''}</div></section>`;
     return `${head}${entMadeCard()}<section class="k-wrap g16" aria-label="최근 사용 온톨로지">${cards.map(entCard).join('')}</section>
       <section class="k-card"><div class="k-ch"><h2>모든 온톨로지</h2><span class="k-s">${all.length}개${made ? ` · 서버 제공 ${all.length - made} · 세션 생성 ${made}` : ''}</span><span class="k-pha k-push">${seg}<label class="k-search" style="flex:0 1 280px">${ki('search', 16, 1.75)}<input type="search" data-in="entQ" value="${esc(e.q)}" placeholder="온톨로지 검색" aria-label="온톨로지 검색"></label></span></div>
-        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">도메인 팩 · 기반</th><th scope="col">성숙도</th><th scope="col">운영 버전</th><th scope="col">상태</th><th scope="col">역할</th><th scope="col"></th><th scope="col">관리</th></tr></thead><tbody id="enttbody">${entRows()}</tbody></table></div>
-        ${made ? '<p class="k-cf line">세션 생성 온톨로지는 세션 종료 시 삭제됩니다. 내보내기 후 서버에 등록해 주세요.</p>' : ''}</section>
+        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">도메인 팩 · 기반</th><th scope="col">성숙도</th><th scope="col">운영 버전</th><th scope="col">상태</th><th scope="col">역할</th><th scope="col"></th><th scope="col">관리</th></tr></thead><tbody id="enttbody">${entRows()}</tbody></table></div></section>
       <div class="k-cols">${tree}</div>`;
   }
   screen('ontologies', { area: 'bare', word: '온톨로지 선택', crumb: ['온톨로지 선택'], view: viewOntologies, after: entNeed });
@@ -156,7 +159,10 @@
     }
     return e.nw;
   }
-  const entBase = (nw) => (S.ent.onto ? S.ent.onto.ontologies.find((o) => o.id === nw.base) || S.ent.onto.ontologies.find((o) => o.current) : null);
+  // the ontologies a new one can start from: to pick modules, one whose library holds some; to inherit, one applying
+  // some. The base is always one of them, so the one the select shows is the one step 3 and the request use
+  const entBases = (nw) => (S.ent.onto ? S.ent.onto.ontologies.filter((o) => (nw.start === 'base' ? o.modules.some((m) => m.on) : o.modules.length)) : []);
+  const entBase = (nw) => { const all = entBases(nw); return all.find((o) => o.id === nw.base) || all.find((o) => o.current) || all[0] || null; };
   // the modules the picked ones stand on: they come along whether picked or not
   function entNeeded(rows, picked) {
     const by = Object.fromEntries(rows.map((r) => [r.name, r])), need = new Set();
@@ -211,10 +217,10 @@
     const head = kHead('온톨로지 만들기', '도메인 팩, 기존 온톨로지, 파일에서 새 온톨로지를 생성합니다.', '<a class="k-btn" href="#ontologies">취소</a>');
     if (e.err) return head + stateBlock('error', { say: e.err });
     if (!e.onto) return `${head}<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>`;
-    const nw = entNew(), all = e.onto.ontologies, left = Math.max(e.onto.made_max - e.onto.made, 0);
+    const nw = entNew(), left = Math.max(e.onto.made_max - e.onto.made, 0);
     const tile = ([k, w, say]) => `<label class="k-ck box"><input type="radio" name="entstart" value="${k}" data-in="entStart"${nw.start === k ? ' checked' : ''}><span class="k-14">${w}<br><span class="k-s">${say}</span></span></label>`;
     const withBase = nw.start === 'pack' || nw.start === 'base';
-    const baseSel = withBase ? `<label class="k-f">기반 온톨로지<select class="k-in" data-in="entBase">${all.filter((o) => o.modules.length).map((o) => `<option value="${esc(o.id)}"${o.id === (entBase(nw) || {}).id ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>` : '';
+    const baseSel = withBase ? `<label class="k-f">기반 온톨로지<select class="k-in" data-in="entBase">${entBases(nw).map((o) => `<option value="${esc(o.id)}"${o.id === (entBase(nw) || {}).id ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>` : '';
     const made = entMadeOf(nw), aiFirst = nw.start === 'ai' && known('ai');
     const go = (to, word, pri) => `<button class="k-btn wide${pri ? ' pri' : ''}" data-act="entMake" data-go="${to}"${nw.busy || !left ? ' disabled' : ''}>${nw.busy && pri ? '생성 중' : word}</button>`;
     return `${head}<div class="k-cols"><div class="k-c3 wide">
@@ -270,7 +276,7 @@
     e.acctBusy = true;
     api('entry/me').then((x) => { e.acct = x; }).catch(() => { e.acct = {}; }).finally(() => { e.acctBusy = false; if ((S.tab === 'me' || S.tab === 'reset') && !entOut()) render(); });
   }
-  const ENT_ROLE_SAY = { 관리자: '전체 작업 · 온톨로지 관리', '영역 담당': '편집 · 승인 · 배포', 편집: '정의 · 규칙 편집 · 변경 요청', 조회: '조회 · 질문' };
+  const ENT_ROLE_SAY = { 관리자: '전체 작업 · 온톨로지 관리', 승인자: '편집 · 승인 · 배포', 편집자: '정의 · 규칙 편집 · 변경 요청', 조회자: '조회 · 질문' };
   function viewMe() {
     const team = inTeam(), u = team ? S.me.user : null, libs = S.st.libraries || [], sys = isSysAdmin() && firstAdmin('sys'), acct = S.ent.acct || {};
     const head = kHead('내 계정', '계정 정보와 역할을 확인합니다.',
@@ -286,7 +292,7 @@
       : (acct.idle_minutes ? kKv('세션', `미사용 ${esc(acct.idle_minutes)}분 후 종료`) : '')}</section>`;
     const sysRow = `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${team ? (isSysAdmin() ? '시스템 관리자' : '사용자') : '세션 관리자'}</span><span class="k-s">${team ? (isSysAdmin() ? '시스템 역할 · 시스템 관리 전체' : '시스템 역할 · 온톨로지 작업') : '방문자 세션 · 전체 화면'}</span></span>${sys ? `<span class="k-h end"><a class="k-lnk" href="#${V2['sys-users'] ? 'sys-users' : sys}">시스템 관리${ki('chevR', 14, 1.75)}</a></span>` : ''}</div>`;
     const role = workRole();
-    const rows = libs.map((x) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(x.label)} · ${esc(role)}</span><span class="k-s">작업 역할 · ${esc(ENT_ROLE_SAY[role] || '')}</span></span><span class="k-h end"><button class="k-lnk" data-act="entOpen" data-id="${esc(x.id)}"${entManages() ? ` data-go="${esc(entManages())}"` : ''}>${entManages() ? '온톨로지 관리' : '열기'}${ki('chevR', 14, 1.75)}</button></span></div>`).join('');
+    const rows = libs.map((x) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(x.label)} · ${esc(role)}</span><span class="k-s">작업 역할 · ${esc(ENT_ROLE_SAY[role] || '')}</span></span><span class="k-h end">${!entCanOpen(x) ? '' : `<button class="k-lnk" data-act="entOpen" data-id="${esc(x.id)}"${entManages() ? ` data-go="${esc(entManages())}"` : ''}>${entManages() ? '온톨로지 관리' : '열기'}${ki('chevR', 14, 1.75)}</button>`}</span></div>`).join('');
     const roles = `<section class="k-card"><div class="k-ch"><h2>역할 · 접근 범위</h2></div>${sysRow}${rows}<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ontologies">온톨로지 선택${ki('chevR', 14, 1.75)}</a></div></section>`;
     return `${head}<div class="k-cols"><div class="k-v g24" style="flex:3 1 520px;min-width:0">${profile}${help}</div><div class="k-c2 wide">${security}${roles}</div></div>`;
   }
@@ -295,23 +301,24 @@
   // a local account's own password, changed with the one it has now
   function viewReset() {
     const a = S.ent.acct;
-    if (!inTeam()) return `<div class="ent-narrow">${stateBlock('missing', { title: '로그인을 사용하지 않는 서버입니다', say: '', acts: [['#me', '내 계정', 'pri']] })}</div>`;
+    if (!inTeam()) return `<div class="ent-narrow">${stateBlock('missing', { code: '', title: '로그인을 사용하지 않는 서버입니다', say: '', acts: [['#me', '내 계정', 'pri']] })}</div>`;
     if (!a) return '<div class="ent-auth"><section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section></div>';
-    if (!a.can_change_password) return `<div class="ent-narrow">${stateBlock('missing', { title: '비밀번호를 변경할 수 없는 계정입니다', say: '시스템 관리자에게 비밀번호 재설정을 요청해 주세요.', acts: [['#me', '내 계정', 'pri']] })}</div>`;
+    if (!a.can_change_password) return `<div class="ent-narrow">${stateBlock('missing', { code: '', title: '비밀번호를 변경할 수 없는 계정입니다', say: '시스템 관리자에게 비밀번호 재설정을 요청해 주세요.', acts: [['#me', '내 계정', 'pri']] })}</div>`;
     return `<div class="ent-auth"><section class="k-card ent-form"><div><h1 class="k-h1" style="line-height:1.3">비밀번호 재설정</h1><p class="k-p" style="margin-top:4px;color:var(--muted)">로컬 계정의 비밀번호를 변경합니다.</p></div>
         <label class="k-f">현재 비밀번호<input class="k-in" type="password" id="entpw0" autocomplete="current-password"></label>
         <label class="k-f">새 비밀번호<input class="k-in" type="password" id="entpw1" autocomplete="new-password"><span class="k-hint">${esc(a.password_min)}자 이상</span></label>
         <label class="k-f">새 비밀번호 확인<input class="k-in" type="password" id="entpw2" autocomplete="new-password"></label>
         <button class="k-btn pri wide" data-act="entPw"${S.ent.pwBusy ? ' disabled' : ''}>비밀번호 변경</button>
         <span class="k-s">변경 시 모든 기기에서 로그아웃</span></section>
-      <p class="k-crumb" style="text-align:center;flex:none"><a href="#me">내 계정</a></p></div>`;
+      <p class="ent-foot"><a href="#me">내 계정</a></p></div>`;
   }
   screen('reset', { area: 'bare', word: '비밀번호 재설정', find: false, crumb: ['계정', '비밀번호 재설정'], view: viewReset, after: entAcctNeed });
 
   const ENT_NOTE = { change: ['b', '변경 요청', 'changes'], approve: ['ok', 'Action', 'decide'], request: ['', 'Action', 'decide'], draft: ['', '초안', 'data'], attach: ['', '모듈', 'library'], detach: ['', '모듈', 'library'],
     flow: ['', '검증', 'flow'], identity: ['', '식별 통합', 'objects'], sync: ['', '동기화', 'db'] };
+  const ENT_KIND = { ...INBOX_KIND, action: ['warn', 'Action 승인'] };
   function entTodoRow(x) {
-    const box = S.home.box, [tone, word] = INBOX_KIND[x.kind] || ['', x.kind];
+    const box = S.home.box, [tone, word] = ENT_KIND[x.kind] || ['', x.kind];
     let meta = '', to = '', buttons = '';
     if (x.kind === 'action') {
       meta = [`${x.by}${x.by_kind === 'agent' && !/agent/i.test(x.by) ? ' · Agent' : ''} 요청`, x.change, x.failed.length ? `검사 미통과 ${x.failed.join(', ')}` : '판정 · 권한 검사 통과', x.delta || (x.outside ? '자동 승인 한도 초과' : '')].filter(Boolean).join(' · ');
@@ -378,11 +385,9 @@
     } });
 
   // ---- sign-in --------------------------------------------------------------------------------------------------
+  const entSignedIn = () => !(inTeam() && !S.me.user);  // signed in, or nobody signs in on this server
   function viewLogin() {
-    if (!(inTeam() && !S.me.user)) {  // someone already inside opened this address
-      return `<div class="k-main"><div class="ent-narrow">${stateBlock('missing', inTeam() ? { title: `${S.me.user.name} 계정으로 로그인되어 있습니다`, say: '', acts: [['#home', '홈', 'pri'], ['@entLogout', '로그아웃']] }
-        : { title: '로그인을 사용하지 않는 서버입니다', say: '', acts: [['#home', '홈', 'pri']] })}</div></div>`;
-    }
+    if (entSignedIn()) return '';  // the address leads in (after)
     const expired = S.st && !S.ent.out;  // was inside and did not sign out: the sign-in ran out
     S.ent.out = false;
     return `<div class="k-auth">${brand('#')}<main>
@@ -391,20 +396,19 @@
         <label class="k-f">아이디<input class="k-in" type="text" id="luser" autocomplete="username" autofocus></label>
         <label class="k-f">비밀번호<input class="k-in" type="password" id="lpw" autocomplete="current-password"></label>
         <div class="k-h end"><button class="k-lnk flat" type="button" data-act="entForgot">비밀번호 재설정</button></div>
-        <button class="k-btn pri wide" data-act="login">로그인</button></section>
-      <p class="k-note">계정 등록과 비밀번호 재설정은 시스템 관리자에게 요청해 주세요.</p></main></div>`;
+        <button class="k-btn pri wide" data-act="login">로그인</button></section></main></div>`;
   }
-  screen('login', { area: 'auth', word: '로그인', find: false, view: viewLogin });
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Enter') return;
-    if (ev.target.id === 'lpw' || ev.target.id === 'luser') { ev.preventDefault(); ACT.login(); }
-    if (ev.target.id === 'entpw2') { ev.preventDefault(); ACT.entPw(); }
+  // signing in on this address, or opening it already inside, goes on to the home: the address is not kept to come back to
+  screen('login', { area: 'auth', word: '로그인', find: false, view: viewLogin, after: () => { if (entSignedIn()) location.replace('#home'); } });
+  document.addEventListener('keydown', (ev) => {  // Enter on the sign-in form is the page's own (one try per press)
+    if (ev.key === 'Enter' && ev.target.id === 'entpw2') { ev.preventDefault(); ACT.entPw(); }
   });
 
   // ---- arriving: the last ontology worked in, or the list to choose from ------------------------------------------
   window.addEventListener('hashchange', () => {  // working in an ontology is what makes it the last one used
     const tab = location.hash.slice(1).split('?')[0] || 'home';
     if (S.st && areaOf(tab) === 'work') entRemember(S.st.library_id);
+    if (S.st && tab === 'inbox' && !S.home.busy) loadInbox();  // others file and decide in between: the list is read on each opening
   });
   function entLand() {
     if (location.hash.length > 1) return;  // came to a screen by its address
@@ -422,13 +426,20 @@
       entRemember(id);
       location.hash = `#${go}`;
     },
-    entExport: async (t) => {
-      const id = t.dataset.id;
-      if (id !== S.st.library_id) await libraryUse(id);
-      if (S.st.library_id !== id) return;
-      const a = document.createElement('a');
-      a.href = '/api/export/library'; a.download = '';
-      document.body.appendChild(a); a.click(); a.remove();
+    entExport: async (t) => {  // that ontology's files, read by its id: the one in use stays in use
+      try {
+        const r = await fetch(`/api/entry/export?id=${encodeURIComponent(t.dataset.id)}`);
+        if (!r.ok) {
+          let j = {};
+          try { j = await r.json(); } catch (_) { /* empty body */ }
+          throw new Error(j.error || `서버 오류로 온톨로지를 내보내지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`);
+        }
+        const said = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get('Content-Disposition') || '');
+        const url = URL.createObjectURL(await r.blob()), a = document.createElement('a');
+        a.href = url; a.download = said ? decodeURIComponent(said[1]) : 'ontology.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) { fail(err); }
     },
     entKind: (t) => { S.ent.kind = t.dataset.k; render(); },
     entMake: (t) => entMake(t.dataset.go),
@@ -449,13 +460,16 @@
       if (next !== again) { toast('새 비밀번호와 확인 값이 달라 변경하지 못했습니다. 다시 입력해 주세요.', true); const el = $('#entpw2'); if (el) el.focus(); return; }
       if (next.length < min) { toast(`새 비밀번호가 ${min}자보다 짧아 변경하지 못했습니다. ${min}자 이상으로 입력해 주세요.`, true); return; }
       e.pwBusy = true;
+      const btn = $('[data-act=entPw]'), was = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = '변경 중'; }  // the fields stay as typed: no repaint
       try {
         await api('entry/password', { current: now, new: next });
         e.pwBusy = false; e.out = true;
         S.me.user = null;  // every sign-in of this account ended with the change
+        location.hash = '#me';  // signing in again leads to the account, not to this form again
         renderLogin();
         toast('비밀번호를 변경했습니다.');
-      } catch (err) { e.pwBusy = false; fail(err); }
+      } catch (err) { e.pwBusy = false; if (btn) { btn.disabled = false; btn.textContent = was; } fail(err); }
     },
   });
   Object.assign(INPUT, {

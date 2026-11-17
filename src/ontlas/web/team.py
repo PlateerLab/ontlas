@@ -180,8 +180,8 @@ class TeamSessions:
     def get(self, sid: str):
         return sid, self.shared, False
 
-    def reset(self, sid: str):
-        return self.shared
+    def reset(self, sid: str):  # the space is the team's: one person cannot wipe it for everyone
+        raise ValueError("팀이 함께 쓰는 공간이라 초기화하지 못했습니다. 되돌릴 변경은 변경 요청 · 버전에서 롤백해 주세요.")
 
 
 class Syncer:

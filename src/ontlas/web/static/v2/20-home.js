@@ -2,7 +2,7 @@
   // The home says where the ontology stands (maturity, the four parts, the Objects, what waits, the steps of getting
   // started). The other three are reached from the menu and the bar on top: making drafts, asking, bringing files in.
 
-  S.h2 = { busy: false, err: '', find: null, findBusy: false, findOf: '', cat: 'all',
+  S.h2 = { busy: false, err: '', find: null, findBusy: false, findFor: null, cat: 'all',
     ai: { st: null, busy: false, run: false, said: '', kinds: { concepts: true, questions: true, rules: false }, target: '', doc: '', section: '', sections: [], guide: false },
     up: { staged: [], use: '', then: true, busy: false, links: null } };
 
@@ -71,9 +71,9 @@
   function hmObjects(sum) {
     const named = sum.objects.filter((o) => o.name), loose = sum.objects.find((o) => !o.name);
     const chip = (o) => (o.count
-      ? `<button class="hm-obj" data-act="homeobj" data-name="${esc(o.name)}" title="${esc(o.description || '')}">${esc(o.label)}<span class="k-mut">@${esc(o.name)}</span><span class="k-code k-blue">L${o.level}</span></button>`
-      : `<button class="hm-obj dash" data-act="homeobj" data-name="${esc(o.name)}" title="${esc(o.description || '')}">${esc(o.label)}<span class="k-mut">@${esc(o.name)}</span><span class="k-code k-mut">Entity 없음</span></button>`);
-    const body = named.length ? `<div class="k-wrap g8">${named.map(chip).join('')}${loose ? `<a class="hm-obj dash" href="#objects">Object 미지정<span class="k-mut">Entity ${count(loose.count)}</span></a>` : ''}</div>`
+      ? `<button class="hm-obj" data-act="hmObj" data-name="${esc(o.name)}" title="${esc(o.description || '')}">${esc(o.label)}<span class="k-mut">@${esc(o.name)}</span><span class="k-code k-blue">L${o.level}</span></button>`
+      : `<button class="hm-obj dash" data-act="hmObj" data-name="${esc(o.name)}" title="${esc(o.description || '')}">${esc(o.label)}<span class="k-mut">@${esc(o.name)}</span><span class="k-code k-mut">Entity 없음</span></button>`);
+    const body = named.length ? `<div class="k-wrap g8">${named.map(chip).join('')}${loose ? `<a class="hm-obj dash" href="#objects?entity=${encodeURIComponent((loose.entities[0] || {}).name || '')}">Object 미지정<span class="k-mut">Entity ${count(loose.count)}</span></a>` : ''}</div>`
       : `<p class="k-p s">${loose ? `Object 미지정 Entity ${count(loose.count)}개` : '정의된 Object가 없습니다.'}</p>`;
     return `<section class="k-card pad k-v g16" aria-labelledby="hm-map" style="flex:3 1 520px"><div class="k-h sb"><h2 class="k-h2" id="hm-map">도메인 Object ${count(named.length)}개</h2><a class="k-lnk" href="#objmgr">Object${ki('chevR', 14, 1.75)}</a></div>${body}</section>`;
   }
@@ -105,8 +105,8 @@
     if (x.id === 'drafts') return x.state === 'doing' ? [x.waiting ? `초안 ${count(x.waiting)}건 대기` : '', x.changes ? `변경 요청 ${count(x.changes)}건 검토 중` : '', x.edits ? `작성 중인 변경 ${count(x.edits)}건` : ''].filter(Boolean).join(' · ') : x.state === 'done' ? '대기 중인 초안 없음' : '정의 전';
     if (x.id === 'questions') return x.questions ? `${count(x.questions)}개 등록${x.accuracy === null || x.accuracy === undefined ? '' : ` · 정답률 ${pct(x.accuracy)}`}` : '등록된 질문 없음';
     if (x.id === 'version') return x.state === 'done' ? `${x.label} 배포됨` : '배포 전';
-    if (x.id === 'agents') return x.rest ? 'REST API · MCP 사용 가능' : 'API 사용 안 함';
-    return x.state === 'done' ? `${BACKEND_KIND[String(x.kind).toLowerCase()] || x.kind || '원천'} 연결됨` : '선택 사항 · L2 이상';
+    if (x.id === 'agents') return x.state === 'done' ? 'REST API · MCP 사용 가능' : x.rest ? '정의 전' : 'API 사용 안 함';
+    return x.state === 'done' ? `${BACKEND_KIND[String(x.kind).toLowerCase()] || x.kind || '데이터 소스'} 연결됨` : '선택 사항 · L2 이상';
   }
   function hmSteps(sum) {
     const w = sum.waiting;
@@ -130,17 +130,18 @@
     const name = (sum && sum.name) || (lib && lib.label) || st.title || '온톨로지';
     if (!sum) return kHead(name, '') + (S.h2.err ? kEmpty('요청을 처리하지 못했습니다', S.h2.err, '<button class="k-btn" data-act="hmRetry">다시 시도</button>') : '<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>');
     const m = sum.maturity, ch = sum.changes, w = sum.waiting;
-    const meta = [`${sum.version.label} 배포`, ch.pending ? `변경 요청 ${count(ch.pending)}건 검토 중` : '', ch.draft ? `작성 중인 변경 ${count(ch.edits)}건` : ''].filter(Boolean).join(' · ');
+    const shipped = (sum.steps.find((x) => x.id === 'version') || {}).state === 'done';  // as the step 첫 버전 배포 says it
+    const meta = [shipped ? `${sum.version.label} 배포` : '', ch.pending ? `변경 요청 ${count(ch.pending)}건 검토 중` : '', ch.draft ? `작성 중인 변경 ${count(ch.edits)}건` : ''].filter(Boolean).join(' · ');
     const bound = (sum.components.find((c) => c.id === 'binding') || { counts: {} }).counts.bound || 0;
     const filed = m.objects ? `Object ${count(m.objects)}개, Entity ${count(m.entities)}개` : `Entity ${count(m.entities)}개`;
-    const lead = !m.entities ? '정의된 Entity가 없습니다.'
+    const lead = !m.entities ? ''  // the empty state below says it
       : noSource() ? `${filed} · 데이터 소스 미연결`
         : `${filed} · 테이블 Binding Entity ${count(bound)}개`;
     const review = w.all ? `<a class="k-btn pri" href="#${w.rules ? 'ruleagent' : w.concepts ? (known('concepts') ? 'concepts' : 'data') : 'lexicon'}">초안 ${count(w.all)}건 검토${ki('arrow', 16, 1.75)}</a>` : '';
     const head = kHead(name, lead, `<a class="k-btn" href="#flow">${ki('check', 16, 1.75)}검증 실행</a>${review}`, meta);
     if (!m.entities) {
       return `${head}${kEmpty('등록된 정의가 없습니다', '',
-        `${canEdit() ? `<a class="k-btn pri" href="#catalog">${ki('upload', 16, 1.75)}자료 업로드</a><button class="k-btn" data-act="startlib">도메인 팩 적용</button><button class="k-btn" data-act="startmodel">직접 정의</button>` : ''}`)}${hmSteps(sum)}${kNext([['ai', 'AI 초안 생성'], ['changes', '변경 요청 · 버전'], ['evidence', '근거 지도'], ['flow', '검증'], ['connect', '연동 · API']])}`;
+        `${canEdit() ? `<a class="k-btn pri" href="#catalog">${ki('upload', 16, 1.75)}자료 업로드</a><button class="k-btn" data-act="startlib">도메인 팩 적용</button><a class="k-btn" href="${itemHref('entity', 'form')}">직접 정의</a>` : ''}`)}${hmSteps(sum)}${kNext([['ai', 'AI 초안 생성'], ['changes', '변경 요청 · 버전'], ['evidence', '근거 지도'], ['flow', '검증'], ['connect', '연동 · API']])}`;
     }
     return `${head}${hmMaturity(sum)}${hmParts(sum)}<div class="hm-row">${hmObjects(sum)}${hmTodo()}</div>${hmSteps(sum)}${hmDates(sum)}
       ${kNext([['ai', 'AI 초안 생성'], ['changes', '변경 요청 · 버전'], ['evidence', '근거 지도'], ['flow', '검증'], ['connect', '연동 · API']])}`;
@@ -154,7 +155,11 @@
       if (!S.fl) loadHomeFlow();  // the quality part reads the measurement the flow takes
     },
   });
-  Object.assign(ACT, { hmRetry: () => { S.h2.err = ''; render(); } });
+  Object.assign(ACT, {
+    hmRetry: () => { S.h2.err = ''; render(); },
+    // the Object screen opens with the chip's Object picked, its list unfiltered so the row shows
+    hmObj: (t) => { Object.assign(S.ont, { osel: t.dataset.name, oq: '', otier: 'all' }); location.hash = '#objmgr'; },
+  });
 
   // ---- 검색 · 질문 --------------------------------------------------------------------------------------------------
   // One box: what is typed is looked up in the definitions, the rules, the terms and the documents, and a question is
@@ -163,28 +168,34 @@
   const SQ_CAT = [['all', '전체'], ['answer', '답'], ['def', '정의'], ['rule', '규칙'], ['term', '용어'], ['doc', '자료']];
   const SQ_SHOWN = 8;
 
-  async function sqFind(q) {
+  // everything the answer `res` touches, in the scope it was asked in; kept with the answer it belongs to
+  async function sqFind(res) {
     const h = S.h2;
-    h.findBusy = true; h.findOf = q;
-    try { h.find = await api('home/find?q=' + encodeURIComponent(q)); } catch (e) { h.find = { error: e.message, found: [], total: 0, counts: {} }; }
-    h.findBusy = false;
+    h.findBusy = true;
+    let out;
+    try { out = await api(`home/find?q=${encodeURIComponent(res.question)}&folder=${encodeURIComponent(S.sr.folder || '')}`); } catch (e) { out = { error: e.message, found: [], total: 0, counts: {} }; }
+    Object.assign(h, { find: out, findFor: res, findBusy: false });
     if (S.tab === 'search') render();
   }
 
-  // where a found thing is looked at, with the way the older screens open it where there is one
+  // where a found thing is looked at: its own screen, with it picked
   function sqRow(x) {
     const body = `<span class="k-col"><span class="k-ink k-14">${esc(x.title)}</span>${x.sub ? `<span class="k-s">${esc(x.sub)}</span>` : ''}</span><span class="k-h end"><span class="k-chip">${esc(x.word)}</span></span>${ki('chevR', 16, 1.75)}`;
-    if (x.kind === 'object') return `<button class="k-row" data-act="srobj" data-obj="${esc(x.id.slice(7))}">${body}</button>`;
-    if (x.kind === 'rule') { const name = x.id.slice(5), at = name.indexOf('.'); return `<button class="k-row" data-act="rulego" data-dec="${esc(name.slice(0, at))}" data-rule="${esc(name.slice(at + 1))}">${body}</button>`; }
-    if (x.kind === 'query') return `<a class="k-row" href="#query?query=${encodeURIComponent(x.id.slice(6))}">${body}</a>`;
-    const go = x.kind === 'document' ? (known('evidence') ? 'evidence' : 'docs') : x.go;
-    return `<a class="k-row" href="#${go}">${body}</a>`;
+    const name = x.id.slice(x.id.indexOf(':') + 1);
+    if (x.kind === 'object') return `<a class="k-row" href="#objects?entity=${encodeURIComponent(name)}">${body}</a>`;
+    if (x.kind === 'rule') { const at = name.indexOf('.'); return `<button class="k-row" data-act="sqRule" data-ref="decision:${esc(name.slice(0, at))}#${esc(name.slice(at + 1))}">${body}</button>`; }
+    if (x.kind === 'card') return `<button class="k-row" data-act="sqRule" data-ref="${esc(x.id)}">${body}</button>`;
+    if (x.kind === 'term') return `<button class="k-row" data-act="sqTerm" data-id="${esc(name)}">${body}</button>`;
+    if (x.kind === 'query') return `<a class="k-row" href="#query?query=${encodeURIComponent(name)}">${body}</a>`;
+    if (x.kind === 'action') return `<a class="k-row" href="#actions?action=${encodeURIComponent(name)}">${body}</a>`;
+    if (x.kind === 'document') return `<button class="k-row" data-act="sqDoc" data-doc="${esc(x.document || '')}">${body}</button>`;
+    return `<a class="k-row" href="#${x.go}">${body}</a>`;
   }
 
   function sqFound(cat) {
-    const f = S.h2.find, asked = S.sr.res && S.sr.res.question;
-    if (!f || S.h2.findOf !== asked) return '<section class="k-card"><div class="k-ch"><h2>찾은 것</h2></div><p class="k-cf line">찾는 중입니다.</p></section>';
-    if (f.error) return `<section class="k-card"><div class="k-ch"><h2>찾은 것</h2></div><p class="k-cf line">${esc(f.error)}</p></section>`;
+    const f = S.h2.find;
+    if (!f || S.h2.findFor !== S.sr.res) return '<section class="k-card"><div class="k-ch"><h2>찾은 것</h2></div><p class="k-cf line">찾는 중입니다.</p></section>';
+    if (f.error) return `<section class="k-card"><div class="k-ch"><h2>찾은 것</h2></div><div class="k-row"><span class="k-col"><span class="k-14">${esc(f.error)}</span></span><button class="k-btn sm" data-act="sqRefind">다시 시도</button></div></section>`;
     const rows = cat === 'all' ? f.found : f.found.filter((x) => x.group === cat);
     const shown = cat === 'all' && !S.h2.more ? rows.slice(0, SQ_SHOWN) : rows;
     const more = shown.length < rows.length ? `<div class="k-cb" style="padding-top:12px"><button class="k-lnk flat" data-act="sqMore">${count(rows.length - shown.length)}건 더 보기${ki('chevD', 14, 1.75)}</button></div>` : '';
@@ -224,12 +235,12 @@
       const rec = res.record;
       body = `${understood}<p class="k-b k-18" style="margin:0;line-height:1.5">${esc(rec.label)} ${esc(rec.key)}</p>
         <div class="k-x sq-in"><table class="k-t s"><tbody>${rec.values.map((v) => `<tr><td class="mut" style="width:40%">${esc(v.label)}</td><td>${typeof v.value === 'boolean' ? yesNo(v.value) : show(v.value)}</td></tr>`).join('')}</tbody></table></div>
-        <div class="k-h"><button class="k-btn sm" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><button class="k-btn sm" data-act="srobj" data-obj="${esc(rec.type)}">Entity 정의</button></div>`;
+        <div class="k-h"><button class="k-btn sm" data-act="rec" data-type="${esc(rec.type)}" data-key="${esc(rec.key)}">레코드 열기</button><a class="k-btn sm" href="#objects?entity=${encodeURIComponent(rec.type)}">Entity 정의</a></div>`;
     } else if (q) {
       const cell = (v) => (v === null || v === undefined ? '' : show(v));
       body = `${understood}<p class="k-b k-18" style="margin:0;line-height:1.5">${esc(q.label)} 결과 ${count(q.total)}건</p>
         <div class="k-x sq-in"><table class="k-t s"><thead><tr>${q.columns.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${q.rows.map((row) => `<tr>${q.columns.map((c) => `<td>${cell(row[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-        ${q === res.query ? `<div class="k-h"><button class="k-btn sm" data-act="homeq2" data-q="${esc(q.name)}">질의 화면에서 열기</button></div>` : ''}`;
+        ${q === res.query ? `<div class="k-h"><a class="k-btn sm" href="#query?query=${encodeURIComponent(q.name)}">질의 화면에서 열기</a></div>` : ''}`;
     } else if (res.route === 'none' && !(more && more.ok)) {
       const ask = (res.ask || []).map((x) => `<span class="k-chip warn">${esc(x.about)} 담당 · ${esc(x.who)}</span>`).join('');
       body = r.moreBusy ? understood : `${understood}<p class="k-b k-18" style="margin:0;line-height:1.5">답변 없음</p><p class="k-p">${esc(res.reason || res.answer)}</p>
@@ -269,14 +280,14 @@
     const sp = S.sp && !S.sp.busy && !S.sp.error ? S.sp : null;
     const head = kHead('검색 · 질문', '정의 · 규칙 · 용어 · 자료를 검색하고 질문에 근거와 함께 답합니다.');
     const box = `<label class="sq-box"><span class="k-mut" style="display:inline-flex">${ki('search', 18, 1.75)}</span><input class="k-g0" type="search" id="srtext" data-in="srtext" value="${esc(r.text)}" placeholder="검색어 또는 질문 입력" aria-label="검색 또는 질문" autocomplete="off"><span class="k-code k-mut">${r.busy ? '찾는 중' : 'Enter'}</span></label>`;
-    const n = (h.find && h.findOf === (res && res.question) && h.find.counts) || {};
-    const scope = folderPick('srfolder', r.folder, sp, '검색 범위').replace('class="inline"', 'class="k-in sm" style="width:auto;max-width:220px"');
+    const n = (h.find && res && h.findFor === res && h.find.counts) || {};
+    const scope = folderPick('sqFolder', r.folder, sp, '검색 범위').replace('class="inline"', 'class="k-in sm" style="width:auto;max-width:220px"');
     const cats = res ? `<div class="k-h sb"><div class="k-seg" role="group" aria-label="보기">${SQ_CAT.map(([k, w]) => `<button class="${h.cat === k ? 'on' : ''}" data-act="sqCat" data-k="${k}" aria-pressed="${h.cat === k}">${w}${n[k] !== undefined ? ` ${count(n[k])}` : ''}</button>`).join('')}</div>${scope}</div>` : '';
     if (!r.res) {
       const examples = sp ? (sp.examples || []).slice(0, 4).map((c) => `<button class="k-chip w" data-act="srex" data-text="${esc(c)}">${esc(c)}</button>`).join('') : '';
-      return `${head}${box}${examples ? `<div class="k-h g6"><span class="k-s">예시</span>${examples}</div>` : ''}<div class="k-cols"><div class="k-c3 wide">${kEmpty('검색어 또는 질문을 입력해 주세요', '')}</div>${sqSide(null)}</div>`;
+      return `${head}${box}${examples ? `<div class="k-h g6"><span class="k-s">예시</span>${examples}</div>` : ''}<div class="k-cols"><div class="k-c3 wide">${kEmpty('입력된 검색어가 없습니다', '')}</div>${sqSide(null)}</div>`;
     }
-    if (r.res.error) return `${head}${box}<div class="k-cols"><div class="k-c3 wide">${kEmpty('요청을 처리하지 못했습니다', r.res.error, '<button class="k-btn" data-act="srgo">다시 시도</button>')}</div>${sqSide(null)}</div>`;
+    if (r.res.error) return `${head}${box}<div class="k-cols"><div class="k-c3 wide">${kEmpty('요청을 처리하지 못했습니다', r.res.error, `<button class="k-btn" data-act="srgo">다시 시도</button>${r.res.no_source && known('db') ? '<a class="k-btn" href="#db">데이터 소스</a>' : ''}`)}</div>${sqSide(null)}</div>`;
     const left = h.cat === 'all' ? sqAnswer(r) + sqFound('all') : h.cat === 'answer' ? sqAnswer(r) : sqFound(h.cat);
     return `${head}${box}${cats}<div class="k-cols"><div class="k-c3 wide">${left}</div>${sqSide(res)}</div>`;
   }
@@ -286,13 +297,29 @@
     after: () => {
       if (!S.sp) loadSpace();
       const res = S.sr.res && !S.sr.res.error ? S.sr.res : null;
-      if (res && S.h2.findOf !== res.question && !S.h2.findBusy) { S.h2.more = false; sqFind(res.question); }
+      if (res && S.h2.findFor !== res && !S.h2.findBusy) { S.h2.more = false; sqFind(res); }
     },
   });
   Object.assign(ACT, {
     sqCat: (t) => { S.h2.cat = t.dataset.k; render(); },
     sqMore: () => { S.h2.more = true; render(); },
+    sqRefind: () => { S.h2.findFor = null; render(); },  // the screen asks again for what the answer touches
+    // a passage opens its document on 근거 지도, as a document of the map does
+    sqDoc: (t) => { S.qa2.docWant = t.dataset.doc; location.hash = '#docs'; },
+    // 규칙 opens with the rule picked: what it read before is let go first, so the pick is not dropped as stale
+    sqRule: (t) => { smrFresh(); Object.assign(S.smr, { sel: t.dataset.ref, layer: '', area: '' }); location.hash = '#semrules'; },
+    // 용어 사전 opens with the term picked and its row in the list shown, as a link inside that screen opens one
+    sqTerm: async (t) => {
+      const id = t.dataset.id;
+      if (!S.lx.st || S.lx.st.error) await loadLexicon();
+      const row = ((S.lx.st || {}).rows || []).find((r) => r.id === id);
+      S.lx.sel = id;
+      Object.assign(S.o2.lx, { q: '', kind: row && o2IsDef(row) ? 'defs' : 'all', n: 9999 });
+      location.hash = '#lexicon';
+    },
   });
+  // the scope is part of the question: choosing another asks it again there
+  Object.assign(INPUT, { sqFolder: (t) => { S.sr.folder = t.value; if (S.sr.res && S.sr.text.trim() && !S.sr.busy) searchNow(); else render(); } });
 
   // ---- 자료 업로드 --------------------------------------------------------------------------------------------------
   // Files are chosen first and sent when a person says so (업로드만, or 업로드하고 AI 초안 생성). What was uploaded is
@@ -319,11 +346,23 @@
     const staged = u.staged.map(([f, rel], i) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14"><b class="k-b">${esc(rel)}</b></span><span class="k-s">${fileSize(f.size)}${lim.file_bytes && f.size > lim.file_bytes ? ` · 파일당 ${bytes(lim.file_bytes)} 한도 초과` : ''}</span></span>
       <span class="k-h end"><span class="k-chip ${lim.file_bytes && f.size > lim.file_bytes ? 'bad' : 'b'}">${lim.file_bytes && f.size > lim.file_bytes ? '한도 초과' : '대기'}</span><button class="k-lnk" data-act="upDrop" data-i="${i}">제외</button></span></div>`).join('');
     const prog = c.up ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14"><b class="k-b">${esc(c.up.name)}</b></span><span class="k-meter b"><i style="width:${Math.round((c.up.done / c.up.total) * 100)}%"></i></span></span><span class="k-h end"><span class="k-chip b">${count(c.up.done)} / ${count(c.up.total)} 업로드 중</span></span></div>` : '';
-    const sent = new Set(u.sent || []);
-    const done = (st.files || []).filter((f) => sent.has(f.path)).map((f) => { const k = (f.facts || {}).kind;
+    const live = new Map((st.files || []).map((f) => [f.path, f]));  // a file of this folder as it reads now
+    const done = (u.done || []).map((f) => live.get(f.path) || f).map((f) => { const k = (f.facts || {}).kind;
       const word = f.error ? '읽지 못함' : k === 'data' ? '테이블 데이터로 인식' : k === 'definition' ? '정의서로 인식' : k === 'document' ? `${DOC_WORD[f.facts.doc_kind] || '문서'}로 인식` : k === 'raw' ? '원본으로 보관' : '내용 없음';
       return `<div class="k-row"><span class="k-col"><span class="k-ink k-14"><b class="k-b">${esc(f.name)}</b></span><span class="k-s">${esc(f.error || `${word} · ${amount(f)}`)}</span></span><span class="k-h end"><span class="k-chip ${f.error ? 'bad' : 'ok'}">${f.error ? '읽기 실패' : '업로드 완료'}</span></span></div>`; }).join('');
     return staged + prog + done;
+  }
+
+  // the files just sent, wherever they went: a chosen or dropped folder puts its files in folders below this one
+  async function upSent(paths) {
+    const c = S.cat, want = new Set(paths), out = [];
+    for (const dir of new Set(paths.map((p) => p.slice(0, Math.max(p.lastIndexOf('/'), 0))))) {
+      let files = [];
+      if (dir === c.folder) files = (c.st && c.st.files) || [];
+      else { try { files = (await api(`catalog?folder=${encodeURIComponent(dir)}`)).files || []; } catch (e) { fail(e); } }
+      out.push(...files.filter((f) => want.has(f.path)));
+    }
+    return out;
   }
 
   // the files of the repository, as the catalog listed them: what each is read as, and whether a draft and the search read it
@@ -343,7 +382,7 @@
       <span class="k-push k-h"><button class="k-btn sm" data-act="ccopy" title="경로 복사" aria-label="경로 복사">${ki('copy', 16)}</button><button class="k-btn sm" data-act="creload" title="새로고침" aria-label="새로고침">${ki('reload', 16, 1.75)}</button>
         <button class="k-btn sm" data-act="cup"${c.folder ? '' : ' disabled'}>상위 폴더</button><button class="k-btn sm" data-act="cnew">${ki('plus', 16)}새 폴더</button></span></div>`;
     return `<section class="k-card" aria-labelledby="up-list"><div class="k-ch"><h2 id="up-list">업로드 자료</h2><span class="k-s">${esc(st.repository.label)} · ${count(st.repository.files)}개</span>
-      <div class="k-push"><button class="k-btn sm" data-act="repopick">${ki('box', 16)}레포지토리 선택${ki('chevD', 14, 1.75)}</button>${st.repository.files ? '<a class="k-btn sm" href="#convert">변환 결과</a>' : ''}</div></div>
+      <div class="k-push"><button class="k-btn sm" data-act="repopick">${ki('box', 16)}저장소 선택${ki('chevD', 14, 1.75)}</button>${st.repository.files ? '<a class="k-btn sm" href="#convert">변환 결과</a>' : ''}</div></div>
       ${tools}${bulk}${table}</section>`;
   }
 
@@ -361,7 +400,7 @@
     const head = kHead('자료 업로드', '정책서 · 정의서 · 용어집 · 테이블 파일을 업로드합니다.', `<a class="k-btn" href="#${back}"${u.staged.length ? ' data-act="upCancel"' : ''}>취소</a>`);
     if (!c.st) return head + '<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>';
     if (c.st.error) return head + kEmpty('요청을 처리하지 못했습니다', c.st.error, '<button class="k-btn" data-act="creload">다시 시도</button>');
-    if (!canEdit()) return head + kEmpty('업로드 권한이 없습니다', '온톨로지 관리자에게 편집 역할을 요청해 주세요.', '<a class="k-btn pri" href="#home">홈</a>');
+    if (!canEdit()) return head + kEmpty('업로드 권한이 없습니다', '', '<a class="k-btn pri" href="#home">홈</a>');
     const st = c.st, lim = st.limits;
     const path = st.server_paths && u.from === 'path';
     const seg = st.server_paths ? `<div class="k-seg self" role="group" aria-label="업로드 방법"><button class="${path ? '' : 'on'}" data-act="upFrom" data-k="file">파일</button><button class="${path ? 'on' : ''}" data-act="upFrom" data-k="path">서버 경로</button></div>` : '';
@@ -396,7 +435,7 @@
     upPick: () => { if (!S.cat.up) $('#upfile').click(); },
     upPickDir: () => { if (!S.cat.up) $('#updir').click(); },
     upDrop: (t) => { S.h2.up.staged.splice(Number(t.dataset.i), 1); render(); },
-    upCancel: () => { S.h2.up.staged = []; render(); },
+    upCancel: (t) => { S.h2.up.staged = []; location.hash = t.getAttribute('href'); },
     upFrom: (t) => { S.h2.up.from = t.dataset.k; if (t.dataset.k === 'path' && S.cat.paste === null) S.cat.paste = ''; render(); },
     upGo: async (t) => {
       const u = S.h2.up, c = S.cat, then = !!t.dataset.then;
@@ -406,15 +445,20 @@
       const paths = items.map(([, rel]) => (c.folder ? `${c.folder}/` : '') + rel);
       u.staged = [];
       await uploadAll(items);
-      u.sent = paths;
+      let done = await upSent(paths);
       c.next = null;
-      if (u.use) {
-        const here = new Set((c.st && c.st.files ? c.st.files : []).map((f) => f.path));
-        for (const p of paths.filter((x) => here.has(x))) { try { await api('catalog/use', { path: p, use: u.use }); } catch (e) { fail(e); } }
+      if (u.use && done.length) {  // what each file is read as, for the files in the folders below as well
+        for (const f of done) { try { await api('catalog/use', { path: f.path, use: u.use }); } catch (e) { fail(e); } }
         await catalogChanged();
+        done = await upSent(paths);
       }
+      u.done = done;
       S.h2.ai.st = null;
-      if (then) location.hash = '#ai'; else render();
+      if (!then || !done.length) { render(); return; }
+      // the draft is made right after, as 초안 생성 on AI 초안 생성 makes it with what is chosen there
+      await aiLoad();
+      location.hash = '#ai';
+      if (S.h2.ai.st) ACT.aiRun();
     },
   });
   Object.assign(INPUT, { upUse: (t) => { S.h2.up.use = t.value; } });
@@ -443,17 +487,18 @@
   const aiConcepts = () => (known('concepts') ? 'concepts' : 'data');
   const aiWhen = (at) => { const s = String(at || ''), today = new Date().toISOString().slice(0, 10); return s.slice(0, 10) === today ? `오늘 ${s.slice(11, 16)}` : `${s.slice(5, 10).replace('-', '/')} ${s.slice(11, 16)}`; };
   const AI_JOB = { concepts: '개념', rules: '규칙' };
-  const AI_JOB_TONE = { waiting: 'b', filed: 'warn', done: 'ok' };
+  const AI_JOB_TONE = { waiting: 'b', filed: 'warn', done: 'ok', failed: 'bad' };
 
   function aiTargets(st) {
     const a = S.h2.ai, k = a.kinds, on = st.model.on;
-    const tick = (key, word, off, why) => `<label class="k-ck"${off ? ` title="${esc(why)}"` : ''}><input type="checkbox" data-in="aiKind" data-k="${key}"${k[key] && !off ? ' checked' : ''}${off ? ' disabled' : ''}><span${off ? ' class="k-mut"' : ''}>${word}</span></label>`;
+    const lock = canEdit() ? '' : ' disabled';  // one who may not make a draft sees what would be made, not a form to make it with
+    const tick = (key, word, off, why) => `<label class="k-ck"${off ? ` title="${esc(why)}"` : ''}><input type="checkbox" data-in="aiKind" data-k="${key}"${k[key] && !off ? ' checked' : ''}${off ? ' disabled' : lock}><span${off ? ' class="k-mut"' : ''}>${word}</span></label>`;
     const docs = st.documents.map((d) => opt(d.name, `${d.name} · 섹션 ${count(d.sections)}`, a.doc)).join('');
     const fields = [
-      k.concepts ? `<label class="k-f">초안 이름<input class="k-in" type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="예: 주문 · 결제 초안" maxlength="40"><span class="k-hint">미입력 시 자료 이름 사용</span></label>` : '',
-      k.rules && on ? `<label class="k-f">규칙의 바탕 문서<select class="k-in" data-in="aiDoc" aria-label="규칙의 바탕 문서"><option value="">문서 선택</option>${docs}${st.sample_policy ? opt('@sample', '예시 정책서', a.doc) : ''}</select>${!st.documents.length ? '<span class="k-hint">업로드된 문서 없음</span>' : ''}</label>` : '',
-      k.rules && on && a.sections.length ? `<label class="k-f">절<select class="k-in" data-in="aiSection" aria-label="절"><option value="">문서 전체</option>${a.sections.map((x) => opt(x, x, a.section)).join('')}</select></label>` : '',
-      k.rules && on ? `<label class="k-f">범위<select class="k-in" data-in="aiTarget" aria-label="범위"><option value="">자동</option>${st.targets.map((t) => opt(t.id, `${t.label} · ${t.id}`, a.target)).join('')}</select></label>` : '',
+      k.concepts ? `<label class="k-f">초안 이름<input class="k-in" type="text" data-in="dname" value="${esc(S.dr.label)}" placeholder="예: 주문 · 결제 초안" maxlength="40"${lock}><span class="k-hint">미입력 시 자료 이름 사용</span></label>` : '',
+      k.rules && on ? `<label class="k-f">규칙의 바탕 문서<select class="k-in" data-in="aiDoc" aria-label="규칙의 바탕 문서"${lock}><option value="">문서 선택</option>${docs}${st.sample_policy ? opt('@sample', '예시 정책서', a.doc) : ''}</select>${!st.documents.length ? '<span class="k-hint">업로드된 문서 없음</span>' : ''}</label>` : '',
+      k.rules && on && a.sections.length ? `<label class="k-f">절<select class="k-in" data-in="aiSection" aria-label="절"${lock}><option value="">문서 전체</option>${a.sections.map((x) => opt(x, x, a.section)).join('')}</select></label>` : '',
+      k.rules && on ? `<label class="k-f">범위<select class="k-in" data-in="aiTarget" aria-label="범위"${lock}><option value="">자동</option>${st.targets.map((t) => opt(t.id, `${t.label} · ${t.id}`, a.target)).join('')}</select></label>` : '',
     ].filter(Boolean).join('');
     return `<section class="k-card" aria-labelledby="ai-h1"><div class="k-ch"><h2 id="ai-h1">생성 대상</h2><span class="k-s">1</span></div><div class="k-cb">
       <div class="ai-ticks">${tick('concepts', 'Entity · Property · Relation')}${tick('questions', '검증 질문', !k.concepts, 'Entity 초안과 함께 생성')}${tick('rules', '규칙', !on, '언어 모델 연결 필요')}</div>
@@ -468,7 +513,7 @@
     const rows = [
       st.packs.length ? ['도메인 팩', st.packs.map((p) => `${p.label} ${p.version}`).join(' · '), '표준 Object · 규제 규칙', on('도메인 팩 사용')] : null,
       ['업로드 자료', m.files ? `${mats || `자료 ${count(m.files)}건`}${m.included < m.files - m.raw ? ` · 초안 포함 ${count(m.included)}` : ''}` : '업로드 자료 없음', '근거 인용 · 고객사 규칙',
-        m.included ? on('자료 사용') : `<a class="k-lnk" href="#catalog">자료 업로드</a>`],
+        m.included ? on('자료 사용') : canEdit() ? '<a class="k-lnk" href="#catalog">자료 업로드</a>' : ''],
       ['기존 정의', [e.objects ? `Object ${count(e.objects)}` : '', `Entity ${count(e.entities)}`, `규칙 ${count(e.rules)}`].filter(Boolean).join(' · '), '중복 · 충돌 검사', on('기존 정의 필수')],
     ].filter(Boolean);
     return `<section class="k-card" aria-labelledby="ai-h2"><div class="k-ch"><h2 id="ai-h2">바탕 자료</h2><span class="k-s">2</span>${st.samples && !m.files && canEdit() ? '<div class="k-push"><button class="k-btn sm" data-act="aiSample">샘플 데이터 불러오기</button></div>' : ''}</div>
@@ -497,18 +542,18 @@
     const a = S.h2.ai, w = st.waiting, last = st.jobs[0];
     const chip = (tone, word) => `<span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span>`;
     const row = (n, word, what, mark) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${n} · ${word}</span><span class="k-s">${what}</span></span><span class="k-h end">${mark}</span></div>`;
-    const made = !!(last || w.draft);
+    const made = !!(last || w.draft), failed = !!(last && last.error);
     return `<section class="k-card" aria-labelledby="ai-h4"><div class="k-ch"><h2 id="ai-h4">생성 단계</h2>${last ? `<span class="k-s">마지막 생성 · ${esc(aiWhen(last.at))}</span>` : ''}</div>
       ${row(1, '자료 읽기', '테이블 · 정의서 · 문서', st.materials.included ? chip('ok', `자료 ${count(st.materials.included)}건`) : chip('', '자료 없음'))}
-      ${row(2, '후보 생성', 'Entity → Property → Relation → 규칙', a.run ? chip('b', '생성 중') : made ? chip('ok', '완료') : chip('', '대기'))}
-      ${row(3, '자동 검사', '키 없는 테이블 · 출처 없는 규칙 · 정의와 충돌', a.run || !last ? chip('', '대기') : last.made.excluded ? chip('warn', `${count(last.made.excluded)}건 제외`) : chip('ok', '통과'))}
+      ${row(2, '후보 생성', 'Entity → Property → Relation → 규칙', a.run ? chip('b', '생성 중') : failed ? chip('bad', '실패') : made ? chip('ok', '완료') : chip('', '대기'))}
+      ${row(3, '자동 검사', '키 없는 테이블 · 출처 없는 규칙 · 정의와 충돌', a.run || !last || failed ? chip('', '대기') : last.made.excluded ? chip('warn', `${count(last.made.excluded)}건 제외`) : chip('ok', '통과'))}
       ${row(4, '검토 대기 등록', '규칙 초안 · 개념 초안', w.all ? chip('b', `${count(w.all)}건`) : chip('', '0건'))}
       ${a.run && a.said ? `<p class="k-cf line">${esc(a.said)}</p>` : ''}
       <div class="k-cb" style="padding-top:12px"><div class="k-wrap g8"><a class="k-btn pri" href="#ruleagent">규칙 초안 검토</a><a class="k-btn" href="#${aiConcepts()}">개념 초안 검토</a></div></div></section>`;
   }
 
   function aiJobs(st) {
-    const rows = st.jobs.map((j) => `<tr><td class="nw">${esc(aiWhen(j.at))}</td><td>${esc([AI_JOB[j.kind] || j.kind, j.scope || j.label].filter(Boolean).join(' · '))}</td><td>초안 ${count(j.made.all)} · 제외 ${count(j.made.excluded)}</td><td><span class="k-chip ${AI_JOB_TONE[j.state] || ''}">${esc(j.state_label)}</span></td></tr>`).join('');
+    const rows = st.jobs.map((j) => `<tr><td class="nw">${esc(aiWhen(j.at))}</td><td>${esc([AI_JOB[j.kind] || j.kind, j.scope || j.label].filter(Boolean).join(' · '))}</td><td>${j.error ? `<span class="k-s">${esc(j.error)}</span>` : `초안 ${count(j.made.all)} · 제외 ${count(j.made.excluded)}`}</td><td><span class="k-chip ${AI_JOB_TONE[j.state] || ''}">${esc(j.state_label)}</span></td></tr>`).join('');
     return `<section class="k-card" aria-labelledby="ai-h5" id="ai-jobs"><div class="k-ch"><h2 id="ai-h5">생성 작업</h2></div>
       ${rows ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">시각</th><th scope="col">범위</th><th scope="col">결과</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="k-cf line">생성 이력이 없습니다.</p>'}</section>`;
   }
@@ -524,7 +569,7 @@
     const none = st.composed ? '' : '<p class="k-note warn">모듈 구성 온톨로지가 아니어서 초안을 변경 요청으로 등록할 수 없습니다.</p>';
     return `${head}${tiles}${none}<div class="k-cols"><div class="k-c3 wide">${aiTargets(st)}${aiSources(st)}${aiGuide(st)}</div>
       <div class="k-v g24" style="flex:2 1 360px;min-width:0">${aiSteps(st)}${aiJobs(st)}</div></div>
-      ${kNext([['ruleagent', '규칙 초안 검토'], [aiConcepts(), '개념 초안 검토'], ['catalog', '자료 업로드'], ['evidence', '근거 지도']])}`;
+      ${kNext([['ruleagent', '규칙 초안 검토'], [aiConcepts(), '개념 초안 검토'], ...(canEdit() ? [['catalog', '자료 업로드']] : []), ['evidence', '근거 지도']])}`;
   }
 
   screen('ai', {
@@ -553,7 +598,7 @@
     aiHist: () => { const box = $('#ai-jobs'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     aiGuide: () => { S.h2.ai.guide = !S.h2.ai.guide; render(); },
     aiGuideEdit: () => { S.dr.setup = true; S.dr.rulesOpen = true; location.hash = '#data'; },
-    aiSample: async () => { try { await api('files/sample', {}); S.files = await api('files'); S.cat.st = null; S.st = await api('state'); S.h2.ai.st = await api('home/ai'); toast('샘플 데이터를 불러왔습니다.'); render(); } catch (e) { fail(e); } },
+    aiSample: async () => { try { await api('files/sample', {}); S.files = await api('files'); S.cat.st = null; S.st = await api('state'); S.h2.ai.st = await api('home/ai'); toast('샘플 데이터를 추가했습니다.'); render(); } catch (e) { fail(e); } },
     aiRun: async () => {
       const a = S.h2.ai, st = a.st, k = a.kinds;
       if (!st || a.run) return;
@@ -562,9 +607,10 @@
       if (k.concepts && !st.tables) { toast('테이블 데이터나 테이블 정의서가 없어 Entity 초안을 생성하지 못했습니다. 자료를 먼저 업로드해 주세요.', true); return; }
       if (rules && !a.doc) { toast('바탕 문서를 선택하지 않아 규칙 초안을 생성하지 못했습니다. 바탕 문서를 선택해 주세요.', true); return; }
       a.run = true;
-      let made = 0;
+      let now = null;  // the making under way, recorded as failed when it fails
       try {
         if (k.concepts) {
+          now = { kind: 'concepts', scope: S.dr.label || '' };
           a.said = 'Entity · Property · Relation 후보 생성 중'; render();
           if (!S.files || S.files.busy || S.files.error) S.files = await api('files');
           if (!S.dr.rules && S.files.rules) S.dr.rules = JSON.parse(JSON.stringify(S.files.rules));
@@ -574,9 +620,9 @@
           S.st = await api('state');
           startDraft();
           a.st = await api('home/ai/job', { kind: 'concepts' });
-          made += 1;
         }
         if (rules) {
+          now = { kind: 'rules', scope: [a.doc === '@sample' ? '예시 정책서' : a.doc, a.section].filter(Boolean).join(' › ') };
           a.said = '규칙 후보 생성 중 · 최대 5분'; render();
           const src = a.doc === '@sample' ? await api('policy/sample', {}) : await api('policy/document', { name: a.doc, section: a.section });
           if (!src.ok) throw new Error(src.error);
@@ -588,14 +634,12 @@
           if (!r.ok) throw new Error(r.error);
           S.ed = { name: '', label: r.label, applied: false, isNew: true, text: r.yaml, check: null, busy: false };
           S.change = null;
-          a.st = await api('home/ai/job', { kind: 'rules', scope: [a.doc === '@sample' ? '예시 정책서' : a.doc, a.section].filter(Boolean).join(' › ') });
-          made += 1;
+          a.st = await api('home/ai/job', { kind: 'rules', scope: now.scope });
         }
         toast('초안을 생성했습니다.');
       } catch (e) {
-        fail(e);
-        if (made) toast(`${e.message || e} 생성된 초안은 검토 대기 목록에 있습니다.`, true);
-        try { a.st = await api('home/ai'); } catch (_) { /* the state before stays */ }
+        fail(e);  // a draft made before the failure is in 생성 작업 and 검토 대기, the failed one beside it
+        try { a.st = now ? await api('home/ai/job', { ...now, error: e.message || String(e) }) : await api('home/ai'); } catch (_) { /* the state before stays */ }
       }
       a.run = false; a.said = '';
       S.home.ov = null;

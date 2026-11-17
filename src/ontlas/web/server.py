@@ -27,6 +27,8 @@ LOGIN = "ontlas_login"
 MEDIA = "/media/demo.mp4"
 KIT = "/graph-kit.js"
 MAX_BODY = 64 * 1024
+MODULE_BODY_MAX = 1 << 20  # a module's whole text, sent from its editor (api.MODULE_TEXT_MAX, with room for the JSON around it)
+MODULE_ROUTES = {"module/check", "module/save", "module/propose"}
 
 
 def page() -> bytes:
@@ -138,7 +140,9 @@ def guide(video: Path | None) -> dict:
 
 
 
-OWN_LOCK = {"space/ask/more"}  # these wait on a model for tens of seconds and take the session's lock only around its data
+# these take the session's lock only around its data, or not at all: a model's answer waits tens of seconds, and a
+# password touches the sign-ins only, so it does not queue behind a long measurement of the shared space
+OWN_LOCK = {"space/ask/more", "entry/password"}
 
 
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
@@ -262,10 +266,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 pass  # players drop a range request as soon as they have what they need
 
-        def _body(self) -> dict:
+        def _body(self, most: int = MAX_BODY) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_BODY:
-                raise ValueError("요청 크기가 64KB 한도를 초과해 처리하지 못했습니다. 요청을 줄여 다시 시도해 주세요.")
+            if n > most:
+                raise ValueError(f"요청 크기가 {most >> 10}KB 한도를 초과해 처리하지 못했습니다. 요청을 줄여 다시 시도해 주세요.")
             raw = self.rfile.read(n) if n else b"{}"
             try:
                 data = json.loads(raw.decode("utf-8") or "{}")
@@ -372,7 +376,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 q = {k: v[0] for k, v in parse_qs(url.query).items()}
                 return self._api("POST", url.path[5:], {"path": q.get("path", ""), "data": self.rfile.read(n)})
             try:
-                body = self._body()
+                body = self._body(MODULE_BODY_MAX if url.path[5:] in MODULE_ROUTES else MAX_BODY)
             except (ValueError, json.JSONDecodeError) as e:
                 return self._json(400, {"error": str(e)})
             self._api("POST", url.path[5:], body)
@@ -773,7 +777,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "change/decide":
                 return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")))
             if route == "flow/save":
-                return s.save_flow(a.get("settings") if isinstance(a.get("settings"), dict) else {})
+                return s.save_flow(a.get("settings") if isinstance(a.get("settings"), dict) else {},
+                                   a.get("base") if isinstance(a.get("base"), dict) else None)
             if route == "identity/resolve":
                 return s.resolve_identity(str(a.get("name", "")))
             if route == "sync":

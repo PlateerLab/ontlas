@@ -82,7 +82,7 @@
       const on = (S.impact && S.impact.module === r.name) || S.libFocus === r.name || S.libFocus === r.label;
       const req = r.requires.length ? r.requires.map((q) => `<button class="k-chip w" data-act="libshow" data-mod="${esc(q)}">${esc(shortMod((st.library.find((y) => y.name === q) || {}).label || q))}</button>`).join(' ') : '<span class="k-mut">-</span>';
       return `<tr class="${on ? 'on' : ''}"><td><span class="k-b" title="${esc(r.name)}">${esc(r.label || r.name)}</span>${r.description ? `<div class="k-xs o2-desc" title="${esc(r.description)}">${esc(r.description)}</div>` : ''}
-          <div class="k-h g4" style="margin-top:2px">${canEdit() ? `<button class="k-lnk flat" data-act="medit" data-mod="${esc(r.name)}">파일 편집</button>${first && known('model') ? `<button class="k-lnk flat" data-act="libmodel" data-name="${esc(first)}" style="margin-left:12px">그래프 탐색</button>` : ''}` : ''}${waiting.map((c) => `<a class="k-chip warn" href="#changes?id=${encodeURIComponent(c.id)}" style="margin-left:8px">${esc(c.id)} 검토 중 → ${esc(c.version)}</a>`).join('')}</div></td>
+          <div class="k-h g4" style="margin-top:2px">${canEdit() ? `<button class="k-lnk flat" data-act="medit" data-mod="${esc(r.name)}" style="margin-right:12px">파일 편집</button>` : ''}${first && known('model') ? `<a class="k-lnk flat" href="#model?entity=${encodeURIComponent(first)}">그래프 탐색</a>` : ''}${waiting.map((c) => `<a class="k-chip warn" href="#changes?id=${encodeURIComponent(c.id)}" style="margin-left:8px">${esc(c.id)} 검토 중 → ${esc(c.version)}</a>`).join('')}</div></td>
         <td title="${esc(r.kind_label)}">${esc(r.kind)}</td><td class="k-code">${esc(r.version)}</td><td>${req}</td><td class="i3">${esc(counts(r.counts))}</td>
         <td><input type="checkbox"${r.on ? ' checked' : ''}${canEdit() ? '' : ' disabled'} data-act="toggle" data-mod="${esc(r.name)}" aria-label="${esc(r.label || r.name)} 적용"></td></tr>`;
     }).join('');
@@ -111,4 +111,8 @@
 
   document.addEventListener('click', (ev) => {  // the export list closes when something outside it is chosen
     document.querySelectorAll('details.o2-menu[open]').forEach((d) => { if (!d.contains(ev.target) || ev.target.closest('.k-pop a')) d.open = false; });
+  });
+  document.addEventListener('keydown', (ev) => {  // and with Escape, back to the button that opened it
+    if (ev.key !== 'Escape') return;
+    document.querySelectorAll('details.o2-menu[open]').forEach((d) => { d.open = false; if (d.contains(document.activeElement)) d.querySelector('summary').focus(); });
   });

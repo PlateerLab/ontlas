@@ -29,9 +29,11 @@
   // a changed field in the words these screens use for it (the shared history says some of them as the definition spells them)
   const BND_FIELD = { transform: '변환식', source_type: '원천 자료형', columns: '키 컬럼', column: '컬럼', source: '소스', table: '테이블', values: '허용값', labels: '코드 변환표', parameters: 'Parameter', criteria: '전제조건',
     transition_to: '처리 후 상태', approval: '승인 기준', call: '호출 API', undo: '되돌리기 호출', set: '변경 값', auto_within: '자동 승인 기준', auto_agents: 'Agent 자동 실행', query: '질의 정의', params: '입력값', match: '대상',
-    edges: 'Relation', where: '조건', return: '반환', order: '정렬', limit: '건수', label: '이름', description: '설명', key: '키', status: '상태', cite: '근거', target: '대상 Entity', expect: '기대 결과', decision: '규칙' };
+    edges: 'Relation', where: '조건', return: '반환', order: '정렬', limit: '건수', label: '이름', 라벨: '이름', type: '타입', description: '설명', key: '키', status: '상태', cite: '근거', target: '대상 Entity', expect: '기대 결과', decision: '규칙' };
   const bndFieldWord = (label) => String(label).split(/ · |\./).map((w) => BND_FIELD[w] || w).join(' · ');
-  const bndHist = (kind) => async (x) => (await itemHistoryOf(ITEM[kind], x)).map((e) => ({ ...e, rows: e.rows.map((r) => ({ ...r, label: bndFieldWord(r.label) })), all: e.all.map((r) => ({ ...r, label: bndFieldWord(r.label) })) }));
+  const bndWords = (list) => list.map((e) => ({ ...e, rows: e.rows.map((r) => ({ ...r, label: bndFieldWord(r.label) })), all: e.all.map((r) => ({ ...r, label: bndFieldWord(r.label) })) }));
+  const bndHist = (kind) => async (x) => bndWords(await itemHistoryOf(ITEM[kind], x));
+  const bndFlat = (d, pre = '') => Object.entries(d || {}).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? bndFlat(v, `${pre}${k}.`) : [[`${pre}${k}`, v]]));
   const bndSame = (a, b) => ['string', 'enum'].includes(a) ? ['string', 'enum'].includes(b) : ['integer', 'decimal'].includes(a) ? ['integer', 'decimal'].includes(b) : ['date', 'datetime'].includes(a) ? ['date', 'datetime', 'string'].includes(b) : a === 'boolean' ? ['boolean', 'integer'].includes(b) : true;
 
   // ---- Mapping: one Property and the column it reads -------------------------------------------------------------------
@@ -39,10 +41,35 @@
   const bndCodeRows = (text) => String(text || '').split(/\n|·/).map((s) => s.trim()).filter(Boolean).map((line) => { const parts = line.split(/\s*(?:=|→|:)\s*/); return [parts[0].trim(), parts.slice(1).join(' ').trim()]; }).filter(([v]) => v);
   function bndMapOf(d) { const m = bndM(), p = m && m.properties.find((x) => bndMapId(x) === d.prop); return p ? { m, p, o: bndObj(m, p.object), t: bndTable(m, (bndObj(m, p.object) || {}).table) } : { m, p: null, o: null, t: null }; }
 
+  // the Property of the same name on a parent of its Entity (an edit writes the Property on the Entity, which then reads it as its own)
+  const bndParentProp = (m, p) => { const seen = new Set(); let o = bndObj(m, p.object);
+    while (o && o.parent && !seen.has(o.parent)) { seen.add(o.parent); const q = m.properties.find((x) => x.object === o.parent && x.name === p.name && !x.inherited); if (q) return q; o = bndObj(m, o.parent); }
+    return null; };
+  // the column a Property read before an edit, where the history has it unwritten: its own name (a column not written is
+  // the Property's name), or for one taken from a parent the parent's column; a Property made in this edit read none
+  const bndColWas = (m, p) => { const q = bndParentProp(m, p); return q ? q.column || p.name : p.module === 'workspace' ? null : p.name; };
+  const bndColRows = (m, p, rows) => rows.map((r) => (r.label === '컬럼' && (r.before === null || r.before === undefined || r.before === '') ? { ...r, before: bndColWas(m, p) } : r));
+  // a Property an Entity takes from its parent is written on the Entity by its first edit, which the history calls an
+  // addition: what it read before that is the parent's Property, and only what differs from it changed
+  async function bndMapHist(x) {
+    const m = bndM(), list = await itemHistoryOf(ITEM.map, x), parent = bndParentProp(m, x.p);
+    list.forEach((e) => { e.rows = bndColRows(m, x.p, e.rows); });
+    if (parent && list.length) {
+      const [raw, base] = await Promise.all([api('item/history?element=' + encodeURIComponent(`property:${x.p.object}.${x.p.name}`)), api('item/history?element=' + encodeURIComponent(`property:${parent.object}.${parent.name}`))]).catch(() => [null, null]);
+      const e0 = raw && raw.entries[raw.entries.length - 1];
+      if (e0 && e0.kind === 'added' && base && base.now && raw.entries.length === list.length) {
+        const was = Object.fromEntries([['column', parent.column || x.p.name], ...bndFlat(base.now)]);
+        list[list.length - 1].rows = e0.fields.filter((f) => String(was[f.field] ?? '') !== String(f.after ?? ''))
+          .map((f) => ({ label: f.label, before: was[f.field] ?? null, after: f.said && f.said[1] != null ? f.said[1] : f.after }));
+      }
+    }
+    return bndWords(list);
+  }
+
   item('map', {
-    word: 'Mapping', under: 'sources', list: 'sources', load: bndReady, history: bndHist('map'),
-    lead: { delete: 'Property의 컬럼 · 변환식 Mapping을 기본값으로 되돌립니다.' },
-    find: (id) => { const m = bndM(), p = m && m.properties.find((x) => bndMapId(x) === id); return p ? { p, o: bndObj(m, p.object) } : null; },
+    word: 'Mapping', under: 'sources', list: 'sources', load: bndReady, history: bndMapHist,
+    lead: { form: 'Mapping을 추가하거나 편집합니다.', delete: 'Property의 컬럼 · 변환식 Mapping을 기본값으로 되돌립니다.' },
+    find: (id) => { const m = bndM(), p = m && m.properties.find((x) => bndMapId(x) === id && !x.expr); return p ? { p, o: bndObj(m, p.object) } : null; },  // a computed Property has no Mapping
     code: (x) => `${x.o ? x.o.label || x.o.name : x.p.object}.${x.p.label || x.p.name}`,
     name: (x) => (x.p.expr ? '계산 Property' : x.o && x.o.table ? `${x.o.table}.${bndCol(x.p)}` : '테이블 미지정'),
     element: (x) => `property:${x.p.object}.${x.p.name}`,
@@ -74,14 +101,15 @@
       if (d.how === 'expr') out.push(d.transform.trim() ? { say: '변환식 있음', sub: d.transform.trim(), tone: 'ok' } : { say: '변환식이 비어 있음', tone: 'warn', word: '확인 필요' });
       return out;
     },
-    valid: (d) => (!d.prop ? 'Property를 선택해 주세요.' : ''),
+    valid: (d) => (!d.prop ? 'Property가 없어 저장하지 못했습니다. Property를 선택해 주세요.' : ''),
     save: async (d) => {
       const { p } = bndMapOf(d), rows = bndCodeRows(d.codes);
       const args = { object: p.object, name: p.name, transform: d.how === 'expr' ? d.transform.trim() : '', source_type: d.how === 'expr' ? d.source_type : '', status: d.status };
       if (!(p.columns && p.columns.length > 1)) args.column = String(d.column).trim();
       if (d.how === 'code' && rows.length) { args.values = rows.map(([v]) => v); args.labels = Object.fromEntries(rows.filter(([, w]) => w)); }
       await bndEdits([['update_property', args]]);
-      S.bnd.map.sel = d.prop;
+      const now = bndM(), o = bndObj(now, p.object);  // the list comes back on the Object of the Property saved, with its row picked
+      Object.assign(S.bnd.map, { sel: d.prop, area: o && bndAreas(now).some((a) => a.name === o.area) ? o.area : '' });
       return { element: `property:${p.object}.${p.name}` };
     },
     remove: async (x) => { await bndEdits([['update_property', { object: x.p.object, name: x.p.name, column: '', transform: '', source_type: '' }]]); },
@@ -91,9 +119,23 @@
 
   // ---- Binding: one Entity, its table, its key, and the column of each Property ---------------------------------------
   const bndBindRows = (m, name) => bndStored(m, name).map((p) => ({ prop: p.name, column: bndCol(p), was: bndCol(p), fixed: bndCols(p).length > 1 }));
+  // a Binding is the Entity's table and key and the column each of its Properties reads: the column edits of its
+  // Properties are its history too, one entry a change request
+  async function bndBindHist(o) {
+    const m = bndM(), def = ITEM.binding, own = await itemHistoryOf(def, o);
+    const per = await Promise.all(bndStored(m, o.name).map(async (p) => (await itemHistoryOf({ ...def, element: () => `property:${o.name}.${p.name}` }, o))
+      .map((e) => ({ ...e, rows: bndColRows(m, p, e.rows.filter((r) => ['컬럼', '키 컬럼'].includes(r.label))).map((r) => ({ ...r, label: `${p.label || p.name} · ${r.label}` })) }))
+      .filter((e) => e.rows.length)));
+    const at = new Map(own.map((e) => [e.cp || 'draft', e]));
+    per.flat().forEach((e) => { const k = e.cp || 'draft', has = at.get(k);
+      if (has) has.rows = [...has.rows, ...e.rows];
+      else at.set(k, { ...e, all: e.rows.map((r) => ({ label: r.label, value: r.after })) }); });
+    const list = [...at.values()].sort((a, b) => (a.cp ? 1 : 0) - (b.cp ? 1 : 0) || String(b.at || '').localeCompare(String(a.at || '')));
+    return bndWords(list);
+  }
   item('binding', {
-    word: 'Binding', under: 'bind', list: 'bind', load: bndReady, history: bndHist('binding'),
-    lead: { delete: 'Entity의 테이블 연결을 해제합니다.' },
+    word: 'Binding', under: 'bind', list: 'bind', load: bndReady, history: bndBindHist,
+    lead: { form: 'Binding을 추가하거나 편집합니다.', delete: 'Entity의 테이블 연결을 해제합니다.' },
     find: (id) => { const m = bndM(); return m ? bndObj(m, id) : null; },
     code: (o) => bndEnt(o), name: (o) => o.table || '테이블 미지정', element: (o) => `object:${o.name}`,
     draft: (o) => { const m = bndM(), pick = !o && itemParam('entity') ? bndObj(m, itemParam('entity')) : null, e = o || pick; return { entity: e ? e.name : '', table: e ? e.table || '' : '', key: e ? e.key || '' : '', rows: e ? bndBindRows(m, e.name) : [], reason: '' }; },
@@ -134,7 +176,7 @@
       } else out.push({ say: noSource() ? '데이터 소스 미연결' : '원천 테이블 없음', sub: d.table, tone: noSource() ? 'note' : 'warn', word: noSource() ? '' : '확인 필요' });
       return out;
     },
-    valid: (d) => (!d.entity ? 'Entity를 선택해 주세요.' : !d.table.trim() ? '테이블을 선택해 주세요.' : ''),
+    valid: (d) => (!d.entity ? 'Entity가 없어 저장하지 못했습니다. Entity를 선택해 주세요.' : !d.table.trim() ? '테이블이 없어 저장하지 못했습니다. 테이블을 선택해 주세요.' : ''),
     save: async (d, x) => {
       const m = bndM(), o = bndObj(m, d.entity), ops = [];
       const head = { name: o.name, table: d.table.trim() };
@@ -144,7 +186,9 @@
       if (!ops.length) throw new Error('변경된 내용이 없어 저장하지 않았습니다.');
       await bndEdits(ops);
       Object.assign(S.bnd.bind, { sel: o.name, d: null, sql: null, prof: null });
-      return { element: `object:${o.name}`, go: `bind?entity=${encodeURIComponent(o.name)}` };
+      // the reason is kept on what changed: the Entity when its table or key did, else the first column changed
+      const el = ops[0][0] === 'update_object' ? `object:${o.name}` : `property:${o.name}.${ops[0][1].name}`;
+      return { element: el, go: `bind?entity=${encodeURIComponent(o.name)}` };
     },
     uses: async (o) => {
       const m = bndM(), props = bndStored(m, o.name), links = m.links.filter((l) => (l.source === o.name || l.target === o.name) && (l.on || l.via));
@@ -178,19 +222,20 @@
       const v = arg[1];
       if (v && typeof v === 'object') { if (!v.param) return null; conds.push({ prop: ref(arg[0]), op, value: `$${v.param}` }); } else conds.push({ prop: ref(arg[0]), op, value: String(v) });
     }
-    return { start, link, fields, conds, order: ir.order || null, limit: ir.limit || null };  // the order and the limit are kept as they were written
+    return { start, link, fields, conds, order: ir.order || null, limit: ir.limit || null, as: [x, y || 'y'] };  // the order, the limit and the aliases are kept as they were written
   }
   function bndQIr(d) {  // what the form says, as the query's definition; a mistake in the JSON is thrown as a sentence
     if (d.mode === 'json') { try { return JSON.parse(d.json); } catch (e) { throw new Error('질의 정의가 JSON 형식이 아니어서 읽지 못했습니다. 형식을 확인해 주세요.'); } }
     const m = bndM(), rel = bndRels(m, d.start).find((r) => `${r.name}:${r.forward ? 1 : 0}` === d.link);
     const typeOf = (p) => (bndOwn(m, p.startsWith('y.') && rel ? rel.other : d.start).find((q) => q.name === p.slice(2)) || {}).type;
     const key = (bndObj(m, d.start) || {}).key;
+    const [ax, ay] = d.as || ['x', 'y'], at = (r) => `${r.startsWith('y.') ? ay : ax}.${r.slice(2)}`;  // the form says x · y, the definition its own aliases
     const conds = d.conds.filter((c) => c.prop && c.value !== '').map((c) => { const t = typeOf(c.prop), raw = String(c.value);
       const v = raw.startsWith('$') ? { param: raw.slice(1) } : ['integer', 'decimal'].includes(t) && !Number.isNaN(Number(raw)) ? Number(raw) : t === 'boolean' ? raw === 'true' : raw;
-      return { [c.op]: [c.prop, v] }; });
-    const fields = d.fields.filter((f) => f.startsWith('x.') || rel);
-    return { match: { x: d.start, ...(rel ? { y: rel.other } : {}) }, ...(rel ? { edges: [rel.forward ? ['x', rel.name, 'y'] : ['y', rel.name, 'x']] } : {}),
-      ...(conds.length ? { where: conds.length > 1 ? { and: conds } : conds[0] } : {}), return: fields.length ? fields : [`x.${key}`], ...(d.order ? { order: d.order } : {}), ...(d.limit ? { limit: d.limit } : {}) };
+      return { [c.op]: [at(c.prop), v] }; });
+    const fields = d.fields.filter((f) => f.startsWith('x.') || rel).map(at);
+    return { match: { [ax]: d.start, ...(rel ? { [ay]: rel.other } : {}) }, ...(rel ? { edges: [rel.forward ? [ax, rel.name, ay] : [ay, rel.name, ax]] } : {}),
+      ...(conds.length ? { where: conds.length > 1 ? { and: conds } : conds[0] } : {}), return: fields.length ? fields : [`${ax}.${key}`], ...(d.order ? { order: d.order } : {}), ...(d.limit ? { limit: d.limit } : {}) };
   }
   function bndQCheck(d) {  // the definition being written, read into every store's language; the answer comes after the checks are drawn
     const Q = S.bnd.q;
@@ -203,15 +248,32 @@
     return { busy: true };
   }
 
+  // a piece of a query's definition as a person reads it: c placed o, c.status = $status, c.name → name
+  function bndIrSaid(v) {
+    if (v === null || v === undefined || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map((x) => (Array.isArray(x) ? x.map(bndIrSaid).join(' ') : bndIrSaid(x))).join(' · ');
+    if (Object.keys(v).length === 1 && 'param' in v) return `$${v.param}`;
+    if ('col' in v) return `${v.col}${v.as && v.as !== String(v.col).split('.').pop() ? ` → ${v.as}` : ''}`;
+    return Object.entries(v).map(([k, x]) => { const op = QB_OPS.find(([o]) => o === k);
+      if (k === 'and' || k === 'or') return (x || []).map(bndIrSaid).join(k === 'and' ? ' · ' : ' 또는 ');
+      return op && Array.isArray(x) && x.length === 2 ? `${bndIrSaid(x[0])} ${op[1]} ${bndIrSaid(x[1])}` : `${k} ${bndIrSaid(x)}`; }).join(' · ');
+  }
+  const bndQHist = async (x) => (await bndHist('queryitem')(x)).map((e) => ({ ...e, rows: e.rows.map((r) => ({ ...r, before: bndIrSaid(r.before), after: bndIrSaid(r.after) })),
+    all: e.all.map((r) => ({ ...r, value: bndIrSaid(r.value) })) }));
+
   item('queryitem', {
-    word: '질의', under: 'query', list: 'query', history: bndHist('queryitem'),
+    word: '질의', under: 'query', list: 'query', history: bndQHist,
     load: async () => { await bndReady(); await bndQLoad(true); },
     find: (id) => bndQOf(id), code: (x) => x.name, name: (x) => x.label, element: (x) => `query:${x.name}`,
     draft: (x) => {
       const m = bndM(), seed = S.bnd.q.seed, copy = !x && itemParam('copy') ? bndQOf(itemParam('copy')) : null, from = x || copy;
       S.bnd.q.seed = null; S.bnd.q.chk = null;
       const blank = { start: (m.objects.find((o) => o.table) || m.objects[0] || {}).name || '', link: '', fields: [], conds: [], order: null, limit: null };
-      if (from) { const b = bndQForm(from.ir); return { name: x ? x.name : '', label: x ? x.label : `${from.label} 사본`, description: from.description || '', mode: b ? 'form' : 'json', ...(b || blank), json: JSON.stringify(from.ir, null, 2), reason: '' }; }
+      if (from) {
+        const b = bndQForm(from.ir), d = { name: x ? x.name : '', label: x ? x.label : `${from.label} 사본`, description: from.description || '', mode: b ? 'form' : 'json', ...(b || blank), json: JSON.stringify(from.ir, null, 2), reason: '' };
+        try { d.ir0 = JSON.stringify(bndQIr(d)); } catch (e) { d.ir0 = ''; }  // the definition as the form says it on opening: saved again only when changed
+        return d;
+      }
       if (seed) { let ir = null; try { ir = JSON.parse(seed.ir); } catch (e) { ir = null; } const b = ir && bndQForm(ir); return { name: '', label: seed.label || '', description: '', mode: b ? 'form' : 'json', ...(b || blank), json: ir ? JSON.stringify(ir, null, 2) : String(seed.ir || ''), reason: '' }; }
       return { name: '', label: '', description: '', mode: 'form', ...blank, json: '', reason: '' };
     },
@@ -226,9 +288,9 @@
         : `${bndFld('시작 Entity', `<select class="k-in" data-in="bndQStart">${m.objects.map((o) => bndOpt(o.name, bndEnt(o), d.start)).join('')}</select>`)}
           ${bndFld('경유 Relation', `<select class="k-in" data-in="bndQLink"><option value="">없음</option>${rels.map((r) => bndOpt(`${r.name}:${r.forward ? 1 : 0}`, `${r.label} → ${lab(r.other)}`, d.link)).join('')}</select>`)}
           <div class="k-full k-f">입력값 · 조건<div class="k-v">${conds}<div><button class="k-lnk flat" type="button" data-act="bndRowAdd" data-l="conds">${ki('plus', 16, 1.75)}조건</button></div></div><span class="k-hint">입력값은 $이름 · 예: $orderNo</span></div>
-          <div class="k-full k-f">반환 Property<div class="bnd-ticks">${props.map(([k, w]) => `<label class="k-ck pill"><input type="checkbox" data-in="bndTick" data-k="${esc(k)}"${d.fields.includes(k) ? ' checked' : ''}>${esc(w)}</label>`).join('')}</div><span class="k-hint">미선택 시 시작 Entity 키 반환</span></div>`;
+          <div class="k-full k-f">반환 Property<div class="bnd-ticks">${props.map(([k, w]) => `<label class="k-ck pill"><input type="checkbox" data-in="bndTick" data-k="${esc(k)}"${d.fields.includes(k) ? ' checked' : ''}>${esc(w)}</label>`).join('')}</div></div>`;
       return `
-        ${bndBase(`${bndFld('이름', bndIn('label', d.label, ' placeholder="예: 주문별 반품 가능 상품"'))}${bndFld('키', bndIn('name', d.name, ` class="k-in mono" placeholder="예: returnableItems"${x ? ' disabled' : ''}`), 'API · MCP 호출 키')}
+        ${bndBase(`${bndFld('이름', bndIn('label', d.label, ' placeholder="예: 주문별 반품 가능 상품"'))}${bndFld('키', bndIn('name', d.name, ` class="k-in mono" placeholder="예: returnableItems"${x ? ' disabled' : ''}`), x ? '' : '영문자로 시작, 영문자 · 숫자 · _')}
           <div class="k-full">${seg}</div>${body}
           <div class="k-full">${bndFld('설명', `<textarea class="k-in" rows="3" data-in="itf" data-k="description">${esc(d.description)}</textarea>`)}</div>
           ${x ? bndFld('허용 접근 정책', `<input class="k-in" type="text" value="${esc(x.roles.map((r) => r.name).join(' · ') || '없음')}" disabled>`) : ''}`)}`;
@@ -250,10 +312,10 @@
       if (o) out.push(o.table ? { say: '시작 Entity 테이블 확인됨', sub: `${o.label || o.name} · ${o.table}`, tone: 'ok' } : { say: '시작 Entity 테이블 미지정', tone: 'warn', word: '확인 필요' });
       return out;
     },
-    valid: (d) => (!d.label.trim() ? '이름을 입력해 주세요.' : !d.name.trim() ? '키를 입력해 주세요.' : ''),
+    valid: (d) => (!d.label.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.name.trim() ? '키가 없어 저장하지 못했습니다. 키를 입력해 주세요.' : ''),
     save: async (d, x) => {
-      const ir = bndQIr(d), name = d.name.trim();
-      const ops = x ? [['update_query', { name, label: d.label.trim(), description: d.description.trim(), query: ir }]]
+      const ir = bndQIr(d), name = d.name.trim(), same = !!x && !!d.ir0 && JSON.stringify(ir) === d.ir0;
+      const ops = x ? [['update_query', { name, label: d.label.trim(), description: d.description.trim(), ...(same ? {} : { query: ir }) }]]
         : [['new_query', { name, label: d.label.trim(), description: d.description.trim(), query: ir }]];
       await bndEdits(ops);
       Object.assign(S.bnd.q, { st: null, sel: name, tr: null, run: null });
@@ -280,7 +342,7 @@
   // ---- Action: what it takes, what must hold, what it changes, who lets it through ---------------------------------------
   const bndTyped = (x) => (x === 'true' ? true : x === 'false' ? false : (x !== '' && !Number.isNaN(Number(x)) ? Number(x) : x));
   item('act', {
-    word: 'Action', under: 'actions', list: 'actions', load: bndReady, history: bndHist('act'),
+    word: 'Action', under: 'actions', list: 'actions', load: bndReady, history: bndHist('act'), lead: { form: 'Action을 추가하거나 편집합니다.' },
     find: (id) => { const m = bndM(); return (m && m.actions.find((a) => a.name === id)) || null; },
     code: (a) => a.name, name: (a) => a.label, element: (a) => `action:${a.name}`,
     draft: (a) => {
@@ -301,7 +363,8 @@
       const decisions = [['', '규칙 선택'], ...m.decisions.filter((y) => y.target === d.target).map((y) => [y.name, y.label])];
       const outs = (r) => { const y = m.decisions.find((z) => z.name === r.decision); return y ? y.outputs.filter((o) => o.name !== 'reason') : []; };
       const expect = (r, i) => { const o = outs(r).find((y) => y.name === r.field); return o && o.type === 'boolean' ? bndRowSel('criteria', i, 'value', [['true', '가능'], ['false', '불가']], r.value) : bndRowIn('criteria', i, 'value', r.value, ' placeholder="기대값"'); };
-      const subjects = [['', '기준 선택'], ...props.filter((p) => ['integer', 'decimal'].includes(p.type)).map((p) => [`p:${p.name}`, `Property · ${p.label || p.name}`]), ...d.params.filter((p) => p.name).map((p) => [`i:${p.name}`, `Parameter · ${p.label || p.name}`])];
+      const sets = new Set(d.set.map((r) => r.prop).filter(Boolean));
+      const subjects = [['', '기준 선택'], ...props.filter((p) => ['integer', 'decimal'].includes(p.type) && sets.has(p.name)).map((p) => [`p:${p.name}`, `Property · ${p.label || p.name}`]), ...d.params.filter((p) => p.name).map((p) => [`i:${p.name}`, `Parameter · ${p.label || p.name}`])];
       const roles = x ? m.roles.map((r) => { const v = [bndCan(r, 'request', x.name) ? '요청' : '', bndCan(r, 'execute', x.name) ? '실행' : ''].filter(Boolean); return v.length ? `${r.name} ${v.join(' · ')}` : ''; }).filter(Boolean).join(' · ') : '';
       const card = (title, add, body, foot = '') => `<section class="k-card"><div class="k-ch"><h2>${title}</h2>${add}</div>${body}${foot ? `<p class="k-cf line">${foot}</p>` : ''}</section>`;
       const tbl = (heads, rows, none) => (rows ? `<div class="k-x"><table class="k-t"><thead><tr>${heads.map((h) => `<th scope="col">${h}</th>`).join('')}<th scope="col"></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="k-cf line">${none}</p>`);
@@ -309,12 +372,12 @@
           ${bndFld('대상 Entity', `<select class="k-in" data-in="bndActTarget"${x ? ' disabled' : ''}>${m.objects.map((o) => bndOpt(o.name, bndEnt(o), d.target)).join('')}</select>`)}
           ${bndFld('처리 후 상태', machine ? `<select class="k-in" data-in="itf" data-k="transition_to"><option value="">변경 없음</option>${machine.states.map((s) => bndOpt(s, s, d.transition_to)).join('')}</select>` : '<select class="k-in" disabled><option>상태 전이 없음</option></select>')}
           ${bndFld('승인 기준', `<select class="k-in" data-in="itf" data-k="approval" data-re>${[['always', '항상 승인 필요'], ['auto', '항상 자동 실행'], ['limit', '기준 이내 자동 · 초과 시 승인']].map(([v, w]) => bndOpt(v, w, d.approval)).join('')}</select>`)}
-          ${bndFld('호출 API', `<div class="bnd-rowed"><select class="k-in" data-in="itf" data-k="method" style="flex:0 0 108px" aria-label="방식">${['POST', 'PUT', 'PATCH', 'DELETE', 'GET'].map((y) => bndOpt(y, y, d.method)).join('')}</select>${bndIn('url', d.url, ' class="k-in mono" placeholder="https://service.example/claims/$key" aria-label="호출 주소"')}</div>`, '선택 사항')}
+          ${bndFld('호출 API', `<div class="bnd-rowed"><select class="k-in" data-in="itf" data-k="method" style="flex:0 0 108px" aria-label="방식">${['POST', 'PUT', 'PATCH', 'DELETE', 'GET'].map((y) => bndOpt(y, y, d.method)).join('')}</select><input class="k-in mono" type="text" data-in="bndActUrl" data-k="url" value="${esc(d.url)}" placeholder="https://service.example/claims/$key" aria-label="호출 주소"></div>`, '선택 사항')}
           ${x ? bndFld('허용 접근 정책', `<input class="k-in" type="text" value="${esc(roles || '없음')}" disabled>`) : ''}
           <div class="k-full">${bndFld('근거', bndIn('cite', d.cite, ' placeholder="예: 반품 정책서 v1.2 4조"'))}</div>`)}
         ${card('Parameter', bndRowAdd('params', 'Parameter'), tbl(['이름', '타입', '설명'], d.params.map((r, i) => `<tr><td>${bndRowIn('params', i, 'name', r.name, ' placeholder="영문 이름" style="font-family:var(--mono)"')}</td><td>${bndRowSel('params', i, 'type', TYPES.filter((y) => y !== 'enum').map((y) => [y, TYPE_WORD[y]]), r.type)}</td><td>${bndRowIn('params', i, 'label', r.label, ' placeholder="설명"')}</td><td>${bndRowDel('params', i)}</td></tr>`).join(''), 'Parameter 없음'))}
         ${card('전제조건 규칙', bndRowAdd('criteria', '전제조건'), tbl(['규칙', '결과', '기대값'], d.criteria.map((r, i) => `<tr><td>${bndRowSel('criteria', i, 'decision', decisions, r.decision, true)}</td><td>${bndRowSel('criteria', i, 'field', [['', '결과 선택'], ...outs(r).map((o) => [o.name, outWord(m.decisions.find((y) => y.name === r.decision), o.name)])], r.field, true)}</td><td>${expect(r, i)}</td><td>${bndRowDel('criteria', i)}</td></tr>`).join(''), '전제조건 없음'))}
-        ${card('변경 값', bndRowAdd('set', '변경 값'), tbl(['Property', '값'], d.set.map((r, i) => `<tr><td>${bndRowSel('set', i, 'prop', [['', 'Property 선택'], ...props.map((p) => [p.name, p.label || p.name])], r.prop)}</td><td>${bndRowIn('set', i, 'value', r.value, ' placeholder="값 또는 $Parameter"')}</td><td>${bndRowDel('set', i)}</td></tr>`).join(''), '변경 값 없음'))}
+        ${card('변경 값', bndRowAdd('set', '변경 값'), tbl(['Property', '값'], d.set.map((r, i) => `<tr><td>${bndRowSel('set', i, 'prop', [['', 'Property 선택'], ...props.map((p) => [p.name, p.label || p.name])], r.prop, true)}</td><td>${bndRowIn('set', i, 'value', r.value, ' placeholder="값 또는 $Parameter"')}</td><td>${bndRowDel('set', i)}</td></tr>`).join(''), '변경 값 없음'))}
         ${d.approval === 'limit' ? card('자동 승인 기준', bndRowAdd('limits', '기준'), tbl(['기준', '방식', '값'], d.limits.map((r, i) => `<tr><td>${bndRowSel('limits', i, 'subject', subjects, r.subject)}</td><td>${bndRowSel('limits', i, 'kind', LIMIT_KIND, r.kind)}</td><td>${bndRowIn('limits', i, 'value', r.value, ' placeholder="값 또는 @기준값"')}</td><td>${bndRowDel('limits', i)}</td></tr>`).join(''), '기준 없음')
           + `<div class="k-cb" style="padding-top:12px"><label class="k-ck mid"><input type="checkbox" data-in="itf" data-k="agents"${d.agents ? ' checked' : ''}>Agent 요청 기준 이내 자동 실행</label></div>`) : ''}
         ${d.url.trim() ? `<section class="k-card"><div class="k-ch"><h2>호출 본문 · 되돌리기</h2></div><div class="k-cb">${bndFld('요청 본문', bndIn('body', d.body, ' class="k-in mono" placeholder="JSON · $key · $Parameter · $after.Property"'))}${bndFld('되돌리기 호출 주소', bndIn('undo_url', d.undo_url, ' class="k-in mono"'), '선택 사항')}</div></section>` : ''}`;
@@ -330,10 +393,15 @@
       out.push(!used.length ? { say: '전제조건 없음', tone: 'note' } : draft.length ? { say: '미배포 규칙을 전제조건으로 사용', sub: draft.join(', '), tone: 'warn', word: '확인 필요' } : { say: '전제조건 규칙 배포 확인됨', tone: 'ok' });
       if (d.params.some((p) => p.name && !IDENT.test(p.name))) out.push({ say: 'Parameter 이름 형식 오류 · 영문자 · 숫자 · _', tone: 'bad' });
       if (d.approval === 'limit' && !d.limits.some((l) => l.subject && l.value !== '')) out.push({ say: '자동 승인 기준이 비어 있음', sub: '항상 승인 필요로 저장', tone: 'warn', word: '확인 필요' });
+      if (d.approval === 'limit') {
+        const sets = d.set.map((r) => r.prop), names = d.params.map((p) => p.name);
+        const off = d.limits.filter((l) => l.subject && l.value !== '' && (l.subject[0] === 'p' ? !sets.includes(l.subject.slice(2)) : !names.includes(l.subject.slice(2)) || ['delta', 'percent'].includes(l.kind)));
+        if (off.length) out.push({ say: '자동 승인 기준 오류 · 변경 값의 Property 또는 Parameter의 최댓값 · 최솟값', sub: off.map((l) => l.subject.slice(2)).join(', '), tone: 'bad' });
+      }
       out.push(d.url.trim() ? { say: '호출 API 있음', sub: `${d.method} ${d.url.trim()}`, tone: 'ok' } : { say: '호출 API 없음 · 원천 값 변경', tone: 'note' });
       return out;
     },
-    valid: (d) => (!d.label.trim() ? '이름을 입력해 주세요.' : !d.name.trim() ? '키를 입력해 주세요.' : !d.target ? '대상 Entity를 선택해 주세요.' : ''),
+    valid: (d) => (!d.label.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.name.trim() ? '키가 없어 저장하지 못했습니다. 키를 입력해 주세요.' : !d.target ? '대상 Entity가 없어 저장하지 못했습니다. 대상 Entity를 선택해 주세요.' : ''),
     save: async (d, x) => {
       const name = d.name.trim();
       const parameters = Object.fromEntries(d.params.filter((p) => p.name).map((p) => [p.name.trim(), { type: p.type || 'string', label: p.label || p.name }]));
@@ -360,4 +428,8 @@
     },
     remove: async (a) => { await bndEdits([['delete_action', { name: a.name }]]); Object.assign(S.bnd.act, { sel: '', res: null }); },
   });
-  Object.assign(INPUT, { bndActTarget: (t) => { Object.assign(S.it.d, { target: t.value, criteria: [], set: [], limits: [], transition_to: '' }); render(); } });
+  Object.assign(INPUT, {
+    bndActTarget: (t) => { Object.assign(S.it.d, { target: t.value, criteria: [], set: [], limits: [], transition_to: '' }); render(); },
+    bndActUrl: (t) => { const d = S.it.d; if (!d) return; const had = !!d.url.trim(); d.url = t.value; bndRecheck();
+      if (had !== !!d.url.trim()) { const at = t.selectionStart; render(); const el = $('input[data-in=bndActUrl]'); if (el) { el.focus(); el.setSelectionRange(at, at); } } },
+  });

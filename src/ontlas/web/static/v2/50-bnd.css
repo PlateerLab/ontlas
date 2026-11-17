@@ -7,8 +7,6 @@
 .bnd-src { flex:2 1 520px; min-width:0; padding:16px 20px; border-radius:12px; border:1px dashed var(--dash); background:var(--panel); box-sizing:border-box; }
 .bnd-src.on { border:1px solid var(--line); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
 .bnd-ico { width:36px; height:36px; border-radius:8px; background:var(--sunk); display:inline-flex; align-items:center; justify-content:center; color:var(--ink3); flex:none; }
-.bnd-say { flex:1 1 220px; padding:12px; border-radius:8px; background:var(--ok-soft); line-height:1.6; font-size:13px; }
-.bnd-say.w { background:#fff; border:1px solid var(--line); }
 .bnd-two { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
 .bnd-dash { padding:16px 20px; border-radius:12px; border:1px dashed var(--dash); }
 .k-t th.bnd-dashl, .k-t td.bnd-dashl { border-left:1px dashed var(--dash); }
@@ -76,6 +74,7 @@
   .bnd-two { grid-template-columns:minmax(0, 1fr); }
   .bnd-tree { flex:1 1 100%; }
   .bnd-h { font-size:20px; }
+  .bnd-sel { min-width:160px; }  /* the Property each column reads stays readable; the table scrolls in its box */
 }
 .k-t th.bnd-arrow, .k-t td.bnd-arrow { width:24px; padding-left:0; padding-right:0; color:var(--muted); }
 

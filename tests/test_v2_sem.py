@@ -178,6 +178,44 @@ def test_the_history_of_a_named_value_and_of_a_metric(session):
         get(session, "sem/history", kind="object", name="OrderItem")
 
 
+def test_the_history_says_codes_and_references_in_words(session):
+    session.manage_edit("update_rule_card", {"id": "unit-price-not-negative", "status": "review"})
+    (e,) = get(session, "sem/history", kind="card", name="unit-price-not-negative")["entries"]
+    assert {"field": "status", "label": "상태", "before": "승인", "after": "검토 중"} in e["fields"]
+    assert e["all"]["적용 대상"] == "주문상품 · 결제 단가" and e["all"]["유형"] == "계산" and e["all"]["검사"] == "주문상품 · 결제 단가 0 이상"
+    session.manage_edit("update_metric", {"name": "returnRate", "formula": {"match": {"i": "OrderItem"}, "where": {"eq": ["i.item_status", "RETURN_REQUESTED"]},
+                                                                           "value": {"count": "i"}}})
+    (m,) = get(session, "sem/history", kind="metric", name="returnRate")["entries"]
+    (f,) = [f for f in m["fields"] if f["field"] == "formula"]
+    assert f["before"] == "주문상품 건수 · 조건 주문상품 · 주문상품 상태 같음 RETURNED" and f["after"].endswith("같음 RETURN_REQUESTED")
+    assert m["all"]["기준 시각"] == "배송 완료 시각 · 주문상품 · 배송 완료 일시" and not any("{" in str(v) for v in m["all"].values())
+    session.manage_edit("add_parameter", {"name": "probe_flag", "type": "boolean", "value": "true"})
+    (b,) = get(session, "sem/history", kind="parameter", name="probe_flag")["entries"]
+    assert b["all"]["값"] == "예" and b["all"]["자료형"] == "참 · 거짓"
+
+
+def test_an_axiom_card_is_changed_as_its_module_s_request_whatever_the_module_s_size(session, monkeypatch):
+    """The module is the library's own, not a pasted file: the AXIOM module of a whole law runs past a pasted file's size."""
+    import yaml
+
+    from ontlas.web import api as web_api
+
+    monkeypatch.setattr(web_api, "MODULE_TEXT_MAX", 64)
+    out = post(session, "sem/axiom/card", id="law-return-min-days", fields={"result": "고친 결과"})
+    cr = session.studio.changes.requests[out["change"]["id"]]
+    assert out["ok"] and cr.status == "pending" and not session._ws().dirty
+    assert next(c for c in yaml.safe_load(cr.text)["rule_cards"] if c["id"] == "law-return-min-days")["result"] == "고친 결과"
+    with pytest.raises(ValueError, match="AXIOM 규칙이 아니어서"):
+        post(session, "sem/axiom/card", id="acme-vip-window", fields={"result": "고친 결과"})
+
+
+def test_an_axiom_card_taken_out_is_a_removal_in_its_history(session):
+    out = post(session, "sem/axiom/card", id="law-refund-cap", remove=True)
+    (e,) = get(session, "sem/history", kind="card", name="law-refund-cap")["entries"]
+    assert e["change"] == out["change"]["id"] and e["kind"] == "removed" and e["all"] == {}
+    assert e["fields"] and all(f["after"] is None for f in e["fields"])
+
+
 def test_a_viewer_reads_the_drafts_and_an_editor_does_not_decide():
     from ontlas.web.team import User
 

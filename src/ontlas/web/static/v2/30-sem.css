@@ -18,6 +18,7 @@ select.smr-pick.on { background-color:var(--blue-soft); color:var(--blue-t); fon
 .k-t td .smr-cite { white-space:normal; }
 .smr-rules { table-layout:fixed; min-width:640px; }
 .smr-rules td.smr-id { white-space:normal; overflow-wrap:anywhere; }
+.smr-pickb { border:0; background:none; padding:0; font:inherit; color:inherit; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
 .smr-facts { display:grid; grid-template-columns:max-content minmax(0, 1fr); gap:6px 16px; align-items:baseline; }
 .smr-facts:empty { display:none; }
 .smr-facts .k-chip { white-space:normal; }

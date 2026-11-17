@@ -2,7 +2,7 @@
   // Each screen reads what the server measures now: the stores that answer, the callers of /v1 the server was started
   // with, the roles of the definition. Nothing here is a sample.
 
-  S.ops = { key: '', tg: null, cn: null, busy: {}, sec: 'cfg', fold: {}, sel: '', landed: '', shown: '', tryPol: '', reidx: false };
+  S.ops = { key: '', tg: null, cn: null, busy: {}, sec: 'cfg', fold: {}, sel: '', landed: '', shown: '', top: 0, tryPol: '', who: {}, reidx: false };
   const OPS_TABS = ['adapters', 'connect', 'roles'];
   const opsMine = () => OPS_TABS.includes(S.tab) || S.tab === 'vectors' || S.tab.startsWith('policy-') || S.tab.startsWith('store-');
 
@@ -15,8 +15,8 @@
   function opsFresh() {
     const k = `${S.st.library_id}:${S.st.pipeline}`;
     if (S.ops.key === k) return;
-    if (S.ops.key) S.conn = null;  // the decisions and Entities a call is tried on are another ontology's now
-    Object.assign(S.ops, { key: k, tg: null, cn: null, sel: '' });
+    if (S.ops.key) S.conn = null;  // the decisions, Entities and policies a call is tried on are another ontology's now
+    Object.assign(S.ops, { key: k, tg: null, cn: null, sel: '', tryPol: '', who: {} });
   }
   const opsGood = (x) => (x && !x.error && !x.busy ? x : null);
   const opsWait = (say = '불러오는 중입니다.') => `<section class="k-card pad"><p class="k-p s">${esc(say)}</p></section>`;
@@ -37,10 +37,15 @@
   const OPS_LOGIC = { rules: '규칙 판정 · AXIOM › Custom › Standard', owl2rl: 'OWL 2 RL · 계층 · 관계 추론', shapes: 'Restriction · 제약 검사' };
   const OPS_LLM = { off: '미연결', idle: '연결됨 · 호출 전', ok: '연결됨', bad: '응답 없음' };
 
-  async function opsCheck(say) {  // every store asked the same questions, the reasoners run: the page runs it once on opening
+  async function opsCheck() {  // every store asked the same questions, the reasoners run: the page runs it once on opening
     S.adbusy = true; render();
-    try { S.adrep = await api('adapters/check', {}); S.adrs = null; S.ops.cn = null; if (say) toast('저장소를 점검했습니다.'); } catch (e) { fail(e); }
+    try { S.adrep = await api('adapters/check', {}); S.adrs = null; S.ops.cn = null; } catch (e) { fail(e); }
     S.adbusy = false; render();
+  }
+  // what the stores hold changed: read them again and check again, the screen left as it is (and where it is) meanwhile
+  async function opsReload() {
+    try { S.ad = await api('adapters'); } catch (e) { S.ad = { error: e.message || String(e) }; render(); return; }
+    opsCheck();
   }
 
   function opsStorage() {
@@ -59,10 +64,10 @@
     const langsOk = a.languages.filter((l) => l.compiled === a.queries).length;
     const tile = (label, big, sub) => `<div class="k-stat ops-tile"><p>${label}</p><p class="k-big">${big}</p><p class="k-s ops-sub">${sub}</p></div>`;
     const dash = (label, big, sub) => `<div class="ops-dash ops-tile"><p class="k-s">${label}</p><p class="k-big mut">${big}</p><p class="k-s ops-sub">${sub}</p></div>`;
-    const agree = !several ? dash('저장소 간 결과 일치', '미연결', '비교 기준 · 소스 DB')
-      : tile('저장소 간 결과 일치', rep && rep.graph ? `${rep.graph.agree} / ${rep.graph.queries}` : S.adbusy ? '<span class="k-mut k-14">점검 중</span>' : '-', rep ? `점검 ${esc(String(rep.graph_ms))}ms` : '비교 기준 · 소스 DB');
+    const agree = !several ? dash('저장소 간 결과 일치', '미연결', '비교 기준 · 데이터 소스')
+      : tile('저장소 간 결과 일치', rep && rep.graph ? `${rep.graph.agree} / ${rep.graph.queries}` : S.adbusy ? '<span class="k-mut k-14">점검 중</span>' : '-', rep ? `점검 ${esc(String(rep.graph_ms))}ms` : '비교 기준 · 데이터 소스');
     const tiles = `<section class="k-wrap" aria-label="구성 요약">
-      ${tile('저장소', `${rowsAll - (a.source.connected ? 0 : 1) - down} <span class="k-mut k-14" style="font-weight:400">/ ${rowsAll}</span>`, a.source.connected ? (down ? `응답 없음 ${down}` : '모두 정상') : '소스 DB 미연결')}
+      ${tile('저장소', `${rowsAll - (a.source.connected ? 0 : 1) - down} <span class="k-mut k-14" style="font-weight:400">/ ${rowsAll}</span>`, a.source.connected ? (down ? `응답 없음 ${down}` : '모두 정상') : '데이터 소스 미연결')}
       ${tile('질의 변환 언어', `${langsOk} / ${a.languages.length}`, `등록 질의 ${count(a.queries)}개 기준`)}
       ${tile('추론 엔진', count(a.reasoners.length), esc(a.reasoners.map((r) => r.name).join(' · ')) || '-')}
       ${tile('임베딩', a.embedder.dim ? `${count(a.embedder.dim)} <span class="k-mut k-14" style="font-weight:400">차원</span>` : '-', esc(a.embedder.kind))}
@@ -71,18 +76,18 @@
     const dom = (st.layers.find((l) => l.kind === 'domain') || st.layers[0] || { modules: [] }).modules[0];
     const seen = (name) => (cn ? cn.stores.find((x) => x.name === name) : null);
     const said = (x) => (!x ? '' : x.state === 'bad' ? `<span class="k-chip bad" title="${esc(x.error)}">응답 없음</span>` : x.state === 'idle' ? '<span class="k-chip">호출 전</span>' : `<span class="k-chip ok">응답 ${esc(String(x.ms))}ms</span>`);
-    const graphAgree = rep && rep.graph ? `<span class="k-chip ${rep.graph.agree === rep.graph.queries ? 'ok' : 'bad'}">${rep.graph.agree === rep.graph.queries ? '소스와 일치' : '소스와 다름'} ${rep.graph.agree} / ${rep.graph.queries}</span>` : '';
+    const graphAgree = rep && rep.graph ? `<span class="k-chip ${rep.graph.agree === rep.graph.queries ? 'ok' : 'bad'}">${rep.graph.agree === rep.graph.queries ? '데이터 소스와 일치' : '데이터 소스와 다름'} ${rep.graph.agree} / ${rep.graph.queries}</span>` : '';
     const check = sp && sp.check;
     const dropCol = canAdd && a.vectors.length > 1;
     const storeRows = [`<tr><td class="k-code b">library</td><td>정의 원본</td><td>YAML 모듈 ${count(st.modules_on)}개</td><td>Object · Entity · 규칙 · 버전</td><td><span class="k-chip ok">기준${dom ? ` · v${esc(dom.version)}` : ''}</span></td>${dropCol ? '<td></td>' : ''}</tr>`]
       .concat(a.backends.map((b) => { const x = seen(b.name);
-        return `<tr><td class="k-code b">${esc(b.name)}</td><td>${b.source ? '소스 저장소' : '그래프 저장소'}</td><td>${x ? `${esc(BACKEND_KIND[String(x.kind).toLowerCase()] || x.kind)} · ${esc(x.language)}` : `${esc(b.language)} ${esc(b.dialect || '')}`}</td>
-          <td>${b.source ? `소스 값${b.write ? ' · Action 반영' : ''} · 비교 기준` : `판정 · 질의 · 그래프 탐색${b.load ? ' · 소스 변경분 반영' : ''}`}</td><td><span class="k-h g6">${said(x)}${b.source ? '' : graphAgree}</span></td>${dropCol ? '<td></td>' : ''}</tr>`; }))
+        return `<tr><td class="k-code b">${esc(b.name)}</td><td>${b.source ? '데이터 소스' : '그래프 저장소'}</td><td>${x ? `${esc(BACKEND_KIND[String(x.kind).toLowerCase()] || x.kind)} · ${esc(x.language)}` : `${esc(b.language)} ${esc(b.dialect || '')}`}</td>
+          <td>${b.source ? `레코드 값${b.write ? ' · Action 반영' : ''} · 비교 기준` : `판정 · 질의 · 그래프 탐색${b.load ? ' · 데이터 소스 변경분 반영' : ''}`}</td><td><span class="k-h g6">${said(x)}${b.source ? '' : graphAgree}</span></td>${dropCol ? '<td></td>' : ''}</tr>`; }))
       .concat(a.vectors.map((v) => { const r = rep && rep.vectors[v.name];
         const state = v.error ? `<span class="k-chip bad">${esc(v.error)}</span>` : `${check ? `<span class="k-chip ${check.found === check.questions ? 'ok' : 'warn'}">검색 적중 ${check.found} / ${check.questions}</span>` : '<span class="k-chip ok">색인됨</span>'}${r && !r.error ? `<span class="k-chip ${r.agree ? 'ok' : 'bad'}">검색 결과 일치 ${Math.round(r.overlap * 100)}%</span>` : r && r.error ? `<span class="k-chip bad">${esc(r.error)}</span>` : ''}`;
         return `<tr><td class="k-code b">${esc(v.name)}</td><td>벡터 저장소</td><td>${esc(v.kind)} · ${esc(v.metric)}<br><span class="k-s">지원 ${esc(a.vector_kinds.join(' · '))}</span></td><td>문서 청크 ${count(v.count)}개 · 정의 검색</td><td><span class="k-h g6">${state}</span></td>
-          ${dropCol ? `<td class="r">${v.primary ? '' : `<button class="k-lnk bad" data-act="opsStoreDrop" data-name="${esc(v.name)}">폐기</button>`}</td>` : ''}</tr>`; }))
-      .concat(a.source.connected ? [] : [`<tr class="ops-off"><td class="k-code b">source</td><td>소스 저장소</td><td>-</td><td>소스 값 · Action 반영 · 비교 기준</td><td>${known('db') ? '<a class="k-chip dash" href="#db">미연결 · 데이터 소스</a>' : '<span class="k-chip dash">미연결</span>'}</td>${dropCol ? '<td></td>' : ''}</tr>`]).join('');
+          ${dropCol ? `<td class="r">${v.primary ? '' : `<button class="k-lnk bad" data-act="opsStoreDrop" data-name="${esc(v.name)}">삭제</button>`}</td>` : ''}</tr>`; }))
+      .concat(a.source.connected ? [] : [`<tr class="ops-off"><td class="k-code b">source</td><td>데이터 소스</td><td>-</td><td>레코드 값 · Action 반영 · 비교 기준</td><td>${known('db') ? '<a class="k-chip dash" href="#db">미연결 · 데이터 소스</a>' : '<span class="k-chip dash">미연결</span>'}</td>${dropCol ? '<td></td>' : ''}</tr>`]).join('');
     const stores = `<section class="k-card" id="opscfg" aria-labelledby="ops-st-h"><div class="k-ch"><h2 id="ops-st-h">저장소</h2></div>
       <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">구분</th><th scope="col">종류</th><th scope="col">역할</th><th scope="col">상태</th>${dropCol ? '<th scope="col"></th>' : ''}</tr></thead><tbody>${storeRows}</tbody></table></div></section>`;
     // the languages: every registered query compiled now; a language a store reads also runs there
@@ -93,14 +98,16 @@
     }).join('');
     const langs = `<section class="k-card" aria-labelledby="ops-ql-h" style="flex:3 1 520px"><div class="k-ch"><h2 id="ops-ql-h">질의 언어</h2><span class="k-s k-push">등록 질의 ${count(a.queries)}개 기준</span></div>
       <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">언어</th><th scope="col">변환</th><th scope="col">실행 저장소</th></tr></thead><tbody>${langRows}</tbody></table></div></section>`;
-    // the reasoners: each run on the projected graph, when asked or by the check
+    // the reasoners: each run on the projected graph, when asked or by the check. The check runs every reasoner it can
+    // whenever the graph store holds the projected rows, so one it did not run has no graph to run on
     const reasRows = a.reasoners.map((r) => {
       const x = (S.adrs || {})[r.name] || (rep && rep.runs && rep.runs[r.name]);
+      const bare = !r.missing && !x && rep && !S.adbusy;
       const found = x && (x.found !== undefined ? x.found : (x.findings || []).length);
       const g = rep && rep.reasoners && rep.reasoners[r.logic], twin = g && Object.keys(g.engines).length > 1;
-      const mark = r.missing ? `<span class="k-chip warn">${esc(r.missing)}</span>` : !x ? (S.adbusy ? '<span class="k-chip">점검 중</span>' : '') : x.error ? `<span class="k-chip bad" title="${esc(x.error)}">실행 실패</span>` : `<span class="k-chip ${found ? 'warn' : 'ok'}">${found ? `발견 ${count(found)}건` : '발견 없음'}</span>`;
+      const mark = r.missing ? `<span class="k-chip warn">${esc(r.missing)}</span>` : bare ? '<span class="k-chip">그래프 데이터 없음</span>' : !x ? (S.adbusy ? '<span class="k-chip">점검 중</span>' : '') : x.error ? `<span class="k-chip bad" title="${esc(x.error)}">실행 실패</span>` : `<span class="k-chip ${found ? 'warn' : 'ok'}">${found ? `발견 ${count(found)}건` : '발견 없음'}</span>`;
       const last = x && !x.error ? `<br><span class="k-s">추론 결과 ${count(x.count)}건 · ${esc(String(x.ms))}ms${twin ? ` · 동일 논리 엔진 대비 ${g.same ? '일치' : '불일치'}` : ''}</span>` : x && x.error ? `<br><span class="k-s k-bad">${esc(x.error)}</span>` : '';
-      return `<div class="ops-reas"><span class="k-g0"><span class="k-code k-b">${esc(r.name)}</span><br><span class="k-s">${esc(OPS_LOGIC[r.logic] || r.logic)}</span>${last}</span>${mark}${r.missing ? '' : `<button class="k-lnk" data-act="adreason" data-name="${esc(r.name)}">실행</button>`}</div>`;
+      return `<div class="ops-reas"><span class="k-g0"><span class="k-code k-b">${esc(r.name)}</span><br><span class="k-s">${esc(OPS_LOGIC[r.logic] || r.logic)}</span>${last}</span>${mark}${r.missing ? '' : `<button class="k-lnk" data-act="adreason" data-name="${esc(r.name)}"${bare ? ' disabled' : ''}>실행</button>`}</div>`;
     }).join('');
     const reas = `<section class="k-card" aria-labelledby="ops-rz-h" style="flex:2 1 340px"><div class="k-ch ops-line"><h2 id="ops-rz-h">추론 엔진</h2></div>${reasRows || '<p class="k-cf">등록된 추론 엔진이 없습니다.</p>'}</section>`;
     return `${head}${seg}${tiles}${stores}<div class="k-cols">${langs}${reas}</div>${opsVectors(a, sp, cn)}${opsUsedBy(a, tg)}
@@ -122,7 +129,7 @@
     else {
       const v = S.vemb, choices = (sp.embedders || []).filter((c) => !(c.kind === e.kind && (c.name || '') === e.name));
       const plan = v && v.plan ? `<div class="k-v"><div class="k-h g6"><span class="k-chip">문서 ${count(v.plan.files.length)}개</span><span class="k-chip">청크 ${count(v.plan.chunks)}개</span><span class="k-chip">${count(v.plan.chars)}자</span><span class="k-chip warn">예상 ${v.plan.seconds < 1 ? '1초 미만' : `약 ${Math.ceil(v.plan.seconds)}초`}</span></div>
-          <p class="k-note warn">변경하면 벡터 저장소를 비우고 전체 청크를 다시 임베딩합니다.</p>
+          <p class="k-note warn">벡터 저장소 초기화 · 전체 청크 재임베딩</p>
           <div class="k-h"><button class="k-btn pri sm" data-act="vembuse"${v.busy ? ' disabled' : ''}>${v.busy ? '임베딩 중' : '변경 후 재임베딩'}</button><button class="k-btn sm" data-act="vembcancel">취소</button></div></div>` : '';
       const change = choices.length && isSysAdmin() ? opsFold('model', '임베딩 모델 변경', `<div class="k-v ops-in"><div class="k-h"><select class="k-in ops-pick" data-in="vemb" aria-label="임베딩 모델"><option value="">모델 선택</option>${choices.map((c) => { const at = (sp.embedders || []).indexOf(c); return `<option value="${at}"${v && String(v.pick) === String(at) ? ' selected' : ''}>${esc(c.name || c.kind)}${c.dim ? ` · ${c.dim}차원` : ''}</option>`; }).join('')}</select>
           <button class="k-btn" data-act="vembplan"${!v || v.pick === '' || v.busy ? ' disabled' : ''}>${v && v.busy && !v.plan ? '측정 중' : '영향 확인'}</button></div>${plan}</div>`) : '';
@@ -153,32 +160,42 @@
     opsFresh();
     opsRead('tg', 'ops/targets');
     opsRead('cn', 'connections');
-    opsRead('ad', 'adapters', () => S.ad, (x) => { S.ad = x; if (!x.error && !S.adrep && !S.adbusy) setTimeout(() => { if (S.tab === 'adapters' || S.tab === 'vectors') opsCheck(false); }, 0); });
+    opsRead('ad', 'adapters', () => S.ad, (x) => { S.ad = x; if (!x.error && !S.adrep && !S.adbusy) setTimeout(() => { if (S.tab === 'adapters' || S.tab === 'vectors') opsCheck(); }, 0); });
     opsRead('sp', 'space', () => S.sp, (x) => { S.sp = x; });
   }
   screen('adapters', { area: 'work', word: '저장소 · 엔진', view: opsStorage, after: opsStorageAfter });
-  // the older address of the vector screen opens the same screen at its section
+  // the older address of the vector screen opens the same screen at its section: when first drawn, and once more when
+  // the check has filled the rows above it, unless the person has scrolled since
   screen('vectors', {
-    area: 'work', word: '저장소 · 엔진', under: 'adapters', find: false, crumb: () => ['운영', '저장소 · 엔진'],
+    area: 'work', word: '저장소 · 엔진', under: 'adapters', find: false,
     view: () => { S.ops.sec = 'vec'; return opsStorage(); },
-    after: () => { opsStorageAfter(); const el = $('#opsvec'); if (el && S.ops.shown !== location.hash + ':' + !!S.ad) { S.ops.shown = location.hash + ':' + !!S.ad; el.scrollIntoView({ block: 'start' }); } },
+    after: () => {
+      opsStorageAfter();
+      const el = $('#opsvec'), main = $('#main'), key = String(!!S.adrep);
+      if (!el || S.ops.shown === key) return;
+      if (!S.ops.shown || main.scrollTop === S.ops.top) { el.scrollIntoView({ block: 'start' }); S.ops.top = main.scrollTop; }
+      S.ops.shown = key;
+    },
   });
+  // each arrival at #vectors scrolls to its section; at #adapters the screen opens at its top, its first section lit
+  window.addEventListener('hashchange', () => { S.ops.shown = ''; S.ops.sec = 'cfg'; });
 
   Object.assign(ACT, {
     opsRetry: () => { ['tg', 'cn'].forEach((k) => { if (S.ops[k] && S.ops[k].error) S.ops[k] = null; }); if (S.ad && S.ad.error) S.ad = null; if (S.sp && S.sp.error) S.sp = null; if (S.conn && S.conn.error) S.conn = null; if (S.mg.st && S.mg.st.error) S.mg.st = null; render(); },
-    opsCheck: () => opsCheck(true),
+    opsCheck: () => opsCheck(),
     opsGo: (t) => { S.ops.sec = t.dataset.k; t.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === t)); const el = document.getElementById(t.dataset.to); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
     opsFold: (t) => { S.ops.fold[t.dataset.k] = !S.ops.fold[t.dataset.k]; render(); },
     opsReindex: async () => {
       if (S.ops.reidx) return;
       S.ops.reidx = true; render();
-      try { const r = await api('ops/reindex', {}); S.sp = r.space; S.ad = null; S.adrep = null; toast(`청크 ${count(r.chunks)}개를 재색인했습니다.`); } catch (e) { fail(e); }
-      S.ops.reidx = false; render();
+      let done = false;
+      try { const r = await api('ops/reindex', {}); S.sp = r.space; toast(`청크 ${count(r.chunks)}개의 색인을 생성했습니다.`); done = true; } catch (e) { fail(e); }
+      S.ops.reidx = false;
+      if (done) opsReload(); else render();
     },
     opsStoreDrop: async (t) => {
-      if (!window.confirm(`벡터 저장소 ${t.dataset.name}을(를) 폐기하시겠습니까?`)) return;
-      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); S.ad = null; S.adrep = null; toast('벡터 저장소를 폐기했습니다.'); } catch (e) { fail(e); }
-      render();
+      if (!window.confirm(`벡터 저장소 ${t.dataset.name}을(를) 삭제하시겠습니까?`)) return;
+      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); toast(`벡터 저장소 ${t.dataset.name}을(를) 삭제했습니다.`); opsReload(); } catch (e) { fail(e); }
     },
   });
 
@@ -190,6 +207,7 @@
   const OPS_NEEDS_SOURCE = new Set(['run_query', 'run_sparql', 'run_cypher', 'get_record', 'request_action']);
 
   function opsApi() {
+    opsFresh();
     const i = S.conn, tg = opsGood(S.ops.tg), base = location.origin;
     const head = kHead('연동 · API', '외부 Agent · 플랫폼의 연동 방법과 API를 관리합니다.',
       '<a class="k-btn" href="/v1/openapi.json" download="ontlas-openapi.json">OpenAPI 내려받기</a>');
@@ -206,15 +224,18 @@
     const roles = new Set((S.st.roles || []).map((r) => r.name));
     const policy = (t) => (!t.policy ? '<span class="k-chip warn">정책 없음 · 전체 조회</span>' : roles.has(t.policy) ? `<a class="k-code" href="#roles?policy=${encodeURIComponent(t.policy)}">${esc(t.policy)}</a>` : `<span class="k-code k-ink">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>`);
     const rows = list.map((t) => `<tr><td><b class="k-b">${esc(t.name)}</b></td><td>REST</td><td>${policy(t)}</td><td>조회 · 판정 · 검색${t.write ? ' · Action 요청' : ''}</td><td class="r">${count(t.calls)}</td><td>${t.last ? esc(String(t.last).slice(0, 16).replace('T', ' ')) : '<span class="k-mut">-</span>'}</td></tr>`).join('');
-    const serveRest = 'export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN --api-role support_agent';
-    const agents = '# agents.yaml\nagents:\n  - {name: 고객 응대 Agent, token_env: ONTLAS_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}\n\nontlas serve studio.yaml --api-agents agents.yaml';
+    // the examples name a policy of this ontology (its first), with the caller attributes its row rules compare with
+    const pol = (S.st.roles || [])[0], keys = pol ? pol.principal || [] : [];
+    const serveRest = `export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN${pol ? ` --api-role ${pol.name}${keys.map((k) => ` --api-principal ${k}=...`).join('')}` : ''}`;
+    const agents = `# agents.yaml\nagents:\n  - {name: ${JSON.stringify(pol ? pol.label : 'Agent')}, token_env: ONTLAS_AGENT_TOKEN${pol ? `, role: ${pol.name}` : ''}${keys.length ? `, principal: {${keys.map((k) => `${k}: ...`).join(', ')}}` : ''}, write: true}\n\nontlas serve studio.yaml --api-agents agents.yaml`;
     const targets = `<section class="k-card" aria-labelledby="ops-tg-h"><div class="k-ch"><h2 id="ops-tg-h">연동 대상</h2><div class="k-push"><span class="k-chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? 'REST API 켜짐' : 'REST API 꺼짐'}</span></div></div>
       ${rows ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">연결</th><th scope="col">접근 정책</th><th scope="col">허용 도구</th><th scope="col" class="r">호출 수</th><th scope="col">마지막 사용</th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : `<p class="k-cf line">${i.rest ? '등록된 연동 대상이 없습니다.' : 'REST API 꺼짐'}</p>`}
+    : '<p class="k-cf line">등록된 연동 대상이 없습니다.</p>'}
       <div class="k-cb" style="padding-top:12px;gap:4px">${opsMore('serve', 'REST API 활성화 명령', serveRest)}${opsMore('agents', 'Agent별 토큰 · 역할 설정', agents)}</div></section>`;
     // the ways an agent takes it, each with what a person copies to do so
-    const mcpCmd = 'ontlas mcp studio.yaml --role customer_agent --principal customer_id=C001 --read-only';
-    const mcpConf = JSON.stringify({ mcpServers: { ontlas: { command: 'ontlas', args: ['mcp', 'studio.yaml', '--role', 'customer_agent', '--read-only'] } } }, null, 2);
+    const mcpArgs = ['mcp', 'studio.yaml', ...(pol ? ['--role', pol.name, ...keys.flatMap((k) => ['--principal', `${k}=...`])] : []), '--read-only'];
+    const mcpCmd = `ontlas ${mcpArgs.join(' ')}`;
+    const mcpConf = JSON.stringify({ mcpServers: { ontlas: { command: 'ontlas', args: mcpArgs } } }, null, 2);
     const curl = `curl ${base}/v1/search -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'`;
     const gateway = 'backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true';
     const way = (name, say, acts) => `<div class="ops-way"><p><b>${name}</b><br><span class="k-s">${say}</span></p><div class="k-h g6">${acts}</div></div>`;
@@ -226,7 +247,7 @@
       </div></section>`;
     // the addresses: every tool /v1 serves, each with its own address to copy
     const toolRows = i.tools.map((t) => `<tr><td><span class="k-code k-ink">${esc(t.method)} ${esc(t.path)}</span><br><span class="k-m12">${esc(t.name)}</span></td><td>${esc(TOOL_WORD[t.name] || t.description)}</td>
-      <td>${!i.rest ? '<span class="k-chip">꺼짐</span>' : !i.source && OPS_NEEDS_SOURCE.has(t.name) ? '<span class="k-chip">소스 필요</span>' : '<span class="k-chip ok">사용 가능</span>'}</td><td class="r">${opsCopy(`${base}${t.path}`, `${t.name} 주소 복사`)}</td></tr>`).join('');
+      <td>${!i.rest ? '<span class="k-chip">꺼짐</span>' : !i.source && OPS_NEEDS_SOURCE.has(t.name) ? '<span class="k-chip">데이터 소스 필요</span>' : '<span class="k-chip ok">사용 가능</span>'}</td><td class="r">${opsCopy(`${base}${t.path}`, `${t.name} 주소 복사`)}</td></tr>`).join('');
     const endpoints = `<section class="k-card" id="cntools" aria-labelledby="ops-ep-h"><div class="k-ch"><h2 id="ops-ep-h">엔드포인트</h2><span class="k-s">REST · v1 · 도구 ${count(i.tools.length)}개</span>
         <div class="k-push"><a class="k-lnk" href="/v1/openapi.json" target="_blank" rel="noopener">문서 열기</a><a class="k-lnk" href="/v1/tools" target="_blank" rel="noopener">도구 정의 열기</a></div></div>
       <div class="k-cb">${opsPre(`${base}/v1`, '주소 복사')}<div class="k-h g6">${opsTake(`${base}/v1/openapi.json`, 'OpenAPI 주소 복사')}${i.libraries > 1 ? '<span class="k-s">library 지정 · /v1/libraries</span>' : ''}</div></div>
@@ -235,65 +256,102 @@
     // how XGEN takes it, step by step, with what each step copies
     const chip = (text, word) => `<button class="k-chip b" data-act="copycode" data-v="${esc(text)}">${word}</button>`;
     const xgen = `<section class="k-card" aria-labelledby="ops-xg-h"><div class="k-ch"><h2 id="ops-xg-h">XGEN 연동</h2></div><ol class="ops-steps">
-      <li><b>판정 노드</b><span>HTTP 요청 노드 · <span class="k-code">POST ${esc(base)}/v1/decide</span> · values 전달 · 값 누락 시 422와 누락 목록 <button class="k-chip b" data-act="cnnode">노드 설정 보기</button></span></li>
-      <li><b>용어 해석 · 값 검증</b><span><span class="k-code">/v1/terms</span> 대표어 · 뜻 · 검색 표기 · <span class="k-code">/v1/validate</span> 정의 · 규칙 카드 범위 검사 <button class="k-chip b" data-act="cngo" data-to="trypanel">API 실행</button></span></li>
-      <li><b>Agent 도구</b><span>API 도구 등록 · Geny 도구 포트 연결 · 판정 · 규칙 카드 · 용어 · 검증 도구 ${chip(`${base}/v1/openapi.json`, 'OpenAPI 주소 복사')}</span></li>
-      <li><b>Agent 컨텍스트</b><span><span class="k-code">/v1/context</span>의 text · Geny 시스템 프롬프트 · 질문 관련 정의 · 규칙 ${chip(`${base}/v1/context`, '주소 복사')}</span></li>
-      <li><b>검증</b><span><span class="k-code">/v1/questions</span> · 소스 연결 전 값 기준 · 연결 후 레코드 기준 ${chip(`${base}/v1/questions`, '주소 복사')}</span></li></ol></section>`;
+      <li><b>판정 노드</b><span>HTTP 요청 노드 · <span class="k-code">POST ${esc(base)}/v1/decide</span> <button class="k-chip b" data-act="cnnode">노드 설정 보기</button></span></li>
+      <li><b>용어 해석 · 값 검증</b><span><span class="k-code">/v1/terms</span> · <span class="k-code">/v1/validate</span> <button class="k-chip b" data-act="cngo" data-to="trypanel">API 실행</button></span></li>
+      <li><b>Agent 도구</b><span>OpenAPI 도구 등록 · Geny 도구 포트 ${chip(`${base}/v1/openapi.json`, 'OpenAPI 주소 복사')}</span></li>
+      <li><b>Agent 컨텍스트</b><span><span class="k-code">/v1/context</span> · Geny 시스템 프롬프트 ${chip(`${base}/v1/context`, '주소 복사')}</span></li>
+      <li><b>검증</b><span><span class="k-code">/v1/questions</span> ${chip(`${base}/v1/questions`, '주소 복사')}</span></li></ol></section>`;
     return `${head}${tiles}${targets}${ways}<div class="ops-halves"><div class="ops-half">${endpoints}${mcp}</div><div class="ops-half">${opsTry(i)}</div></div>${xgen}
       ${opsNext([['actions', 'Action'], ['changes', '변경 요청 · 버전'], ['members', '멤버 · 권한', 'onto']])}`;
+  }
+
+  // the policies a call is tried as: those of the definition being written, where a policy added or changed and not
+  // yet deployed is marked and tried on that definition; the deployed ones while it is read, or where it cannot be
+  const opsTryPols = () => { const m = S.mg.st; return m && !m.error ? m.roles : S.st.roles || []; };
+  const opsTryPolicy = () => opsTryPols().find((r) => r.name === S.ops.tryPol) || null;
+  // the caller attributes a policy's row rules and scope compare with (customer_id, seller_id): what a token carries
+  function opsWho(r) {
+    if (!r) return [];
+    if (!r.rows) return r.principal || [];
+    const out = [];
+    const walk = (x) => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') { if (typeof x.principal === 'string') out.push(x.principal); Object.values(x).forEach(walk); } };
+    walk(r.rows);
+    if ((r.scope || {}).attribute) out.push(r.scope.attribute);
+    return [...new Set(out)];
+  }
+  // the body as the panel sends it: an elapsed-days value given as a date goes under the date's own name, which is how
+  // /v1 takes a date for it (delivered_at: 2026-10-20T09:00:00 for days_since_delivery)
+  function opsTryBody(c, i) {
+    const body = tryBody(c, i), d = c.api === 'decide' && c.mode === 'values' ? i.decisions.find((x) => x.name === c.decision) : null;
+    for (const x of d ? d.inputs : []) {
+      const v = body.values[x.name];
+      if (x.days_since && x.property && typeof v === 'string') { delete body.values[x.name]; body.values[x.property] = v; }
+    }
+    return body;
   }
 
   // one /v1 call made from the page: what is sent is what a platform sends, as the access policy picked would make it
   function opsTry(i) {
     const c = tryState(i), api = tryApi(c), NONE = '값 없음';
-    const d = i.decisions.find((x) => x.name === c.decision), o = (i.objects || []).find((x) => x.name === c.object);
+    const pols = opsTryPols();
+    // a policy no longer there (deleted, or of another ontology) is not tried in secret: the pick goes back to none
+    if (S.ops.tryPol && S.mg.st && !S.mg.busy && !pols.some((r) => r.name === S.ops.tryPol)) S.ops.tryPol = '';
+    const pol = opsTryPolicy(), keys = opsWho(pol);
+    // the Entities the policy reads, as /v1 shows them to its caller
+    const objects = (i.objects || []).filter((x) => !pol || !pol.read || opsCan(pol.read, x.name));
+    if (!objects.some((x) => x.name === c.object)) { c.object = (objects[0] || {}).name || ''; c.ovalues = {}; if (c.api === 'validate' || c.api === 'object') c.res = null; }
+    const d = i.decisions.find((x) => x.name === c.decision), o = objects.find((x) => x.name === c.object);
+    const noObject = `<p class="k-note">${(i.objects || []).length ? '조회 가능한 Entity가 없습니다.' : '등록된 Entity가 없습니다.'}</p>`;
     const control = (x, cur, on) => {
       const attr = `class="k-in" data-in="${on}" data-k="${esc(x.name)}"`;
       if (x.type === 'boolean') return `<select ${attr}>${opt('', '입력 안 함', cur)}${opt('true', '예', cur)}${opt('false', '아니요', cur)}${opt('null', NONE, cur)}</select>`;
       if (x.values && x.values.length) return `<select ${attr}>${opt('', '입력 안 함', cur)}${x.values.map((v) => opt(String(v), String(v), cur)).join('')}${opt('null', NONE, cur)}</select>`;
-      const num = ['integer', 'decimal', 'number'].includes(x.type);
+      const num = ['integer', 'decimal', 'number'].includes(x.type) && !x.days_since;
       return `<input type="text" ${attr} value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${num ? '숫자' : ''}">`;
     };
     const named = (x) => `<span>${esc(x.label)} <span class="k-m12">${esc(x.name)}</span></span>`;
-    const pickObject = `<label class="k-f">Entity<select class="k-in" data-in="ctryo">${(i.objects || []).map((x) => opt(x.name, `${x.label} (${x.name})`, c.object)).join('')}</select></label>`;
-    const help = (x) => (x.days_since ? `${x.property_label || x.property} 경과일 · 일시 값 가능` : x.param ? '판정 Parameter' : x.property ? '' : '연결 Entity 값');
+    const pickObject = `<label class="k-f">Entity<select class="k-in" data-in="ctryo">${objects.map((x) => opt(x.name, `${x.label} (${x.name})`, c.object)).join('')}</select></label>`;
+    const help = (x) => (x.days_since ? '일수 또는 일시 · 예: 2026-10-20T09:00:00' : x.param ? '판정 Parameter' : x.property ? '' : '연결 Entity 값');
     let fields, ready = true;
     if (c.api === 'terms') {
       fields = `<label class="k-f">문장<input class="k-in" type="text" data-in="ctryt" value="${esc(c.text)}" placeholder="질문 또는 문장"></label>`;
     } else if (c.api === 'object') {
       ready = !!o;
-      fields = o ? pickObject : '<p class="k-note">등록된 Entity가 없습니다.</p>';
+      fields = o ? pickObject : noObject;
     } else if (c.api === 'validate') {
       ready = !!o;
-      fields = !o ? '<p class="k-note">등록된 Entity가 없습니다.</p>'
+      fields = !o ? noObject
         : `<div class="k-g2">${pickObject}<label class="k-f">범위<select class="k-in" data-in="ctryc">${opt('', '입력 값만', c.complete ? '1' : '')}${opt('1', '필수 Property 누락 포함', c.complete ? '1' : '')}</select></label>
           ${o.properties.map((x) => `<label class="k-f">${named(x)}${control(x, (c.ovalues || {})[x.name], 'ctryov')}</label>`).join('')}</div>`;
     } else if (!d) {
       ready = false;
       fields = '<p class="k-note">등록된 결정표가 없습니다.</p>';
     } else {
-      const mode = `<div class="k-f">기준<div class="k-seg self">${[['values', '판정 값'], ['record', '레코드 키']].map(([k, w]) => `<button class="${c.mode === k ? 'on' : ''}" data-act="ctrymode" data-k="${k}" aria-pressed="${c.mode === k}">${w}</button>`).join('')}</div></div>`;
+      if (!d.target && c.mode === 'record') c.mode = 'values';  // a decision on no Entity has no record to read
+      const mode = !d.target ? '' : `<div class="k-f">기준<div class="k-seg self">${[['values', '판정 값'], ['record', '레코드 키']].map(([k, w]) => `<button class="${c.mode === k ? 'on' : ''}" data-act="ctrymode" data-k="${k}" aria-pressed="${c.mode === k}">${w}</button>`).join('')}</div></div>`;
       fields = `<div class="k-g2"><label class="k-f">판정<select class="k-in" data-in="ctryd">${i.decisions.map((x) => opt(x.name, `${x.label} (${x.name})`, c.decision)).join('')}</select></label>${mode}
         ${c.mode === 'record'
-    ? `<label class="k-f k-full">레코드 키<input class="k-in" type="text" data-in="ctryk" value="${esc(c.key)}" placeholder="예: ${esc(d.target ? `${d.target_label} 키` : '레코드 키')}">${i.source ? '' : '<span class="k-hint">소스 미연결 · 409 응답</span>'}</label>`
+    ? `<label class="k-f k-full">레코드 키<input class="k-in" type="text" data-in="ctryk" value="${esc(c.key)}" placeholder="예: ${esc(`${d.target_label} 키`)}">${i.source ? '' : '<span class="k-hint">데이터 소스 미연결</span>'}</label>`
     : `${d.inputs.map((x) => `<label class="k-f">${named(x)}${control(x, (c.values || {})[x.name], 'ctryv')}${help(x) ? `<span class="k-hint">${esc(help(x))}</span>` : ''}</label>`).join('')}
-        ${d.inputs.some((x) => x.days_since) ? `<label class="k-f">기준 시각<input class="k-in" type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><span class="k-hint">경과일 계산 기준 · 비우면 현재 시각</span></label>` : ''}`}</div>`;
+        ${d.inputs.some((x) => x.days_since) ? `<label class="k-f">기준 시각<input class="k-in" type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><span class="k-hint">경과일 계산 기준 · 미입력 시 현재 시각</span></label>` : ''}`}</div>`;
     }
     const fill = c.api === 'decide' && d && c.mode === 'values' && d.example ? `<button class="k-btn" data-act="ctryfill" title="${esc(`${d.example.question} ${d.example.text}`)}">예시 값 채우기</button>` : '';
-    const pols = S.st.roles || [];
+    // while the policies are still being read, the one picked stays shown as it is the one sent
+    const listed = S.ops.tryPol && !pol ? [...pols, { name: S.ops.tryPol }] : pols;
+    const polWord = (r) => `${r.label && r.label !== r.name ? `${r.name} · ${r.label}` : r.name}${r.pending || r.new ? ' · 변경 대기' : ''}`;
+    const who = keys.length ? `<div class="k-g2">${keys.map((k) => `<label class="k-f">호출자 속성 · ${esc(k)}<input class="k-in mono" type="text" data-in="opsTryWho" data-k="${esc(k)}" value="${esc(S.ops.who[k] || '')}"></label>`).join('')}</div>` : '';
     return `<section class="k-card" id="trypanel" aria-labelledby="ops-try-h"><div class="k-ch"><h2 id="ops-try-h">실행 패널</h2><div class="k-push"><span class="k-s">POST ${esc(api[2])}${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
       <div class="k-cb ops-try">
         <div class="k-g2"><label class="k-f">엔드포인트<select class="k-in" data-in="opsTryApi">${TRY_API.map(([k, w, path]) => opt(k, `POST ${path} · ${w}`, c.api)).join('')}</select></label>
-          <label class="k-f">접근 정책<select class="k-in" data-in="opsTryPol">${opt('', '정책 없음 · 전체', S.ops.tryPol)}${pols.map((r) => opt(r.name, r.label && r.label !== r.name ? `${r.name} · ${r.label}` : r.name, S.ops.tryPol)).join('')}</select></label></div>
-        ${fields}
+          <label class="k-f">접근 정책<select class="k-in" data-in="opsTryPol">${opt('', '정책 없음 · 전체', S.ops.tryPol)}${listed.map((r) => opt(r.name, polWord(r), S.ops.tryPol)).join('')}</select></label></div>
+        ${who}${fields}
         ${ready ? `${opsTryCode(c, i)}<div class="k-h"><button class="k-btn pri" data-act="ctryrun"${c.busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}${c.busy ? '실행 중' : '실행'}</button>${fill}${c.api === 'object' ? '' : '<button class="k-btn" data-act="ctryclear">값 초기화</button>'}</div>` : ''}
         <div class="ops-res" id="opstryres">${opsTryResult(c)}</div></div></section>`;
   }
 
   // the request as it goes out: its body, the same as a cURL line, the same as the settings of an XGEN HTTP request node
   function opsTryCode(c, i) {
-    const base = location.origin, body = tryBody(c, i), path = tryApi(c)[2];
+    const base = location.origin, body = opsTryBody(c, i), path = tryApi(c)[2];
     const lib = i.library && i.libraries > 1 ? { library: i.library.id } : {};
     const flat = JSON.stringify({ ...lib, ...body });
     const curl = `curl -X POST ${base}${path} \\\n  -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${flat}'`;
@@ -304,7 +362,7 @@
     const template = { decide: `{"decision": "${c.decision}", "values": {{ input | tojson }}}`, validate: `{"object": "${c.object}", "values": {{ input | tojson }}}`, terms: '{"text": {{ input | tojson }}}' }[c.api];
     return `<div class="k-v" id="opstrycode"><div class="k-h sb"><div class="k-seg">${tab('body', '요청 본문')}${tab('curl', 'cURL')}${tab('node', 'XGEN HTTP 요청 노드')}</div>${opsTake(text, '복사')}</div>
       ${c.view === 'node' ? `<div class="k-x"><table class="k-t s end ops-node"><tbody>${node.map(([k, v]) => `<tr><td class="k-code">${esc(k)}</td><td class="k-code" style="white-space:normal">${esc(v)}</td></tr>`).join('')}</tbody></table></div>
-        <p class="k-p s">${template ? `body 템플릿 예: <span class="k-code" style="white-space:normal">${esc(template)}</span> · ` : ''}응답 result · 실패 시 success false</p>` : `<pre class="k-pre">${esc(text)}</pre>`}</div>`;
+        ${template ? `<p class="k-p s">body 템플릿 예: <span class="k-code" style="white-space:normal">${esc(template)}</span></p>` : ''}` : `<pre class="k-pre">${esc(text)}</pre>`}</div>`;
   }
 
   function opsTryResult(c) {
@@ -313,18 +371,18 @@
     if (!r) return '';
     const [tone, word] = r.status === 200 ? ['ok', api[4]] : TRY_STATUS[r.status] || ['bad', '오류'];
     const b = r.body || {};
-    const as = r.policy ? `<span class="k-s">접근 정책 <span class="k-code">${esc(r.policy)}</span></span>` : '';
+    const as = r.policy ? `<span class="k-s">접근 정책 <span class="k-code">${esc(r.policy)}</span>${r.draft ? ' · 변경 대기 정의' : ''}</span>` : '';
     const head = `<div class="k-h"><span class="k-chip ${tone}">${r.status} · ${word}</span>${c.api === 'decide' && b.mode ? `<span class="k-s">${b.mode === 'values' ? '판정 값 기준' : '레코드 기준'}</span>` : ''}${as}</div>`;
     const raw = `<pre class="k-pre">${esc(JSON.stringify(b, null, 2))}</pre>`;
     const table = (heads, rows) => `<div class="k-x"><table class="k-t s end"><thead><tr>${heads.map((h) => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
     if (r.status === 422) {
-      const missing = (b.missing || []).length ? `<p class="k-note">판정에 필요한 값이 없어 판정하지 않았습니다.</p>
+      const missing = (b.missing || []).length ? `<p class="k-note">판정에 필요한 값이 없어 판정하지 못했습니다. 누락 값을 입력해 주세요.</p>
         ${table(['누락 값', '이름', '형식'], b.missing.map((m) => `<tr><td class="b">${esc(m.label)}</td><td class="k-code">${esc(m.input)}${m.property && m.property !== m.input ? ` <span class="k-mut">또는 ${esc(m.property)}</span>` : ''}</td><td>${esc(m.type)}${(m.values || []).length ? `<br><span class="k-s">허용 코드 ${esc(m.values.join(', '))}</span>` : ''}</td></tr>`).join(''))}` : '';
-      const invalid = (b.invalid || []).length ? `<p class="k-note">허용 코드가 아닌 값이 있어 판정하지 않았습니다.</p>
+      const invalid = (b.invalid || []).length ? `<p class="k-note">허용 코드가 아닌 값이 있어 판정하지 못했습니다. 허용 코드로 입력해 주세요.</p>
         ${table(['항목', '입력 값', '허용 코드'], b.invalid.map((m) => `<tr><td class="b">${esc(m.label)}<br><span class="k-m12">${esc(m.input)}</span></td><td>${show(m.value)}</td><td>${esc((m.values || []).join(', '))}</td></tr>`).join(''))}` : '';
       return `${head}${invalid}${missing}${raw}`;
     }
-    if (r.status !== 200) return `${head}${b.error ? `<p class="k-note warn">${esc(b.error)}</p>` : ''}${raw}`;
+    if (r.status !== 200) return `${head}${b.error ? `<p class="k-note warn">${esc(opsTrySaid(r))}</p>` : ''}${raw}`;
     const ver = b.definition ? `<p class="k-m12">정의 버전 ${esc(b.definition.version)} · 모듈 ${b.definition.modules.length}개</p>` : '';
     if (c.api === 'validate') {
       const bound = (v) => [v.min !== null && v.min !== undefined ? `${v.min} 이상` : '', v.max !== null && v.max !== undefined ? `${v.max} 이하` : ''].filter(Boolean).join(' · ');
@@ -363,6 +421,19 @@
       ${(b.not_needed || []).length ? `<p class="k-p s">미사용 값 · ${esc(b.not_needed.map((m) => m.label).join(', '))}</p>` : ''}${ver}${keep}${raw}`;
   }
 
+  // what /v1 refused, in the page's words; the body under it stays as the platform gets it
+  function opsTrySaid(r) {
+    const e = String((r.body || {}).error || ''), m = e.match(/needs principal attributes \[(.*)\]/);
+    if (/[가-힣]/.test(e)) return e;  // the page's own refusal, already in its words
+    if (m) return `호출자 속성 ${m[1].replace(/'/g, '')} 값이 없어 실행하지 못했습니다. 호출자 속성을 입력해 주세요.`;
+    if (/outside (this role's rows|the scope of role)/.test(e)) return '접근 정책의 행 범위 밖 레코드라 판정하지 못했습니다. 레코드 키와 호출자 속성을 확인해 주세요.';
+    if (/may not read/.test(e) || (r.policy && /unknown object/.test(e))) return '접근 정책의 조회 범위 밖 Entity라 실행하지 못했습니다. 조회 범위 안의 Entity를 선택해 주세요.';
+    if (/may not run/.test(e)) return '접근 정책의 실행 허용 범위 밖이라 실행하지 못했습니다. 접근 정책의 실행 허용 항목을 확인해 주세요.';
+    if (r.status === 409) return '연결된 데이터 소스가 없어 레코드를 조회하지 못했습니다. 데이터 소스를 연결해 주세요.';
+    if (/not found/.test(e)) return '레코드를 찾을 수 없어 판정하지 못했습니다. 레코드 키를 확인해 주세요.';
+    return r.status === 403 ? '접근 정책의 허용 범위 밖이라 실행하지 못했습니다. 접근 정책을 확인해 주세요.' : '요청 값 오류로 실행하지 못했습니다. 요청 본문을 확인해 주세요.';
+  }
+
   const opsTryRepaint = () => { const box = $('#opstrycode'); if (box && S.conn && !S.conn.error) box.outerHTML = opsTryCode(S.ctry, S.conn); };
 
   screen('connect', {
@@ -372,12 +443,14 @@
       opsFresh();
       opsRead('tg', 'ops/targets');
       opsRead('conn', 'integrations', () => S.conn, (x) => { S.conn = x; });
+      if (!S.mg.st && !S.mg.busy) loadManage().then(() => { if (S.tab === 'connect') render(); });  // the policies with their pending ones
     },
   });
 
   Object.assign(INPUT, {
     opsTryApi: (t) => { Object.assign(S.ctry, { api: t.value, res: null, saved: false }); render(); },
     opsTryPol: (t) => { S.ops.tryPol = t.value; if (S.ctry) { S.ctry.res = null; S.ctry.saved = false; } render(); },
+    opsTryWho: (t) => { S.ops.who = { ...S.ops.who, [t.dataset.k]: t.value }; },
     // the values of a request being written: the request shown under them follows, the fields keep their place
     ctryv: (t) => { const c = S.ctry; c.values = { ...(c.values || {}), [t.dataset.k]: t.value }; opsTryRepaint(); },
     ctryk: (t) => { S.ctry.key = t.value; opsTryRepaint(); },
@@ -398,7 +471,8 @@
       const c = S.ctry;
       if (c.api === 'terms' && !c.text.trim()) { toast('문장을 입력해 주세요.', true); return; }
       c.busy = true; c.saved = false; render();
-      try { c.res = await api('ops/try', { path: tryApi(c)[2], policy: S.ops.tryPol, body: tryBody(c, S.conn) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
+      const principal = Object.fromEntries(opsWho(opsTryPolicy()).map((k) => [k, String(S.ops.who[k] || '').trim()]).filter(([, v]) => v));
+      try { c.res = await api('ops/try', { path: tryApi(c)[2], policy: S.ops.tryPol, principal, body: opsTryBody(c, S.conn) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
       c.busy = false; render();
     },
   });
@@ -420,7 +494,7 @@
   const opsProp = (m, key) => { const [o, p] = String(key).split('.'); const x = m.properties.find((q) => q.object === o && q.name === p); return `${mgLabel(o)}.${x ? x.label || p : p}`; };
   function opsRowSay(m, x) {  // a row rule in words: 주문의 고객 = 호출자의 customer_id
     if (x.raw) return `${mgLabel(x.type)} · 모듈 정의 조건`;
-    const via = (x.via || []).filter(Boolean), end = via.length ? hopEnd(x.type, via[0]) : x.type;
+    const via = (x.via || []).filter(Boolean), end = via.reduce((t, step) => hopEnd(t, step), x.type);
     const p = m.properties.find((q) => q.object === end && q.name === x.property);
     return `${mgLabel(x.type)}${via.length ? ` › ${mgLabel(end)}` : ''}의 ${p ? p.label || x.property : x.property} = ${x.principal ? `호출자의 ${x.principal}` : show(x.value)}`;
   }
@@ -451,7 +525,7 @@
     const scope = (r) => (r.read.includes('*') ? '전체' : `Object ${count(objs.filter((o) => o.ents.some((e) => r.read.includes(e.name))).length)} · Entity ${count(r.read.length)}`);
     const acts = (r) => [r.request.length ? (r.request.includes('*') ? '요청 전체' : `요청 ${count(r.request.length)}`) : '', r.execute.length ? (r.execute.includes('*') ? '실행 전체' : `실행 ${count(r.execute.length)}`) : ''].filter(Boolean).join(' · ') || '<span class="k-mut">-</span>';
     const polCell = (r) => `<span class="k-code">${esc(r.name)}</span>${r.pending || r.new ? ' <span class="k-chip warn">변경 대기</span>' : ''}<br><span class="k-s">${esc(r.label)}</span>`;
-    const row = (r, t) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="opsPolPick" data-name="${esc(r.name)}"><td class="b">${t ? `${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span>` : '<span class="k-mut" style="font-weight:400">연동 대상 없음</span>'}</td>
+    const row = (r, t) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="opsPolPick" data-name="${esc(r.name)}" tabindex="0"${sel && r.name === sel.name ? ' aria-current="true"' : ''}><td class="b">${t ? `${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span>` : '<span class="k-mut" style="font-weight:400">연동 대상 없음</span>'}</td>
       <td>${polCell(r)}</td><td>${scope(r)}</td><td>${r.rows.length ? esc(r.rows.map((x) => mgLabel(x.type)).join(' · ')) : '전체'}</td><td class="r">${count(Object.keys(r.mask).length)}</td><td>${acts(r)}</td></tr>`;
     const rows = roles.flatMap((r) => (linked(r).length ? linked(r).map((t) => row(r, t)) : [row(r, null)])).join('')
       + loose.map((t) => `<tr><td class="b">${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span></td><td>${t.policy ? `<span class="k-code">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>` : '<span class="k-chip warn">정책 없음</span>'}</td><td>전체</td><td>전체</td><td class="r">0</td><td>${t.write ? '요청 전체' : '<span class="k-mut">-</span>'}</td></tr>`).join('');
@@ -515,6 +589,15 @@
     },
   });
 
+  // a policy row is picked with Enter or Space as with a click, and keeps the focus through the repaint
+  document.addEventListener('keydown', (ev) => {
+    const t = ev.target;
+    if (!t || !t.dataset || t.dataset.act !== 'opsPolPick' || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+    ev.preventDefault();
+    ACT.opsPolPick(t);
+    const again = [...document.querySelectorAll('#main tr[data-act=opsPolPick]')].find((x) => x.dataset.name === t.dataset.name);
+    if (again) again.focus();
+  });
   Object.assign(ACT, {
     opsPolPick: (t) => { S.ops.sel = t.dataset.name; render(); },
     opsPolTry: (t) => { S.ops.tryPol = t.dataset.name; if (S.ctry) S.ctry.res = null; location.hash = '#connect'; setTimeout(() => { const el = $('#trypanel'); if (el) el.scrollIntoView({ block: 'start' }); }, 400); },
@@ -543,15 +626,72 @@
       row[f] = t.value;
       if (f === 'type') { row.via = ''; row.property = ''; }
       if (f === 'via') row.property = '';
-      if (t.tagName === 'SELECT') render();
+      if (t.tagName === 'SELECT') { render(); return; }
+      const box = $('#itchecks');
+      if (box) box.innerHTML = itemChecks(ITEM.policy, S.it);
     },
   });
 
   // ---- the policy's own screens ---------------------------------------------------------------------------------------
 
   const OPS_ROLE_FIELD = { read: '조회 Entity', run: '실행 질의 · 결정 · 함수', request: '요청 Action', execute: '실행 Action', mask: '마스킹', 가림: '마스킹', unmask: '마스킹 해제', row_filters: '행 범위', scope: '조직 범위', documents: '열람 문서', label: '이름', 라벨: '이름' };
-  // a role's field as the policy screens name it: read -> 조회 Entity, mask.Customer.phone -> 마스킹 · Customer.phone
-  const opsRoleWord = (label) => { const s = String(label), sep = s.includes(' · ') ? ' · ' : '.', head = s.split(sep)[0], rest = s.slice(head.length + sep.length); return OPS_ROLE_FIELD[head] ? `${OPS_ROLE_FIELD[head]}${rest ? ` · ${rest}` : ''}` : s; };
+  const OPS_ROLE_PART = { attribute: '호출자 속성', types: 'Entity' };
+  const opsRoleHead = (label) => { const s = String(label), sep = s.includes(' · ') ? ' · ' : '.', head = s.split(sep)[0]; return [head, s.slice(head.length + sep.length)]; };
+  // a role's field as the policy screens name it: read -> 조회 Entity, mask.Customer.phone -> 마스킹 · 고객.전화번호
+  const opsRoleWord = (label) => {
+    const [head, rest] = opsRoleHead(label), m = S.mg.st, [first, ...more] = rest.split('.');
+    if (!OPS_ROLE_FIELD[head]) return String(label);
+    const part = !rest ? '' : ['mask', '가림', 'unmask'].includes(head) && m && !m.error ? opsProp(m, rest)
+      : head === 'row_filters' ? mgLabel(first) : head === 'scope' ? [OPS_ROLE_PART[first] || first, ...more.map(mgLabel)].join(' · ') : rest;
+    return `${OPS_ROLE_FIELD[head]}${part ? ` · ${part}` : ''}`;
+  };
+  // a role's value in the same words: names for the lists, the masking style, a row rule, where the scope is held
+  function opsRoleSaid(label, v) {
+    const [head, rest] = opsRoleHead(label), m = S.mg.st;
+    if (v === null || v === undefined || v === '' || !m || m.error) return v;
+    const of = (list) => (n) => (list.find((x) => x.name === n) || {}).label || n;
+    const lists = { read: mgLabel, run: of([...m.decisions, ...m.functions, ...m.queries]), request: of(m.actions), execute: of(m.actions), documents: String, unmask: String };
+    if (Array.isArray(v) && lists[head]) return v.map((n) => (n === '*' ? '전체' : lists[head](n))).join(' · ') || '없음';
+    if (['mask', '가림'].includes(head)) return OPS_MASK[v] || v;
+    if (head === 'row_filters' && v && typeof v === 'object' && !Array.isArray(v)) return opsRowSay(m, opsRowRule(rest.split('.')[0], v));
+    const where = (w) => (typeof w === 'string' ? w : [...(w.via || []), w.property].join(' › '));
+    if (head === 'scope' && /^types\./.test(rest)) return where(v);
+    if (head === 'scope' && typeof v === 'object' && !Array.isArray(v)) return Object.entries(v).map(([t, w]) => `${mgLabel(t)} · ${where(w)}`).join(', ');
+    return v;
+  }
+  // a row filter as the policy form reads it, the way the server reads it: one compare on the Entity's own Property, or
+  // one through Relations to the Entity it ends at; any other stays as the module wrote it
+  function opsRowRule(type, spec) {
+    const side = (who) => (who && typeof who === 'object' ? (Object.keys(who).join() === 'principal' ? { principal: who.principal } : null) : { value: who });
+    const keys = Object.keys(spec).join();
+    if (keys === 'eq' && String(spec.eq[0]).startsWith('$self.') && side(spec.eq[1])) return { type, via: [], property: String(spec.eq[0]).split('.').slice(1).join('.'), ...side(spec.eq[1]) };
+    const body = keys === 'exists' ? spec.exists : null;
+    if (body && Object.keys(body.where || {}).join() === 'eq') {
+      const [ref, who] = body.where.eq, via = [];
+      let here = '$self';
+      for (const e of body.edges || []) {
+        if (e.length !== 3 || e[0] !== here) return { type, raw: spec };
+        via.push(e[1]);
+        [, , here] = e;
+      }
+      if (String(ref).startsWith(`${here}.`) && side(who)) return { type, via, property: String(ref).split('.').slice(1).join('.'), ...side(who) };
+    }
+    return { type, raw: spec };
+  }
+  // the lines of a whole policy: the keys of one row filter, or of one scoped Entity, come back together as one line
+  function opsRoleLines(all) {
+    const out = [], at = {};
+    for (const r of all) {
+      const path = String(r.label).split('.'), n = path[0] === 'row_filters' ? 2 : path[0] === 'scope' && path[1] === 'types' ? 3 : 0;
+      if (!n || path.length <= n) { out.push(r); continue; }
+      const key = path.slice(0, n).join('.');
+      if (!at[key]) { at[key] = { label: key, value: {} }; out.push(at[key]); }
+      let o = at[key].value;
+      path.slice(n, -1).forEach((k) => { o = o[k] = o[k] || {}; });
+      o[path[path.length - 1]] = r.value;
+    }
+    return out;
+  }
 
   function opsPolicyForm(d, x) {
     const m = S.mg.st, src = !noSource();
@@ -559,7 +699,7 @@
     const all = (list) => tick(list, '*', '전체', d[list].includes('*'));
     const ticks = (list, items) => `<div class="ops-ticks">${all(list)}${d[list].includes('*') ? '' : items.map(([k, w]) => tick(list, k, w, d[list].includes(k))).join('')}</div>`;
     const read = d.read.includes('*') ? `<div class="ops-ticks">${all('read')}</div>` : `<div class="ops-ticks">${all('read')}</div><div>${opsObjects(m).map((o) => { const names = o.ents.map((e) => e.name), n = names.filter((x) => d.read.includes(x)).length;
-      return `<div class="ops-group"><label class="k-ck mid k-b"><input type="checkbox" data-in="opsPolTick" data-list="read" data-ents="${esc(names.join(' '))}" data-v=""${n === names.length ? ' checked' : ''}><span class="k-cut">${esc(o.label)}</span>${n && n < names.length ? `<span class="k-xs" style="font-weight:400">${n}/${names.length}</span>` : ''}</label><div class="ops-ticks">${o.ents.map((e) => tick('read', e.name, e.label, d.read.includes(e.name))).join('')}</div></div>`; }).join('')}</div>`;
+      return `<div class="ops-group"><label class="k-ck mid k-b"><input type="checkbox" data-in="opsPolTick" data-list="read" data-ents="${esc(names.join(' '))}" data-v=""${n === names.length ? ' checked' : ''}><span class="k-cut">${esc(o.label)}</span>${n && n < names.length ? `<span class="k-xs" style="font-weight:400">${n}/${names.length}</span>` : ''}</label><div class="ops-ticks">${o.ents.map((e) => tick('read', e.name, e.label, d.read.includes(e.name))).join('')}</div></div>`; }).join('') || '<span class="k-s">Entity 없음</span>'}</div>`;
     const sel = (list, i, f, options, v) => `<select class="k-in" data-in="opsPolRow" data-list="${list}" data-i="${i}" data-f="${f}">${options.map(([k, w]) => opt(k, w, v)).join('')}</select>`;
     const del = (list, i) => `<button class="k-lnk bad" data-act="opsPolRowDel" data-list="${list}" data-i="${i}">삭제</button>`;
     const add = (list, word) => `<button class="k-lnk flat" data-act="opsPolRowAdd" data-list="${list}">${ki('plus', 16, 1.75)}${word}</button>`;
@@ -589,8 +729,8 @@
       <section class="k-card"><div class="k-ch"><h2>실행 · 문서 · 조직 범위</h2></div><div class="k-cb"><div class="k-g2">
         ${field('실행 허용 질의 · 결정 · 함수', ticks('run', [...m.decisions.map((q) => [q.name, q.label]), ...m.functions.map((q) => [q.name, q.label]), ...m.queries.map((q) => [q.name, q.label])]))}
         ${m.documents.length ? field('열람 문서', ticks('docs', [...(m.folders || []).map((f) => [`${f}/*`, `${f} 폴더`]), ...m.documents.map((q) => [q, q])]), '하위 폴더 포함') : ''}
-        <label class="k-f k-full">조직 범위 · 호출자 속성<input class="k-in mono" type="text" data-in="itf" data-k="scope_attr" value="${esc(d.scope_attr)}" placeholder="예: seller_id"><span class="k-hint">호출자 소속 조직의 행으로 제한</span></label>
-        ${field('조직 범위 · Entity', `${d.scopes.map(scope).join('')}${add('scopes', 'Entity 추가')}`, '호출자 속성 지정 시 적용')}
+        <label class="k-f k-full">조직 범위 · 호출자 속성<input class="k-in mono" type="text" data-in="itf" data-k="scope_attr" value="${esc(d.scope_attr)}" placeholder="예: seller_id"></label>
+        ${field('조직 범위 · Entity', `${d.scopes.map(scope).join('')}${add('scopes', 'Entity 추가')}`)}
       </div></div></section>`;
   }
 
@@ -613,10 +753,20 @@
       }
       const gone = d.mask.filter((r) => r.prop && !m.properties.some((p) => `${p.object}.${p.name}` === r.prop));
       out.push(gone.length ? { say: '정의에 없는 마스킹 Property', sub: gone.map((r) => r.prop).join(', '), tone: 'bad' } : { say: '마스킹 Property 정의 일치', tone: 'ok' });
+      if (d.mask.some((r) => !r.prop)) out.push({ say: '마스킹 Property 미선택', tone: 'bad' });
+      // the server keeps one masking style per Property: a second line would replace the first
+      const masked = d.mask.map((r) => r.prop).filter((k, i, all) => k && all.indexOf(k) !== i);
+      if (masked.length) out.push({ say: '마스킹 Property 중복', sub: [...new Set(masked)].map((k) => opsProp(m, k)).join(', '), tone: 'bad' });
       const outside = d.rows.filter((r) => r.type && !opsCan(d.read, r.type));
       if (outside.length) out.push({ say: '조회 범위 밖 Entity의 행 범위', sub: outside.map((r) => mgLabel(r.type)).join(', '), tone: 'warn' });
-      const half = d.rows.filter((r) => !r.raw && (r.type || r.property || r.value) && !(r.type && r.property && String(r.value).trim()));
+      const half = d.rows.filter((r) => !r.raw && !(r.type && r.property && String(r.value).trim()));
       if (half.length) out.push({ say: '행 범위 입력 누락', sub: 'Entity · Property · 값', tone: 'bad' });
+      // the server keeps one rule per Entity, for rows and for the organisation's scope: a second would replace the first
+      const twice = (list) => [...new Set(list.map((r) => r.type).filter((t, i, all) => t && all.indexOf(t) !== i))].map(mgLabel).join(', ');
+      if (twice(d.rows)) out.push({ say: '행 범위 Entity 중복', sub: twice(d.rows), tone: 'bad' });
+      if (d.scopes.some((r) => !(r.type && r.property))) out.push({ say: '조직 범위 입력 누락', sub: 'Entity · Property', tone: 'bad' });
+      if (twice(d.scopes)) out.push({ say: '조직 범위 Entity 중복', sub: twice(d.scopes), tone: 'bad' });
+      if (d.scopes.some((r) => r.type) && !String(d.scope_attr || '').trim()) out.push({ say: '조직 범위 호출자 속성 미입력', tone: 'bad' });
       out.push({ say: `연결 연동 대상 ${x ? opsCallers(x.name).length : 0}개`, tone: 'note' });
       if (noSource()) out.push({ say: '행 범위 · 마스킹 · 데이터 소스 연결 시 적용', tone: 'note' });
       return out;
@@ -624,17 +774,19 @@
     valid: (d, x) => (!x && !d.name.trim() ? '정책 키를 입력해 주세요.' : !d.label.trim() ? '이름을 입력해 주세요.' : ''),
     save: async (d, x) => {
       const asValue = (v) => (v === 'true' ? true : v === 'false' ? false : (v !== '' && !Number.isNaN(Number(v)) ? Number(v) : v));
-      const mask = Object.fromEntries(d.mask.filter((r) => r.prop).map((r) => [r.prop, r.style]));
-      const rows = d.rows.filter((r) => r.raw || (r.type && r.property)).map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: asValue(r.value) } : { principal: r.value }) }));
-      const scope = d.scope_attr ? { attribute: d.scope_attr, types: d.scopes.filter((r) => r.type && r.property).map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
+      const mask = Object.fromEntries(d.mask.map((r) => [r.prop, r.style]));
+      const rows = d.rows.map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: asValue(r.value) } : { principal: r.value }) }));
+      const scope = d.scope_attr ? { attribute: d.scope_attr, types: d.scopes.map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
       const name = x ? x.name : d.name.trim();
       S.mg.st = await api('manage/edit', { op: x ? 'update_role' : 'add_role', args: { name, label: d.label.trim(), read: d.read, run: d.run, request: d.request, mask, rows, scope, documents: d.docs.includes('*') ? null : d.docs } });
       S.ops.sel = name;
       return { go: 'roles', element: `role:${name}` };
     },
     uses: async (x) => opsCallers(x.name).map((t) => ({ say: `연동 대상 ${t.name}`, sub: `호출 ${count(t.calls)}건`, href: 'connect' })),
-    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; return { go: 'roles' }; },
-    history: async (x) => (await itemHistoryOf({ word: '접근 정책', element: (y) => `role:${y.name}` }, x)).map((e) => ({ ...e, rows: e.rows.map((r) => ({ ...r, label: opsRoleWord(r.label) })), all: e.all.map((r) => ({ ...r, label: opsRoleWord(r.label) })) })),
+    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; return { go: 'roles' }; },
+    history: async (x) => (await itemHistoryOf({ word: '접근 정책', element: (y) => `role:${y.name}` }, x)).map((e) => ({ ...e,
+      rows: e.rows.map((r) => ({ ...r, label: opsRoleWord(r.label), before: opsRoleSaid(r.label, r.before), after: opsRoleSaid(r.label, r.after) })),
+      all: opsRoleLines(e.all).map((r) => ({ ...r, label: opsRoleWord(r.label), value: opsRoleSaid(r.label, r.value) })) })),
   });
 
   // ---- a vector store added beside the one in use (an install that allows connections) -----------------------------
@@ -642,29 +794,25 @@
   item('store', {
     word: '저장소', under: 'adapters', list: 'adapters', direct: true, may: () => isSysAdmin(),
     lead: { form: '벡터 저장소를 추가합니다.' },
-    load: async () => { if (!opsGood(S.sp)) { try { S.sp = await api('space'); } catch (e) { S.sp = { error: e.message }; } } },
+    load: async () => { if (!opsGood(S.sp)) S.sp = await api('space'); },
+    // a server that does not connect to stores outside shows that state alone, with no form and no save
+    can: () => (opsGood(S.sp) && !S.sp.can_connect ? '외부 저장소 연결 허용 안 됨' : ''),
     find: () => null,
     name: (x) => x.name,
     draft: () => ({ name: '', kind: ((opsGood(S.sp) || { kinds: [] }).kinds.filter((k) => k !== 'memory')[0]) || '', url: '' }),
-    form: (d) => {
-      const sp = opsGood(S.sp);
-      if (!sp || !sp.can_connect) return `<section class="k-card pad"><p class="k-note">외부 저장소 연결이 허용되지 않아 저장소를 추가할 수 없습니다.</p></section>`;
-      return `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
-        <label class="k-f">이름<input class="k-in mono" type="text" data-in="itf" data-k="name" value="${esc(d.name)}" placeholder="${esc(d.kind)}" maxlength="32"><span class="k-hint">비우면 종류 이름 사용</span></label>
+    form: (d) => `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
+        <label class="k-f">이름<input class="k-in mono" type="text" data-in="itf" data-k="name" value="${esc(d.name)}" placeholder="${esc(d.kind)}" maxlength="32"><span class="k-hint">미입력 시 종류 이름 사용</span></label>
         <label class="k-f">구분<select class="k-in" disabled><option>벡터 저장소</option></select></label>
-        <label class="k-f">종류<select class="k-in" data-in="itf" data-k="kind" data-re>${sp.kinds.filter((k) => k !== 'memory').map((k) => opt(k, k, d.kind)).join('')}</select></label>
+        <label class="k-f">종류<select class="k-in" data-in="itf" data-k="kind" data-re>${S.sp.kinds.filter((k) => k !== 'memory').map((k) => opt(k, k, d.kind)).join('')}</select></label>
         <label class="k-f">주소<input class="k-in mono" type="text" data-in="itf" data-k="url" value="${esc(d.url)}" placeholder="${d.kind === 'pgvector' ? 'postgresql://...' : 'http://localhost:6333'}"></label>
-      </div></div></section>`;
-    },
+      </div></div></section>`,
     checks: (d) => {
-      const sp = opsGood(S.sp), name = (d.name || d.kind).trim();
-      if (!sp || !sp.can_connect) return [{ say: '외부 저장소 연결 허용 안 됨', tone: 'bad', word: '추가 불가' }];
+      const name = (d.name || d.kind).trim();
       const shaped = d.kind === 'pgvector' ? /^postgres(ql)?:\/\/\S+/.test(d.url.trim()) : /^https?:\/\/\S+/.test(d.url.trim());
-      return [sp.stores.some((s) => s.name === name) ? { say: '중복된 저장소 이름', tone: 'bad' } : { say: '저장소 이름 중복 없음', tone: 'ok' },
-        !d.url.trim() ? { say: '주소 미입력', tone: 'warn' } : shaped ? { say: '주소 형식 일치', tone: 'ok' } : { say: d.kind === 'pgvector' ? '주소는 postgresql:// 로 시작' : '주소는 http:// 또는 https:// 로 시작', tone: 'bad' },
-        { say: `저장 시 연결 확인 · 청크 ${count(sp.chunks)}개 색인`, tone: 'note' }];
+      return [S.sp.stores.some((s) => s.name === name) ? { say: '중복된 저장소 이름', tone: 'bad' } : { say: '저장소 이름 중복 없음', tone: 'ok' },
+        !d.url.trim() ? { say: '주소 미입력', tone: 'warn' } : shaped ? { say: '주소 형식 일치', tone: 'ok' } : { say: d.kind === 'pgvector' ? '주소는 postgresql:// 로 시작' : '주소는 http:// 또는 https:// 로 시작', tone: 'bad' }];
     },
-    saves: () => [['적용', '저장 즉시'], ['기록', '공간 기록'], ['되돌리기', '저장소 표의 폐기']],
+    saves: () => [['반영', '즉시 적용']],
     valid: (d) => (!d.url.trim() ? '주소를 입력해 주세요.' : ''),
-    save: async (d) => { S.sp = await api('space/store', { op: 'add', kind: d.kind, name: (d.name || d.kind).trim(), url: d.url.trim() }); S.ad = null; S.adrep = null; return { go: 'adapters' }; },
+    save: async (d) => { S.sp = await api('space/store', { op: 'add', kind: d.kind, name: (d.name || d.kind).trim(), url: d.url.trim() }); S.ad = null; S.adrep = null; return { go: 'adapters', said: '벡터 저장소를 추가했습니다.' }; },
   });

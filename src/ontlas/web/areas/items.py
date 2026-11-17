@@ -26,7 +26,9 @@ def _now_of(s, el: str) -> dict | None:
 def _entry(s, el: str, sides: list, **about: Any) -> dict:
     before, after = sides
     kind = "added" if before is None else "removed" if after is None else "changed"
-    return {**about, "kind": kind, "before": before, "after": after, "fields": s._field_diff(el, before, after)}
+    every = s._field_diff(el, None, after if after is not None else before, limit=0)  # the item as it read then, in words
+    return {**about, "kind": kind, "before": before, "after": after, "fields": s._field_diff(el, before, after),
+            "all": [{"label": f["label"], "value": f["said"][1] if f["said"][1] is not None else f["after"]} for f in every]}
 
 
 @get("item/uses")
@@ -71,15 +73,22 @@ def history(s, a, who) -> dict:
             if sides is not None:
                 entries.insert(0, _entry(s, el, sides, change="", version="", module="", module_label="", status="draft",
                                          status_label="작성 중", at="", by=s.who, decided_by="", reason="", deployed=False))
-    # why a change was made is a note left on the item when it was saved. A note belongs to the first change filed at
-    # or after it (a note is kept to the minute, a change to the second), and to the edit not yet sent when none was.
+    # why a change was made is a note left on the item when it was saved. A note goes with the change request its edits
+    # were filed in (none when they were thrown away), and with the edit not yet sent until then. A note kept before
+    # notes knew their request belongs to the first change filed at or after it.
     for e in entries:
         e["notes"] = []
     filed = sorted((e for e in entries if e["at"]), key=lambda e: str(e["at"]))
+    by_id = {e["change"]: e for e in entries if e["change"]}
     draft = entries[0] if entries and entries[0]["status"] == "draft" else None
     for n in sorted(s._notes().get(el, []), key=lambda n: str(n.get("at") or "")):
-        at = str(n.get("at") or "")[:16]
-        home = next((e for e in filed if str(e["at"])[:16] >= at), draft)
+        if "change" in n:
+            home = by_id.get(n["change"])
+        elif draft is not None:
+            home = draft
+        else:
+            at = str(n.get("at") or "")[:16]
+            home = next((e for e in filed if str(e["at"])[:16] >= at), None)
         if home is not None:
-            home["notes"].append(n)
+            home["notes"].append({k: n.get(k) for k in ("at", "by", "text")})
     return {"element": el, "label": s._element_label(el), "now": _now_of(s, el), "entries": entries}

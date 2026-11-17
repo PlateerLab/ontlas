@@ -76,7 +76,7 @@
   ];
   const ADMIN = [
     ['onto', '온톨로지 관리', [['settings', '온톨로지 설정', 'sliders'], ['members', '멤버 · 권한', 'key']]],
-    ['sys', '시스템 관리', [['sys-overview', '관리 현황', 'pulse'], ['sys-users', '사용자 · 그룹', 'users'], ['sys-auth', '인증 · 보안', 'shield'], ['sys-gov', '거버넌스 정책', 'scale'],
+    ['sys', '시스템 관리', [['sys-overview', '관리 현황', 'pulse'], ['sys-users', '사용자 · 그룹', 'users'], ['sys-auth', '인증 · 보안', 'shield'],
       ['sys-packs', '도메인 팩', 'box'], ['sys-vocab', '기준 어휘', 'layers'], ['sys-ai', 'AI 운영', 'chip'], ['sys-audit', '감사 로그', 'history'], ['sys-system', '시스템', 'db']]],
   ];
   const ADMIN_KEYS = ADMIN.flatMap((g) => g[2].map((x) => x[0]));
@@ -135,7 +135,8 @@
     const role = workRole();
     const row = (x) => { const on = area === 'work' && x.id === st.library_id;
       return `<button class="k-opt${on ? ' on' : ''}" data-act="swlib" data-id="${esc(x.id)}"><span>${esc(x.label)}</span><span class="k-chip w">${esc(role)}</span>${on ? ki('check', 16, 1.75) : ''}</button>`; };
-    const rows = libs.length ? libs.map(row).join('') : `<button class="k-opt${area === 'work' ? ' on' : ''}" data-act="swlib" data-id=""><span>${esc(st.title || '온톨로지')}</span><span class="k-chip w">${esc(role)}</span></button>`;
+    const open = libs.filter((x) => x.id === st.library_id || canEdit());  // switching moves the shared space, which an editor may do
+    const rows = open.length ? open.map(row).join('') : `<button class="k-opt${area === 'work' ? ' on' : ''}" data-act="swlib" data-id=""><span>${esc(st.title || '온톨로지')}</span><span class="k-chip w">${esc(role)}</span></button>`;
     const all = V2.ontologies ? `<a class="k-opt${S.tab === 'ontologies' ? ' on' : ''}" href="#ontologies">${ki('layers')}<span>전체 온톨로지</span></a>` : '';
     const make = V2['ontology-new'] && canMakeLibrary() ? `<a class="k-opt${S.tab === 'ontology-new' ? ' on' : ''}" href="#ontology-new">${ki('plus')}<span>온톨로지 만들기</span></a>` : '';
     const onto = isOntoAdmin() && firstAdmin('onto'), sys = isSysAdmin() && firstAdmin('sys');
@@ -244,6 +245,15 @@
   document.addEventListener('click', (ev) => {  // the list closes when something outside it is chosen
     document.querySelectorAll('details.k-switch[open]').forEach((d) => { if (!d.contains(ev.target) || ev.target.closest('.k-pop a, .k-pop button')) d.open = false; });
   });
+  document.addEventListener('keydown', (ev) => {  // Escape closes an open list such as the ontology switcher or an export list, before anything else
+    if (ev.key !== 'Escape') return;
+    const open = [...document.querySelectorAll('details[open]')].filter((d) => d.querySelector(':scope > .k-pop'));
+    if (!open.length) return;
+    open.forEach((d) => { d.open = false; });
+    const s = open[0].querySelector('summary');
+    if (s) s.focus();
+    ev.stopImmediatePropagation();
+  }, true);
 
   // the part a tab belongs to, for what still asks by tab: [part, the screen's word, its tabs]
   const groupOf = (tab) => { const r = menuRow(tab); return r ? [r[1], r[2], r[3]] : [ADMIN_KEYS.includes(tab) ? 'admin' : 'home', (V2[tab] && V2[tab].word) || navLabel(tab), [tab]]; };
@@ -251,12 +261,13 @@
   function screenList() {
     const part = (id) => (PARTS.find((p) => p[0] === id) || [])[1] || '';
     const rows = [['home', '홈', '', 'home']];
+    const may = (k) => (k === 'catalog' ? canEdit() : !V2[k] || !V2[k].may || V2[k].may());  // as the bar on top: only what the person may open
     if (V2.ai) rows.push(['ai', 'AI 초안 생성', '', 'home']);
-    MENU.filter((r) => known(r[0])).forEach((r) => {
+    MENU.filter((r) => known(r[0]) && may(r[0])).forEach((r) => {
       rows.push([r[0], r[2], part(r[1]), r[0]]);
       r[3].filter((k) => k !== r[0] && !NO_TAB.has(k) && oldTabs().has(k)).forEach((k) => rows.push([k, tabWord(k), `${part(r[1])} › ${r[2]}`, k]));
     });
-    Object.keys(ASIDE).filter(known).forEach((k) => rows.push([k, ASIDE[k][0], '', k]));
+    Object.keys(ASIDE).filter((k) => known(k) && may(k)).forEach((k) => rows.push([k, ASIDE[k][0], '', k]));
     Object.keys(V2).filter((k) => V2[k].find !== false && V2[k].area !== 'auth' && !rows.some((r) => r[0] === k) && (!V2[k].may || V2[k].may())).forEach((k) => rows.push([k, V2[k].word, V2[k].area === 'admin' ? '관리' : '', k]));
     return rows;
   }

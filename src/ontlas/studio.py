@@ -709,7 +709,7 @@ class Studio:
 
     def sync(self) -> dict[str, Any]:
         """Read the source again and send each graph only what changed since its last load; the result is kept."""
-        at = self.now().isoformat(timespec="seconds")
+        at = datetime.now().isoformat(timespec="seconds")  # when it ran; self.now() is the date the rules read
         graphs = list(self._loaded) or [n for n, b in self.backends.items() if b.capabilities.load]
         try:
             report = self.project(into=graphs) if graphs else {}

@@ -356,6 +356,7 @@ a.btn { display:inline-flex; }
 .main td { padding:10px 12px; border-bottom:1px solid var(--row); }
 .main input[type=text], .main input[type=number], .main input[type=password], .main select, .main textarea { font-size:14px; border:1px solid var(--line2); border-radius:8px; min-height:36px; padding:0 12px; color:var(--ink); }
 .main textarea { padding:8px 12px; line-height:1.5; }
+.main textarea.code { color:#d7e3f4; border-color:var(--code); font-size:12px; line-height:1.6; }  /* code on its dark ground, over the box above */
 .main input[type=text]:focus, .main input[type=number]:focus, .main select:focus, .main textarea:focus { outline:2px solid var(--blue-line); border-color:var(--blue); }
 .field > label, .label { font-size:13px; font-weight:400; color:var(--muted); }
 .seg { background:var(--sunk); border:0; border-radius:8px; padding:2px; gap:2px; }

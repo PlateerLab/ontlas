@@ -20,11 +20,11 @@
 
   function bndActTry(m, a) {
     const A = S.bnd.act, on = !noSource(), roles = S.st.roles || [], applied = S.st.actions.some((x) => x.name === a.name);
-    if (!applied) return `<section class="k-card pad k-v" id="bnd-try" aria-labelledby="bnd-dry-h"><h2 class="k-h2" id="bnd-dry-h">테스트 실행</h2><p class="k-p s">배포 전 Action은 테스트할 수 없습니다.</p>${known('changes') ? '<div class="k-h"><a class="k-btn" href="#changes">변경 요청 · 버전</a></div>' : ''}</section>`;
+    if (!applied) return `<section class="k-card pad k-v" id="bnd-try" aria-labelledby="bnd-dry-h"><div class="k-h"><h2 class="k-h2" id="bnd-dry-h">테스트 실행</h2><span class="k-chip warn">미배포</span>${known('changes') ? '<a class="k-btn k-push" href="#changes">변경 요청 · 버전</a>' : ''}</div></section>`;
     if (!A.role && roles.length) A.role = (roles.find((r) => bndCan(m.roles.find((x) => x.name === r.name) || {}, 'request', a.name)) || roles[0]).name;
     const keys = A.keys && A.keys.type === a.target ? A.keys.list : null;
     const byRecord = on && !!A.key;
-    const record = on ? `<label class="k-f" style="flex:1 1 220px">대상 ${esc(a.target_label)}<select class="k-in" data-in="bndActKey"><option value="">레코드 없음 · 값 입력</option>${(keys || []).map((k) => { const extra = Object.values(k.fields || {}).filter((v) => v !== null && v !== '').map(plainText).join(' · ');
+    const record = on ? `<label class="k-f" style="flex:1 1 220px">대상 ${esc(a.target_label)}<select class="k-in" data-in="bndActKey"><option value="">레코드 없음 · 값 입력</option>${(keys || []).map((k) => { const extra = Object.values(k.fields || {}).filter((v) => v !== null && v !== '' && String(v) !== String(k.key)).map(plainText).join(' · ');
       return `<option value="${esc(k.key)}"${k.key === A.key ? ' selected' : ''}>${esc(k.key)}${extra ? ` · ${esc(extra)}` : ''}</option>`; }).join('')}</select></label>` : '';
     const params = a.parameters.map((p) => `<label class="k-f" style="flex:1 1 180px">${esc(p.label || p.name)}<input class="k-in" type="text" data-in="bndActParam" data-k="${esc(p.name)}" value="${esc(A.params[p.name] ?? '')}"></label>`).join('');
     const vals = byRecord ? '' : a.criteria.filter((c) => c.decision).map((c) => { const d = m.decisions.find((x) => x.name === c.decision);
@@ -73,7 +73,7 @@
         <span class="k-push" style="display:flex;gap:6px"><span class="k-chip ${mk[0]}">${mk[1]}</span><span class="k-chip">${on ? '실행 · 승인 후 반영' : '실행 · 미연결'}</span></span></div>
       <div class="bnd-sec"><p class="k-b k-14" style="margin:0 0 8px">Parameter</p>${a.parameters.length ? `<div class="k-x"><table class="k-t s"><thead><tr><th scope="col">이름</th><th scope="col">타입</th><th scope="col">설명</th></tr></thead><tbody>${a.parameters.map((p) => `<tr><td class="k-code">${esc(p.name)}</td><td class="k-code">${esc(p.type)}</td><td>${esc(p.label || '-')}</td></tr>`).join('')}</tbody></table></div>` : '<span class="k-s">Parameter 없음</span>'}</div>
       <div class="k-v bnd-sec"><p class="k-b k-14" style="margin:0">전제조건 규칙</p><div class="k-wrap g8">${pre || '<span class="k-s">전제조건 없음</span>'}</div></div>
-      <div class="k-wrap g16 bnd-sec">${half('처리 후 상태', `<span class="k-13">${a.transition_to ? `${esc(a.target_label)} 상태 → ${esc(a.transition_to)}` : '상태 변경 없음'}${machine ? ` · <a href="#states">상태 전이</a>` : ''}</span>${sets ? `<span class="k-13">${esc(sets)}</span>` : ''}`)}
+      <div class="k-wrap g16 bnd-sec">${half('처리 후 상태', `<span class="k-13">${a.transition_to ? `${esc(a.target_label)} 상태 → ${esc(a.transition_to)}` : '상태 변경 없음'}${machine ? ` · <a href="#objects?entity=${encodeURIComponent(a.target)}">상태 전이</a>` : ''}</span>${sets ? `<span class="k-13">${esc(sets)}</span>` : ''}`)}
         ${half('승인 기준', `<span class="k-13">${esc(bndApproval(m, a))}</span>`)}</div>
       <div class="k-wrap g16 bnd-sec">${half('호출 API', a.call && a.call.url ? `<span class="k-code" style="white-space:normal;overflow-wrap:anywhere">${esc(a.call.method || 'POST')} ${esc(a.call.url)}</span>${a.undo && a.undo.url ? '<span class="k-s">되돌리기 호출 있음</span>' : '<span class="k-s">되돌리기 호출 없음</span>'}` : '<span class="k-13">없음 · 원천 값 변경</span>')}
         ${half('권한', rights || '<span class="k-13">요청 가능한 접근 정책 없음</span>')}</div>

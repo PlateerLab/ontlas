@@ -10,6 +10,9 @@
     act: { sel: '', role: '', key: '', params: {}, inputs: {}, res: null, busy: false },
   };
   Object.assign(OP_WORD, { add_query: '질의 추가', new_query: '질의 추가', update_query: '질의 변경', delete_query: '질의 삭제' });
+  // a link (#bind?entity= · #query?sel= · #actions?action=) picks what it names each time it is followed; a pick made by
+  // hand on the screen holds until the address changes
+  window.addEventListener('hashchange', () => { S.bnd.bind.asked = ''; S.bnd.q.asked = ''; S.bnd.act.asked = ''; });
 
   const bndM = () => (S.mg.st && !S.mg.st.error ? S.mg.st : null);
   // text with no size of its own is 16px on these screens, as the screen plan draws it
@@ -65,28 +68,37 @@
     if (r && Array.isArray(r.findings)) r.findings.forEach((f) => { (by[f.element] = by[f.element] || []).push(f); });
     return by;
   }
-  const bndChecked = () => !!(S.bind && S.bind.ok !== undefined && !S.bind.busy && !S.bind.error && !S.bind.no_source);
+  // how many places the last check found a difference at, of the kinds named (all when none): every screen counts the same
+  const bndDiffs = (kinds) => new Set(((S.bind && S.bind.findings) || []).filter((f) => !kinds || kinds.includes(f.kind)).map((f) => f.element)).size;
+  // a check is of the definition it was made on: an edit since makes it old, and the screens say 검사 전 again
+  const bndChecked = () => !!(S.bind && S.bind.ok !== undefined && !S.bind.busy && !S.bind.error && !S.bind.no_source && S.bind.sig === bndSig());
+  function bndCheckRun() {  // the definition as the pending edits leave it, which is what these screens show
+    const sig = bndSig();
+    S.bind = { busy: true, sig };
+    return api('bnd/check', {}).then((r) => { S.bind = { ...r, sig }; }).catch((e) => { S.bind = { error: e.message, sig }; });
+  }
   async function bndCheck() {  // 차이 검사 · Binding 검사: the definition against the source's tables, columns, types, keys and values
     if (noSource()) { toast('연결된 데이터 소스가 없어 대조하지 못했습니다. 데이터 소스를 연결해 주세요.', true); return; }
-    S.bind = { busy: true };
+    const run = bndCheckRun();
     render();
-    try { S.bind = await api('bindings', {}); } catch (e) { S.bind = { error: e.message }; }
+    await run;
     render();
-    if (S.bind.error) toast(S.bind.error, true); else toast(`스키마 대조 결과 차이 ${(S.bind.findings || []).length}건을 확인했습니다.`);
+    if (S.bind.error) toast(S.bind.error, true); else toast(`스키마 대조 결과 차이 ${bndDiffs()}건을 확인했습니다.`);
   }
-  const bndNoSource = (say) => `<div class="k-i3 k-14 bnd-status" role="status"><span class="k-chip b">데이터 소스 미연결</span><span style="flex:1 1 420px;min-width:0">${esc(say)}</span><span class="k-wrap g8"><a class="k-btn" href="#db">데이터 소스 연결</a>${S.tab === 'sources' ? '' : '<a class="k-btn" href="#sources">Mapping</a>'}</span></div>`;
+  const bndNoSource = () => `<div class="k-i3 k-14 bnd-status" role="status"><span class="k-chip b">데이터 소스 미연결</span><span class="k-wrap g8 k-push"><a class="k-btn" href="#db">데이터 소스 연결</a>${S.tab === 'sources' ? '' : '<a class="k-btn" href="#sources">Mapping</a>'}</span></div>`;
 
   // ---- BND-01 데이터 소스 연결 -----------------------------------------------------------------------------------
   const BND_DB_KIND = [['postgres', 'PostgreSQL', 'postgresql', '5432'], ['mysql', 'MySQL', 'mysql', '3306'], ['oracle', 'Oracle', 'oracle', '1521'], ['mssql', 'SQL Server', 'mssql', '1433'], ['sqlite', 'SQLite', '', '']];
   const BND_DB_LEAD = '업무 DB와 API를 읽기 전용 데이터 소스로 연결합니다.';
 
-  // the tables the definition names and the tables the source has, one row each
+  // the tables the definition names (an Entity's table, the table a Relation is read from) and the tables the source has
   function bndTableRows(m) {
     const src = m.sources.source, rows = new Map();
-    const row = (name) => { if (!rows.has(name)) rows.set(name, { table: name, ents: [], cols: 0, real: null }); return rows.get(name); };
-    m.objects.filter((o) => o.table).forEach((o) => { const r = row(o.table); r.ents.push(o); r.cols += bndOwn(m, o.name).filter((p) => !p.expr).length; });
+    const row = (name) => { if (!rows.has(name)) rows.set(name, { table: name, ents: [], links: [], cols: 0, real: null, used: false }); return rows.get(name); };
+    m.objects.filter((o) => o.table).forEach((o) => { const r = row(o.table); r.ents.push(o); r.cols += bndOwn(m, o.name).filter((p) => !p.expr).length; r.used = true; });
+    m.links.filter((l) => l.via && l.via.table).forEach((l) => { const r = row(l.via.table); r.links.push(l); r.cols += new Set([l.via.source || l.via.from, l.via.target || l.via.to].filter(Boolean)).size; r.used = true; });
     src.tables.forEach((t) => { row(t.table).real = t; });
-    return [...rows.values()].sort((a, b) => (b.ents.length ? 1 : 0) - (a.ents.length ? 1 : 0) || a.table.localeCompare(b.table));
+    return [...rows.values()].sort((a, b) => (b.used ? 1 : 0) - (a.used ? 1 : 0) || a.table.localeCompare(b.table));
   }
 
   function bndDbForm() {
@@ -99,10 +111,9 @@
         <label class="k-f">질의 서비스 주소<input class="k-in" type="text" data-in="gwurl" value="${esc(g.url)}" placeholder="https://platform.example/query"></label>
         <div class="bnd-two"><label class="k-f">연결 번호<input class="k-in" type="text" data-in="gwconn" value="${esc(g.connection)}" placeholder="12"></label>
           <label class="k-f">종류<select class="k-in" data-in="gwdialect">${[['postgres', 'PostgreSQL'], ['mysql', 'MySQL'], ['oracle', 'Oracle']].map(([k, l]) => `<option value="${k}"${g.dialect === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
-        <label class="k-f">접속 토큰<input class="k-in" type="password" data-in="gwtoken" value="${esc(g.token)}" autocomplete="off"><span class="k-hint">세션 메모리에만 보관</span></label>`;
+        <label class="k-f">접속 토큰<input class="k-in" type="password" data-in="gwtoken" value="${esc(g.token)}" autocomplete="off"></label>`;
     }
-    if (!st.data.connect) return `<p class="k-note">서버 설정에서 DB 연결을 허용하지 않아 연결할 수 없습니다. 테이블 파일은 자료 업로드로 추가해 주세요.</p>
-      <div class="k-h"><a class="k-btn" href="#catalog">${ki('upload', 16, 1.75)}자료 업로드</a></div>`;
+    if (!st.data.connect) return `<div class="k-h"><span class="k-chip">DB 연결 · 서버 설정</span><a class="k-btn k-push" href="#catalog">${ki('upload', 16, 1.75)}자료 업로드</a></div>`;
     const kind = BND_DB_KIND.find((x) => x[0] === D.kind) || BND_DB_KIND[0];
     const body = D.kind === 'sqlite' ? input('path', '파일 경로', ' placeholder="예: /data/shop.db"')
       : `<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">${input('host', '호스트', ' placeholder="db-ro.example.com"')}${input('port', '포트', ` placeholder="${kind[3]}"`)}</div>
@@ -122,32 +133,30 @@
     const sub = on ? `${BACKEND_KIND[src.kind] || src.kind} 읽기 전용 · ${origin.detail || origin.label || src.name}${store ? (store.state === 'ok' ? ` · 응답 ${store.ms}ms` : ` · ${store.error || '응답 없음'}`) : ''}` : '연결된 데이터 소스 없음';
     const pipes = st.pipelines.length > 1 ? `<div class="k-h"><label class="k-f" style="flex:0 1 320px">데이터<select class="k-in sm" data-in="bndPipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select></label>${st.pipeline !== 'p1' && isOntoAdmin() ? '<button class="k-lnk bad" data-act="bndPipeDrop" style="align-self:flex-end">데이터 삭제</button>' : ''}</div>` : '';
     const band = `<section class="k-wrap g16" aria-labelledby="bnd-src-h" style="align-items:stretch">
-      <div class="k-v bnd-src${on ? ' on' : ''}"><div class="k-pha"><span class="bnd-ico">${ki('db', 20, 1.75)}</span><div class="k-g0"><h2 class="k-h2" id="bnd-src-h">${what} · ${on ? '연결됨' : '미연결'}</h2><p class="k-s" style="margin:0">${esc(sub)}</p></div><span class="k-chip">L2 · L3</span></div>
-        <div class="k-wrap"><div class="bnd-say"><b class="k-ok">연결 없이 사용</b><br>정의 · 규칙 조회, 값 입력 판정, 정의형 · 판정형 검증, Mapping 명세</div>
-          <div class="bnd-say${on ? '' : ' w'}"><b${on ? ' class="k-ok"' : ''}>${on ? '연결로 사용' : '연결 필요'}</b><br>실시간 값 조회, 판정 일치율, 거래 값 정확도, 스키마 ↔ 정의서 차이 검사</div></div>${pipes}</div>
+      <div class="k-v bnd-src${on ? ' on' : ''}"><div class="k-pha"><span class="bnd-ico">${ki('db', 20, 1.75)}</span><div class="k-g0"><h2 class="k-h2" id="bnd-src-h">${what} · ${on ? '연결됨' : '미연결'}</h2><p class="k-s" style="margin:0">${esc(sub)}</p></div><span class="k-chip">L2 · L3</span></div>${pipes}</div>
       <div class="k-card pad k-v" style="flex:1 1 280px"><p class="k-h2" style="margin:0">연결 방식</p>
-        <label class="k-ck" style="font-size:16px"><input type="radio" name="bndway" value="dsn" data-in="bndDbWay"${D.way === 'dsn' ? ' checked' : ''}><span>DB 읽기 전용 계정<br><span class="k-s">DB 계정으로 직접 조회</span></span></label>
-        <label class="k-ck" style="font-size:16px"><input type="radio" name="bndway" value="gw" data-in="bndDbWay"${D.way === 'gw' ? ' checked' : ''}><span>API 호출<br><span class="k-s">플랫폼 질의 서비스로 조회</span></span></label></div></section>`;
+        <label class="k-ck" style="font-size:16px"><input type="radio" name="bndway" value="dsn" data-in="bndDbWay"${D.way === 'dsn' ? ' checked' : ''}><span>DB 읽기 전용 계정</span></label>
+        <label class="k-ck" style="font-size:16px"><input type="radio" name="bndway" value="gw" data-in="bndDbWay"${D.way === 'gw' ? ' checked' : ''}><span>API 호출 · 질의 서비스</span></label></div></section>`;
     let scope = '<section class="k-card pad" style="flex:2 1 560px"><p class="k-p s">불러오는 중입니다.</p></section>';
     if (m) {
-      const rows = bndTableRows(m), named = rows.filter((r) => r.ents.length).length;
-      const obj = (r) => { const names = [...new Set(r.ents.map((o) => o.area_label || o.label || o.name))]; return names.length ? esc(names.join(' · ')) : '<span class="k-mut">-</span>'; };
+      const rows = bndTableRows(m), named = rows.filter((r) => r.used).length;
+      const obj = (r) => { const names = [...new Set(r.ents.map((o) => o.area_label || o.label || o.name))], rels = r.links.map((l) => l.label || l.name);
+        return names.length || rels.length ? esc([...names, ...(rels.length ? [`Relation ${rels.join(', ')}`] : [])].join(' · ')) : '<span class="k-mut">-</span>'; };
       const real = (r) => (!on ? '<span class="k-mut">미연결</span>' : r.real ? `${r.real.columns.length}컬럼 · ${show(r.real.rows)}행` : '<span class="k-chip warn">테이블 없음</span>');
-      const read = (r) => (r.ents.length ? '<span class="k-chip ok">사용</span>' : canEdit() ? `<button class="k-lnk" data-act="mgobjnew" data-t="${esc(r.table)}">+ Entity</button>` : '<span class="k-chip">미사용</span>');
+      const read = (r) => (r.used ? '<span class="k-chip ok">사용</span>' : canEdit() ? `<a class="k-lnk" href="#entity-form?table=${encodeURIComponent(r.table)}">+ Entity</a>` : '<span class="k-chip">미사용</span>');
       scope = `<section class="k-card" aria-labelledby="bnd-tb-h" style="flex:2 1 560px"><div class="k-h g12" style="padding:16px 20px"><h2 class="k-h2" id="bnd-tb-h">테이블 범위</h2><span class="k-chip">정의 ${named}</span><span class="k-s k-push">${on ? `실제 스키마 ${m.sources.source.tables.length}개 테이블` : ''}</span></div>
         ${rows.length ? `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">테이블</th><th scope="col">대응 Object</th><th class="r" scope="col">정의서</th><th scope="col" class="bnd-dashl">실제 스키마</th><th scope="col">사용</th></tr></thead><tbody>
-          ${rows.map((r) => `<tr><td class="k-code">${esc(r.table)}</td><td>${obj(r)}</td><td class="r">${r.ents.length ? r.cols : '<span class="k-mut">-</span>'}</td><td class="bnd-dashl${on && r.real ? '' : ' mut'}">${real(r)}</td><td>${read(r)}</td></tr>`).join('')}</tbody></table></div>`
+          ${rows.map((r) => `<tr><td class="k-code">${esc(r.table)}</td><td>${obj(r)}</td><td class="r">${r.used ? r.cols : '<span class="k-mut">-</span>'}</td><td class="bnd-dashl${on && r.real ? '' : ' mut'}">${real(r)}</td><td>${read(r)}</td></tr>`).join('')}</tbody></table></div>`
     : '<p class="k-cf line">테이블이 지정된 Entity가 없습니다.</p>'}
         </section>`;
     }
-    const by = bndFound(), all = Object.values(by).flat(), n = (kinds) => all.filter((f) => kinds.includes(f.kind)).length;
     const got = on && bndChecked();
-    const after = (title, say, value, href) => `<div class="k-v g4 k-14" style="flex:1 1 220px"><b class="k-b">${title}</b><span class="k-s">${say}</span>${value ? `<a class="k-13" href="#${href}">${value}</a>` : ''}</div>`;
+    const after = (title, value, href) => `<div class="k-v g4 k-14" style="flex:1 1 220px"><b class="k-b">${title}</b>${value ? `<a class="k-13" href="#${href}">${value}</a>` : `<span class="k-s">${on ? '대조 전' : '미연결'}</span>`}</div>`;
     const checks = `<section class="k-v g12 bnd-dash" aria-labelledby="bnd-af-h"><div class="k-h"><h2 class="k-h2" id="bnd-af-h">연결 점검</h2>${on ? `<button class="k-lnk k-push" data-act="bndCheckNow"${S.bind && S.bind.busy ? ' disabled' : ''}>${ki('reload', 16, 1.75)}${S.bind && S.bind.busy ? '대조 중' : got ? '다시 대조' : '대조 실행'}</button>` : ''}</div>
-      <div class="k-wrap">${after('스키마 ↔ 정의서 차이', '정의서에 없는 테이블 · 컬럼, 타입이 다른 컬럼', got ? `차이 ${n(['table', 'column', 'type'])}건` : '', 'bind')}
-        ${after('코드값 실제 분포', '정의에 없는 실제 값', got ? `정의에 없는 값 ${n(['enum'])}건` : '', 'sources')}
-        ${after('Mapping 명세 확인', '샘플 값 기준 Property ↔ 컬럼 검사', got ? `컬럼 ${S.bind.checked.columns}개 · 데이터 점검 ${S.bind.checked.data_checks}건` : '', 'sources')}
-        ${after('판정 일치율', '과거 처리 기록 재계산', on ? '검증' : '', 'flow')}</div></section>`;
+      <div class="k-wrap">${after('스키마 ↔ 정의서 차이', got ? `차이 ${bndDiffs(['table', 'column', 'type'])}건` : '', 'bind')}
+        ${after('코드값 실제 분포', got ? `정의에 없는 값 ${bndDiffs(['enum'])}건` : '', 'sources')}
+        ${after('Mapping 명세 확인', got ? `컬럼 ${S.bind.checked.columns}개 · 데이터 점검 ${S.bind.checked.data_checks}건` : '', 'sources')}
+        ${after('판정 일치율', on ? '검증' : '', 'flow')}</div></section>`;
     return bndPg(`${head}${band}<div class="k-cols"><section class="k-card pad k-v g12" aria-labelledby="bnd-cf-h" style="flex:1 1 340px"><h2 class="k-h2" id="bnd-cf-h">연결 정보</h2>${bndDbForm()}</section>${scope}</div>${checks}
       ${kNext([['sources', 'Mapping'], ['query', '질의'], ['roles', '접근 정책'], ['adapters', '저장소 · 엔진'], ['flow', '검증']])}`);
   }
@@ -167,7 +176,7 @@
       try {
         D.test = await api('connections');
         const b = D.test.stores.find((x) => x.source);
-        toast(b ? (b.state === 'ok' ? `데이터 소스 연결을 확인했습니다 · 응답 ${b.ms}ms` : `데이터 소스가 응답하지 않아 연결을 확인하지 못했습니다. ${b.error || ''}`) : '연결된 데이터 소스가 없어 테스트하지 못했습니다.', !!b && b.state !== 'ok');
+        toast(b ? (b.state === 'ok' ? '데이터 소스 연결을 확인했습니다.' :'데이터 소스가 응답하지 않아 연결을 확인하지 못했습니다. 연결 정보를 확인해 주세요.') : '연결된 데이터 소스가 없어 테스트하지 못했습니다. 데이터 소스를 연결해 주세요.', !!b && b.state !== 'ok');
       } catch (e) { fail(e); }
       D.testing = false; render();
     },
@@ -175,20 +184,20 @@
       const D = S.bnd.db;
       S.dr.label = D.name.trim();
       if (D.way === 'gw') {
-        if (!S.gw.url.trim() || !S.gw.connection.trim()) { toast('질의 서비스 주소와 연결 번호를 입력해 주세요.', true); return; }
+        if (!S.gw.url.trim() || !S.gw.connection.trim()) { toast('질의 서비스 주소와 연결 번호가 없어 연결하지 못했습니다. 주소와 연결 번호를 입력해 주세요.', true); return; }
         ACT.gwconnect();
         return;
       }
       const kind = BND_DB_KIND.find((x) => x[0] === D.kind);
       let dsn = D.path.trim();
       if (D.kind !== 'sqlite') {
-        if (!D.host.trim() || !D.database.trim()) { toast('호스트와 데이터베이스를 입력해 주세요.', true); return; }
+        if (!D.host.trim() || !D.database.trim()) { toast('호스트와 데이터베이스가 없어 연결하지 못했습니다. 호스트와 데이터베이스를 입력해 주세요.', true); return; }
         const who = D.user ? `${encodeURIComponent(D.user)}${D.pw ? `:${encodeURIComponent(D.pw)}` : ''}@` : '';
         dsn = `${kind[2]}://${who}${D.host.trim()}${D.port.trim() ? `:${D.port.trim()}` : ''}/${encodeURIComponent(D.database.trim())}`;
-      } else if (!dsn) { toast('SQLite 파일 경로를 입력해 주세요.', true); return; }
+      } else if (!dsn) { toast('SQLite 파일 경로가 없어 연결하지 못했습니다. 파일 경로를 입력해 주세요.', true); return; }
+      // the password stays in its field until the source is connected, so a second try sends what the field shows
       S.dr.dsn = dsn;
-      D.pw = '';
-      ACT.connect();
+      filesCall('connect', { dsn, label: S.dr.label, rules: S.dr.rules }, () => { D.pw = ''; startDraft(); location.hash = '#data'; });
     },
     bndPipeDrop: () => {
       const p = S.st.pipelines.find((x) => x.id === S.st.pipeline);
@@ -206,7 +215,7 @@
     const bad = found[0];
     const mark = state === 'none' ? ['', '테이블 미지정'] : state === 'calc' ? ['', '계산 Property'] : bad ? ['warn', FINDING[bad.kind] || bad.kind]
       : state === 'missing' ? ['warn', '컬럼 없음'] : state === 'ok' ? ['ok', bndChecked() ? '값 확인됨' : '스키마 확인됨'] : ['b', '명세'];
-    return { p, o, state, found, mark, id: bndMapId(p), name: `${o ? o.label || o.name : p.object}.${p.label || p.name}`, source: o && o.table ? `${o.table}.${bndCol(p)}` : '' };
+    return { p, o, state, found, mark, id: bndMapId(p), name: `${o ? o.label || o.name : p.object}.${p.label || p.name}`, source: o && o.table && !p.expr ? `${o.table}.${bndCol(p)}` : '' };
   }
 
   function bndMapView() {
@@ -223,7 +232,9 @@
     const area = areas.find((a) => a.name === M.area) || { objects: [] };
     const rows = area.objects.flatMap((o) => bndOwn(m, o.name)).map((p) => bndMapRow(m, by, p));
     const sel = every.find((r) => r.id === M.sel) || null;
-    const bar = sel ? itemBar('map', sel.id, sel.name, sel.source || '테이블 미지정') : '';
+    // a computed Property reads no column: it has no Mapping to edit, and its formula is changed on its Entity
+    const bar = !sel ? '' : sel.state === 'calc' ? kBar('선택한 Property', sel.name, `계산식 · ${sel.p.expr}`, `<a class="k-btn" href="#objects?entity=${encodeURIComponent(sel.p.object)}">${ki('doc', 16, 1.75)}Entity</a>`)
+      : itemBar('map', sel.id, sel.name, sel.source || '테이블 미지정');
     const stats = `<section class="k-wrap" aria-label="Mapping 현황">
       <div class="k-card bnd-stat"><p class="k-s" style="margin:0">Mapping 명세</p><p class="k-big">${spec.length} <span class="k-mut k-14" style="font-weight:400">/ Property ${core.length}</span></p><p class="k-s" style="margin:4px 0 0">테이블 지정 Entity의 Property</p></div>
       <div class="k-card bnd-stat"><p class="k-s" style="margin:0">코드 Mapping</p><p class="k-big">${codes.length}</p><p class="k-s k-cut" style="margin:4px 0 0">${codes.length ? esc(codes.slice(0, 4).map((r) => r.p.label || r.p.name).join(' · ')) : '허용값 Property'}</p></div>
@@ -247,7 +258,7 @@
       <table class="k-t s"><thead><tr><th scope="col">소스 값</th><th scope="col">표시</th></tr></thead><tbody>${cp.values.map((v) => `<tr><td class="k-code">${esc(v)}</td><td>${esc((cp.labels || {})[v] || '-')}</td></tr>`).join('')}</tbody></table></section>`
       : `<section class="k-card pad k-v"><h2 class="k-h2">코드 Mapping</h2><p class="k-p s">${sel ? '허용값이 없습니다.' : '선택된 Mapping이 없습니다.'}</p></section>`;
     return bndPg(`${kHead('Mapping', BND_MAP_LEAD, `<a class="k-btn" href="#bind">Entity Binding</a><button class="k-btn" data-act="bndCheckNow"${S.bind && S.bind.busy ? ' disabled' : ''}>${ki('reload', 16, 1.75)}${S.bind && S.bind.busy ? '대조 중' : '차이 검사'}</button>${canEdit() ? `<a class="k-btn pri" href="${itemHref('map', 'form')}">${ki('plus', 16, 1.75)}Mapping</a>` : ''}`)}
-      ${bar}${on ? '' : bndNoSource('데이터 소스가 연결되지 않아 실제 스키마와 코드값을 대조할 수 없습니다.')}${stats}<div class="k-cols">${table}<div class="k-c2">${why}${code}</div></div>
+      ${bar}${on ? '' : bndNoSource()}${stats}<div class="k-cols">${table}<div class="k-c2">${why}${code}</div></div>
       ${kNext([['bind', 'Entity Binding'], ['db', '데이터 소스'], ['objects', 'Entity'], ['lexicon', '용어 사전'], ['query', '질의'], ['actions', 'Action']])}`);
   }
 

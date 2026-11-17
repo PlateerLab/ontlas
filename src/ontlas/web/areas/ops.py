@@ -65,21 +65,50 @@ def targets(s, a, who) -> dict:
             "calls_month": sum(r["month"] for r in rows), "calls": sum(r["calls"] for r in rows)}
 
 
+def _tried_on(s, role: str):
+    """The studio a policy is tried on, and whether it is the definition being written: a policy that change request
+    adds or changes is tried as it would be deployed, on a copy of the studio over that change request; any other on
+    the deployed definition, as a platform calls it now."""
+    from ontlas.modules import ModuleError
+    from ontlas.review import FlowSettings, element_diff, trial
+
+    deployed = s.studio.onto.roles
+    try:
+        ws = s._ws()
+    except ValueError:  # a studio not made of modules has no change request to write
+        ws = None
+    if ws is None or not ws.dirty:
+        if role and role not in deployed:
+            raise ValueError(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요.")
+        return s.studio, False
+    try:
+        comp = ws.composed()
+    except ModuleError:
+        raise ValueError("작성 중인 변경 요청의 정의 오류로 정책을 시험하지 못했습니다. 변경 요청을 확인해 주세요.") from None
+    if role and role not in comp.ontology.roles:
+        raise ValueError(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요.")
+    if not role or (role in deployed and f"role:{role}" not in element_diff(s.studio.onto, comp.ontology)["changed"]):
+        return s.studio, False
+    return trial(s.studio, list(comp.modules), FlowSettings(off=["project"])), True
+
+
 @post("ops/try", needs="viewer")
 def try_call(s, a, who) -> dict:
     """One /v1 call on this page's library as an access policy would make it: the status and the body a platform with
-    that policy gets. Reading and deciding only, as the older route allows."""
+    that policy gets, the policy's caller attributes as its token would carry them. Reading and deciding only, as the
+    older route allows."""
     from ontlas.rest import Rest
     from ontlas.tools import StudioTools
 
     path, role = str(a.get("path") or ""), str(a.get("policy") or "")
     if path not in s.TRY:
         raise ValueError("실행할 수 없는 API라 요청하지 못했습니다. 판정 · 값 검증 · 용어 해석 · 개념 조회 API를 선택해 주세요.")
-    if role and role not in s.studio.onto.roles:
-        raise LookupError(f"접근 정책 {role}")
+    studio, draft = _tried_on(s, role)
+    principal = {str(k): str(v).strip() for k, v in (a.get("principal") or {}).items() if str(v).strip()} if role else {}
     body = {k: v for k, v in (a.get("body") or {}).items() if k != "library"}  # this page is on one library already
-    code, out = Rest(StudioTools(s.studio, role=role or None, actor_id="page")).answer("POST", path, body)
-    return {"status": code, "body": out, "policy": role}
+    tools = StudioTools(studio, role=role or None, principal=principal, actor_id="page")
+    code, out = Rest(tools).answer("POST", path, body)
+    return {"status": code, "body": out, "policy": role, "draft": draft}
 
 
 @post("ops/reindex", needs="editor")

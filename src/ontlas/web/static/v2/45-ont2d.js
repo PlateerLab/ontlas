@@ -22,6 +22,14 @@
     return [...step('links').map((x) => ({ el: x.element, kind: 'link', x, obj: x.from })), ...step('objects').map((x) => ({ el: x.element, kind: 'object', x, obj: x.element.split(':')[1] })),
       ...step('properties').map((x) => ({ el: x.element, kind: 'property', x, obj: x.object }))];
   }
+  // whether a draft can be made: some material, and where it has tables, at least one of them picked (the draft is made
+  // from the data's tables, else from the definition documents' tables)
+  function o2CcCanMake() {
+    const f = S.files, data = f.files.flatMap((x) => x.tables.map((t) => t.name));
+    const names = data.length ? data : f.definitions.flatMap((x) => x.tables.map((t) => t.name));
+    return f.files.length + f.definitions.length > 0 && (!names.length || names.some((n) => S.dr.tables[n] !== false));
+  }
+  const o2CcReviewed = () => Object.keys(S.dr.ok || {}).length > 0 || ['drop', 'labels', 'types', 'keys', 'card'].some((k) => Object.values((S.dr.ed || {})[k] || {}).some(Boolean));
   const o2CcState = (c) => (S.dr.ed.drop[c.el] || (c.kind === 'property' && S.dr.ed.drop[`object:${c.obj}`]) ? 'off' : S.dr.ok[c.el] ? 'ok' : 'wait');
   // how a candidate was found: declared in the source, or read off its values
   const o2CcHow = (c) => ((c.kind === 'object' && c.x.why === 'primary_key') || (c.kind === 'link' && c.x.why === 'foreign_key') ? ['b', '키 기반'] : c.kind === 'object' && c.x.why === 'row_number' ? ['warn', '키 없음'] : ['', '값으로 추론']);
@@ -49,7 +57,7 @@
     const source = `<section class="k-card" aria-labelledby="o2xs"><div class="k-h g12" style="padding:16px 20px;border-bottom:1px solid var(--row)">
         <span style="width:32px;height:32px;border-radius:8px;background:var(--blue-wash);color:var(--blue);display:inline-flex;align-items:center;justify-content:center">${ki('doc', 18, 1.75)}</span>
         <div style="flex:1 1 320px;min-width:0"><h2 class="k-h2" id="o2xs">바탕 자료</h2></div>
-        ${edit ? `<a class="k-btn" href="#catalog">${ki('plus', 16, 1.75)}자료 업로드</a><button class="k-btn" data-act="draft"${total && !S.dr.busy ? '' : ' disabled'}>${ki('play', 16, 1.75)}${S.dr.busy ? '생성 중' : p ? '다시 생성' : '초안 생성'}</button>` : ''}</div>
+        ${edit ? `<a class="k-btn" href="#catalog">${ki('plus', 16, 1.75)}자료 업로드</a><button class="k-btn" id="o2ccgo" data-act="o2ccgo"${o2CcCanMake() && !S.dr.busy ? '' : ' disabled'}>${ki('play', 16, 1.75)}${S.dr.busy ? '생성 중' : p ? '다시 생성' : '초안 생성'}</button>` : ''}</div>
       <div class="k-wrap g8" role="group" aria-label="추출할 자료" style="padding:12px 20px;border-bottom:1px solid var(--row)">${[...tables, ...defs].join('') || `<span class="k-s">자료가 없습니다.</span>${edit && st.data.samples ? '<button class="k-lnk" data-act="dsample">샘플 데이터</button>' : ''}`}
         <a class="k-lnk" href="#${lib}" style="min-height:36px">전체 자료 ${total} · ${lib === 'evidence' ? '근거 지도' : '자료 업로드'}${ki('chevR', 14, 1.75)}</a></div>
       <div class="k-14" style="padding:12px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px"><span class="k-s">${p ? `마지막 생성 · ${esc(p.label || st.repository.label)} · 자료 ${(p.steps.find((s) => s.id === 'read') || { items: [] }).items.length}건` : '생성 전'}</span>
@@ -154,6 +162,16 @@
     o2ccok: (t) => { const el = t.dataset.el; S.dr.ed.drop[el] = false; S.dr.ok[el] = true; o2CcEdited(); },
     o2ccstep: (t) => { S.dr.view = t.dataset.k; S.dr.setup = false; location.hash = '#data'; },
     o2ccsetup: () => { S.dr.setup = true; S.dr.rulesOpen = true; location.hash = '#data'; },
+    o2ccgo: () => {  // a draft made again starts its review over: asked first when something was reviewed
+      if (!o2CcCanMake()) return;
+      if (S.files.pending && o2CcReviewed() && !window.confirm('다시 생성하면 검토한 승인 · 거절 · 이름 변경이 모두 초기화됩니다.')) return;
+      ACT.draft();
+    },
+  });
+  document.addEventListener('change', (ev) => {  // a table taken out or put back: with none picked there is nothing to make a draft from
+    if (S.tab !== 'concepts' || !ev.target.matches || !ev.target.matches('input[data-in=dtable]') || !S.files || !S.files.files) return;
+    const b = $('#o2ccgo');
+    if (b) b.disabled = !o2CcCanMake() || !!S.dr.busy;
   });
   Object.assign(INPUT, {
     o2cclab: (t) => { S.dr.ed.labels[t.dataset.el] = t.value; clearTimeout(o2CcEdited.t); o2CcEdited.t = setTimeout(() => preview(), 300); },

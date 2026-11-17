@@ -454,6 +454,7 @@ window.SpaceGraph = (function () {
     if (!c) return;
     const dpr = window.devicePixelRatio || 1, w = st.stage.clientWidth, h = st.stage.clientHeight;
     if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    if (c.style.width !== `${w}px` || c.style.height !== `${h}px`) { c.style.width = `${w}px`; c.style.height = `${h}px`; }  // a canvas is as large as its pixels unless told: on a 2x screen the names drew twice as far
     const x = c.getContext('2d');
     x.setTransform(dpr, 0, 0, dpr, 0, 0);
     x.clearRect(0, 0, w, h);
@@ -664,8 +665,9 @@ window.SpaceGraph = (function () {
     const g = st.graph, edge = (a) => a.raw && (!st.opt.shown || st.opt.shown('edge', a.raw));
     const nodes = g.filterNodes((id, a) => !st.bundles.has(id) && nodeShown(st, id, a));
     const edges = g.filterEdges((k, a, s, t) => edge(a) && nodeShown(st, s, g.getNodeAttributes(s)) && nodeShown(st, t, g.getNodeAttributes(t)));
-    const count = edges.length + st.loops.length, kept = () => (st.route && st.route.keys ? st.route.keys.size
-      : edges.filter((k) => st.only.has(g.source(k)) && st.only.has(g.target(k))).length + st.loops.filter((e) => st.only.has(e.source)).length);
+    const loops = st.loops.filter((e) => g.hasNode(e.source) && !st.bundles.has(e.source) && nodeShown(st, e.source, g.getNodeAttributes(e.source)));  // a loop on a hidden node is not drawn either
+    const count = edges.length + loops.length, kept = () => (st.route && st.route.keys ? st.route.keys.size
+      : edges.filter((k) => st.only.has(g.source(k)) && st.only.has(g.target(k))).length + loops.filter((e) => st.only.has(e.source)).length);
     st.el.querySelector('.kg-status').textContent = st.only ? `Node ${st.only.size} / ${nodes.length} · Edge ${kept()} / ${count}`
       : `${st.fold.size ? `묶음 ${st.fold.size} · ` : ''}Node ${nodes.length} · Edge ${count}`;
     fitLegend(st);  // the status takes its width from the legend
@@ -706,7 +708,7 @@ window.SpaceGraph = (function () {
         cam.animatedReset({ duration: 260 });
       }
       else if (act === 'route') { st.hops = 0; st.route = { from: st.center }; refresh(); }
-      else if (b.dataset.hops) { st.hops = Number(b.dataset.hops); refresh(); }
+      else if (b.dataset.hops) { st.hops = st.hops === Number(b.dataset.hops) ? 0 : Number(b.dataset.hops); refresh(); }  // the step pressed again shows the whole graph
       else if (act === 'ccw') cam.animate({ angle: cam.angle - Math.PI / 8 }, { duration: 200 });
       else if (act === 'cw') cam.animate({ angle: cam.angle + Math.PI / 8 }, { duration: 200 });
       else if (act === 'fit') cam.animatedReset({ duration: 260 });
@@ -750,7 +752,7 @@ window.SpaceGraph = (function () {
     renderer.on('clickNode', ({ node, event }) => { st.opened = false; if (touch(event)) tap(st, node); });
     renderer.on('downNode', ({ node, event }) => {
       if (touch(event)) return;
-      st.drag = { node, moved: false };
+      st.drag = { node, moved: false, x: event.x, y: event.y };  // where it was pressed: a hand's wobble is still a click
       if (!renderer.getCustomBBox()) renderer.setCustomBBox(renderer.getBBox());
       event.preventSigmaDefault();
     });
@@ -759,6 +761,7 @@ window.SpaceGraph = (function () {
         if (!st.hover) st.stage.style.cursor = titleAt(st, ev) ? 'pointer' : '';
         return;
       }
+      if (!st.drag.moved && Math.hypot(ev.x - st.drag.x, ev.y - st.drag.y) < 4) { ev.preventSigmaDefault(); return; }  // the camera stays put too
       const p = renderer.viewportToGraph(ev), { node } = st.drag, x = st.bundles.get(node);
       if (x) {  // a bundle carries its members with it
         const a = st.graph.getNodeAttributes(node), dx = p.x - a.x, dy = p.y - a.y;
@@ -855,7 +858,7 @@ window.SpaceGraph = (function () {
         minCameraRatio: 0.06, maxCameraRatio: 4, ...reducers(st),
       });
     } catch (e) {
-      el.innerHTML = '<div class="kg-none big">이 브라우저에서 WebGL을 사용할 수 없어 그래프를 표시하지 못했습니다. 객체 관리 화면에서 같은 정의를 확인할 수 있습니다.</div>';
+      el.innerHTML = '<div class="kg-none big">이 브라우저에서 WebGL을 사용할 수 없어 그래프를 표시하지 못했습니다. 하드웨어 가속을 켠 뒤 다시 열어 주세요.</div>';
       return;
     }
     cur = st;
@@ -872,7 +875,7 @@ window.SpaceGraph = (function () {
     const mine = ++ticket;
     if (!el.firstChild) el.innerHTML = '<div class="kg-none big">그래프를 불러오는 중입니다.</div>';
     load().catch(() => {
-      if (document.body.contains(el)) el.innerHTML = '<div class="kg-none big">그래프 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해 주세요.</div>';
+      if (document.body.contains(el)) el.innerHTML = '<div class="kg-none big">네트워크 오류로 그래프 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해 주세요.</div>';
       return false;
     }).then((ok) => {
       if (ok !== false && mine === ticket && document.body.contains(el)) start(el, data, opt);
@@ -904,7 +907,8 @@ window.SpaceGraph = (function () {
     const g = cur.graph, shown = g.filterNodes((id) => !cur.bundles.has(id) && !cur.renderer.getNodeDisplayData(id).hidden).length;
     return { nodes: g.order - cur.bundles.size, edges: g.size - cur.links.length + cur.loops.length, layout: cur.layout, groups: cur.groups.map((x) => x.label), colorBy: prefs.colorBy,
       shown, bundles: [...cur.bundles].filter(([, x]) => cur.fold.has(x.key)).map(([id, x]) => ({ id, label: x.label, nodes: x.nodes.length })),
-      hops: cur.hops, route: cur.route && cur.route.nodes ? cur.route.nodes : null };
+      hops: cur.hops, route: cur.route && cur.route.nodes ? cur.route.nodes : null,
+      ids: g.filterNodes((id) => !cur.renderer.getNodeDisplayData(id).hidden) };  // the nodes drawn, for whoever looks for an empty spot
   }
 
   return { mount, refresh, focus, kill, point, state };

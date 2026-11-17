@@ -44,6 +44,8 @@ def _question(a: dict, onto) -> dict:
         raise ValueError("평가 방법이 올바르지 않아 저장하지 못했습니다. 평가 방법을 다시 선택해 주세요.")
     out: dict[str, Any] = {"text": text, "type": kind, "grading": grading, "holdout": bool(a.get("holdout")),
                            "keywords": _keywords(a.get("keywords")), "owner": str(a.get("owner") or "").strip()}
+    if grading == "keywords" and not out["keywords"]:
+        raise ValueError("키워드가 없어 저장하지 못했습니다. 키워드를 하나 이상 입력해 주세요.")
     by_words = bool(out["keywords"]) and grading in ("keywords", "evidence")  # held right by its words, not by a value
     expect = a.get("expect")
     if a.get("decision"):
@@ -159,7 +161,7 @@ def question_save(s, a, who) -> dict:
 def question_try(s, a, who) -> dict:
     """The question asked now, as the studio stands, without saving it: whether the answer is the one expected."""
     from ontlas.model import Question
-    from ontlas.web.api import UNMEASURED, _gap_text, plain, said
+    from ontlas.web.api import _gap_text, plain, said
 
     st = s.studio
     try:
@@ -176,7 +178,7 @@ def question_try(s, a, who) -> dict:
         r = st.questions().results[0]
     finally:
         st.onto.questions = held
-    return plain({"ok": True, "measured": not r.unmeasured, "note": UNMEASURED.get(r.unmeasured, ""),
+    return plain({"ok": True, "measured": not r.unmeasured, "unmeasured": r.unmeasured or "",
                   "passed": None if r.unmeasured else r.passed, "expected": r.expected, "got": r.got,
                   "error": said(r.error) if r.error else "", "grounded": r.grounded,
                   "gaps": [_gap_text(g) for g in r.gaps], "diagnosis": r.diagnosis, "stages": r.stages})
