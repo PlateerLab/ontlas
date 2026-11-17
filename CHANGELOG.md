@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.2
+
+- **The ways in from outside stand where a person looks first, each with something to take away.** 외부 연동 said how a
+  platform or an agent connects (REST, an OpenAPI document, MCP, a database connection a platform lends), but below the
+  long panel that tries the API, and as text with nothing to copy. A card at the top now gives the four ways as rows:
+  the address or the command with a copy button, the authorization header, a cURL example, an MCP client's settings and
+  the studio file's settings to copy, the OpenAPI document to open, and buttons that go to the try panel and the tool
+  list. A settings text a person opened stays open while the page repaints. The XGEN steps lead to the node settings and
+  copy the addresses they name, and each row of the tool table copies its own address.
+
 ## 0.24.1
 
 - **Approved changes are written to the folder of the library they were made in.** A deployment that writes approved

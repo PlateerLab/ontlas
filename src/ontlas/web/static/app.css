@@ -1434,6 +1434,25 @@ tr.unasked td { color:#98a2b3; }
 .trydl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:4px 12px; margin:0 0 6px; font-size:13px; }
 .trydl dt { color:var(--muted); }
 .trydl dd { margin:0; word-break:break-word; }
+/* the ways into the space from outside: one row each, with what a person copies from it and where to try it */
+.cnways { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); column-gap:28px; padding-top:4px; padding-bottom:4px; }
+.cnway { display:flex; flex-direction:column; gap:8px; padding:12px 0; min-width:0; }
+.cnway:nth-child(n+3) { border-top:1px solid var(--line); }
+.cnname { display:flex; align-items:center; gap:8px; font-size:13.5px; }
+.cnbody { min-width:0; display:flex; flex-direction:column; gap:8px; }
+.cnwhat { font-size:12.5px; color:#475467; line-height:1.55; }
+.cnval { display:flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px 6px 6px 10px; }
+.cnval code { flex:1; min-width:0; font-size:12.5px; overflow-wrap:anywhere; }
+.cnacts { display:flex; gap:6px; flex-wrap:wrap; }
+.cnacts:empty { display:none; }
+.cnmore > summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--muted); }
+.cncode { position:relative; margin-top:6px; }
+.cncode pre.code { margin:0; max-height:220px; overflow:auto; white-space:pre-wrap; }
+.cncode .iconbtn { position:absolute; top:6px; right:6px; background:rgba(255,255,255,.92); }
+.steps2 .iconbtn, .steps2 .chip { vertical-align:middle; }
+.cnhere { box-shadow:0 0 0 2px var(--blue); transition:box-shadow .2s ease; }
+@media (max-width: 1100px) { .cnways { grid-template-columns:minmax(0,1fr); } .cnway:nth-child(n+2) { border-top:1px solid var(--line); } }
+@media (prefers-reduced-motion: reduce) { .cnhere { transition:none; } }
 .trycode { margin-top:14px; min-width:0; }
 .trycode .tabs { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--line); margin-bottom:8px; }
 .trycode .tabs .tab { border:0; padding:6px 10px; font-size:12.5px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }

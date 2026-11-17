@@ -352,8 +352,9 @@
       '출처 충돌에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인 후 반영됩니다.',
       '결정표 점검은 중복 조건, 미적용 규칙, 누락 구간을 표시합니다.']],
     ['connect', '외부 플랫폼과 Agent의 연동 방법을 확인합니다.', [
-      'MCP를 지원하는 Agent는 ontlas mcp로 연결합니다.',
-      '그 밖의 플랫폼은 토큰으로 REST API를 호출합니다. OpenAPI 문서로 도구를 등록합니다.',
+      '화면 위쪽 연동 방법에서 방법마다 주소, 명령, 설정을 복사합니다. [API 실행]은 같은 호출을 화면에서 실행합니다.',
+      'MCP를 지원하는 Agent는 ontlas mcp로 연결합니다. [클라이언트 설정 복사]로 Agent 설정에 넣을 내용을 복사합니다.',
+      '그 밖의 플랫폼은 토큰으로 REST API를 호출합니다. OpenAPI 문서 주소로 도구를 등록합니다.',
       '플랫폼이 관리하는 DB 연결을 원천으로 사용합니다. 비밀번호는 공간에 저장하지 않습니다.',
       '역할을 지정하면 그 역할의 조회 범위와 가림이 외부 호출에도 적용됩니다.']],
     ['check', '검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다.', [
@@ -469,6 +470,7 @@
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
     lib: { open: false, start: 'files', label: '', key: '', files: null, mods: null, busy: false, up: false, res: null },  // a library being made on the page
+    cn: {},  // which settings texts of the connection ways are open
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
       q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', viewRole: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [], views: null, color: {}, labelBy: {} },
@@ -4629,7 +4631,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
         ${d.inputs.some((x) => x.days_since) ? `<div class="field" style="max-width:260px"><label>기준 시각 (선택)</label><input type="text" data-in="ctryat" value="${esc(c.at)}" placeholder="예: 2026-11-12T09:00:00"><div class="fnote">일시로 보낸 값의 경과일을 이 시각 기준으로 계산합니다. 비우면 지금 기준입니다.</div></div>` : ''}`}`;
     }
     const fill = c.api === 'decide' && d && c.mode === 'values' && d.example ? `<button class="btn" data-act="ctryfill" title="${esc(`${d.example.question} ${d.example.text}`)}">예시 값 채우기</button>` : '';
-    return `<div class="card" style="grid-column:1/-1"><div class="ch">연동 API 실행<div class="right"><span class="muted" style="font-size:12px">POST ${esc(api[2])}${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
+    return `<div class="card" id="trypanel" style="grid-column:1/-1"><div class="ch">연동 API 실행<div class="right"><span class="muted" style="font-size:12px">POST ${esc(api[2])}${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
       <div class="cb"><div class="gwhat">워크플로우와 Agent가 이 라이브러리를 호출하는 API를 화면에서 실행합니다. 화면 결과는 같은 요청을 보낸 플랫폼이 받는 응답과 같습니다.</div>
       <div class="trygrid"><div>
         <div class="field"><label>API</label><div class="seg">${TRY_API.map(([k, label]) => `<button class="tab${c.api === k ? ' on' : ''}" data-act="ctryapi" data-k="${k}" aria-pressed="${c.api === k}">${label}</button>`).join('')}</div></div>
@@ -4650,25 +4652,38 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     const head = pageHead('외부 연동', '워크플로우와 Agent가 이 라이브러리의 규칙과 온톨로지를 호출하는 방법을 확인하고, 연동 API를 실행합니다');
     if (!i) return `${head}<div class="empty"><span class="spin"></span>불러오는 중입니다.</div>`;
     const base = location.origin;
-    const code = (t) => `<pre class="code">${esc(t)}</pre>`;
-    const xgen = `<div class="card"><div class="ch">XGEN 연동</div><div class="cb"><ol class="steps2">
-        <li><b>판정 노드</b><span>HTTP 요청 노드로 <span class="mono">POST ${esc(base)}/v1/decide</span>를 호출합니다. 원천이 없어도 워크플로우가 가진 값을 values로 보내면 규칙대로 판정합니다. 값이 빠지면 422와 빠진 값 목록을 반환합니다.</span></li>
-        <li><b>용어 해석 · 값 검증</b><span><span class="mono">/v1/terms</span>는 질문의 용어를 대표어, 뜻, 검색 표기로 바꿔 검색 질의 확장에 사용합니다. <span class="mono">/v1/validate</span>는 값이 정의와 규칙 카드의 범위 안에 있는지 확인합니다.</span></li>
-        <li><b>Agent 도구</b><span>OpenAPI 문서를 API 컬렉션으로 등록하고 Geny의 도구로 연결합니다. 판정, 규칙 카드, 용어, 검증 도구를 그대로 사용합니다.</span></li>
-        <li><b>Agent 컨텍스트</b><span><span class="mono">/v1/context</span>의 text를 Geny 시스템 프롬프트에 넣습니다. 질문과 관련된 정의와 규칙이 들어갑니다.</span></li>
-        <li><b>검증</b><span><span class="mono">/v1/questions</span>로 원천 연결 전에는 값 기준, 연결 후에는 레코드 기준으로 같은 검증 질문을 측정합니다.</span></li></ol>
+    // each way in, with what a person takes away from it: an address, a command, a settings text, and where to try it
+    const icon = (text, say) => `<button class="iconbtn" data-act="copycode" data-v="${esc(text)}" aria-label="${esc(say)}" title="${esc(say)}">${ui('copy')}</button>`;
+    const take = (text, label) => `<button class="btn sm" data-act="copycode" data-v="${esc(text)}">${label}</button>`;
+    const chipcopy = (text, label) => `<button class="chip sm b" data-act="copycode" data-v="${esc(text)}">${label}</button>`;
+    const more = (key, title, text) => `<details class="cnmore" data-cn="${key}"${S.cn[key] ? ' open' : ''}><summary>${title}</summary><div class="cncode"><pre class="code">${esc(text)}</pre>${icon(text, `${title} 복사`)}</div></details>`;
+    const way = (name, chip, what, value, acts, extra) => `<div class="cnway"><div class="cnname"><b>${name}</b>${chip}</div><div class="cnbody"><div class="cnwhat">${what}</div>
+      ${value ? `<div class="cnval"><code class="mono">${esc(value)}</code>${icon(value, `${name} 복사`)}</div>` : ''}<div class="cnacts">${acts}</div>${extra || ''}</div></div>`;
+    const mcpConf = JSON.stringify({ mcpServers: { ontlas: { command: 'ontlas', args: ['mcp', 'studio.yaml', '--role', 'customer_agent', '--read-only'] } } }, null, 2);
+    const serveRest = 'export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN --api-role support_agent';
+    const curl = `curl ${base}/v1/search -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'`;
+    const agents = '# agents.yaml\nagents:\n  - {name: 고객 응대 Agent, token_env: ONTLAS_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}\n\nontlas serve studio.yaml --api-agents agents.yaml';
+    const gateway = 'backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true';
+    const ways = `<div class="card" style="grid-column:1/-1"><div class="ch">연동 방법</div><div class="cb cnways">
+      ${way('REST API', `<span class="chip sm ${i.rest ? 'ok' : 'warn'}">${i.rest ? '켜짐' : '이 서버는 꺼짐'}</span>`, '워크플로우와 플랫폼이 토큰으로 호출합니다. 토큰은 서버 실행 시 지정한 값이고, 역할을 지정하면 그 역할의 조회 범위와 가림이 적용됩니다.', `${base}/v1`,
+    `${take('Authorization: Bearer <API 토큰>', '인증 헤더 복사')}${take(curl, 'cURL 예시 복사')}<button class="btn sm" data-act="cngo" data-to="trypanel">API 실행</button>`,
+    `${more('serve', '서버에서 REST API 켜기', serveRest)}${more('agents', 'Agent별 토큰과 역할', agents)}`)}
+      ${way('OpenAPI 문서', '', '플랫폼의 API 도구 등록에 사용합니다. Agent가 판정, 규칙 카드, 용어, 검증을 도구로 호출합니다.', `${base}/v1/openapi.json`,
+    `<a class="btn sm" href="/v1/openapi.json" target="_blank" rel="noopener">문서 열기</a><a class="btn sm" href="/v1/tools" target="_blank" rel="noopener">도구 정의 열기</a><button class="btn sm" data-act="cngo" data-to="cntools">도구 ${i.tools.length}개 보기</button>`)}
+      ${way('MCP', '<span class="chip sm ok">사용 가능</span>', 'Claude, Cursor처럼 MCP를 지원하는 Agent에 도구로 연결합니다. 스튜디오 파일이 있는 위치에서 실행합니다.', 'ontlas mcp studio.yaml --role customer_agent --principal customer_id=C001 --read-only',
+    take(mcpConf, '클라이언트 설정 복사'), more('mcp', '클라이언트 설정', mcpConf))}
+      ${way('플랫폼 DB 연결', '', '플랫폼이 관리하는 DB 연결을 원천으로 읽습니다. 비밀번호는 저장하지 않고, 읽기 전용과 허용 테이블은 플랫폼 정책을 따릅니다.', '',
+    `${take(gateway, '스튜디오 파일 설정 복사')}${S.st.data.connect ? '<a class="btn sm" href="#db">플랫폼 연결 입력</a>' : ''}`, more('gateway', '스튜디오 파일 설정', gateway))}
+      </div></div>`;
+    const xgen = `<div class="card" style="grid-column:1/-1"><div class="ch">XGEN 연동</div><div class="cb"><ol class="steps2">
+        <li><b>판정 노드</b><span>HTTP 요청 노드로 <span class="mono">POST ${esc(base)}/v1/decide</span>를 호출합니다. 원천이 없어도 워크플로우가 가진 값을 values로 보내면 규칙대로 판정합니다. 값이 빠지면 422와 빠진 값 목록을 반환합니다. <button class="chip sm b" data-act="cnnode">노드 설정 보기</button></span></li>
+        <li><b>용어 해석 · 값 검증</b><span><span class="mono">/v1/terms</span>는 질문의 용어를 대표어, 뜻, 검색 표기로 바꿔 검색 질의 확장에 사용합니다. <span class="mono">/v1/validate</span>는 값이 정의와 규칙 카드의 범위 안에 있는지 확인합니다. <button class="chip sm b" data-act="cngo" data-to="trypanel">API 실행</button></span></li>
+        <li><b>Agent 도구</b><span>호출할 API를 API 도구로 등록하고 Geny의 도구 포트에 연결합니다. 판정, 규칙 카드, 용어, 검증 도구를 그대로 사용합니다. ${chipcopy(`${base}/v1/openapi.json`, 'OpenAPI 주소 복사')}</span></li>
+        <li><b>Agent 컨텍스트</b><span><span class="mono">/v1/context</span>의 text를 Geny 시스템 프롬프트에 넣습니다. 질문과 관련된 정의와 규칙이 들어갑니다. ${chipcopy(`${base}/v1/context`, '주소 복사')}</span></li>
+        <li><b>검증</b><span><span class="mono">/v1/questions</span>로 원천 연결 전에는 값 기준, 연결 후에는 레코드 기준으로 같은 검증 질문을 측정합니다. ${chipcopy(`${base}/v1/questions`, '주소 복사')}</span></li></ol>
         ${i.libraries > 1 ? '<div class="hint xp">라이브러리가 여럿이면 요청에 library를 지정합니다. 목록은 /v1/libraries에서 확인합니다.</div>' : ''}</div></div>`;
-    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start">${tryPanel(i)}${xgen}
-      <div class="card"><div class="ch">MCP<div class="right"><span class="chip ok">사용 가능</span></div></div><div class="cb"><div class="gwhat">Claude, Cursor처럼 MCP를 지원하는 Agent에 공간을 도구로 연결합니다. 문서 검색, 질의, 판정을 도구로 호출합니다.</div>
-        ${code('ontlas mcp studio.yaml --role customer_agent --principal customer_id=C001 --read-only')}<div class="hint xp">역할을 지정하면 그 역할의 조회 범위와 가림이 그대로 적용됩니다.</div></div></div>
-      <div class="card"><div class="ch">REST API<div class="right"><span class="chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? '켜짐' : '이 서버는 꺼짐'}</span></div></div><div class="cb"><div class="gwhat">어떤 플랫폼에서든 토큰으로 호출합니다. OpenAPI 문서를 가져가면 도구로 등록할 수 있습니다.</div>
-        ${code(`export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN --api-role support_agent\n\ncurl ${base}/v1/search -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" -d '{"text": "반품 기간", "k": 3}'`)}
-        <div class="hint xp">Agent마다 토큰을 따로 발급하면 감사 기록에 Agent 이름이 남고, 각 Agent는 자기 요청만 조회합니다.</div>
-        ${code('# agents.yaml\nagents:\n  - {name: 고객 응대 Agent, token_env: ONTLAS_CS_TOKEN, role: customer_agent, principal: {customer_id: C001}, write: true}\n\nontlas serve studio.yaml --api-agents agents.yaml')}
-        <div class="chips"><a class="btn sm" href="/v1/openapi.json" target="_blank" rel="noopener">OpenAPI</a><a class="btn sm" href="/v1/tools" target="_blank" rel="noopener">도구 목록</a></div></div></div>
-      <div class="card"><div class="ch">플랫폼 DB 연결</div><div class="cb"><div class="gwhat">플랫폼이 관리하는 DB 연결을 쿼리 서비스로 사용합니다. 비밀번호는 공간에 저장하지 않으며, 읽기 전용과 허용 테이블 정책은 플랫폼 기준을 따릅니다.</div>
-        ${code('backends:\n  source:\n    kind: gateway\n    url: https://platform.example/query\n    connection: 12\n    dialect: postgres\n    token_env: PLATFORM_TOKEN\n    source: true')}<div class="hint xp">원천 데이터는 읽기 전용입니다. 온톨로지와 벡터는 공간에 저장합니다.</div></div></div>
-      <div class="card" style="grid-column:1/-1"><div class="ch">REST 도구 ${i.tools.length}개<div class="right"><span class="muted mono" style="font-size:12px">${esc(base)}</span><button class="iconbtn" data-act="copybase" data-v="${esc(base)}" aria-label="주소 복사" title="주소 복사">${ui('copy')}</button></div></div><div class="cb"><table class="tight"><tr><th>도구</th><th>주소</th><th>설명</th></tr>${i.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td class="mono">${esc(t.method)} ${esc(t.path)}</td><td style="font-size:12.5px">${esc(TOOL_WORD[t.name] || t.description)}</td></tr>`).join('')}</table></div></div></div>`;
+    return `${head}<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start">${ways}${tryPanel(i)}${xgen}
+      <div class="card" id="cntools" style="grid-column:1/-1"><div class="ch">REST 도구 ${i.tools.length}개<div class="right"><span class="muted mono" style="font-size:12px">${esc(base)}</span><button class="iconbtn" data-act="copybase" data-v="${esc(base)}" aria-label="주소 복사" title="주소 복사">${ui('copy')}</button></div></div><div class="cb"><table class="tight"><tr><th>도구</th><th>주소</th><th>설명</th><th></th></tr>${i.tools.map((t) => `<tr><td class="mono">${esc(t.name)}</td><td class="mono">${esc(t.method)} ${esc(t.path)}</td><td style="font-size:12.5px">${esc(TOOL_WORD[t.name] || t.description)}</td><td style="text-align:right">${icon(`${base}${t.path}`, `${t.name} 주소 복사`)}</td></tr>`).join('')}</table></div></div></div>`;
   }
 
   function viewRules() {
@@ -8706,6 +8721,13 @@ ${controls}${body}`;
     ctryapi: (t) => { Object.assign(S.ctry, { api: t.dataset.k, res: null, saved: false }); render(); },
     ctrymode: (t) => { S.ctry.mode = t.dataset.k; S.ctry.res = null; render(); },
     ctryview: (t) => { S.ctry.view = t.dataset.k; render(); },
+    cngo: (t) => { const el = document.getElementById(t.dataset.to); if (el) { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.classList.add('cnhere'); setTimeout(() => el.classList.remove('cnhere'), 1400); } },
+    cnnode: () => {  // the decision call as the settings of an XGEN HTTP request node
+      Object.assign(S.ctry, S.ctry.api === 'decide' ? { view: 'node' } : { api: 'decide', view: 'node', res: null, saved: false });
+      render();
+      const el = document.querySelector('.trycode');
+      if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
     ctryclear: () => {
       const c = S.ctry;
       Object.assign(c, c.api === 'terms' ? { text: '' } : c.api === 'validate' ? { ovalues: {} } : { values: {}, key: '', at: '' }, { res: null, saved: false });
@@ -9440,6 +9462,7 @@ ${controls}${body}`;
     });
     main.addEventListener('focusout', (ev) => { if (ev.target.id === 'cedit' && S.cat.edit) finishEdit(); });
     main.addEventListener('toggle', (ev) => { if (ev.target.dataset && ev.target.dataset.more && S.mg.form) S.mg.form.more = ev.target.open; }, true);  // 고급 stays as left
+    main.addEventListener('toggle', (ev) => { if (ev.target.dataset && ev.target.dataset.cn) S.cn[ev.target.dataset.cn] = ev.target.open; }, true);  // a connection way's settings stay open across a repaint
     main.addEventListener('change', (ev) => {
       if (ev.target.id === 'fileinput') uploadAll([...ev.target.files].map((f) => [f, f.name]));
       if (ev.target.id === 'libfileinput') libraryFilesAdd([...ev.target.files]);
