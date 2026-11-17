@@ -1,0 +1,64 @@
+/* 품질 관리 (검증질문 관리 · 검증) · 파이프라인 모니터링 · 근거 지도: what these screens need beyond the kit */
+
+/* a measure against its target; one that waits for a data source is drawn with a dashed edge */
+.qa-dash { flex:1 1 160px; padding:16px; border-radius:12px; border:1px dashed var(--dash); box-sizing:border-box; min-width:0; }
+.qa-tile { flex:1 1 200px; padding:16px; border-radius:12px; border:1px solid var(--line); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); box-sizing:border-box; min-width:0; }
+.qa-tile.warn { border-color:var(--warn-line); background:var(--warn-wash); }
+.qa-tile.wait { border:1px dashed var(--dash); background:none; box-shadow:none; }
+
+/* 검증질문 관리 */
+.qa-id { border:0; background:none; padding:0; font:inherit; color:inherit; cursor:pointer; }
+.qa-group { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.qa-group > p { margin:0; }
+.k-f > input.qa-ro:not([type=checkbox]):not([type=radio]) { background:var(--panel); color:var(--muted); }
+
+/* 검증 */
+.qa-ask { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 4px 0 12px; border:1px solid var(--line2); border-radius:10px; box-sizing:border-box; color:var(--blue); }
+.qa-ask input { border:0; outline:none; background:transparent; font-family:inherit; color:var(--ink); padding:0; min-height:0; }
+.qa-ask:focus-within { border-color:var(--blue); outline:2px solid var(--blue-line); }
+.qa-ask input:focus-visible { outline:none; }
+.qa-answer { padding:12px 16px; border-radius:10px; background:var(--bg); display:flex; flex-direction:column; gap:6px; }
+.k-btn.qa-on { border-color:var(--blue); background:var(--blue-wash); }
+.qa-gates { margin:0; padding:6px 20px 12px; list-style:none; }
+.qa-gates li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--row); }
+.qa-gates li:last-child { border-bottom:0; }
+.qa-passfoot { padding:0 20px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+.qa-g3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.qa-vrow { display:grid; grid-template-columns:minmax(120px, 1.2fr) repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:center; }
+
+/* 파이프라인 모니터링 */
+.qa-steps { margin:0; padding:0; list-style:none; display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+.qa-step { padding:12px; border-radius:10px; background:var(--bg); display:flex; flex-direction:column; gap:6px; min-width:0; box-sizing:border-box; }
+.qa-step.warn { background:var(--warn-soft); }
+.qa-step.bad { background:var(--bad-soft); }
+.qa-step.dash { background:none; border:1px dashed var(--dash); }
+.qa-steph { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.qa-steph a { color:inherit; }
+.qa-steph a:hover { color:var(--blue-d); }
+.qa-rule { display:flex; flex-direction:column; gap:4px; padding:12px 20px; border-bottom:1px solid var(--row); }
+.qa-rule:last-child { border-bottom:0; }
+.qa-rule.warn { background:var(--warn-wash); }
+.qa-ruleh { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+.qa-scene .mstage { border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+
+/* 근거 지도: a cell says how much of an Object a document names */
+.qa-side { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+.qa-side > * { flex:1 1 300px; min-width:0; box-sizing:border-box; }
+.qa-c { display:flex; align-items:center; justify-content:center; min-height:28px; min-width:56px; width:100%; padding:0 8px; border-radius:6px; border:0; box-sizing:border-box; font-family:inherit; font-size:13px; font-weight:500; white-space:nowrap; text-decoration:none; }
+.qa-c.all { background:var(--blue); color:#fff; }
+.qa-c.some { background:#DCE6FB; color:var(--blue-d); }
+.qa-c.none { border:1px dashed var(--dash); color:var(--muted); background:none; }
+.qa-c.wait { border:1px dashed var(--dash); color:var(--muted); background:var(--panel); }
+a.qa-c.all:hover { color:#fff; }
+.qa-leg { display:inline-flex; align-items:center; gap:6px; }
+.qa-leg .qa-c { width:12px; height:12px; min-height:0; min-width:0; padding:0; border-radius:4px; }
+.k-t .qa-srccol { border-left:1px dashed var(--dash); }
+.qa-gap { display:flex; flex-direction:column; gap:2px; padding:12px 20px; border-bottom:1px solid var(--row); color:var(--ink); }
+.qa-gap:last-child { border-bottom:0; }
+.qa-gap:hover { background:var(--bg); color:var(--ink); }
+.qa-orph { padding:16px 20px; border-radius:12px; border:1px dashed var(--dash); }
+.qa-docname { border:0; background:none; padding:0; font:inherit; color:var(--ink); cursor:pointer; text-align:left; }
+.qa-docname:hover { color:var(--blue-d); }
+
+@media (max-width:900px) { .qa-g3 { grid-template-columns:repeat(2, minmax(0, 1fr)); } .qa-vrow { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+@media (max-width:640px) { .qa-g3 { grid-template-columns:minmax(0, 1fr); } .qa-vrow { grid-template-columns:minmax(0, 1fr); } }

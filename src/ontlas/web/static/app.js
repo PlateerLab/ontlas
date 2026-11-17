@@ -8314,7 +8314,7 @@ ${controls}${body}`;
         await api('flow/save', { settings: S.flset.settings });
         S.fl = null; S.flset = null; S.agree = null;
         render();
-        toast('흐름 설정을 저장했습니다.');
+        toast('통과 조건을 저장했습니다.');
       } catch (e) { fail(e); }
     },
     cshow: (t) => { S.chg.sel = t.dataset.id; S.chg.det = null; S.chg.item = ''; location.hash = '#changes'; },

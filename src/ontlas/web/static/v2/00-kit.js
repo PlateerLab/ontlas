@@ -167,15 +167,14 @@
     const top = (key, word, icon) => (known(key) ? `<a class="k-nav${S.tab === key ? ' on' : ''}" href="#${key}"${S.tab === key ? ' aria-current="page"' : ''}>${ki(icon, 18)}<span>${word}</span></a>` : '');
     const item = (r) => {
       const on = here === r;
-      if (on) S.seen[r[0]] = r[3].includes(cur) ? cur : r[0];
       const mark = r[0] === 'changes' && S.st.changes ? `<span class="k-chip w">${S.st.changes}</span>` : r[0] === 'objects' && waitEdit ? '<span class="k-chip warn">변경 대기</span>' : '';
-      return `<a class="k-nav sub${on ? ' on' : ''}" href="#${S.seen[r[0]] || r[0]}"${on ? ' aria-current="page"' : ''}><span>${esc(r[2])}</span>${mark}</a>`;
+      return `<a class="k-nav sub${on ? ' on' : ''}" href="#${r[0]}"${on ? ' aria-current="page"' : ''}><span>${esc(r[2])}</span>${mark}</a>`;
     };
     const part = ([id, word, icon]) => {
       const rows = MENU.filter((r) => r[1] === id && known(r[0]));
       if (!rows.length) return '';
       const open = S.nopen[id] === undefined ? !!(here && here[1] === id) : S.nopen[id];
-      return `<div class="k-navg"><a class="k-nav part${open ? ' open' : ''}" href="#${S.seen[rows[0][0]] || rows[0][0]}" data-act="nfold" data-k="${id}" aria-expanded="${open}">${ki(icon, 18)}<span>${word}</span>${ki(open ? 'chevD' : 'chevR', 16, 1.75)}</a>${open ? rows.map(item).join('') : ''}</div>`;
+      return `<div class="k-navg"><a class="k-nav part${open ? ' open' : ''}" href="#${rows[0][0]}" data-act="nfold" data-k="${id}" aria-expanded="${open}">${ki(icon, 18)}<span>${word}</span>${ki(open ? 'chevD' : 'chevR', 16, 1.75)}</a>${open ? rows.map(item).join('') : ''}</div>`;
     };
     return `<div class="k-navs">${top('home', '홈', 'home')}${top('ai', 'AI 초안 생성', 'spark')}${PARTS.map(part).join('')}</div>${maturityFoot()}`;
   }
