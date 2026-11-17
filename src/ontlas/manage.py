@@ -836,6 +836,23 @@ class Workspace(TermEdits):
             self._section("extend", "rule_cards").setdefault(cid, {}).update(fields)
         return f"rule_card:{cid}"
 
+    def _delete_states(self, a: dict) -> str:
+        """Take an Entity's state machine out. Where the Entity is another module's, the removal is this module's."""
+        name = str(a.get("object") or "")
+        t = self.composed().ontology.objects.get(name)
+        if t is None:
+            raise EditError(f"object type '{name}' is unknown")
+        if not t.states:
+            raise EditError(f"{name} has no state machine")
+        if self._owns_object(name):
+            self._section("body", "objects")[name].pop("states", None)
+            return f"states:{name}"
+        ((self.module.extend.get("objects") or {}).get(name) or {}).pop("states_set", None)
+        base = self._base_onto.objects.get(name)
+        if base is not None and base.states and name not in self._removed("states"):
+            self._removed("states").append(name)
+        return f"states:{name}"
+
     def _action_spec(self, a: dict) -> dict:
         spec: dict[str, Any] = {}
         for k in ("label", "parameters", "criteria", "set", "transition_to", "approval", "cite", "call", "undo"):
