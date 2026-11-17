@@ -441,6 +441,19 @@ def _extend_action(acc: dict, m: Module, name: str, patch: dict, touched: dict) 
     touched.setdefault(f"action:{name}", []).append(m.name)
 
 
+def _extend_query(acc: dict, m: Module, name: str, patch: dict, touched: dict) -> None:
+    """What a later module changes in a registered query: its words, what it asks, what it takes."""
+    q = acc["queries"].get(name)
+    if q is None:
+        raise ModuleError(f"{m.key} extends query '{name}', which no attached module defines")
+    for k in ("label", "description", "query", "params"):
+        if k in patch:
+            q[k] = copy.deepcopy(patch[k])
+    if "query" in patch and "params" not in patch:  # the new text takes what it names, not what the old one took
+        q.pop("params", None)
+    touched.setdefault(f"query:{name}", []).append(m.name)
+
+
 def _extend_parameter(acc: dict, m: Module, name: str, patch: Any, touched: dict) -> None:
     if name not in acc["parameters"]:
         raise ModuleError(f"{m.key} extends parameter '{name}', which no attached module defines")
@@ -511,11 +524,13 @@ def compose(modules: list[Module], *, name: str = "", namespace: str = "", versi
                     _extend_action(acc, m, k, patch or {}, touched)
                 elif s == "parameters":
                     _extend_parameter(acc, m, k, patch, touched)
+                elif s == "queries":
+                    _extend_query(acc, m, k, patch or {}, touched)
                 elif s in ("metrics", "conflicts", "functions", "identities", "areas"):
                     _extend_entry(acc, m, s, k, patch or {}, touched)
                 else:
                     raise ModuleError(f"{m.key}: cannot extend '{s}'; extend objects, links, decisions, actions, roles, "
-                                      "parameters, metrics, conflicts, functions, identities or areas")
+                                      "parameters, queries, metrics, conflicts, functions, identities or areas")
         for s, items in (m.remove or {}).items():
             if s == "properties":
                 for t, props in (items or {}).items():

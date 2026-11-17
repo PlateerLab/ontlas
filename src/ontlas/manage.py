@@ -15,7 +15,7 @@ from typing import Any
 from ontlas.lexicon import TermEdits, term_id
 from ontlas.model import TYPES, _scope_filter
 from ontlas.modules import Module, ModuleError, Requirement, compose, settle
-from ontlas.semantic import CARD_FIELDS, CARD_STATUS, LAYER_LABEL, CardError, card_spec
+from ontlas.semantic import CARD_FIELDS, CARD_STATUS, CardError, card_spec
 
 NAME = "workspace"
 UNDO_DEPTH = 50  # the edits that can each be taken back; each keeps the module as it was before it
@@ -757,12 +757,14 @@ class Workspace(TermEdits):
 
     # ---- rule cards: the records of rules, Custom ones written here (semantic.py) ----------------------------------
 
-    def _custom_card(self, cid: str) -> dict:
+    def _open_card(self, cid: str) -> dict:
+        """A card this module may change: its own, or a Standard or Custom one of another module, which it extends
+        or removes. An AXIOM card is changed only in its own module."""
         card = next((c for c in self.composed().cards if c["id"] == cid), None)
         if card is None:
             raise EditError(f"rule card '{cid}' is unknown")
-        if card["layer"] != "custom":
-            raise EditError(f"rule card '{cid}' is {LAYER_LABEL[card['layer']]}; only Custom cards are edited here")
+        if card["layer"] == "axiom":
+            raise EditError(f"rule card '{cid}' is AXIOM; it is changed in its own module")
         return card
 
     @staticmethod
@@ -784,11 +786,11 @@ class Workspace(TermEdits):
 
     def _update_rule_card(self, a: dict) -> str:
         cid = str(a.get("id") or "")
-        card = self._custom_card(cid)
+        card = self._open_card(cid)
         fields = {k: copy.deepcopy(a[k]) for k in CARD_FIELDS if k in a and k not in ("id", "layer")}
         self._card_checked({**{k: card[k] for k in CARD_FIELDS if card.get(k) is not None and k != "layer"}, **fields})
         own = next((c for c in self.module.body.get("rule_cards") or [] if c.get("id") == cid), None)
-        if own is None:  # another customer module's card: this module gives it the fields
+        if own is None:  # another module's card: this module gives it the fields
             self._section("extend", "rule_cards").setdefault(cid, {}).update(fields)
             return f"rule_card:{cid}"
         own.update(fields)
@@ -798,7 +800,7 @@ class Workspace(TermEdits):
 
     def _delete_rule_card(self, a: dict) -> str:
         cid = str(a.get("id") or "")
-        self._custom_card(cid)
+        self._open_card(cid)
         cards = self.module.body.get("rule_cards") or []
         if any(c.get("id") == cid for c in cards):
             self.module.body["rule_cards"] = [c for c in cards if c.get("id") != cid]
@@ -874,9 +876,10 @@ class Workspace(TermEdits):
         name = str(a.get("name") or "")
         if name not in self.composed().ontology.queries:
             raise EditError(f"query '{name}' is unknown")
-        if not self._owns("queries", name):  # a module's query cannot be extended: one under another name takes its place
-            raise EditError(f"query '{name}' comes from its module")
-        self._query_spec(name, a, self._section("body", "queries")[name])
+        if self._owns("queries", name):
+            self._query_spec(name, a, self._section("body", "queries")[name])
+        else:  # another module's query: this module gives it what changed
+            self._query_spec(name, a, self._section("extend", "queries").setdefault(name, {}))
         return f"query:{name}"
 
     def _delete_query(self, a: dict) -> str:

@@ -69,7 +69,7 @@ def _query_row(s, onto, base, name: str, rq) -> dict:
             "start": start, "start_label": label(start), "nodes": nodes, "hops": hops, "returns": returns,
             "module": owner or "workspace", "module_label": (module.label or module.name) if module else "",
             "version": module.version if module else "", "new": name not in base.queries,
-            "editable": name not in base.queries or (comp is not None and owner == "workspace"),
+            "editable": True,  # a module's query is changed by extending it, one made here in place
             "questions": [x.id for x in onto.questions if x.query == name],
             "roles": [{"name": r.name, "label": r.label or r.name} for r in onto.roles.values() if r.can("run", name)]}
 

@@ -220,7 +220,7 @@
       return { name: '', label: '', description: '', mode: 'form', ...blank, json: '', reason: '' };
     },
     form: (d, x) => {
-      const m = bndM(), locked = !!x && !x.editable;
+      const m = bndM();
       const rels = bndRels(m, d.start), rel = rels.find((r) => `${r.name}:${r.forward ? 1 : 0}` === d.link);
       const lab = (t) => (bndObj(m, t) || {}).label || t;
       const props = [...bndOwn(m, d.start).map((p) => [`x.${p.name}`, `${lab(d.start)} · ${p.label || p.name}`]), ...(rel ? bndOwn(m, rel.other).map((p) => [`y.${p.name}`, `${lab(rel.other)} · ${p.label || p.name}`]) : [])];
@@ -231,7 +231,7 @@
           ${bndFld('따라갈 관계', `<select class="k-in" data-in="bndQLink"><option value="">따라가지 않음</option>${rels.map((r) => bndOpt(`${r.name}:${r.forward ? 1 : 0}`, `${r.label} → ${lab(r.other)}`, d.link)).join('')}</select>`)}
           <div class="k-full k-f">입력값 · 조건<div class="k-v">${conds}<div><button class="k-lnk flat" type="button" data-act="bndRowAdd" data-l="conds">${ki('plus', 16, 1.75)}조건</button></div></div><span class="k-hint">값을 $이름으로 적으면 실행할 때 받는 입력값이 됩니다 · 예: $orderNo</span></div>
           <div class="k-full k-f">반환 속성<div class="bnd-ticks">${props.map(([k, w]) => `<label class="k-ck pill"><input type="checkbox" data-in="bndTick" data-k="${esc(k)}"${d.fields.includes(k) ? ' checked' : ''}>${esc(w)}</label>`).join('')}</div><span class="k-hint">고르지 않으면 시작 Entity의 키를 돌려줍니다</span></div>`;
-      return `${locked ? `<p class="k-note warn">모듈이 정의한 쿼리는 여기서 바꿀 수 없습니다. 같은 내용으로 새 쿼리를 만들어 고칩니다. <a href="${itemHref('queryitem', 'form')}?copy=${encodeURIComponent(x.name)}">사본으로 새 쿼리 만들기</a></p>` : ''}
+      return `
         ${bndBase(`${bndFld('이름', bndIn('label', d.label, ' placeholder="예: 주문별 반품 가능 상품"'))}${bndFld('키', bndIn('name', d.name, ` class="k-in mono" placeholder="예: returnableItems"${x ? ' disabled' : ''}`), 'API · MCP에서 이 키로 호출')}
           <div class="k-full">${seg}</div>${body}
           <div class="k-full">${bndFld('설명', `<textarea class="k-in" rows="3" data-in="itf" data-k="description">${esc(d.description)}</textarea>`)}</div>
@@ -255,7 +255,7 @@
       if (noSource()) out.push({ say: '실행은 데이터 소스 연결 후', tone: 'note' });
       return out;
     },
-    valid: (d, x) => (x && !x.editable ? '모듈이 정의한 쿼리는 여기서 바꿀 수 없습니다. 사본으로 새 쿼리를 만들어 주세요.' : !d.label.trim() ? '이름을 입력해 주세요.' : !d.name.trim() ? '키를 입력해 주세요.' : ''),
+    valid: (d) => (!d.label.trim() ? '이름을 입력해 주세요.' : !d.name.trim() ? '키를 입력해 주세요.' : ''),
     save: async (d, x) => {
       const ir = bndQIr(d), name = d.name.trim();
       const ops = x ? [['update_query', { name, label: d.label.trim(), description: d.description.trim(), query: ir }]]

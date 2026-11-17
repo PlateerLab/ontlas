@@ -51,7 +51,7 @@ def test_a_registered_query_says_where_it_starts_what_it_follows_and_who_uses_it
     assert q["start"] == "Customer" and q["start_label"] == "고객" and q["params"] == {"customer": "string"}
     assert [(h["link"], h["to"]) for h in q["hops"]] == [("placed", "Order")]
     assert q["returns"][0] == {"text": "o.order_id", "label": "주문 · 주문 번호"}
-    assert q["module"] == "commerce" and q["version"] and not q["new"] and not q["editable"]
+    assert q["module"] == "commerce" and q["version"] and not q["new"] and q["editable"]
     assert "Q1" in q["questions"] and any(r["name"] == "operator" for r in q["roles"])
 
 
@@ -68,9 +68,10 @@ def test_a_query_is_added_with_the_values_it_takes_then_changed_then_taken_out(s
     assert session.manage_undo()["ok"] and listed(session, "itemsByStatus") is not None  # an edit like any other: it is taken back
 
 
-def test_a_query_a_module_defines_is_not_changed_here_but_can_be_taken_out_with_what_asks_it(session):
-    with pytest.raises(ValueError, match="모듈이 정의한 것"):
-        session.manage_edit("update_query", {"name": "ordersOfCustomer", "label": "다른 이름"})
+def test_a_query_a_module_defines_is_changed_by_extending_it_and_taken_out_with_what_asks_it(session):
+    session.manage_edit("update_query", {"name": "ordersOfCustomer", "label": "다른 이름"})
+    assert listed(session, "ordersOfCustomer")["label"] == "다른 이름"
+    assert session.manage_undo()["ok"]
     with pytest.raises(ValueError, match="찾을 수 없어"):
         session.manage_edit("update_query", {"name": "nope", "label": "x"})
     out = session.manage_edit("delete_query", {"name": "ordersOfCustomer"})

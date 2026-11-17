@@ -268,3 +268,39 @@ def history(s, a, who) -> dict:
     _file_notes(entries, s._notes().get(f"{'rule_card' if kind == 'card' else kind}:{name}", []))
     return {"kind": kind, "name": name, "now": _composed(comp, st.onto, section, name) if comp is not None else None,
             "entries": entries}
+
+
+AXIOM_CARD_FIELDS = ("type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner", "status")
+
+
+@post("sem/axiom/card", needs="editor")
+def axiom_card(s, a, who) -> dict:
+    """A change to an AXIOM card, or its removal, filed as a change request to the module that defines it. The edits
+    waiting in the workspace never change an AXIOM card: it is settled where it is written, and approved by a person."""
+    import yaml
+
+    cid = str(a.get("id") or "")
+    comp = s.studio.composition
+    card = next((c for c in (comp.cards if comp else []) if c["id"] == cid), None)
+    if card is None:
+        raise ValueError(f"규칙 카드 '{cid}'을(를) 찾을 수 없어 처리하지 못했습니다.")
+    if card["layer"] != "axiom":
+        raise ValueError(f"규칙 카드 '{cid}'은(는) AXIOM 규칙이 아니어서 이 경로로 바꾸지 못했습니다. 규칙 화면에서 편집해 주세요.")
+    module = yaml.safe_load(s.module_source(card["module"])["yaml"]) or {}
+    cards = module.get("rule_cards") or []
+    own = next((c for c in cards if isinstance(c, dict) and c.get("id") == cid), None)
+    if own is None:
+        raise ValueError(f"규칙 카드 '{cid}'의 정의를 모듈 '{card['module']}'에서 찾지 못해 처리하지 못했습니다.")
+    if a.get("remove"):
+        module["rule_cards"] = [c for c in cards if c is not own]
+    else:
+        fields = a.get("fields") if isinstance(a.get("fields"), dict) else {}
+        for k in AXIOM_CARD_FIELDS:
+            if k in fields:
+                if fields[k] in (None, "", [], {}):
+                    own.pop(k, None)
+                else:
+                    own[k] = fields[k]
+    out = s.propose_module(yaml.safe_dump(module, allow_unicode=True, sort_keys=False))
+    return {"ok": True, "change": out["change"], "module": card["module"]}
+

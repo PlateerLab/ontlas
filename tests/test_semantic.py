@@ -351,9 +351,9 @@ def test_custom_rule_cards_are_added_changed_and_removed_on_the_page(session):
     assert "acme-vip-window" in s["removed"] and not any(c["id"] == "acme-gift-wrap" for c in s["cards"])
     refusals = [
         ("update_rule_card", {"id": "law-return-min-days", "status": "draft"},
-         "규칙 카드 'law-return-min-days'은(는) AXIOM 규칙이라 여기서 바꾸거나 지우지 못했습니다. Custom 규칙 카드만 바꿀 수 있습니다."),
-        ("delete_rule_card", {"id": "return-request-moves"},
-         "규칙 카드 'return-request-moves'은(는) Standard 규칙이라 여기서 바꾸거나 지우지 못했습니다. Custom 규칙 카드만 바꿀 수 있습니다."),
+         "규칙 카드 'law-return-min-days'은(는) AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
+        ("delete_rule_card", {"id": "law-return-min-days"},
+         "규칙 카드 'law-return-min-days'은(는) AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
         ("add_rule_card", {**card, "id": "law-return-min-days"},
          "규칙 카드 'law-return-min-days'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
         ("add_rule_card", {**card, "type": "guess"},

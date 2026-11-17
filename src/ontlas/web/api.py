@@ -148,7 +148,6 @@ IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "qu
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
-    (r"^query '(.+)' comes from its module$", r"쿼리 '\1'은(는) 모듈이 정의한 것이라 여기서 바꾸지 못했습니다. 다른 키로 새 쿼리를 추가해 주세요."),
     (r"^query '(.+)' is unknown$", r"쿼리 '\1'을(를) 찾을 수 없어 처리하지 못했습니다."),
     (r"^query '(.+)' already exists$", r"질의 '\1'이(가) 이미 있어 저장하지 못했습니다. 다른 영문 이름을 입력해 주세요."),
     (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
@@ -237,8 +236,8 @@ EDIT_TEXT = [
     (r"^rule cards made here are Custom$", "여기서 만드는 규칙 카드는 Custom 규칙입니다. 계층을 Custom으로 두고 다시 저장해 주세요."),
     (r"^rule card '(.+)' already exists$", r"규칙 카드 '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
     (r"^rule card '(.+)' is unknown$", r"규칙 카드 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
-    (r"^rule card '(.+)' is (AXIOM|Standard); only Custom cards are edited here$",
-     r"규칙 카드 '\1'은(는) \2 규칙이라 여기서 바꾸거나 지우지 못했습니다. Custom 규칙 카드만 바꿀 수 있습니다."),
+    (r"^rule card '(.+)' is AXIOM; it is changed in its own module$",
+     r"규칙 카드 '\1'은(는) AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
     (r"^rule card id '(.*)' must be letters, digits, _ and - starting with a letter$",
      r"규칙 카드 번호 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^rule card '(.+)': type '(.*)' is not one of .*$",

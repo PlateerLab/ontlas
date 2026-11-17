@@ -81,7 +81,10 @@
       return ref;
     });
   }
-  const smrEditable = (c) => (c.kind === 'executable' ? c.layer !== 'axiom' : c.layer === 'custom');
+  // every rule card is edited here (an AXIOM card as a change request to its own module); an AXIOM rule of a decision table is not
+  const smrEditable = (c) => (c.kind === 'executable' ? c.layer !== 'axiom' : true);
+  const smrAxiomCard = (c) => !!c && c.kind !== 'executable' && c.layer === 'axiom';
+  const SMR_AXIOM_SAID = 'AXIOM 모듈의 변경 요청으로 올렸습니다. 승인하면 반영됩니다.';
   const smrVer = (c) => `${c.version ? `v${c.version}` : '-'}${c.new || c.pending ? ' 초안' : ''}`;
   const smrCite = (s) => (s ? `<span class="k-m12 smr-cite"><span aria-hidden="true">§</span>${esc(s)}</span>` : '<span class="k-mut">-</span>');
 
@@ -136,7 +139,7 @@
     const facts = [fact('유형 · 상태', state), fact('적용 대상', smrApplies(c).map(esc).join(', ')), fact('기준값', params), fact('위반 시', esc(c.risk || '')), fact('근거 확인', esc(c.verification || '')),
       fact('실행 위치', (c.implements || []).map(ref).join(' ')), fact('사용처', (c.used_by || []).map(ref).join(' ')), fact(c.check && c.check.property ? '값 범위' : 'AXIOM 검사', check), fact('정의한 모듈', where)].join('');
     const open = c.kind === 'executable' ? `<a class="k-lnk flat" href="#mgrules?decision=${encodeURIComponent(c.decision)}">결정표 ${esc(c.decision_label || c.decision)} 편집${ki('chevR', 14, 1.75)}</a>` : '';
-    const why = smrEditable(c) ? '' : `<p class="k-s" style="margin:0">${c.layer === 'axiom' ? 'AXIOM 규칙은 axiom 모듈에서만 바뀝니다. 이 화면에서는 고치거나 지우지 않습니다.' : 'Standard 규칙 카드는 도메인 팩의 모듈에서 정의합니다. 이 화면에서는 Custom 규칙 카드를 만들고 고칩니다.'}</p>`;
+    const why = smrEditable(c) ? '' : `<p class="k-s" style="margin:0">${c.layer === 'axiom' ? '결정표의 AXIOM 규칙은 그 규칙을 정의한 모듈에서 바꿉니다. 온톨로지 화면의 모듈 파일 편집에서 고칩니다.' : 'Standard 규칙 카드는 도메인 팩의 모듈에서 정의합니다. 이 화면에서는 Custom 규칙 카드를 만들고 고칩니다.'}</p>`;
     return `<section class="k-card pad k-v g12" aria-labelledby="smr-rc"><div class="k-pha"><span class="k-code k-mut">${esc(c.id)}</span><h2 class="k-h2" id="smr-rc">${esc(c.statement)}</h2>${kLayer(c.layer)}</div>
       <div class="k-g2" style="gap:8px">${box('조건', lines(c.conditions))}${box('결과', esc(c.result || ''))}${box('예외', lines(c.exceptions))}${box('근거 · 버전 · 담당자', [c.source, smrVer(c), c.owner].filter(Boolean).map(esc).join(' · '))}</div>
       <div class="smr-facts">${facts}</div>${open}${why}</section>`;
@@ -398,7 +401,7 @@
   function smrRuleForm(d, c) {
     const m = S.mg.st, fresh = !c;
     const kinds = fresh ? `<div class="k-full k-h g12"><div class="k-seg" role="group" aria-label="규칙의 종류"><button type="button" class="${d.kind === 'stated' ? 'on' : ''}" data-act="smrKind" data-k="stated">규칙 카드</button><button type="button" class="${d.kind === 'executable' ? 'on' : ''}" data-act="smrKind" data-k="executable"${m.decisions.length ? '' : ' disabled'}>결정표 규칙</button></div><span class="k-s">규칙 카드는 규칙을 글로 남깁니다. 결정표 규칙은 판정에 바로 쓰입니다</span></div>` : '';
-    const locked = c && !smrEditable(c) ? `<p class="k-note warn k-full">${c.layer === 'axiom' ? 'AXIOM 규칙은 axiom 모듈에서만 바뀝니다. 이 화면에서는 저장할 수 없습니다.' : 'Standard 규칙 카드는 도메인 팩의 모듈에서 정의합니다. 이 화면에서는 저장할 수 없습니다.'}</p>` : '';
+    const locked = c && !smrEditable(c) ? `<p class="k-note warn k-full">${c.layer === 'axiom' ? '결정표의 AXIOM 규칙은 그 규칙을 정의한 모듈에서 바꿉니다. 온톨로지 화면의 모듈 파일 편집에서 고칩니다.' : 'Standard 규칙 카드는 도메인 팩의 모듈에서 정의합니다. 이 화면에서는 저장할 수 없습니다.'}</p>` : '';
     if (d.kind === 'executable') {
       const t = smrTable(d.decision);
       const conds = t ? t.inputs.map((i) => {
@@ -482,6 +485,13 @@
 
   async function smrRuleSave(d, c) {
     let r, element;
+    if (smrAxiomCard(c)) {  // an AXIOM card: its own module's change request, not the edits waiting in the workspace
+      const fields = { type: d.type, statement: d.statement.trim(), applies_to: [...(d.area ? [`area:${d.area}`] : []), ...(d.keep || [])], conditions: smrLines(d.conditions), result: String(d.result || '').trim(),
+        exceptions: smrLines(d.exceptions), source: String(d.source || '').trim(), owner: String(d.owner || '').trim() };
+      r = await api('sem/axiom/card', { id: c.id, fields });
+      S.sem.st = null; S.changes = null;
+      return { element: `rule_card:${c.id}`, go: `changes?id=${encodeURIComponent(r.change.id)}`, said: SMR_AXIOM_SAID };
+    }
     if (d.kind === 'executable') {
       const args = { decision: d.decision, id: d.id.trim(), when: d.when, then: d.then, cite: d.source || '', owner: d.owner || '', ...(d.status ? { status: d.status } : {}) };
       r = await api('manage/edit', c ? { op: 'update_rule', args } : { op: 'add_rule', args: { ...args, first: !!d.first } });
@@ -528,7 +538,9 @@
     draft: smrRuleDraft, form: smrRuleForm, checks: smrRuleChecks, valid: smrRuleValid, save: smrRuleSave,
     uses: smrRuleUses,
     history: (c) => (c.kind === 'executable' ? itemHistoryOf(ITEM.rule, c) : smrHistory('card', c.id, '규칙')),
+    saves: (d, c) => (smrAxiomCard(c) ? [['저장 상태', 'AXIOM 모듈의 변경 요청으로 올림'], ['변경 요청', '<a href="#changes">변경 요청 · 버전</a>에 검토 대기로 등록'], ['검토', '승인해야 반영 · AXIOM은 어떤 규칙도 덮어쓸 수 없음'], ['회귀 테스트', '올릴 때 자동 실행']] : null),
     remove: async (c) => {
+      if (smrAxiomCard(c)) { const r = await api('sem/axiom/card', { id: c.id, remove: true }); S.sem.st = null; S.changes = null; return { go: `changes?id=${encodeURIComponent(r.change.id)}`, said: SMR_AXIOM_SAID }; }
       if (!smrEditable(c)) throw new Error(c.layer === 'axiom' ? 'AXIOM 규칙은 axiom 모듈에서만 바뀌어 삭제를 요청하지 못했습니다.' : 'Standard 규칙 카드는 도메인 팩의 모듈에서 정의해 삭제를 요청하지 못했습니다.');
       smrEdited(await api('manage/edit', c.kind === 'executable' ? { op: 'delete_rule', args: { decision: c.decision, id: c.rule } } : { op: 'delete_rule_card', args: { id: c.id } }));
     },

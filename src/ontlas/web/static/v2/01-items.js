@@ -99,9 +99,9 @@
     if (!canEdit()) return head + kEmpty('편집 권한이 없습니다', '이 온톨로지에서 편집 이상 역할이 있어야 항목을 만들거나 고칠 수 있습니다.', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
     const seg = `<div class="k-h g12"><div class="k-seg" role="group" aria-label="추가 또는 편집"><a href="${itemHref(kind, 'form')}" class="${isNew ? 'on' : ''}"${isNew ? ' aria-current="true"' : ''}>추가</a><a ${isNew ? 'aria-disabled="true"' : `href="${itemHref(kind, 'form', it.id)}" aria-current="true"`} class="${isNew ? '' : 'on'}">편집</a></div>${def.hint ? `<span class="k-s">${esc(def.hint)}</span>` : ''}</div>`;
     const bar = isNew ? '' : itemNamed(def, it, itemActs(kind, it.id, { edit: false }));
-    const rows = def.saves ? def.saves(it.d, it.x) : def.direct
+    const rows = (def.saves && def.saves(it.d, it.x)) || (def.direct
       ? [['저장 상태', '저장하면 바로 적용'], ['기록', known('sys-audit') && isSysAdmin() ? '<a href="#sys-audit">감사 로그</a>에 남음' : '감사 로그에 남음']]
-      : [['저장 상태', '초안 · 운영 버전에는 아직 반영 안 됨'], ['변경 요청', '<a href="#changes">작성 중인 변경 요청에 추가</a>'], ['검토', selfApply() ? '변경 요청을 올리면 회귀 테스트 후 바로 배포' : '영역 담당 승인 후 배포'], ['회귀 테스트', '변경 요청을 올릴 때 자동 실행']];
+      : [['저장 상태', '초안 · 운영 버전에는 아직 반영 안 됨'], ['변경 요청', '<a href="#changes">작성 중인 변경 요청에 추가</a>'], ['검토', selfApply() ? '변경 요청을 올리면 회귀 테스트 후 바로 배포' : '영역 담당 승인 후 배포'], ['회귀 테스트', '변경 요청을 올릴 때 자동 실행']]);
     const checks = itemChecks(def, it);
     const reason = def.direct || def.noReason ? '' : `<section class="k-card"><div class="k-ch"><h2>변경 사유</h2></div><div class="k-cb"><label class="k-f"><textarea class="k-in" rows="3" data-in="itf" data-k="reason" aria-label="변경 사유">${esc(it.d.reason || '')}</textarea></label><span class="k-s">편집할 때는 필수입니다. 히스토리와 변경 요청에 그대로 남습니다</span></div></section>`;
     return `${head}${seg}${bar}<div class="k-cols"><div class="k-c3">${def.form(it.d, it.x)}${reason}</div>
@@ -196,7 +196,7 @@
         const el = !def.direct && String(it.d.reason || '').trim() && def.element ? (out.element || (it.x ? def.element(it.x) : '')) : '';
         if (el) await api('element/comment', { id: el, text: it.d.reason }).catch(() => {});  // why, kept beside the item
         S.it = { key: '' };
-        toast(def.direct ? '저장했습니다.' : '저장했습니다. 작성 중인 변경 요청에 담겼습니다.');
+        toast(out.said || (def.direct ? '저장했습니다.' : '저장했습니다. 작성 중인 변경 요청에 담겼습니다.'));
         location.hash = '#' + (out.go || def.list);
       } catch (e) { it.busy = false; render(); fail(e); }
     },
@@ -209,7 +209,7 @@
         const out = (await def.remove(it.x, { mode: it.mode, reason: it.reason.trim() })) || {};
         if (el) await api('element/comment', { id: el, text: `${it.mode === 'disable' ? '사용 중지' : '삭제 요청'} · ${it.reason.trim()}` }).catch(() => {});
         S.it = { key: '' };
-        toast(it.mode === 'disable' ? '사용을 중지했습니다.' : '삭제를 요청했습니다. 작성 중인 변경 요청에 담겼습니다.');
+        toast(out.said || (it.mode === 'disable' ? '사용을 중지했습니다.' : '삭제를 요청했습니다. 작성 중인 변경 요청에 담겼습니다.'));
         location.hash = '#' + (out.go || def.list);
       } catch (e) { it.busy = false; render(); fail(e); }
     },
