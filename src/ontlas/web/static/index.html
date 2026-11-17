@@ -6,15 +6,19 @@
 <title>Ontlas</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2316181d%27/%3E%3Cpath transform=%27translate(-122 0)%27 fill=%27white%27 d=%27M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z%27/%3E%3C/svg%3E">
 <meta name="description" content="업무를 온톨로지로 정의하고, 그 정의와 규칙으로 질문에 답하고 판정하는 Ontlas입니다.">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.2.8/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.2.8/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.2.8/600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.2.7/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.2.7/500.css">
 <style>/*CSS*/</style>
 </head>
 <body>
 <div class="app" id="app">
-  <aside class="side" id="side"></aside>
-  <div class="navback" data-act="navclose"></div>
-  <header class="top" id="top"></header>
-  <main class="main" id="main"><div class="empty">스페이스를 불러오는 중입니다.</div></main>
+  <nav class="k-side" id="side" aria-label="주 메뉴"></nav>
+  <div class="k-back" data-act="navclose"></div>
+  <header class="k-top" id="top"></header>
+  <main class="main k-scroll" id="main" tabindex="-1"><div class="k-main"><p class="k-p s">온톨로지를 불러오는 중입니다.</p></div></main>
 </div>
 <div id="layer"></div>
 <div class="toast" id="toast" hidden></div>

@@ -64,28 +64,13 @@
     ['search', '질문해 보기'], ['connect', '외부 연동'], ['catalog', '데이터 카탈로그'], ['db', 'DB 연결'], ['convert', '변환 결과'], ['sources', '데이터 소스'],
     ['data', '초안 생성'], ['objects', 'Entity'], ['props', '속성 관리'], ['links', '관계 관리'], ['states', '상태 전이'], ['mgrules', '결정표'], ['mgfuncs', '함수'], ['actions', '액션'], ['roles', '권한'], ['library', '모듈 라이브러리'], ['onto', '전체 보기'],
     ['query', '질의'], ['decide', '처리 요청'], ['check', '검증 질문'], ['bind', 'DB 대조'], ['objmgr', 'Object'], ['ruleagent', '규칙 생성 Agent'], ['versions', '버전 이력'], ['lexicon', '용어 사전'], ['semrules', '규칙 카드']];
-  // the sidebar: 홈, then the four parts a space is made of (the rules, the ontology, the data it is bound to, what proves
-  // it), then what keeps it running. A part opens to its screens; a screen's own views are tabs on its page.
-  const NAV_GROUP = [['home', '홈', ['home', 'inbox']],
-    ['sem', '규칙', ['semrules', 'mgrules', 'rules', 'mgfuncs']], ['sem', '용어 사전', ['lexicon']], ['sem', '규칙 생성 Agent', ['ruleagent']], ['sem', '권한', ['roles']],
-    ['ont', 'Object', ['objmgr']], ['ont', 'Entity', ['objects', 'states']], ['ont', '그래프 탐색', ['model', 'onto']],
-    ['ont', '문서', ['docs']], ['ont', '질의', ['query']], ['ont', '변경 · 버전', ['changes', 'versions']], ['ont', '라이브러리', ['library']],
-    ['bnd', '데이터 가져오기', ['catalog', 'db', 'data', 'convert']], ['bnd', 'Mapping', ['sources', 'bind']],
-    ['bnd', '액션', ['actions', 'decide']], ['bnd', '레코드', ['records', 'record', 'graph']],
-    ['qa', '검증 질문', ['check']], ['qa', '검증', ['flow', 'search']],
-    ['ops', '저장소 · 연동', ['adapters', 'vectors', 'connect']], ['ops', '파이프라인 관제', ['monitor']],
-    ['ops', '데이터 지도', ['explorer', 'map']], ['ops', '사용 안내', ['guide']]];
-  const SECTION = [['home', '홈'], ['sem', 'Semantic Layer'], ['ont', 'Ontology'], ['bnd', 'Data Binding'], ['qa', 'Quality'], ['ops', 'Operations']];
-  const SECTION_PART = { sem: '규칙 · 용어 · 권한', ont: 'Object · Entity · 관계 · 버전', bnd: '원천 데이터 · Mapping · 레코드', qa: '검증 질문 · 통과 조건', ops: '저장소 · 관제' };
+  const SECTION = [['home', '홈'], ['sem', '시멘틱 매니저'], ['ont', '온톨로지 매니저'], ['bnd', '데이터 바인더'], ['qa', '품질 관리'], ['ops', '운영']];
   const REPO_TABS = new Set(['convert', 'data', 'explorer', 'map', 'docs', 'vectors']);  // where the repository decides what is shown (the catalog names it in its own head)
   const NO_TAB = new Set(['record', 'inbox']);  // screens reached from another (a record from its list, 할 일 from the top bar and the home)
   // a tab sits under its screen, so it does not repeat the screen's word; screens of one thing are one tab with a switch
   const TAB_WORD = { semrules: '규칙 카드', mgrules: '결정표', rules: '기준값 · 지표', mgfuncs: '함수', actions: '액션 정의', decide: '처리 요청', changes: '변경 요청', versions: '버전 이력', library: '모듈 라이브러리', model: '다이어그램', onto: '전체 보기', objects: 'Entity · 속성 · 관계', states: '상태 전이', docs: '문서', graph: '레코드 그래프', records: '레코드 탐색', monitor: '관제', catalog: '데이터 카탈로그', db: 'DB 연결', data: '초안 생성', convert: '변환 결과', sources: '데이터 소스', bind: 'DB 대조', adapters: '어댑터', vectors: '벡터 · 임베딩', connect: '외부 연동', check: '검증 질문', flow: '흐름 · 통과 조건', search: '질문해 보기', explorer: '자산 탐색기', map: '자산 그래프' };
-  // screens of one thing are one tab with a switch; a third list leads to what lives elsewhere
-  const TAB_SETS = [];
   const TABLE_TABS = ['objects', 'props', 'links'];
   const tabWord = (tab) => TAB_WORD[tab] || navLabel(tab);
-  const tabSet = (tab) => TAB_SETS.find((x) => x[1].some((y) => y[0] === tab));
   const KIND = { database: 'DB', table: '테이블', column: '컬럼', folder: '폴더', file: '파일', document: '문서', collection: '문서 컬렉션', object: 'Entity', property: '속성', link: '관계', query: '질의',
     decision: '결정', action: 'Action', role: '역할', agent: 'Agent', workflow: '워크플로우', vector_store: '벡터 저장소', graph_store: '그래프 저장소', reasoner: '추론기', embedder: '임베딩 모델' };
   const KIND_TAB = { database: 'db', table: 'sources', column: 'sources', folder: 'catalog', file: 'catalog', document: 'docs', collection: 'vectors', object: 'objects', property: 'props', link: 'links',
@@ -552,25 +537,11 @@
 
   // ---- frame ---------------------------------------------------------------------------------------------------
 
-  function renderLogin() {
-    $('#top').innerHTML = '<div class="grow"></div>';
-    $('#side').innerHTML = BRAND;
-    $('#main').innerHTML = `<div class="card login"><div class="ch">로그인</div><div class="cb">
-      <div class="field"><label for="luser">아이디</label><input type="text" id="luser" autocomplete="username"></div>
-      <div class="field"><label for="lpw">비밀번호</label><input type="password" id="lpw" autocomplete="current-password"></div>
-      <button class="btn primary" style="width:100%" data-act="login">로그인</button>
-      <div class="hint" style="margin-top:10px">팀 스페이스는 로그인한 사용자만 사용할 수 있습니다. 계정은 관리자에게 요청해 주세요.</div></div></div>`;
-  }
-
-  const ROLE_WORD = { viewer: '조회', editor: '편집', approver: '승인', admin: '관리' };
-
-  try { S.slim = localStorage.getItem('ontlas-slim') === '1'; } catch (e) { S.slim = false; }
   const keep = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* this visit only */ } };
   const noSource = () => !!(S.st && S.st.source && S.st.source.connected === false);
   // what a screen that reads rows says when there are none to read, with the one way on
   const noSourceCard = (what) => `<div class="card nosrc"><div class="cb"><b>원천 데이터가 연결되어 있지 않습니다</b><span class="muted">${what} 정의와 규칙, 값을 넣은 판정은 연결 없이 동작합니다.</span><a class="btn sm primary" href="#catalog">데이터 연결</a></div></div>`;
   try {
-    S.lopen = localStorage.getItem('ontlas-lopen') === '1';
     (localStorage.getItem('ontlas-nopen') || '').split(',').filter(Boolean).forEach((k) => { S.nopen[k] = true; });
     S.explain = localStorage.getItem('ontlas-explain') === '1';
   } catch (e) { /* the defaults stand */ }
@@ -606,167 +577,8 @@
     });
   }
   const curTab = () => (S.tab === 'model' && S.md.view === 'table' ? 'objects' : S.tab);  // the workspace's table is the Entity screen, its diagram 그래프 탐색
-  const groupOf = (tab) => { const k = TABLE_TABS.includes(tab) || (tab === 'model' && S.tab === 'model' && S.md.view === 'table') ? 'objects' : tab; return NAV_GROUP.find((g) => g[2].includes(k)); };
-  // the XGEN mark (the platform's wordmark, its X alone when the sidebar is narrow) beside the product's name
+  // the XGEN wordmark, beside the product's name
   const XGEN_WORD = '<svg class="xword" viewBox="128 0 72 32" aria-hidden="true"><path d="M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z"/><path d="M196.336 8.0835V23.9173H194.102L185.984 12.3481H185.852V23.9173H183.419V8.0835H185.675L193.792 19.6745H193.947V8.0835H196.336Z"/><path d="M168.419 23.9173V8.0835H178.332V10.1611H170.821V14.9506H177.808V17.0064H170.821V21.8397H178.419V23.9173H168.419Z"/><path d="M160.847 13.0211C160.258 11.0945 158.842 9.92961 156.75 9.92961C154.091 9.92961 152.043 12.0802 152.043 16.0006C152.043 19.9209 154.07 22.0715 156.859 22.0715C159.376 22.0715 161.043 20.4362 161.086 17.8376H157.208V15.799H163.418V17.6359C163.418 21.7355 160.672 24.3342 156.837 24.3342C152.566 24.3342 149.668 21.1307 149.668 16.0006C149.668 10.8257 152.653 7.66699 156.728 7.66699C160.149 7.66699 162.764 9.8624 163.309 13.0211H160.847Z"/></svg>';
-  const XGEN_X = '<svg class="xsym" viewBox="126 4 24 24" aria-hidden="true"><path d="M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z"/></svg>';
-  const BRAND = `<a class="sbrand" href="#home" aria-label="XGEN Ontlas 홈">${XGEN_WORD}${XGEN_X}<b class="bname">Ontlas</b></a>`;
-
-  function renderTop() {
-    const st = S.st;
-    const u = S.me && S.me.team && S.me.user;
-    const who = u ? `<span class="chip b">${esc(u.name)} · ${esc(u.roles.map((r) => ROLE_WORD[r] || r).join(', '))}</span><button class="btn sm ghost" data-act="logout">로그아웃</button>` : '';
-    const cur = curTab(), g = groupOf(S.tab), sec = g ? SECTION.find((x) => x[0] === g[0]) : null;
-    const word = tabWord(cur);
-    const trail = S.tab === 'home' ? '' : `${sec && sec[0] !== 'home' ? `<i>›</i><span>${esc(sec[1])}</span>` : ''}${g && g[0] !== 'home' && g[1] !== word ? `<i>›</i><span>${esc(g[1])}</span>` : ''}<i>›</i><b>${esc(word)}</b>`;
-    const waits = S.home.box ? S.home.box.counts.assigned : 0;
-    $('#top').innerHTML = `<button class="iconbtn menubtn" data-act="navopen" aria-label="메뉴 열기" aria-expanded="${$('#app').classList.contains('navopen')}">${ui('menu')}</button><nav class="crumbs" aria-label="현재 위치"><a href="#home">홈</a>${trail}</nav>
-      <div class="grow"></div>
-      ${REPO_TABS.has(S.tab) ? `<button class="pill" data-act="repopick" aria-label="레포지토리 선택">${ui('catalog2')}<span>${esc(st.repository.label)}</span>${ui('chevron')}</button>` : ''}
-      <button class="pill quiet tfind hide-sm" data-act="palette">${ui('search')}<span>검색 또는 질문</span><kbd>Ctrl K</kbd></button>
-      <a class="pill quiet tinbox${S.tab === 'inbox' ? ' on' : ''}" href="#inbox" aria-label="할 일 ${waits}건">${ui('inbox')}<span>할 일</span>${waits ? `<span class="nbadge">${waits}</span>` : ''}</a>
-      ${GUIDE.some((x) => x[0] === S.tab) ? '<button class="btn sm" data-act="helpopen">도움말</button>' : ''}
-      ${who}${u && !u.roles.includes('admin') ? '' : '<button class="btn sm ghost" data-act="reset">초기화</button>'}`;
-  }
-
-  function originChip(o) {
-    if (o.kind === 'files') return `<span class="chip ok hide-sm">업로드 데이터${o.label && o.label !== '업로드 데이터' ? ` · ${esc(o.label)}` : ''}</span>`;
-    if (o.kind === 'database') return `<span class="chip ok hide-sm">연결 DB · ${esc(o.detail || '')}</span>`;
-    if (o.kind === 'definitions') return `<span class="chip ok hide-sm">정의서 · ${esc(o.label || '')}</span>`;
-    return o.notice ? `<span class="chip warn hide-sm">${esc(o.notice)}</span>` : '';
-  }
-
-  function tabCounts() {
-    const st = S.st;
-    return { catalog: st.data.files, library: st.changes || st.library.length, objects: st.stats.objects, links: st.stats.links,
-      query: st.stats.queries, decide: st.stats.decisions + st.stats.actions, check: st.stats.questions,
-      sources: S.mg.st && S.mg.st.sources ? S.mg.st.sources.source.tables.length : 0 };
-  }
-
-  function subTabs() {
-    const g = groupOf(S.tab);
-    if (!g || g[2].filter((k) => !NO_TAB.has(k)).length < 2) return '';
-    const cur = curTab();
-    const n = tabCounts();
-    const here = tabSet(S.tab);
-    if (here) S.seen[here[0]] = S.tab;
-    const tab = (k) => {
-      if (NO_TAB.has(k)) return '';
-      const set = tabSet(k);
-      if (set && set[1][0][0] !== k) return '';
-      const on = set ? set === here : cur === k;
-      const keys = set ? set[1].map((x) => x[0]) : [k];
-      const count = set ? 0 : n[k];
-      return `<a class="stab${on ? ' on' : ''}" href="#${(set && S.seen[set[0]]) || k}" data-tabs="${keys.join(' ')}"${on ? ' aria-current="page"' : ''}>${esc(set ? set[0] : tabWord(k))}${count ? `<span class="n">${count}</span>` : ''}</a>`;
-    };
-    const seg = here ? `<div class="sseg" role="group" aria-label="${esc(here[0])}">${(here[2] || []).map(([k, word]) => `<a class="sitem" href="#${k}" title="작업 공간의 ${esc(word)} 표로 이동합니다">${esc(word)}<span class="sout" aria-hidden="true">↗</span></a>`).join('')}${here[1].map(([k, word]) => `<a class="sitem${S.tab === k ? ' on' : ''}" href="#${k}"${S.tab === k ? ' aria-current="true"' : ''}>${esc(word)}</a>`).join('')}</div>` : '';
-    return `<nav class="stabs" aria-label="${esc(g[1])}">${g[2].map(tab).join('')}${seg}</nav>`;
-  }
-
-  // ---- what the space is connected to: the server tries each store when asked, so a dot is a measurement, never a default --
-  const LINKS_EVERY = 30000;
-  const LINK_WORD = { ok: '연결', bad: '응답 없음', idle: '호출 전', off: '사용 안 함' };
-  const LLM_KIND = { openai: 'OpenAI 호환 API' };
-
-  async function loadLinks() {
-    if (loadLinks.busy) return;
-    loadLinks.busy = true;
-    loadLinks.at = Date.now();
-    try { S.links = await api('connections'); } catch (e) { /* the last measurement stays until the next one */ }
-    loadLinks.busy = false;
-    renderSide();
-  }
-
-  function sideLinks() {
-    const c = S.links;
-    if (!c) return '';
-    const row = (state, name, detail, tab, tip) => `<a class="lrow" href="#${tab}" data-tip="${esc(tip)}"><i class="dot ${state}"></i><b>${esc(name)}</b><span>${esc(detail)}</span></a>`;
-    const role = (b) => (b.source ? '원천 DB' : '그래프 저장소');
-    const said = (b) => b.error || `${LINK_WORD[b.state]} · 응답 ${b.ms}ms`;
-    const llm = c.llm.state === 'ok' ? (LLM_KIND[c.llm.kind] || LINK_WORD.ok) : LINK_WORD[c.llm.state];
-    const rows = {
-      store: c.stores.map((b) => row(b.state, role(b), BACKEND_KIND[b.kind] || b.kind || b.name, 'adapters', said(b)))
-        .concat(c.vectors.map((v) => row(v.state, '벡터 저장소', v.kind, 'vectors', v.error || LINK_WORD[v.state]))),
-      lang: c.stores.map((b) => row(b.state, b.language, role(b), 'query', said(b)))
-        .concat(c.translate.length ? [row('off', '변환만', `${count(c.translate.length)}개 언어`, 'adapters', c.translate.join(', '))] : []),
-      link: [row('ok', '임베딩 모델', `${c.embedder.kind} · ${c.embedder.dim}차원`, 'vectors', c.embedder.name),
-        row(c.llm.state, '언어 모델', llm, 'search', c.llm.error || (c.llm.at ? `마지막 호출 ${c.llm.at.replace('T', ' ')}` : LINK_WORD[c.llm.state])),
-        row(c.rest ? 'ok' : 'off', '외부 API', c.rest ? '/v1' : LINK_WORD.off, 'connect', c.rest ? 'REST /v1' : '')],
-    };
-    const bad = c.stores.concat(c.vectors, [c.llm]).filter((x) => x.state === 'bad').length;
-    const tabs = [['store', '저장소'], ['lang', '언어'], ['link', '연동']].map(([k, w]) => `<button class="${S.ltab === k ? 'on' : ''}" data-act="ltab" data-k="${k}" role="tab" aria-selected="${S.ltab === k}">${w}</button>`).join('');
-    // one line until it is opened, and open by itself while something does not answer
-    const open = S.lopen || bad > 0;
-    return `<div class="sfoot${open ? '' : ' shut'}"><button class="lhead" data-act="lopen" aria-expanded="${open}"><b>연결</b><span class="${bad ? 'bad' : 'ok'}">${bad ? `응답 없음 ${bad}` : '정상'}</span>${ui('chevron')}</button>
-      ${open ? `<div class="lseg" role="tablist" aria-label="연결 종류">${tabs}</div><div class="lrows">${rows[S.ltab].join('')}</div>` : ''}</div>`;
-  }
-
-  // how far the definition has come, L0 to L3, from the Entities' levels; with no source the last two wait for one
-  function sideMaturity() {
-    const m = S.mg.st;
-    if (!m || m.error || !m.objects) return '';
-    const filed = m.objects.filter((o) => o.area);  // the Entities under an Object; shared concepts outside every Object are not counted
-    const ls = (filed.length ? filed : m.objects).map((o) => o.level || 0);
-    if (!ls.length) return '';
-    const low = Math.min(...ls), high = Math.max(...ls);
-    const at = Math.min(low + 1, 3);  // the level the whole definition is working toward
-    const chips = [0, 1, 2, 3].map((l) => `<span class="mlv${l <= low ? ' done' : l <= high ? ' part' : ''}${l === at && low < 3 ? ' now' : ''}" title="${esc(['L0 개념', 'L1 논리', 'L2 연결', 'L3 검증'][l])} · Entity ${ls.filter((x) => x >= l).length} / ${ls.length}">L${l}</span>`).join('');
-    const say = noSource() ? '원천 미연결. 정의 · 규칙 · 판정은 연결 없이 동작합니다' : 'L2 · L3 은 원천 Mapping 과 DB 대조 결과로 측정합니다';
-    return `<a class="smat" href="#objmgr" title="Object 별 성숙도"><span class="mh"><b>성숙도</b><span>${low >= 3 ? 'L3 완료' : `L${at} 진행 중`}</span></span><span class="mlvs">${chips}</span><span class="msay">${esc(say)}</span></a>`;
-  }
-
-  // the space being worked on: its name, what it is made of, where its data comes from, and the data to switch to
-  function sideSpace() {
-    const st = S.st, src = st.source || {};
-    const where = noSource() ? '원천 미연결' : `원천 ${BACKEND_KIND[(src.kind || '').toLowerCase()] || src.kind || src.name || ''}`;
-    const libs = (st.libraries || []).length > 1 ? `<select class="pipesel" data-top="lib" aria-label="라이브러리 선택" title="라이브러리">${st.libraries.map((x) => `<option value="${esc(x.id)}"${x.id === st.library_id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}${canMakeLibrary() ? '<option value="+">새 라이브러리 만들기</option>' : ''}</select>` : '';
-    const pipes = st.pipelines.length > 1 ? `<select class="pipesel" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select>` : '';
-    return `<div class="sspace"><b title="${esc(st.title || '')}">${esc(st.title || '스페이스')}</b><span>모듈 ${count(st.modules_on)} · ${esc(where)}</span>${originChip(st.origin)}${libs}${pipes}</div>`;
-  }
-
-  function renderSide() {
-    if (S.st && !loadLinks.busy && (!S.links || S.links.pipeline !== S.st.pipeline || Date.now() - (loadLinks.at || 0) > LINKS_EVERY)) loadLinks();
-    if (S.st && !S.mg.st && !S.mg.busy) loadManage();  // the sidebar's maturity reads the definition
-    const wait = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
-    const waits = S.home.box ? S.home.box.counts.assigned : 0;
-    const cur = curTab(), g = groupOf(S.tab), here = g ? g[0] : 'home';
-    const item = (i) => {
-      const [, label, keys] = NAV_GROUP[i];
-      const on = keys.includes(cur);
-      if (on) S.seen[i] = cur;
-      const waiting = wait && keys.includes('objects');
-      const badge = keys[0] === 'changes' && S.st.changes ? `<span class="nbadge">${S.st.changes}</span>` : '';
-      const what = (GUIDE.find((x) => x[0] === keys[0]) || [])[1] || '';
-      return `<a class="nav sub${on ? ' on' : ''}" href="#${S.seen[i] || keys[0]}" data-tabs="${keys.join(' ')}"${what ? ` title="${esc(what)}"` : ''}${on ? ' aria-current="page"' : ''}><span class="nl">${esc(label)}</span>${waiting ? '<span class="chip sm warn">변경 대기</span>' : ''}${badge}</a>`;
-    };
-    const section = ([id, word]) => {
-      const idx = NAV_GROUP.map((x, i) => [x, i]).filter(([x]) => x[0] === id).map(([, i]) => i);
-      if (id === 'home') {
-        const on = here === 'home';
-        return `<a class="nav top${on ? ' on' : ''}" href="#home" data-tip="홈"${on ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24">${ICON.home}</svg><span class="nl">홈</span>${waits ? `<span class="nbadge" title="할 일">${waits}</span>` : ''}</a>`;
-      }
-      const icon = `<svg viewBox="0 0 24 24">${ICON[`sec_${id}`]}</svg>`;
-      if (S.slim) {  // a narrow sidebar has no room to open a part: its icon leads to the part's first screen
-        const first = NAV_GROUP[idx[0]];
-        return `<a class="nav top${here === id ? ' on' : ''}" href="#${S.seen[idx[0]] || first[2][0]}" data-tip="${esc(word)}"><span class="nl">${esc(word)}</span>${icon}</a>`;
-      }
-      const open = S.nopen[id] === undefined ? here === id : S.nopen[id];
-      return `<div class="nsec${open ? ' open' : ''}"><button class="nav top msec${here === id ? ' cur' : ''}" data-act="nfold" data-k="${id}" aria-expanded="${open}"${SECTION_PART[id] ? ` title="${esc(SECTION_PART[id])}"` : ''}>${icon}<span class="nl">${esc(word)}</span>${ui('chevron')}</button>${open ? `<div class="nsub">${idx.map(item).join('')}</div>` : ''}</div>`;
-    };
-    const word = S.slim ? '사이드바 펼치기' : '사이드바 접기';
-    const nav = $('#side .snav');
-    const kept = nav ? nav.scrollTop : 0;
-    $('#side').innerHTML = `${BRAND}${S.slim ? '' : sideSpace()}<div class="snav">${SECTION.map(section).join('')}</div>${S.slim ? '' : sideMaturity()}${sideLinks()}
-      <button class="sidetoggle" data-act="slim" aria-label="${word}" aria-expanded="${!S.slim}" data-tip="${word}">${ui('fold')}</button>`;
-    $('#side .snav').scrollTop = kept;
-    if (S.tab !== renderSide.tab) {
-      renderSide.tab = S.tab;
-      const on = $('#side .nav.on');
-      if (on) on.scrollIntoView({ block: 'nearest' });
-    }
-    $('#app').classList.toggle('slim', S.slim);  // the sidebar is as the person left it, on every screen
-  }
-
   function render() {
     if (!S.st) return;
     renderTop();
@@ -777,12 +589,16 @@
     const main = $('#main');
     main.classList.toggle('wsmode', S.tab === 'model');
     main.classList.remove('pgo');
-    main.dataset.sec = ['home', 'inbox', 'records', 'record', 'graph', 'decide', 'search'].includes(S.tab) ? 'use' : (groupOf(S.tab) || ['home'])[0];  // code names are left out of the screens people use the ontology on
+    main.dataset.sec = ['home', 'inbox', 'records', 'record', 'graph', 'decide', 'search'].includes(S.tab) ? 'use' : groupOf(S.tab)[0];  // code names are left out of the screens people use the ontology on
     const kept = [...main.querySelectorAll('.wscolb')].map((x) => x.scrollTop);
-    main.innerHTML = (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
+    const v2 = V2[S.tab];
+    if (v2 && v2.may && !v2.may()) { main.innerHTML = `<div class="k-main">${noAccess()}</div>`; paintLayer(); return; }
+    const body = v2 ? v2.view() : (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
+    main.innerHTML = S.tab === 'model' || (v2 && v2.area === 'auth') ? body : `<div class="k-main">${body}</div>`;
     main.querySelectorAll('.wscolb').forEach((x, i) => { x.scrollTop = kept[i] || 0; });
     declutter();
     paintLayer();
+    if (v2) { if (v2.after) v2.after(); landNow(); showHit(); return; }
     after();
   }
 
@@ -6268,7 +6084,7 @@ ${controls}${body}`;
   // decision table, a registered query. Each item says where it leads: [hash, label, where, icon key]
   function palItems() {
     const q = S.pal.q.trim().toLowerCase();
-    const tabs = NAV.filter(([k, l]) => !q || l.toLowerCase().includes(q) || groupOf(k)[1].toLowerCase().includes(q)).map(([k, l]) => [k, l, groupOf(k)[1], k]);
+    const tabs = screenList().filter(([, l, where]) => !q || l.toLowerCase().includes(q) || where.toLowerCase().includes(q));
     if (!q) return tabs;
     const hit = (...xs) => xs.some((s) => String(s || '').toLowerCase().includes(q));
     const st = S.st;
@@ -8555,14 +8371,17 @@ ${controls}${body}`;
     exrecords: (t) => { Object.assign(S.rl, { type: t.dataset.type, q: '', res: null }); location.hash = '#records'; },
     fout: (t) => catalogCall('catalog/include', { paths: [t.dataset.name], on: false }),
     ruopen: (t) => { S.ruopen = S.ruopen === t.dataset.d ? null : t.dataset.d; render(); },
-    ltab: (t) => { S.ltab = t.dataset.k; renderSide(); },
-    lopen: () => { S.lopen = !S.lopen; keep('ontlas-lopen', S.lopen ? '1' : ''); renderSide(); },
-    nfold: (t) => {
-      const k = t.dataset.k, g = groupOf(S.tab);
-      const open = S.nopen[k] === undefined ? (g && g[0] === k) : S.nopen[k];
-      S.nopen[k] = !open;
+    nfold: (t) => {  // a part of the menu: its name opens its first screen; on one of its screens it folds and unfolds
+      const k = t.dataset.k, here = menuRow(curTab());
+      if (!here || here[1] !== k) { S.nopen[k] = true; if (location.hash === t.getAttribute('href')) renderSide(); else location.hash = t.getAttribute('href'); return; }
+      S.nopen[k] = !(S.nopen[k] === undefined ? true : S.nopen[k]);
       keep('ontlas-nopen', Object.keys(S.nopen).filter((x) => S.nopen[x]).join(','));
       renderSide();
+    },
+    swlib: async (t) => {  // an ontology picked from the list: its home, whatever screen the person was on
+      const id = t.dataset.id, same = !id || id === S.st.library_id;
+      if (!same) await libraryUse(id);
+      if (S.tab !== 'home' && (areaOf(S.tab) !== 'work' || !same)) location.hash = '#home'; else render();
     },
     // a card's notes open and close where they stand; what was opened stays open while the person is on that screen
     info: (t) => {
@@ -8573,11 +8392,6 @@ ${controls}${body}`;
       t.setAttribute('aria-expanded', on);
     },
     explain: () => { S.explain = !S.explain; keep('ontlas-explain', S.explain ? '1' : ''); document.body.classList.toggle('explain', S.explain); render(); },
-    slim: () => {
-      S.slim = !S.slim;
-      try { localStorage.setItem('ontlas-slim', S.slim ? '1' : ''); } catch (e) { /* stays for this visit */ }
-      renderSide();
-    },
     extab: (t) => { S.ex.tab = t.dataset.k; loadExplorer(); },
     exgo: (t) => {
       if (t.dataset.switch) return exSwitch(t.dataset.id.slice(5));
@@ -9433,10 +9247,7 @@ ${controls}${body}`;
       if (ev.key === 'Enter' && items[S.pal.i]) { ev.preventDefault(); const k = items[S.pal.i][0]; closeFloats(); location.hash = '#' + k; }
     });
     $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
-    $('#side').addEventListener('change', (ev) => {
-      if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value });
-      if (ev.target.dataset.top === 'lib') { if (ev.target.value === '+') { ev.target.value = S.st.library_id; libraryNewOpen(); } else libraryUse(ev.target.value); }
-    });
+    $('#side').addEventListener('change', (ev) => { if (ev.target.dataset.side === 'lib') libraryUse(ev.target.value); });  // the ontology the admin screens are about
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('dragstart', (ev) => {
       const c = ev.target.closest && ev.target.closest('[data-col]');
@@ -9512,9 +9323,9 @@ ${controls}${body}`;
   }
 
   readHash();
-  if (!NAV.some(([k]) => k === S.tab)) S.tab = 'home';
+  /*PARTS*/
+  if (!known(S.tab)) S.tab = 'home';
   setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
-  setInterval(() => { if (S.st && document.visibilityState === 'visible') loadLinks(); }, LINKS_EVERY);
   wire();
   load().catch(fail);
 })();

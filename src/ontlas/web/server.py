@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import secrets
 import sys
@@ -17,6 +18,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from ontlas.backends.base import NoSource
 from ontlas.preview import CSS as BASE_CSS
+from ontlas.web import routes
 from ontlas.web.api import NO_SOURCE, NO_SOURCE_SAID, DataOptions, StudioSession
 
 STATIC = Path(__file__).parent / "static"
@@ -30,9 +32,13 @@ MAX_BODY = 64 * 1024
 def page() -> bytes:
     """index.html with the stylesheet and script inlined, so a cache in front never serves a stale pair."""
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    css = BASE_CSS + (STATIC / "app.css").read_text(encoding="utf-8")
+    parts = sorted((STATIC / "v2").glob("*"))  # the screens, one file an area; they are written inside app.js's scope
+    css = BASE_CSS + "".join(p.read_text(encoding="utf-8") for p in
+                             [STATIC / "app.css", STATIC / "kit.css", *(p for p in parts if p.suffix == ".css")])
+    app = (STATIC / "app.js").read_text(encoding="utf-8").replace(
+        "/*PARTS*/", "\n".join(p.read_text(encoding="utf-8") for p in parts if p.suffix == ".js"))
     js = f"window.GRAPH_KIT_URL={json.dumps(KIT + '?v=' + kit_version())};" + "".join(
-        (STATIC / name).read_text(encoding="utf-8") for name in ("scene.js", "graph.js", "app.js"))
+        (STATIC / name).read_text(encoding="utf-8") for name in ("scene.js", "graph.js")) + app
     return html.replace("/*CSS*/", css).replace("/*JS*/", js).encode("utf-8")
 
 
@@ -139,7 +145,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                  video: Path | None = None, logins=None, rest=None):
     from ontlas.web.team import NEEDS
 
+    routes.load()
     body_html = page()
+    live = bool(os.environ.get("ONTLAS_STATIC_LIVE"))  # while the screens are being written: every request reads the files again
     team = logins is not None
     etag = hashlib.sha256(body_html).hexdigest()[:16]
     the_guide = guide(video)
@@ -280,8 +288,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._rest("GET", url.path, {k: v[0] for k, v in parse_qs(url.query).items()})
             if url.path in ("/", "/index.html"):
                 sid, _, new = self._session()
-                return self._send(200, body_html, "text/html; charset=utf-8", sid=sid, new=new,
-                                  extra={"ETag": etag, "Content-Security-Policy":
+                body = page() if live else body_html
+                return self._send(200, body, "text/html; charset=utf-8", sid=sid, new=new,
+                                  extra={"ETag": hashlib.sha256(body).hexdigest()[:16] if live else etag, "Content-Security-Policy":
                                          "default-src 'self'; "
                                          "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "
                                          "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
@@ -421,6 +430,9 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             self._json(200, out, sid=sid, new=new)
 
         def _route(self, method: str, route: str, a: dict, s: StudioSession, sid: str):
+            added = routes.find(method, route)
+            if added is not None:
+                return added(s, a, self._user())
             role = str(a.get("role") or "")
             principal = a.get("principal") if isinstance(a.get("principal"), dict) else None
             if method == "GET":

@@ -352,7 +352,6 @@ button.chip:hover { border-color:var(--blue); color:var(--blue); }
 .pill.quiet { color:var(--muted); }
 .pill.quiet .ui { color:var(--muted); }
 kbd { font-family:"JetBrains Mono",Consolas,monospace; font-size:10.5px; border:1px solid var(--line); border-radius:4px; padding:0 4px; color:var(--muted); background:var(--panel); }
-.main a:not(.btn):not(.chip):not(.nav):not(.stab):not(.sitem):not(.mfloor):not(.malert):not(.tag):not(.badge) { color:var(--blue); }
 .btn.primary:hover:not(:disabled) { background:#2b2f37; }
 
 /* catalog */
