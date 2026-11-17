@@ -1,0 +1,89 @@
+/* 운영 › 저장소 · 엔진, 연동 · API, 접근 정책: what these screens need beside the kit */
+
+/* tiles of a summary row, and a tile for what is not there yet (dashed) */
+.ops-tile { flex:1 1 150px; min-width:0; }
+.ops-tile > p { margin:0; }
+.ops-tile > p.k-big { margin:4px 0 0; }
+.ops-sub { margin:4px 0 0 !important; }
+.ops-dash { box-sizing:border-box; padding:16px; border-radius:12px; border:1px dashed var(--dash); min-width:0; }
+.k-t tr.ops-off > td { background:var(--panel); color:var(--muted); }
+.k-t tr.ops-off:hover > td { background:var(--panel); }
+.ops-line { border-bottom:1px solid var(--row); }
+.ops-reas { display:flex; align-items:center; gap:8px; padding:12px 20px; border-bottom:1px solid var(--row); }
+.ops-reas:last-child { border-bottom:0; }
+.ops-held { flex:1 1 260px; box-sizing:border-box; padding:12px 16px; border-radius:10px; background:var(--bg); min-width:0; }
+.ops-held b { font-weight:600; }
+.k-t td.ops-mono { font-family:var(--mono); font-size:12px; word-break:break-all; }
+.ops-folds { display:flex; flex-direction:column; border-top:1px solid var(--row); }
+.ops-folds:empty { display:none; }
+.ops-fold { padding:8px 20px; border-top:1px solid var(--row); }
+.ops-fold:first-child { border-top:0; }
+.ops-fold > .k-lnk { color:var(--ink); font-size:14px; }
+.ops-in { padding:8px 0 8px; }
+.ops-pick { width:auto; min-width:240px; max-width:100%; }
+.ops-mark { width:36px; height:36px; border-radius:8px; background:var(--sunk); color:var(--ink3); display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.ops-mark.b { background:var(--blue-soft); color:var(--blue); }
+
+/* a text to take away: the block, and the button that copies it at its corner */
+.ops-pre { position:relative; min-width:0; }
+.ops-pre > .k-pre { padding-right:44px; word-break:break-all; }
+.ops-pre > .ops-copy { position:absolute; top:6px; right:6px; color:#fff; min-height:28px; padding:0 6px; }
+.ops-pre > .ops-copy:hover { background:rgba(255,255,255,.14); color:#fff; }
+.ops-copy { padding:0 6px; }
+.ops-more > summary { display:inline-flex; align-items:center; gap:4px; min-height:32px; font-size:13px; font-weight:500; color:var(--blue); }
+.ops-more > summary:hover { color:var(--blue-d); }
+.ops-more[open] > summary > svg { transform:rotate(90deg); }
+.ops-more > .ops-pre { margin-top:4px; }
+
+/* 연동 · API */
+.ops-ways { display:flex; flex-wrap:wrap; gap:16px; padding:0 20px 20px; }
+.ops-way { flex:1 1 220px; min-width:0; box-sizing:border-box; padding:12px; border-radius:8px; background:var(--bg); font-size:13px; line-height:1.55; display:flex; flex-direction:column; gap:8px; }
+.ops-way b { font-weight:600; font-size:13px; }
+.ops-way > p { margin:0; flex:1; }
+.ops-halves { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+.ops-half { flex:1 1 480px; min-width:0; display:flex; flex-direction:column; gap:24px; }
+.ops-steps { margin:0; padding:0 20px 20px; list-style:none; display:flex; flex-direction:column; gap:12px; counter-reset:ops; }
+.ops-steps > li { display:flex; gap:12px; align-items:flex-start; font-size:14px; line-height:1.6; counter-increment:ops; }
+.ops-steps > li::before { content:counter(ops); width:20px; height:20px; margin-top:2px; border-radius:50%; background:var(--sunk); color:var(--ink2); font-size:12px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.ops-steps > li > b { flex:0 0 150px; font-weight:500; }
+.ops-steps > li > span { flex:1; min-width:0; color:var(--ink3); }
+.ops-steps .k-chip { margin-left:4px; }
+.ops-try { display:flex; flex-direction:column; gap:12px; }
+.ops-try .k-f > .k-m12 { font-weight:400; }
+.ops-res { display:flex; flex-direction:column; gap:8px; }
+.ops-res .k-pre { max-height:320px; overflow:auto; }
+.ops-verdict { margin:0; font-size:20px; font-weight:500; line-height:1.3; }
+.ops-node td:first-child { width:140px; }
+.ops-node td { word-break:break-all; }
+.ops-here { outline:2px solid var(--blue); outline-offset:2px; transition:outline-color .6s var(--ease); }
+
+/* 접근 정책 */
+.ops-say { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; background:var(--blue-soft); }
+.ops-say > .ops-mark { background:#fff; color:var(--blue); }
+.ops-say > div { flex:1 1 420px; min-width:0; }
+.ops-say p { margin:0; }
+.ops-say p.k-b { font-size:16px; }
+.ops-pol { flex:2 1 340px; display:flex; flex-direction:column; }
+.ops-polh { padding:16px 20px; border-bottom:1px solid var(--row); display:flex; flex-direction:column; gap:6px; }
+.ops-polh h2 { margin:0; font-size:20px; font-weight:600; font-family:var(--mono); word-break:break-all; }
+.ops-part { display:flex; flex-direction:column; gap:8px; padding:12px 20px; border-bottom:1px solid var(--row); }
+.ops-part h3 { margin:0; font-size:15px; font-weight:600; }
+.ops-pair { display:flex; justify-content:space-between; gap:12px; font-size:14px; }
+.ops-pair > span:first-child { color:var(--muted); flex:none; }
+.ops-pair > span:last-child { text-align:right; min-width:0; }
+.ops-polf { margin-top:auto; padding:12px 20px; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.ops-ticks { display:flex; flex-wrap:wrap; gap:8px; }
+.ops-group { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 0; border-top:1px solid var(--row); }
+.ops-group > .k-ck { flex:0 0 132px; min-width:0; }
+.ops-group > .ops-ticks { flex:1 1 260px; min-width:0; }
+.ops-ticks .k-ck.pill { min-height:32px; padding:0 10px; font-size:13px; }
+.ops-rule { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ops-rule > select, .ops-rule > input { flex:1 1 96px; min-width:0; width:auto; }
+.ops-rule > .k-lnk { flex:none; }
+
+@media (max-width:640px) {
+  .ops-steps > li { flex-wrap:wrap; }
+  .ops-steps > li > b { flex-basis:calc(100% - 40px); }
+  .ops-steps > li > span { flex-basis:100%; padding-left:32px; }
+  .ops-pick { min-width:0; width:100%; }
+}
