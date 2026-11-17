@@ -8842,7 +8842,7 @@ ${controls}${body}`;
         S.mg.busy = false;
         await load();
         if (S.fix) await fixRecheck(r.pending);
-        toast(r.pending ? '변경을 요청했습니다. 승인자가 승인하면 반영됩니다. [온톨로지 라이브러리]의 변경 요청에서 확인하세요.'
+        toast(r.pending ? '변경을 요청했습니다. 승인자가 승인하면 반영됩니다. [변경 요청 · 버전]에서 확인합니다.'
           : `사본에서 검토한 뒤 적용했습니다. '${r.change.module_label}' ${r.change.version} 기준으로 모든 화면이 바뀝니다.${r.warning ? ' ' + r.warning : ''}`);
       } catch (e) { S.mg.busy = false; render(); fail(e); }
     },

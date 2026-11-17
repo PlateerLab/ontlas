@@ -89,7 +89,8 @@ select { appearance:none; -webkit-appearance:none; -moz-appearance:none; padding
 .k-nav { display:flex; align-items:center; gap:8px; padding:0 8px; min-height:36px; border-radius:8px; color:var(--ink2); font-size:14px; box-sizing:border-box; text-decoration:none; user-select:none; border:0; background:none; font-family:inherit; width:100%; text-align:left; flex:none; }
 .k-nav:hover { background:var(--panel); color:var(--ink2); }
 .k-nav.on { background:var(--blue-soft); color:var(--blue-d); font-weight:500; }
-.k-nav > span { flex:1; min-width:0; }
+.k-nav > span:first-of-type { flex:1; min-width:0; }
+.k-nav > .k-chip { flex:none; }
 .k-nav.part > svg:first-child { color:var(--muted); }
 .k-nav.part > svg:last-child { color:var(--muted); }
 .k-nav.part.open { font-weight:500; color:var(--ink); }

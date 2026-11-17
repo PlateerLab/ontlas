@@ -1,0 +1,41 @@
+/* 온톨로지 매니저의 뒤쪽 화면(용어사전, 개념 초안, 온톨로지, 변경 요청 · 버전): what the kit has no part for */
+
+/* the five steps a change request goes through */
+.o2-steps { display:flex; gap:8px; }
+.o2-steps i { height:4px; border-radius:2px; background:var(--row); display:block; }
+.o2-steps i.on { background:var(--blue); }
+
+/* a line that names what follows inside a card */
+.o2-sub { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 20px; border-top:1px solid var(--row); background:var(--bg); }
+/* a module file, or two of them compared line by line */
+.o2-yaml { margin:0; padding:12px 16px; border-radius:8px; background:var(--bg); font-family:var(--mono); font-size:13px; line-height:1.7; white-space:pre; max-height:420px; overflow:auto; }
+.o2-yaml span { display:block; min-height:1.7em; }
+/* one changed element opened under its row: its fields, who reads it, the comments */
+.o2-open { display:flex; flex-direction:column; gap:12px; padding:12px 20px 16px; border-top:1px solid var(--row); background:var(--bg); }
+.o2-open .k-x { background:#fff; border:1px solid var(--line); border-radius:8px; }
+.o2-note { font-size:14px; padding:8px 12px; border-radius:8px; background:#fff; border:1px solid var(--line); }
+
+/* the list a button opens under itself (the two export files) */
+.o2-menu { position:relative; }
+.o2-menu > summary { list-style:none; }
+/* the two places a version runs in, side by side */
+.o2-env { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); border-top:1px solid var(--row); }
+.o2-env > div + div { border-left:1px solid var(--row); }
+.o2-desc { max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.o2-impact { margin:0 20px 16px; padding:16px; border:1px solid var(--warn-line); border-radius:8px; background:var(--warn-wash); }
+
+/* the older parts shown inside these screens (the module editor, the draft's steps) keep their own look; only their gaps */
+.k-main > .card.editor { margin:0; }
+
+@media (max-width:640px) {
+  .o2-env { grid-template-columns:minmax(0, 1fr); }
+  .o2-env > div + div { border-left:0; border-top:1px solid var(--row); }
+}
+
+/* 용어사전: the count that asks for a look */
+.o2-warn { border-color:var(--warn-line); background:var(--warn-wash); }
+/* 개념 초안: the three fields of a candidate side by side, and a candidate in the list */
+.o2-three { padding:16px 20px; border-bottom:1px solid var(--row); display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.o2-cand { gap:6px; }
+.o2-cand b { overflow-wrap:anywhere; }
+@media (max-width:640px) { .o2-three { grid-template-columns:minmax(0, 1fr); } }
