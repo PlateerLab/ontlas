@@ -23,7 +23,7 @@ from ontlas.compile.base import CompileError, compiler_for
 from ontlas.conformance import normalize_rows
 from ontlas.decide.table import answer as rule_gives
 from ontlas.ir import Column, Query, Ref
-from ontlas.library import OverlayLibrary
+from ontlas.library import Library, OverlayLibrary
 from ontlas.modules import Module, ModuleError, Requirement, compose
 from ontlas.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_text
 from ontlas.repository import Repositories, clean_path, is_litter
@@ -494,6 +494,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.library_id = "l1"
         self._library_held: dict[str, tuple] = {}  # library id -> (its pipelines, the one on screen), to come back to
         self._library_files: dict[str, dict] = {}  # the files a new library is about to be made from, by name
+        self._library_stores: dict[str, Any] = {}  # library id -> the folder its approved changes are written to, if any
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
@@ -1386,6 +1387,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             return {"ok": True}
         self._stash()
         self._library_held[self.library_id] = (self.pipelines, self.pipeline)
+        self._library_stores[self.library_id] = self.store
         if lid in self._library_held:
             self.pipelines, pid = self._library_held.pop(lid)
         else:
@@ -1396,6 +1398,13 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                                "rows": studio.library.list() if studio.library is not None else [], "log": []}]
             pid = "p1"
         cur = next(p for p in self.pipelines if p["id"] == pid)
+        if lid not in self._library_stores:
+            # where the deployment writes approved changes, each library is written to its own folder: a change approved
+            # in this one must not land in the first one's. A library made on the page has no folder and is written nowhere.
+            writes = self._library_stores.get(self.libraries[0]["id"]) is not None
+            folder = getattr(self.pipelines[0]["studio"].library, "base", None)
+            self._library_stores[lid] = Library(folder.root) if writes and target.get("path") and folder is not None else None
+        self.store = self._library_stores[lid]
         self._adopt(cur["studio"])
         self.origin, self._library_rows, self.log = cur["origin"], cur["rows"], cur["log"]
         self.pipeline, self.library_id = pid, lid
@@ -1523,6 +1532,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if lid == self.library_id:
             self.library_use(self.libraries[0]["id"])
         self._library_held.pop(lid, None)
+        self._library_stores.pop(lid, None)
         self.libraries.remove(target)
         self.event("library", f"{target['label']} 삭제")
         return {"ok": True}

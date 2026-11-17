@@ -498,7 +498,9 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--role")
     s.add_argument("--principal", action="append", default=[])
     s.add_argument("--read-only", action="store_true")
-    s.add_argument("--transport", default="stdio")
+    s.add_argument("--agent", default="", help="the name the audit trail gives this agent")
+    s.add_argument("--journal", default="", help="a file of this process's own that keeps its requests and audit trail")
+    s.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
 
     s = sub.add_parser("new", help="start an empty studio folder: no modules, no data; definitions are made by hand")
     s.add_argument("dir")
@@ -719,6 +721,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         args = [a.config, "--transport", a.transport] + (["--role", a.role] if a.role else [])
         args += sum((["--principal", p] for p in a.principal), []) + (["--read-only"] if a.read_only else [])
+        args += (["--agent", a.agent] if a.agent else []) + (["--journal", a.journal] if a.journal else [])
         mcp_main(args)
         return 0
 

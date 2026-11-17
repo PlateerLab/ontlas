@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.24.1
+
+- **Approved changes are written to the folder of the library they were made in.** A deployment that writes approved
+  changes (`--library-write`) and offers more than one library (`--library`) kept writing to the first library's folder
+  after a visitor switched: a module approved in the second library was saved among the first one's modules, and
+  switching a module on there replaced the first library's record of what is on, so the first could come back from a
+  restart asking for modules it does not have. The folder now follows the library on screen: each offered library is
+  written to its own, and a library made on the page, which has none, is kept with the session only.
+- **`ontlas mcp` passes on the agent's name and its journal.** The MCP server takes `--agent` (what the audit trail
+  calls the caller) and `--journal` (a file that keeps its requests across restarts), and the README said so, but
+  the `ontlas mcp` command refused both. It hands them on now, and names the transports it takes (`stdio`, `sse`,
+  `streamable-http`).
+- The README lists every command, every `ontlas serve` option and every `/v1` call, and says how a library is made on
+  the page and taken out.
+
 ## 0.24.0
 
 - **A library is made on the page.** The libraries a visitor could open were the studio files the server was started

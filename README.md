@@ -532,6 +532,15 @@ in SPARQL and Cypher through the concept's type or label, and the conformance ru
 `aligned` IRIs export as `skos:exactMatch`, `cite` as `dcterms:source`, the module as `rdfs:isDefinedBy`; an
 imported standard keeps its original IRIs as alignments.
 
+A deployment offers one library or several (`ontlas serve studio.yaml --library other/studio.yaml`), and the page switches
+between them, each with its own definition, data and applied drafts. A new one is made on the page (Ontology › 라이브러리
+› 새 라이브러리) three ways: from files (a definition draft's YAML or JSON files read as one draft, or an OWL vocabulary in
+Turtle or RDF/XML as a module), on the modules of the library that is open (those chosen, with what they require), or
+empty. The result says what it holds and, for an import, what was adjusted and what had no place in a module. A library
+made this way lives with the session; 내려받기 gives the library that is open as a studio folder in a zip (the studio file
+and the file of each module it applies), which `ontlas serve` serves and `--library` offers, and that is how it is kept
+and reached over `/v1`. Where approved changes are saved (`--library-write`), each library is written to its own folder.
+
 ## Adapt a domain
 
 Adapting a domain to a system means leaving its standard as it is and writing only what differs. Whatever you start
@@ -547,8 +556,8 @@ the rest.
 | Data files or a database | `ontlas draft` | A definition and its `binding` |
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
 | Policy text, in any document format | `ontlas policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
-| An OWL or RDFS ontology | `ontlas import-owl` | A starting definition |
-| Definitions drafted as tables (Objects, Entities, rules by layer, named values, a glossary; YAML or JSON) | `ontlas library import-definitions` | A domain module, an `axiom` module for the rules marked AXIOM, a `customer` module for those marked Custom |
+| An OWL or RDFS ontology | `ontlas import-owl`, the page's 라이브러리 › 새 라이브러리 | A starting definition, or a library of its own |
+| Definitions drafted as tables (Objects, Entities, rules by layer, named values, a glossary; YAML or JSON) | `ontlas library import-definitions`, the page's 라이브러리 › 새 라이브러리 | A domain module, an `axiom` module for the rules marked AXIOM, a `customer` module for those marked Custom |
 | Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
 | Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
 
@@ -1156,6 +1165,23 @@ agents:
 `/v1/proposals` gives a token the requests it made and how each stands, and `/v1/record` one object by its key, inside the
 token's rows and masks.
 
+Every call, as `/v1/openapi.json` lists them:
+
+| Call | It gives |
+|---|---|
+| `GET /v1/ontology` | Object types, properties, links, registered queries, decisions and actions the token may use |
+| `POST /v1/find` · `/v1/context` | The definitions and rules a question is about, as a list or as text for an agent's prompt |
+| `POST /v1/object` · `/v1/record` | One object type with what touches it; one object's values by its key |
+| `POST /v1/terms` · `/v1/rules` | The glossary's reading of a sentence; the rule cards, AXIOM first |
+| `POST /v1/decide` · `/v1/validate` | A decision on a record or on stated values; whether values keep to the definition and the rule cards |
+| `POST /v1/questions` | The validation questions, on their own values and on the records they name |
+| `POST /v1/answer` · `/v1/search` | One question answered with its grounds; passages by meaning with the definitions they name |
+| `POST /v1/query` · `/v1/sparql` · `/v1/cypher` · `/v1/translate` | A registered query or an IR object run on a backend; SPARQL or Cypher written against the ontology, on any backend; the text of a query in a backend's language |
+| `GET /v1/functions` · `POST /v1/function` | The functions the token may run, and one of them run |
+| `POST /v1/actions` · `GET /v1/proposals` | A declared action requested (with `--api-write`); the requests the token made and how each stands |
+| `GET /v1/documents` · `/v1/space` · `/v1/libraries` | The documents and their sections; what the space holds; the libraries the server offers |
+| `GET /v1/openapi.json` · `/v1/tools` | The API as OpenAPI, and as function definitions |
+
 ### Deciding with no source
 
 A workflow that only goes through the API decides on the values it already has, before any source is connected:
@@ -1235,6 +1261,7 @@ backends:
 
 ```bash
 ontlas mcp examples/commerce/studio.yaml --role customer_agent --principal customer_id=C001 [--read-only]
+ontlas mcp studio.yaml --agent "고객 응대 Agent" --journal records/agent.jsonl --transport streamable-http
 ```
 
 Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`, `run_function`, `describe_object`, `describe_ontology`, `list_modules`, `list_backends`, `translate_query`, `run_query`, `run_sparql`, `run_cypher`,
@@ -1242,8 +1269,8 @@ Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`,
 `decide` takes `values` as `/v1/decide` does, and answers `needs_values` with what the outcome still turns on instead of guessing.
 Every call runs inside the role's row filters; `request_action`
 only files a request, and nothing is written until a person approves it. `list_proposals` gives an agent with a role its own
-requests. `--agent NAME` is what the audit trail calls it, and `--journal FILE` keeps its requests across restarts. Works with
-the MCP Python SDK 1.x and 2.x.
+requests. `--agent NAME` is what the audit trail calls it, `--journal FILE` keeps its requests across restarts, and
+`--transport` is `stdio` (the default), `sse` or `streamable-http`. Works with the MCP Python SDK 1.x and 2.x.
 
 An agent need not read a whole ontology: `find_definitions` gives what a question is about and `describe_object` one object with what
 touches it. A running server reads the library again once an approved change is saved there (`--library-write`). A request stays in its own
@@ -1290,9 +1317,13 @@ ontlas export examples/commerce/ontology.yaml --format owl         # shacl · r2
 ontlas import-owl vocabulary.ttl -o ontology.yaml
 ontlas run examples/commerce/studio.yaml myOrders --role customer_agent --principal customer_id=C001
 ontlas sparql examples/commerce/studio.yaml query.rq --backend source
+ontlas cypher examples/commerce/studio.yaml "MATCH (o:Order) RETURN o.status, count(o) AS n"   # Cypher, on SQL too
 ontlas decide examples/commerce/studio.yaml returnEligibility I1001
+ontlas decide examples/library/studio.yaml returnEligibility --input days_since_delivery=3 --input item_status=NORMAL --input category_returnable=true --input customer_grade=VIP   # on values, no source read
 ontlas questions examples/commerce/studio.yaml                    # validation questions and accuracy
 ontlas conformance examples/commerce/studio.yaml                  # every registered query on every backend
+ontlas rules examples/commerce/studio.yaml                        # links the rules derive, and what they find
+ontlas shacl examples/commerce/studio.yaml                        # the projection held to the generated SHACL shapes
 ontlas preview examples/library/studio.yaml -o studio.html        # the page in the screenshots
 ontlas serve examples/library/studio.yaml --port 7710             # the same page, working: one studio per visitor
 ontlas serve examples/library/studio.yaml --samples examples/files  # + example files a visitor loads with one click
@@ -1300,6 +1331,7 @@ ontlas serve examples/library/studio.yaml --library other/studio.yaml  # + anoth
 ontlas serve examples/library/studio.yaml --video demo.mp4          # + a demo video beside the guide (demo.chapters.json)
 ontlas serve examples/library/studio.yaml --allow-connect --file-kb 4096 --rows 50000  # inside your own network only
 ontlas serve examples/library/studio.yaml --repositories ./repositories --max-files 2000 --total-mb 4096  # files kept across restarts
+ontlas new energy-studio --label "에너지 설비"                     # an empty studio folder: definitions are made on the page
 ontlas draft examples/files/*.csv -o lib-demo                     # a definition and bindings drafted from data
 ontlas ingest schema.sql 코드정의서.xlsx 용어집.xlsx 정책서.docx -o bundle.json  # anything, rolled into one JSON
 ontlas draft --definitions bundle.json --name shop -o shop        # the JSON, drafted into modules
@@ -1307,23 +1339,31 @@ ontlas gates examples/library/studio.yaml                         # the flow's p
 ontlas agreement examples/library/studio.yaml                     # past decisions decided again
 ontlas values examples/library/studio.yaml                        # answers held against the transaction system
 ontlas functions examples/library/studio.yaml                     # registered functions; --run NAME --key K to run one
+ontlas metric examples/library/studio.yaml returnRate             # a metric with what it means; no name lists the dictionary
+ontlas periods examples/library/studio.yaml                       # rows of one thing valid at the same time
+ontlas transitions examples/library/studio.yaml                   # time-based transitions that have come due; --apply takes them
+ontlas views examples/library/studio.yaml                         # the statements that make the views objects are defined by
+ontlas catalog examples/library/studio.yaml                       # the asset graph; --impact what a change touches, --agent/--sees what an agent sees
 ontlas review examples/library/studio.yaml acme-1.1.0.yaml        # a new module version, reviewed on a copy
 ontlas identity studio.yaml Person --write       # join the records, write the crosswalk
 ontlas sync examples/library/studio.yaml --every 60               # the graphs kept up with the source
 ontlas nl-eval examples/commerce/studio.yaml examples/commerce/nl_questions.yaml --llm-url ... --llm-model ...
 ontlas policy-draft examples/library/studio.yaml examples/policies/교환정책서.md --target OrderItem --llm-url ... --llm-model ...
 ontlas users add users.yaml kim --roles editor                    # a person of a team studio (ontlas serve --users)
+ontlas users list users.yaml                                      # the people and their roles
 ontlas search examples/library/studio.yaml "반품 기간" -k 3          # passages by meaning, and the definitions named
 ontlas documents examples/library/studio.yaml                     # what the space holds: documents, stores, embedder, reasoners
 ontlas vectors examples/library/studio.yaml                       # every vector store against exact search
 ontlas reasoners examples/library/studio.yaml                     # what each engine derives; engines of one logic must agree
 ontlas openapi --server https://space.example > openapi.json      # the REST API, for a platform to import
 ontlas library list examples/library                              # every package, its kind, versions and requirements
+ontlas library show examples/library commerce                     # one package: what it defines, extends and removes
 ontlas library create my-lib energy --kind domain --label "에너지 설비" --requires core
 ontlas library import-owl my-lib schema-orders.ttl schema-orders --requires core
 ontlas library import-definitions my-lib shop objects.yaml entities.yaml rules.yaml glossary.yaml --requires core
 # the same on the page: 라이브러리 > 새 라이브러리 (the files, the library that is open, or empty), then 내려받기 for a studio folder to serve
 ontlas library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
+ontlas library delete my-lib energy --version 0.1.0               # a version out of the library; no version, the whole package
 ontlas library compose examples/library commerce-operations-bindings -o ontology.yaml
 ontlas modules examples/library/studio.yaml --impact fashion      # what detaching it would take away
 ontlas modules examples/library/studio.yaml --rules               # the rule layers and cards; --check adds the AXIOM checks
@@ -1331,6 +1371,19 @@ ontlas lexicon show examples/library/studio.yaml                  # the terms, w
 ontlas lexicon import 용어집.csv --config studio.yaml -o dictionary.yaml  # a glossary, as one module
 ontlas bindings examples/library/studio.yaml                      # the definition against the database
 ```
+
+`ontlas serve` takes these beside the studio file:
+
+| For | Options |
+|---|---|
+| The address | `--host`, `--port`, `--quiet` (no request log) |
+| Visitors | `--sessions` (studios kept at once; the least recent goes first), `--idle` (seconds before an unused one is dropped). With `--users FILE` there is one studio a team shares behind a sign-in, and `--journal FILE` keeps its requests, approvals and audit trail across restarts |
+| What a visitor may bring | `--samples DIR`, `--policies DIR`, `--file-kb`, `--max-files`, `--total-mb`, `--rows`, `--repositories DIR` (files kept across restarts), `--allow-connect` (a database by address, inside your own network only) |
+| Libraries | `--library STUDIO` (another studio file to switch to, repeated for more), `--library-write` (approved module versions saved to the folder of the library they were made in) |
+| `/v1` | `--api-token-env VAR` turns it on; `--api-role`, `--api-principal key=value` and `--api-name` say who the token is, `--api-write` lets it request actions, `--api-agents FILE` gives each agent a token of its own |
+| A language model | `--llm-url`, `--llm-model`, `--llm-key-env VAR`, `--llm-extra JSON` (merged into each chat request) |
+| Embeddings | `--embedder hash`, `fastembed`, or `openai` with `--embedder-url` and `--embedder-model` |
+| The rest | `--sync N` (re-read the source every N seconds), `--video FILE` (a demo beside the guide) |
 
 A studio file names the ontology, the backends and what to project at start:
 
