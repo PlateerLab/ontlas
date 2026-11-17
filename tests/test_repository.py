@@ -127,7 +127,7 @@ def test_repositories_in_a_folder_outlive_the_server(tmp_path):
     r.put(second, "a/x.csv", b"1", facts={"kind": "data"})
     r.include(second, ["a"], False)
     again = Repositories(tmp_path)
-    assert [x["label"] for x in again.rows()] == ["기본 레포지토리", "둘째"]
+    assert [x["label"] for x in again.rows()] == ["기본 저장소", "둘째"]
     assert again.entry(second, "a/x.csv")["included"] is False and again.read(second, "a/x.csv") == b"1"
 
 
@@ -150,7 +150,7 @@ def test_a_repository_needs_a_name_of_its_own_and_one_must_remain(tmp_path):
     with pytest.raises(ValueError):
         r.create(" ")
     with pytest.raises(ValueError):
-        r.create("기본 레포지토리")
+        r.create("기본 저장소")
     with pytest.raises(ValueError):
         r.delete_repo("r1")
     second = r.create("둘째")
@@ -298,3 +298,10 @@ def test_images_and_video_are_kept_as_they_are(session):
     assert [f["source"] for f in session.files_state()["files"]] == ["자료/회원.csv"]
     assert session.catalog_file("자료/사진.png")["json"] == ""
     assert session.catalog_download("자료/사진.png")[1].startswith(b"\x89PNG")
+
+
+def test_the_first_repository_kept_under_its_old_name_is_read_as_the_default(tmp_path):
+    r = Repositories(tmp_path)
+    r.items["r1"]["label"] = "기본 레포지토리"
+    r._save()
+    assert [x["label"] for x in Repositories(tmp_path).rows()] == ["기본 저장소"]

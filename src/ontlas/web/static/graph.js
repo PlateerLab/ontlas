@@ -367,7 +367,10 @@ window.SpaceGraph = (function () {
     closePops(st);  // a list left open over the stage closes, as a press on the empty stage closes it
     if (!again) { tap(st, id); return; }
     const on = cur || st;  // the first press may have drawn the screen again, with a new graph in its place
-    if (on.graph.hasNode(id) && !on.bundles.has(id) && selected(on) === id && !on.hops) { on.hops = 1; refresh(); }
+    if (!on.graph.hasNode(id) || on.bundles.has(id)) return;
+    // the first press let go of a node that was picked already: the double press means it, so it is picked again
+    if (selected(on) !== id && on.opt.pick && !(on.route && !on.route.nodes)) on.opt.pick(id);
+    if (selected(on) === id && !on.hops) { on.hops = 1; refresh(); }
   }
 
   function look(st, ids, pad = 70) {  // the camera takes these in; how far it moves is read off the screen, so a rotated stage needs no care
@@ -924,7 +927,8 @@ window.SpaceGraph = (function () {
     return { nodes: g.order - cur.bundles.size, edges: g.size - cur.links.length + cur.loops.length, layout: cur.layout, groups: cur.groups.map((x) => x.label), colorBy: prefs.colorBy,
       shown, bundles: [...cur.bundles].filter(([, x]) => cur.fold.has(x.key)).map(([id, x]) => ({ id, label: x.label, nodes: x.nodes.length })),
       hops: cur.hops, route: cur.route && cur.route.nodes ? cur.route.nodes : null,
-      ids: g.filterNodes((id) => !cur.renderer.getNodeDisplayData(id).hidden) };  // the nodes drawn, for whoever looks for an empty spot
+      ids: g.filterNodes((id) => !cur.renderer.getNodeDisplayData(id).hidden),  // the nodes drawn, for whoever looks for an empty spot
+      drawn: g.filterEdges((e) => { const d = cur.renderer.getEdgeDisplayData(e); return !!d && !d.hidden; }).length };  // the lines drawn
   }
 
   return { mount, refresh, focus, kill, point, state };

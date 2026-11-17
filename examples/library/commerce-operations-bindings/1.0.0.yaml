@@ -1,7 +1,7 @@
 module: commerce-operations-bindings
 version: 1.0.0
 kind: binding
-label: 이커머스 운영 원천 Binding
+label: 이커머스 운영 데이터 소스 Binding
 description: 이커머스 운영 온톨로지를 예시 커머스 DB의 테이블과 컬럼에 연결합니다
 requires: [commerce-operations, commerce-bindings]
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.25.2
+
+- **A node already picked keeps its pick on a double press** and opens its neighbours, as one not yet picked did.
+- **A validation question saved unchanged from its panel is refused on the page**, with the same sentence as the
+  form, instead of reaching the server and failing there.
+- **The default repository is 기본 저장소**, on the server as on the page; one kept under the old name is read under the
+  new one. The example library's binding modules say 데이터 소스 where they said 원천.
+- `SpaceGraph.state()` also gives the number of edges drawn.
+
 ## 0.25.1
 
 - **Every control of every screen was pressed, and what did not work is fixed.** Each part was pressed control by

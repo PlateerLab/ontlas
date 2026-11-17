@@ -413,6 +413,11 @@
       const d = S.qa2.pd, a = d ? qaArgs(d) : { error: '' };
       if (!d || S.qa2.busy) return;
       if (a.error) { toast(a.error, true); return; }
+      const q = qaFind(S.qa2.pdOf), was = q ? qaArgs(qaDraft(q)) : null;  // the question as the panel opened it
+      if (was && !was.error && JSON.stringify(was.args) === JSON.stringify(a.args)) {
+        toast('변경된 내용이 없어 저장하지 못했습니다. 값을 변경한 뒤 다시 저장해 주세요.', true);
+        return;
+      }
       S.qa2.busy = true;
       try {
         const r = await api('qa/question/save', a.args);

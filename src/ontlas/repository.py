@@ -19,7 +19,8 @@ PATH_MAX = 400
 DEPTH_MAX = 12
 LABEL_MAX = 40
 INDEX = "index.json"
-DEFAULT_LABEL = "기본 레포지토리"
+DEFAULT_LABEL = "기본 저장소"
+OLD_DEFAULT_LABELS = ("기본 레포지토리",)  # what the first repository was called before; read as the default
 LITTER_NAMES = {".ds_store", "thumbs.db", "desktop.ini"}  # what an operating system leaves in a folder
 LITTER_FOLDERS = {"__macosx", ".git", ".svn"}
 TRASH_MAX = 200  # items a repository's trash keeps; past it the oldest goes for good
@@ -67,6 +68,9 @@ class Repositories:
         self.items: dict[str, dict] = {}
         if self._root is not None and (self._root / INDEX).is_file():
             self.items = json.loads((self._root / INDEX).read_text(encoding="utf-8"))
+            for r in self.items.values():
+                if r.get("label") in OLD_DEFAULT_LABELS and not any(x.get("label") == DEFAULT_LABEL for x in self.items.values()):
+                    r["label"] = DEFAULT_LABEL
         if not self.items:
             self.create(DEFAULT_LABEL)
 
@@ -105,16 +109,16 @@ class Repositories:
 
     def _repo(self, repo: str) -> dict:
         if repo not in self.items:
-            raise LookupError(f"레포지토리 {repo}")
+            raise LookupError(f"저장소 {repo}")
         return self.items[repo]
 
     def create(self, label: str) -> str:
         label = str(label).strip()[:LABEL_MAX]
         if not label:
-            raise ValueError("이름이 없어 레포지토리를 만들지 못했습니다. 이름을 입력해 주세요.")
+            raise ValueError("이름이 없어 저장소를 만들지 못했습니다. 이름을 입력해 주세요.")
         with self.lock:
             if any(r["label"] == label for r in self.items.values()):
-                raise ValueError(f"{label}: 같은 이름의 레포지토리가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
+                raise ValueError(f"{label}: 같은 이름의 저장소가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
             n = 1 + max([int(k[1:]) for k in self.items], default=0)
             self.items[f"r{n}"] = {"label": label, "created": _now(), "folders": [], "files": {}}
             self._save()
@@ -125,9 +129,9 @@ class Repositories:
         with self.lock:
             r = self._repo(repo)
             if not label:
-                raise ValueError("이름이 없어 레포지토리 이름을 바꾸지 못했습니다. 이름을 입력해 주세요.")
+                raise ValueError("이름이 없어 저장소 이름을 바꾸지 못했습니다. 이름을 입력해 주세요.")
             if any(x is not r and x["label"] == label for x in self.items.values()):
-                raise ValueError(f"{label}: 같은 이름의 레포지토리가 있어 바꾸지 못했습니다. 다른 이름을 입력해 주세요.")
+                raise ValueError(f"{label}: 같은 이름의 저장소가 있어 바꾸지 못했습니다. 다른 이름을 입력해 주세요.")
             r["label"] = label
             self._save()
 
@@ -135,7 +139,7 @@ class Repositories:
         with self.lock:
             r = self._repo(repo)
             if len(self.items) == 1:
-                raise ValueError("마지막 레포지토리여서 삭제하지 못했습니다. 다른 레포지토리를 만든 뒤 삭제해 주세요.")
+                raise ValueError("마지막 저장소여서 삭제하지 못했습니다. 다른 저장소를 만든 뒤 삭제해 주세요.")
             shas = {f["sha256"] for f in [*r["files"].values(), *_trashed(r)]}
             del self.items[repo]
             self._forget(shas)

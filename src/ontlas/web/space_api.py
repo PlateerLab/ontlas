@@ -25,7 +25,7 @@ K_MAX = 20
 SEARCH_ROWS = 200  # hits the explorer's search returns
 STORE_KINDS = ("vector_store", "graph_store", "embedder", "reasoner")
 USE_KINDS = ("query", "decision", "action", "role", "agent")
-GROUP_WORDS = {"group:repos": "레포지토리", "group:source": "데이터베이스", "group:document": "문서", "group:ontology": "온톨로지",
+GROUP_WORDS = {"group:repos": "저장소", "group:source": "데이터베이스", "group:document": "문서", "group:ontology": "온톨로지",
                "group:store": "저장소 어댑터", "group:use": "활용"}
 GROUP_KINDS = {"group:repos": ("folder", "file"), "group:source": ("database", "table", "column"),
                "group:document": ("collection", "document"), "group:ontology": ("object", "property", "link"), "group:store": STORE_KINDS}
@@ -294,7 +294,7 @@ class SpaceMixin:
             try:
                 self.save_relations()
             except OSError:
-                out["error"] = "추출한 관계를 저장하지 못했습니다. 레포지토리 폴더의 쓰기 권한을 확인해 주세요."
+                out["error"] = "추출한 관계를 저장하지 못했습니다. 저장소 폴더의 쓰기 권한을 확인해 주세요."
             job["out"] = out  # last: the page stops waiting once this is set
 
         threading.Thread(target=run, name="relation-reading", daemon=True).start()
@@ -781,7 +781,7 @@ class SpaceMixin:
         cat = x["cat"]
         row = lambda a: self._explorer_row(x, a)  # noqa: E731
         if node.startswith("repo:") and node[5:] != self.repo:
-            raise LookupError("사용 중인 레포지토리가 아니어서 열지 못했습니다. 레포지토리를 전환한 뒤 열어 주세요.")
+            raise LookupError("사용 중인 저장소가 아니어서 열지 못했습니다. 저장소를 전환한 뒤 열어 주세요.")
         if node.startswith(("repo:", "dir:")):
             folder = node[4:] if node.startswith("dir:") else ""
             subs, here = self.repositories.listing(self.repo, folder)
