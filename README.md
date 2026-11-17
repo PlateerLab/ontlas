@@ -214,7 +214,7 @@ any screen, Object definition, decision table or query, or asks the words as a q
 | | 문서 | | See documents as sections and concepts, and the relations a model finds between concepts |
 | | 질의 | | Run a query, see it in each language, and ask in plain language when a model is connected |
 | | 변경 · 버전 | 변경 요청 · 버전 이력 | Review changes element by element with their regression, and see every version of the space (see step 6) |
-| | 라이브러리 | | Switch between the libraries the server offers (`--library`), each with its own definition, data and applied drafts; apply or remove modules, see each module's kind, versions and what it holds |
+| | 라이브러리 | | Switch between the libraries the server offers (`--library`), each with its own definition, data and applied drafts; make a new one (from definition files or an OWL vocabulary, on the modules of the one that is open, or empty) and download any of them as a studio folder; apply or remove modules, see each module's kind, versions and what it holds |
 | Data Binding | 데이터 가져오기 | 데이터 카탈로그 · DB 연결 · 초안 생성 · 변환 결과 | Bring files and databases in and draft from them (see step 4) |
 | | Mapping | 데이터 소스 · DB 대조 | See the source's tables, keys and references, and check the definition against them |
 | | 액션 | 액션 정의 · 처리 요청 | Define actions; decide a case with its grounds and the path it took through the layers, request an action, approve it, roll it back |
@@ -1322,6 +1322,7 @@ ontlas library list examples/library                              # every packag
 ontlas library create my-lib energy --kind domain --label "에너지 설비" --requires core
 ontlas library import-owl my-lib schema-orders.ttl schema-orders --requires core
 ontlas library import-definitions my-lib shop objects.yaml entities.yaml rules.yaml glossary.yaml --requires core
+# the same on the page: 라이브러리 > 새 라이브러리 (the files, the library that is open, or empty), then 내려받기 for a studio folder to serve
 ontlas library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
 ontlas library compose examples/library commerce-operations-bindings -o ontology.yaml
 ontlas modules examples/library/studio.yaml --impact fashion      # what detaching it would take away

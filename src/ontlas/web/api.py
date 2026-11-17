@@ -121,6 +121,25 @@ RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", 
              ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".zip", ".7z", ".rar", ".tar", ".gz", ".exe", ".dll", ".bin"}
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
+LIBRARIES_MADE_MAX = 3  # libraries made on the page, kept beside the ones the deployment offers
+LIBRARY_FILES_MAX = 8  # files a new library is made from: a definition draft's are read together as one
+LIBRARY_FILES = {".yaml": "definitions", ".yml": "definitions", ".json": "definitions",  # a draft, else OWL as rdflib reads it
+                 ".ttl": "turtle", ".owl": "xml", ".rdf": "xml"}
+# what an import says it adjusted or left out, by the kind of thing it was: the page counts them under these names
+IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자 추가"),
+                ("^parameter .* kept as text", "기준값을 글로"),
+                ("kept as text|-> string", "값 형식을 글로"),
+                ("read as \\w+ on both", "형식 통일"),
+                ("it goes by", "Entity 이름을 붙여 분리"),
+                ("already reads as", "용어 표기 중복"),
+                ("is not known, filed as", "규칙 유형 미상"),
+                ("superclasses -> kept", "상위 Entity 하나만 유지"),
+                ("no join binding|no source tables", "원천 Mapping 필요"),
+                ("^section ", "모듈에 자리가 없는 구역"),
+                ("relations between Objects", "Object 간 관계"),
+                ("the Entity it reaches is not in the draft", "초안에 없는 Entity 를 가리키는 관계"),
+                ("^term relation", "용어 사전에 없는 관계 종류"),
+                ("^customer label", "코드값을 찾지 못한 고객 표기"))
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 LEVEL_LABEL = ("L0 개념", "L1 논리", "L2 연결", "L3 검증")  # what bindings.entity_level gives, as the page says it
 SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
@@ -366,6 +385,53 @@ def principal_keys(node: Any) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def _rows_in(section: Any) -> int:
+    """How many rows a draft's section holds: a list's, or the lists under the levels of one."""
+    if isinstance(section, list):
+        return len(section)
+    return sum(len(v) for v in section.values() if isinstance(v, list)) if isinstance(section, dict) else 0
+
+
+def _definition_doc(name: str, text: str) -> dict:
+    """A definition draft's file as the mapping of sections it is: JSON by itself, YAML where PyYAML is installed."""
+    try:
+        if name.lower().endswith(".json"):
+            doc = json.loads(text)
+        else:
+            import yaml
+
+            doc = yaml.safe_load(text)
+    except ImportError:
+        raise ValueError("YAML 을 읽는 모듈(PyYAML)이 서버에 없어 읽지 못했습니다. JSON 으로 저장해 다시 선택해 주세요.") from None
+    except Exception as e:  # yaml.YAMLError, json.JSONDecodeError: where the text stops being the format
+        raise ValueError(f"{name} 파일을 읽지 못했습니다. 형식을 확인해 주세요. {e}"[:300]) from None
+    if not isinstance(doc, dict) or not any(_rows_in(v) for k, v in doc.items() if k != "meta"):
+        raise ValueError(f"{name} 파일에 정의 목록이 없어 추가하지 못했습니다. 구역 이름(objects · entities · rules · "
+                         "parameters · terms)을 확인해 주세요.")
+    return doc
+
+
+def _made_counts(studio: Studio) -> dict:
+    o, comp = studio.onto, studio.composition
+    return {"areas": len(o.areas), "objects": len(o.objects), "links": len(o.links),
+            "properties": sum(len(t.properties) for t in o.objects.values()), "parameters": len(o.parameters),
+            "cards": len(comp.cards), "terms": len(comp.terms), "decisions": len(o.decisions), "modules": len(comp.modules)}
+
+
+def _import_report(reports: list) -> dict:
+    """What the imports carried, adjusted and left out, the last two counted by what kind of thing each was."""
+    def told(lines: list[str]) -> dict:
+        kinds: dict[str, int] = {}
+        for x in lines:
+            label = next((lbl for pat, lbl in IMPORT_NOTES if re.search(pat, x)), "기타")
+            kinds[label] = kinds.get(label, 0) + 1
+        return {"count": len(lines), "kinds": [{"label": k, "count": v} for k, v in sorted(kinds.items(), key=lambda kv: -kv[1])],
+                "lines": lines[:300]}
+
+    return {"preserved": sum(len(r.preserved) for r in reports), "adjusted": told([x for r in reports for x in r.adjusted]),
+            "unsupported": told([x for r in reports for x in r.unsupported])}
+
+
 @dataclass
 class DataOptions:
     """What a visitor may bring in: files within these limits, the bundled samples, and (off unless asked) a database."""
@@ -427,6 +493,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.libraries: list[dict] = [{"id": "l1", "label": "", "path": "", "origin": dict(self.origin)}]
         self.library_id = "l1"
         self._library_held: dict[str, tuple] = {}  # library id -> (its pipelines, the one on screen), to come back to
+        self._library_files: dict[str, dict] = {}  # the files a new library is about to be made from, by name
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
@@ -552,8 +619,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             "repositories": self.repositories.rows(),
             "pipelines": [{"id": p["id"], "label": p["label"]} for p in self.pipelines],
             "pipeline": self.pipeline,
-            "libraries": [{"id": x["id"], "label": x["label"], "modules": x.get("modules", 0), "source": x.get("source", "")}
-                          for x in self.libraries],
+            "libraries": [{"id": x["id"], "label": x["label"], "modules": x.get("modules", 0), "source": x.get("source", ""),
+                           "made": bool(x.get("made"))} for x in self.libraries],
             "library_id": self.library_id,
             "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
                      "kept": self.repositories.persistent,
@@ -1336,6 +1403,152 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._measured, self._measured_of, self._watch = {}, None, None
         self.event("library", f"{target['label']}(으)로 전환")
         return {"ok": True}
+
+    # ---- a library made on the page: from definition files, on the one that is open, or with nothing in it ---------
+
+    def library_files(self) -> dict:
+        return {"files": [{k: f[k] for k in ("name", "kind", "size", "sections")} for f in self._library_files.values()],
+                "files_max": LIBRARY_FILES_MAX, "made": sum(bool(x.get("made")) for x in self.libraries),
+                "made_max": LIBRARIES_MADE_MAX}
+
+    def library_file(self, name: str, data: bytes) -> dict:
+        """Hold one file a new library is to be made from. A draft's files are read together when it is made, so here
+        each is read only far enough to refuse one that is not a draft."""
+        name = Path(str(name or "").replace("\\", "/")).name.strip()[:120]
+        kind = LIBRARY_FILES.get(Path(name).suffix.lower())
+        if kind is None:
+            raise ValueError("정의 초안(.yaml · .yml · .json) 또는 OWL(.ttl · .owl · .rdf) 형식이 아니어서 추가하지 못했습니다. "
+                             "형식을 확인해 다시 선택해 주세요.")
+        if name not in self._library_files and len(self._library_files) >= LIBRARY_FILES_MAX:
+            raise ValueError(f"파일 수가 {LIBRARY_FILES_MAX}개 한도에 도달해 추가하지 못했습니다. 파일을 뺀 뒤 다시 추가해 주세요.")
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            raise ValueError(f"{name} 파일이 UTF-8 이 아니어서 읽지 못했습니다. UTF-8 로 저장해 다시 선택해 주세요.") from None
+        entry = {"name": name, "kind": kind, "size": len(data), "text": text, "sections": {}}
+        if kind == "definitions":
+            entry["doc"] = doc = _definition_doc(name, text)
+            entry["sections"] = {str(k): n for k, v in doc.items() if k != "meta" and (n := _rows_in(v))}
+        self._library_files[name] = entry
+        return self.library_files()
+
+    def library_file_drop(self, name: str) -> dict:
+        self._library_files.pop(str(name), None)
+        return self.library_files()
+
+    def library_new(self, label: str, start: str, *, key: str = "", modules: list | None = None) -> dict:
+        """A library made here: from the files held (a definition draft read as one, an OWL vocabulary as a module), on
+        the modules of the library that is open, or with nothing in it. It lives with this session beside the ones the
+        deployment offers; `export_library` takes it out as a studio folder to serve."""
+        from ontlas.reason.port import open_reasoners
+        from ontlas.space import open_space
+
+        label = " ".join(str(label or "").split())[:60]
+        if not label:
+            raise ValueError("이름이 없어 만들지 못했습니다. 이름을 입력해 주세요.")
+        if any(x["label"] == label for x in self.libraries):
+            raise ValueError(f"같은 이름의 라이브러리({label})가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
+        made = [x for x in self.libraries if x.get("made")]
+        if len(made) >= LIBRARIES_MADE_MAX:
+            raise ValueError(f"만든 라이브러리가 {LIBRARIES_MADE_MAX}개 한도에 도달해 만들지 못했습니다. "
+                             "만든 라이브러리를 삭제한 뒤 다시 만들어 주세요.")
+        n = 1 + max([int(x["id"][1:]) for x in made] or [0])
+        key = re.sub(r"[^A-Za-z0-9_-]+", "-", str(key or "")).strip("-").lower()[:40] or f"library-{n}"
+        namespace, report = f"https://example.org/{key}#", None
+        if start == "files":
+            lib, wanted, report = self._library_from_files(key, label, namespace)
+        elif start == "base":
+            cur, comp = self.studio.library, self.studio.composition
+            if cur is None or comp is None:
+                raise ValueError("열려 있는 라이브러리가 모듈로 구성되지 않아 기반으로 쓰지 못했습니다. 다른 시작 방법을 선택해 주세요.")
+            lib = OverlayLibrary(cur.base, list(cur.extra.values()))  # its own copy: edits made there later stay there
+            lib.held = {k: dict(v) for k, v in cur.held.items()}
+            wanted = [str(x) for x in (modules or [])] or [m.name for m in comp.modules]
+            namespace = self.studio.onto.namespace
+        elif start == "empty":
+            lib, wanted = OverlayLibrary(None, []), []
+        else:
+            raise ValueError("시작 방법을 선택하지 않아 만들지 못했습니다. 시작 방법을 선택해 주세요.")
+        try:
+            studio = Studio.from_library(lib, wanted, namespace=namespace, name=key, label=label, use_zen=self.studio.use_zen)
+        except ModuleError as e:
+            raise ValueError(f"모듈 구성이 성립하지 않아 만들지 못했습니다. 선택한 모듈과 파일을 확인해 주세요. {e}") from None
+        studio.space, studio.reasoners = open_space(None), open_reasoners(None)
+        lid = f"s{n}"
+        origin = {"kind": "config", "config": "", "notice": "", "backends": {}, "seeds": []}
+        self.libraries.append({"id": lid, "label": label, "path": "", "origin": origin, "source": "", "made": True,
+                               "modules": len(studio.composition.modules)})
+        self._library_held[lid] = ([{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": dict(origin),
+                                     "rows": lib.list(), "log": []}], "p1")
+        self._library_files = {}
+        self.library_use(lid)
+        return {"ok": True, "id": lid, "label": label, "start": start, "made": _made_counts(studio), "report": report}
+
+    def _library_from_files(self, key: str, label: str, namespace: str) -> tuple:
+        files = list(self._library_files.values())
+        if not files:
+            raise ValueError("파일이 없어 만들지 못했습니다. 정의 초안 또는 OWL 파일을 추가해 주세요.")
+        lib, mods, reps = OverlayLibrary(None, []), [], []
+        docs = [f["doc"] for f in files if f["kind"] == "definitions"]
+        owls = [f for f in files if f["kind"] != "definitions"]
+        try:
+            if docs:
+                got, rep = lib.import_definitions(docs, key, label=label, namespace=namespace)
+                mods, reps = [*got], [rep]
+            for i, f in enumerate(owls, 1):
+                stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(f["name"]).stem).strip("-").lower()
+                alone = not docs and len(owls) == 1
+                m, rep = lib.import_owl(f["text"], key if alone else f"{key}-{stem or i}",
+                                        label=label if alone else Path(f["name"]).stem, fmt=f["kind"])
+                mods.append(m)
+                reps.append(rep)
+        except ImportError:
+            raise ValueError("OWL 을 읽는 모듈(rdflib)이 서버에 없어 가져오지 못했습니다. 정의 초안(YAML · JSON)으로 가져오거나 "
+                             "서버에 rdf 추가 모듈을 설치해 주세요.") from None
+        except ModuleError as e:
+            raise ValueError(f"정의가 서로 맞지 않아 가져오지 못했습니다. 파일 내용을 확인해 주세요. {e}") from None
+        except Exception as e:  # a row that is not shaped as the draft's others: said with what the reader met
+            raise ValueError(f"파일을 정의로 읽지 못했습니다. 파일 내용을 확인해 주세요. {type(e).__name__}: {e}"[:400]) from None
+        if not any(m.elements() or m.body.get("rule_cards") or m.terms for m in mods):
+            raise ValueError("파일에서 읽은 정의가 없어 만들지 못했습니다. 구역 이름(objects · entities · rules · parameters · terms)을 "
+                             "확인해 주세요.")
+        return lib, [m.name for m in mods], _import_report(reps)
+
+    def library_drop(self, lid: str) -> dict:
+        target = next((x for x in self.libraries if x["id"] == lid), None)
+        if target is None:
+            raise LookupError(f"라이브러리 {lid}")
+        if not target.get("made"):
+            raise ValueError("서버가 제공하는 라이브러리는 삭제할 수 없습니다. 이 화면에서 만든 라이브러리만 삭제합니다.")
+        if lid == self.library_id:
+            self.library_use(self.libraries[0]["id"])
+        self._library_held.pop(lid, None)
+        self.libraries.remove(target)
+        self.event("library", f"{target['label']} 삭제")
+        return {"ok": True}
+
+    def export_library(self) -> tuple[bytes, str]:
+        """The library on screen as a studio folder in a zip: the studio file and the file of each module it applies,
+        definitions only. Unpacked, it is served by itself or offered beside another (serve --library)."""
+        import io
+        import zipfile
+
+        import yaml
+
+        comp, o = self.studio.composition, self.studio.onto
+        if comp is None:
+            raise ValueError("이 라이브러리는 모듈로 구성되지 않아 내려받지 못했습니다. OWL 내보내기를 사용해 주세요.")
+        label = o.label or next(x["label"] for x in self.libraries if x["id"] == self.library_id)
+        folder = re.sub(r"[^A-Za-z0-9_.-]+", "-", o.name or "").strip("-") or "library"
+        spec = {"library": "library", "name": o.name or folder, **({"label": label} if label else {}),
+                "namespace": o.namespace, "modules": [m.name for m in comp.modules]}
+        dump = lambda d: yaml.safe_dump(d, allow_unicode=True, sort_keys=False)  # noqa: E731
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr(f"{folder}/studio.yaml", dump(spec))
+            for m in comp.modules:
+                z.writestr(f"{folder}/library/{m.name}/{m.version}.yaml", dump(m.to_dict()))
+        return buf.getvalue(), f"{folder}.zip"
 
     def pipeline_delete(self, pid: str) -> dict:
         if pid == "p1":

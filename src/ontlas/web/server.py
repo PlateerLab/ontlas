@@ -349,7 +349,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if not user.may(need):
                     return self._refuse(403, f"{user.name} 님의 권한으로는 이 작업을 할 수 없어 처리하지 못했습니다. "
                                              "권한이 있는 사람에게 요청해 주세요.")
-            if url.path == "/api/upload":  # the file itself is the body; its path rides in the query
+            if url.path in ("/api/upload", "/api/library/file"):  # the file itself is the body; its path rides in the query
                 n = int(self.headers.get("Content-Length") or 0)
                 if n > upload_max:
                     if n <= 4 * upload_max:  # a file a little over the limit gets an answer it can show; more is cut off
@@ -361,7 +361,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     self.close_connection = True
                     return self._json(400, {"error": f"파일 크기가 {upload_max >> 10:,}KB 한도를 초과해 업로드하지 못했습니다. 파일을 나누어 다시 업로드해 주세요."})
                 q = {k: v[0] for k, v in parse_qs(url.query).items()}
-                return self._api("POST", "upload", {"path": q.get("path", ""), "data": self.rfile.read(n)})
+                return self._api("POST", url.path[5:], {"path": q.get("path", ""), "data": self.rfile.read(n)})
             try:
                 body = self._body()
             except (ValueError, json.JSONDecodeError) as e:
@@ -507,6 +507,11 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "export/module":
                     return (200, s.export_module(a["name"]).encode("utf-8"), "application/yaml; charset=utf-8",
                             f"{a['name']}.yaml")
+                if route == "export/library":
+                    data, name = s.export_library()
+                    return 200, data, "application/zip", name
+                if route == "library/files":
+                    return s.library_files()
                 if route == "rules":
                     return s.rules_state()
                 if route == "semantic":
@@ -641,6 +646,15 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.use_samples()
             if route == "library":
                 return s.library_use(str(a.get("id", "")))
+            if route == "library/file":
+                return s.library_file(str(a["path"]), a["data"])
+            if route == "library/file/drop":
+                return s.library_file_drop(str(a.get("name", "")))
+            if route == "library/new":
+                return s.library_new(str(a.get("label", "")), str(a.get("start", "")), key=str(a.get("key", "")),
+                                     modules=a.get("modules") if isinstance(a.get("modules"), list) else None)
+            if route == "library/drop":
+                return s.library_drop(str(a.get("id", "")))
             if route == "pipeline":
                 if a.get("op") == "delete":
                     return s.pipeline_delete(str(a.get("id", "")))

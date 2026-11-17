@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.24.0
+
+- **A library is made on the page.** The libraries a visitor could open were the studio files the server was started
+  with (`--library`); a new one meant a folder written by hand or by `ontlas library import-definitions` and a restart.
+  The library screen now makes one three ways: from files (a definition draft's YAML or JSON files read as one draft, or
+  an OWL vocabulary in Turtle or RDF/XML as a module), on the modules of the library that is open (those chosen, with
+  what they require; its data source is not carried), or with nothing in it. The result says what it holds (Objects,
+  Entities, properties, relations, rule cards, named values, terms) and, for an import, what was adjusted and what had
+  no place in a module, counted by kind with each line to read. A made library lives with the session beside the ones
+  the deployment offers, up to three, and can be deleted; a team studio lets an admin make one.
+- **A library is taken out as a studio folder.** `내려받기` on the library that is open (`/api/export/library`) gives a
+  zip of the studio file and the file of every module it applies, definitions only. Unpacked, `ontlas serve
+  <folder>/studio.yaml` serves it, or `--library` offers it beside another; that is how a library made on the page is
+  kept and reached over `/v1`.
+- The module table counts a module's Objects, rule cards and named values as well, so a module that holds only rule
+  cards no longer shows as holding nothing.
+- The decision screen asked for the records of a decision that reads none (one decided on stated values alone), a
+  request the server refused each time the screen opened. It is no longer sent.
+
 ## 0.23.1
 
 - **A draft of several files keeps the vocabulary one of them names.** `import-definitions` read how names are written

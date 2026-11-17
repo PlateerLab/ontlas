@@ -39,6 +39,7 @@ NEEDS = {
     "manage/redo": "editor", "manage/revert": "editor", "lexicon/edit": "editor", "lexicon/import": "editor",
     "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
+    "library/file": "admin", "library/file/drop": "admin", "library/new": "admin", "library/drop": "admin",  # a library the whole team then works in
 }
 
 

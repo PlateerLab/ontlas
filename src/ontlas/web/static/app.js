@@ -468,6 +468,7 @@
     rec: { type: '', key: '', res: null, busy: false, err: '', act: '', role: '', seeAs: '', params: {}, fn: {}, tab: 'overview' },
     rl: { type: '', q: '', res: null, busy: false },
     chg: { sel: '', det: null, busy: false, item: '', text: '' },
+    lib: { open: false, start: 'files', label: '', key: '', files: null, mods: null, busy: false, up: false, res: null },  // a library being made on the page
     sim: { dec: '', key: '', vals: {}, res: null, busy: false, err: '' },
     gx: { nodes: {}, edges: [], links: {}, sel: '', route: [], routeEdges: [], err: '', busy: false, seed: { type: '', key: '' }, to: { type: '', key: '' }, pos: {},
       q: '', toq: '', fromq: '', from: null, found: null, hide: [], view: '', viewRole: '', log: [], info: {}, layout: 'layered', zoom: 1, open: [], views: null, color: {}, labelBy: {} },
@@ -716,7 +717,7 @@
   function sideSpace() {
     const st = S.st, src = st.source || {};
     const where = noSource() ? '원천 미연결' : `원천 ${BACKEND_KIND[(src.kind || '').toLowerCase()] || src.kind || src.name || ''}`;
-    const libs = (st.libraries || []).length > 1 ? `<select class="pipesel" data-top="lib" aria-label="라이브러리 선택" title="라이브러리">${st.libraries.map((x) => `<option value="${esc(x.id)}"${x.id === st.library_id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>` : '';
+    const libs = (st.libraries || []).length > 1 ? `<select class="pipesel" data-top="lib" aria-label="라이브러리 선택" title="라이브러리">${st.libraries.map((x) => `<option value="${esc(x.id)}"${x.id === st.library_id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}${canMakeLibrary() ? '<option value="+">새 라이브러리 만들기</option>' : ''}</select>` : '';
     const pipes = st.pipelines.length > 1 ? `<select class="pipesel" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select>` : '';
     return `<div class="sspace"><b title="${esc(st.title || '')}">${esc(st.title || '스페이스')}</b><span>모듈 ${count(st.modules_on)} · ${esc(where)}</span>${originChip(st.origin)}${libs}${pipes}</div>`;
   }
@@ -3338,16 +3339,58 @@
 
   // ---- library -------------------------------------------------------------------------------------------------
 
-  const counts = (c) => [['objects', 'Entity'], ['links', '관계'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
+  const counts = (c) => [['areas', 'Object'], ['objects', 'Entity'], ['links', '관계'], ['rule_cards', '규칙 카드'], ['parameters', '기준값'], ['decisions', '결정'], ['queries', '질의'], ['questions', '검증 질문'], ['gates', '통과 조건'], ['draft_rules', '구축 규칙'], ['terms', '용어'], ['messages', '메시지'], ['extends', '확장'], ['removes', '제거']]
     .filter(([k]) => c[k]).map(([k, l]) => `${l} ${c[k]}`).join(' · ') || '-';
+
+  const canMakeLibrary = () => !(S.me && S.me.team) || !!(S.me.user && (S.me.user.roles || []).includes('admin'));
+  const LIB_START = [['files', '파일에서 가져오기'], ['base', '열려 있는 라이브러리 기반'], ['empty', '빈 라이브러리']];
+  const LIB_MADE = [['areas', 'Object'], ['objects', 'Entity'], ['properties', '속성'], ['links', '관계'], ['cards', '규칙 카드'], ['parameters', '기준값'], ['terms', '용어'], ['decisions', '결정표'], ['modules', '모듈']];
+
+  // what the last library made here holds, and what its import adjusted or could not carry
+  function libraryMade() {
+    const r = S.lib.res;
+    if (!r) return '';
+    const made = LIB_MADE.filter(([k]) => r.made[k]).map(([k, w]) => `<span class="chip sm">${w} ${count(r.made[k])}</span>`).join('') || '<span class="muted">정의 없음</span>';
+    const part = (title, x) => (x && x.count ? `<details class="libnote"><summary>${title} ${count(x.count)}건 <span class="muted">${x.kinds.map((k) => `${esc(k.label)} ${count(k.count)}`).join(' · ')}</span></summary><div class="liblines mono">${x.lines.map((l) => `<div>${esc(l)}</div>`).join('')}${x.count > x.lines.length ? `<div class="muted">이하 ${count(x.count - x.lines.length)}건 생략</div>` : ''}</div></details>` : '');
+    const rep = r.report ? `<div class="muted" style="font-size:12.5px;margin-top:8px">가져온 항목 ${count(r.report.preserved)}건</div>${part('조정', r.report.adjusted)}${part('옮기지 못한 항목', r.report.unsupported)}` : '';
+    return `<div class="libmade"><div class="libmadeh"><b>${esc(r.label)}</b><span class="chip sm ok">생성 완료</span><button class="btn sm ghost" data-act="libresx" style="margin-left:auto">닫기</button></div><div class="chips">${made}</div>${rep}</div>`;
+  }
+
+  function libraryForm() {
+    const f = S.lib, st = S.st;
+    if (!f.open) return '';
+    const seg = `<div class="seg" role="group" aria-label="시작 방법">${LIB_START.map(([k, w]) => `<button class="${f.start === k ? 'on' : ''}" data-act="libstart" data-k="${k}" aria-pressed="${f.start === k}">${w}</button>`).join('')}</div>`;
+    let body = '';
+    if (f.start === 'files') {
+      const held = (f.files && f.files.files) || [];
+      const rows = held.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${x.kind === 'definitions' ? '정의 초안' : 'OWL'}</td><td class="muted" style="font-size:12.5px">${Object.entries(x.sections || {}).map(([k, n]) => `${esc(k)} ${count(n)}`).join(' · ') || '-'}</td><td style="text-align:right">${fileSize(x.size)}</td><td style="text-align:right"><button class="btn sm ghost" data-act="libfiledrop" data-name="${esc(x.name)}">빼기</button></td></tr>`).join('');
+      body = `${held.length ? `<div class="scroll" style="margin-bottom:8px"><table class="tight"><tr><th>파일</th><th>형식</th><th>구역별 행 수</th><th style="text-align:right">크기</th><th></th></tr>${rows}</table></div>` : ''}
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" data-act="libpick"${f.up ? ' disabled' : ''}>${f.up ? '<span class="spin"></span>읽는 중' : '파일 추가'}</button><input type="file" id="libfileinput" multiple hidden accept=".yaml,.yml,.json,.ttl,.owl,.rdf">
+          <span class="muted" style="font-size:12px">정의 초안 YAML · JSON(구역: objects · entities · relations · rules · parameters · terms), OWL .ttl · .owl · .rdf. 정의 초안은 여러 파일을 하나로 읽습니다. 최대 ${count((f.files && f.files.files_max) || 8)}개</span></div>`;
+    } else if (f.start === 'base') {
+      const on = f.mods || new Set(st.library.filter((r) => r.on).map((r) => r.name));
+      body = st.library.length ? `<div class="libmods">${st.library.map((r) => `<label class="libmod"><input type="checkbox" data-in="libmod" data-mod="${esc(r.name)}"${on.has(r.name) ? ' checked' : ''}><span><b>${esc(r.label || r.name)}</b> <span class="muted mono">${esc(r.version)}</span></span><span class="kind"><i style="background:${esc(r.color)}"></i>${esc(r.kind_label)}</span></label>`).join('')}</div>
+        <div class="muted" style="font-size:12px;margin-top:6px">기반 · ${esc(st.title || '')}. 선택한 모듈이 의존하는 모듈은 함께 적용됩니다. 원천 연결은 가져오지 않습니다</div>`
+        : '<div class="muted">열려 있는 라이브러리에 모듈이 없습니다. 다른 시작 방법을 선택해 주세요.</div>';
+    } else {
+      body = '<div class="muted" style="font-size:12.5px">정의 없이 시작합니다. Object · Entity · 규칙은 생성 후 각 화면에서 추가합니다</div>';
+    }
+    const left = f.files ? f.files.made_max - f.files.made : null;
+    return `<div class="libnew" id="libnew">${seg}
+      <div class="libnewrow"><div class="field"><label for="libnl">이름</label><input type="text" id="libnl" data-in="libnl" value="${esc(f.label)}" maxlength="60" placeholder="이커머스 표준"></div>
+        <div class="field"><label for="libnk">키 <span class="muted" style="font-weight:500">모듈 이름 · 네임스페이스. 미입력 시 자동 지정</span></label><input type="text" id="libnk" data-in="libnk" value="${esc(f.key)}" maxlength="40" placeholder="commerce-standard"></div></div>
+      ${body}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px"><button class="btn primary" data-act="libmake"${f.busy ? ' disabled' : ''}>${f.busy ? '<span class="spin"></span>만드는 중' : '만들기'}</button><button class="btn ghost" data-act="libnewx">닫기</button>
+        <span class="muted" style="font-size:12px">생성한 라이브러리는 현재 세션에 유지됩니다${left === null ? '' : ` · 생성 가능 ${count(Math.max(left, 0))}개`}. 계속 사용하려면 [내려받기] 후 서버에 등록합니다</span></div></div>`;
+  }
 
   function librariesCard() {
     const libs = S.st.libraries || [];
-    if (libs.length < 2) return '';
-    const row = (x) => `<tr class="${x.id === S.st.library_id ? 'sel' : ''}"><td><b>${esc(x.label)}</b></td><td style="text-align:right">${count(x.modules)}</td><td>${esc(x.source ? (BACKEND_KIND[x.source] || x.source) : '원천 미연결')}</td>
-      <td style="text-align:right">${x.id === S.st.library_id ? '<span class="chip sm ok">사용 중</span>' : `<button class="btn sm" data-act="libuse" data-id="${esc(x.id)}">열기</button>`}</td></tr>`;
-    return `<div class="card" style="margin-bottom:14px"><div class="ch">라이브러리 <span class="chip sm">${libs.length}</span><div class="right"><span class="muted" style="font-size:12px">라이브러리마다 정의, 데이터, 적용 내역을 따로 유지합니다</span></div></div>
-      <div class="cb scroll" style="padding:0"><table class="tight"><tr><th>라이브러리</th><th style="text-align:right">모듈</th><th>원천</th><th></th></tr>${libs.map(row).join('')}</table></div></div>`;
+    const row = (x) => `<tr class="${x.id === S.st.library_id ? 'sel' : ''}"><td><b>${esc(x.label)}</b>${x.made ? ' <span class="chip sm">세션 생성</span>' : ''}</td><td style="text-align:right">${count(x.modules)}</td><td>${esc(x.source ? (BACKEND_KIND[x.source] || x.source) : '원천 미연결')}</td>
+      <td style="text-align:right;white-space:nowrap">${x.id === S.st.library_id ? '<span class="chip sm ok">사용 중</span> <a class="btn sm ghost" href="/api/export/library" download title="스튜디오 파일과 적용 모듈 파일(zip)">내려받기</a>' : `<button class="btn sm" data-act="libuse" data-id="${esc(x.id)}">열기</button>`}${x.made && canMakeLibrary() ? ` <button class="btn sm ghost" data-act="libdrop" data-id="${esc(x.id)}">삭제</button>` : ''}</td></tr>`;
+    return `<div class="card" style="margin-bottom:14px"><div class="ch">라이브러리 <span class="chip sm">${libs.length}</span><div class="right"><span class="muted hide-sm" style="font-size:12px">라이브러리마다 정의, 데이터, 적용 내역을 따로 유지합니다</span>${canMakeLibrary() && !S.lib.open ? '<button class="btn sm" data-act="libnew">새 라이브러리</button>' : ''}</div></div>
+      <div class="cb scroll" style="padding:0"><table class="tight"><tr><th>라이브러리</th><th style="text-align:right">모듈</th><th>원천</th><th></th></tr>${libs.map(row).join('')}</table></div>
+      ${S.lib.res || S.lib.open ? `<div class="cb" style="border-top:1px solid var(--line)">${libraryMade()}${libraryForm()}</div>` : ''}</div>`;
   }
 
   function viewLibrary() {
@@ -4863,7 +4906,7 @@ ${librariesCard()}<div class="tabs">${tabs.join('')}</div>${policyCard()}${edito
     const dec = st.decisions.find((x) => x.name === d.name);
     d.busy = true;
     try {
-      const keys = await keysFor(dec.target);
+      const keys = dec.target ? await keysFor(dec.target) : [];  // a decision on stated values alone reads no record
       if (!keys.some((k) => k.key === d.key)) d.key = keys.length ? keys[0].key : null;
     } catch (e) { d.busy = false; d.res = { error: e.message }; if (S.tab === 'decide') render(); return; }
     await decide();
@@ -7868,6 +7911,66 @@ ${controls}${body}`;
     } catch (e) { fail(e); }
   }
 
+  // ---- a library made on the page ----
+  async function libraryNewOpen() {
+    Object.assign(S.lib, { open: true, mods: null });
+    if (S.tab !== 'library') location.hash = '#library'; else render();
+    try { S.lib.files = await api('library/files'); } catch (e) { fail(e); }
+    if (S.tab === 'library') { render(); const box = $('#libnew'); if (box) box.scrollIntoView({ block: 'nearest' }); }
+  }
+
+  async function libraryFilesAdd(files) {  // each file is the body of its own request, read on the server
+    const f = S.lib;
+    if (!files.length || f.up) return;
+    f.up = true; render();
+    let added = 0;
+    for (const file of files) {
+      try {
+        const r = await fetch('/api/library/file?path=' + encodeURIComponent(file.name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Ontlas-Request': '1' }, body: file });
+        let j = {};
+        try { j = await r.json(); } catch (_) { /* empty body */ }
+        if (!r.ok) throw new Error(j.error || `서버 오류로 파일을 읽지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`);
+        f.files = j; added += 1;
+      } catch (e) { fail(e); }
+    }
+    f.up = false; render();
+    if (added) toast(`파일 ${count(added)}개를 추가했습니다.`);
+  }
+
+  async function libraryMake() {
+    const f = S.lib;
+    if (f.busy) return;
+    if (!f.label.trim()) { toast('이름이 없어 만들지 못했습니다. 이름을 입력해 주세요.', true); const el = $('#libnl'); if (el) el.focus(); return; }
+    if (f.start === 'files' && !((f.files && f.files.files) || []).length) { toast('파일이 없어 만들지 못했습니다. 정의 초안 또는 OWL 파일을 추가해 주세요.', true); return; }
+    const body = { label: f.label, key: f.key, start: f.start };
+    if (f.start === 'base') body.modules = [...(f.mods || new Set(S.st.library.filter((r) => r.on).map((r) => r.name)))];
+    f.busy = true; render();
+    try {
+      const res = await api('library/new', body);
+      Object.assign(f, { open: false, label: '', key: '', files: null, mods: null, res });
+      clearViews();
+      Object.assign(S.home, { box: null, ov: null });
+      S.mg.st = null; S.ver = null; S.lx.st = null; S.sem.st = null;
+      await load();
+      toast(`${res.label} 라이브러리를 만들었습니다.`);
+    } catch (e) { fail(e); }
+    f.busy = false; render();
+  }
+
+  async function libraryDrop(id) {
+    const x = (S.st.libraries || []).find((y) => y.id === id);
+    if (!x || !window.confirm(`${x.label} 라이브러리를 삭제합니다. 삭제하면 복구할 수 없습니다. 삭제할까요?`)) return;
+    const here = id === S.st.library_id;
+    try {
+      await api('library/drop', { id });
+      if (S.lib.res && S.lib.res.id === id) S.lib.res = null;
+      if (here) { clearViews(); Object.assign(S.home, { box: null, ov: null }); S.mg.st = null; S.ver = null; S.lx.st = null; S.sem.st = null; }
+      await load();
+      if (S.lib.open) { try { S.lib.files = await api('library/files'); } catch (_) { /* the form says nothing of the count then */ } render(); }
+      toast(`${x.label} 라이브러리를 삭제했습니다.`);
+    } catch (e) { fail(e); }
+  }
+
   async function pipelineCall(body) {
     try {
       await api('pipeline', body);
@@ -7997,6 +8100,14 @@ ${controls}${body}`;
     navopen: () => { $('#app').classList.add('navopen'); },  // a narrow window: the sidebar opens over the page
     navclose: () => { $('#app').classList.remove('navopen'); },
     libuse: (t) => libraryUse(t.dataset.id),
+    libnew: () => libraryNewOpen(),
+    libnewx: () => { S.lib.open = false; render(); },
+    libresx: () => { S.lib.res = null; render(); },
+    libstart: (t) => { S.lib.start = t.dataset.k; render(); },
+    libpick: () => { if (!S.lib.up) $('#libfileinput').click(); },
+    libfiledrop: async (t) => { try { S.lib.files = await api('library/file/drop', { name: t.dataset.name }); render(); } catch (e) { fail(e); } },
+    libmake: () => libraryMake(),
+    libdrop: (t) => libraryDrop(t.dataset.id),
     semlayer: (t) => { S.sem.layer = S.sem.layer === t.dataset.k ? 'all' : t.dataset.k; render(); },
     sempick: (t) => { S.sem.sel = t.dataset.ref; render(); },
     lxpick: (t) => { S.lx.sel = t.dataset.id; S.lx.form = null; S.lx.imp = null; render(); },
@@ -9045,6 +9156,8 @@ ${controls}${body}`;
       else if (t.type === 'text') S.dr.rules[t.dataset.k] = t.value.split(',').map((x) => x.trim()).filter(Boolean);
     },
     mtext: (t) => { S.ed.text = t.value; },
+    libnl: (t) => { S.lib.label = t.value; },
+    libnk: (t) => { S.lib.key = t.value; },
     ptext: (t) => {
       const was = !S.pol.text.trim();
       S.pol.text = t.value;
@@ -9300,7 +9413,7 @@ ${controls}${body}`;
     $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
     $('#side').addEventListener('change', (ev) => {
       if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value });
-      if (ev.target.dataset.top === 'lib') libraryUse(ev.target.value);
+      if (ev.target.dataset.top === 'lib') { if (ev.target.value === '+') { ev.target.value = S.st.library_id; libraryNewOpen(); } else libraryUse(ev.target.value); }
     });
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('dragstart', (ev) => {
@@ -9329,6 +9442,12 @@ ${controls}${body}`;
     main.addEventListener('toggle', (ev) => { if (ev.target.dataset && ev.target.dataset.more && S.mg.form) S.mg.form.more = ev.target.open; }, true);  // 고급 stays as left
     main.addEventListener('change', (ev) => {
       if (ev.target.id === 'fileinput') uploadAll([...ev.target.files].map((f) => [f, f.name]));
+      if (ev.target.id === 'libfileinput') libraryFilesAdd([...ev.target.files]);
+      if (ev.target.dataset && ev.target.dataset.in === 'libmod') {
+        const on = S.lib.mods || new Set(S.st.library.filter((r) => r.on).map((r) => r.name));
+        if (ev.target.checked) on.add(ev.target.dataset.mod); else on.delete(ev.target.dataset.mod);
+        S.lib.mods = on;
+      }
       if (ev.target.id === 'dirinput') uploadAll([...ev.target.files].map((f) => [f, f.webkitRelativePath || f.name]));
     });
     main.addEventListener('dragstart', (ev) => { const r = ev.target.closest && ev.target.closest('[data-drag-rule]'); if (r) { S.mg.drag = r.dataset.dragRule; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', S.mg.drag); r.classList.add('dragging'); } });

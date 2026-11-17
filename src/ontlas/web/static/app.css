@@ -1176,6 +1176,19 @@ button.nhead .ui { width:13px; height:13px; transition:transform .15s ease; }
 tr:hover .libacts, tr:focus-within .libacts, tr.sel .libacts { opacity:1; }
 @media (hover: none) { .libacts { opacity:1; position:static; padding:0; background:none; } }
 @media (prefers-reduced-motion: reduce) { .libacts { transition:none; } }
+/* a library being made: how it starts, its name, then what that start asks for; below it, what the last one made holds */
+.libnew .seg { max-width:560px; margin-bottom:12px; }
+.libnewrow { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; max-width:720px; }
+.libmods { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:6px; max-height:220px; overflow:auto; }
+.libmod { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:12.5px; cursor:pointer; }
+.libmod > span:nth-of-type(1) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.libmade { margin-bottom:12px; }
+.libmade:last-child { margin-bottom:0; }
+.libmadeh { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.libnote { margin-top:6px; font-size:12.5px; }
+.libnote > summary { cursor:pointer; font-weight:700; }
+.liblines { max-height:200px; overflow:auto; margin-top:6px; padding:8px 10px; background:var(--panel); border-radius:8px; font-size:11.5px; line-height:1.6; }
+@media (max-width: 700px) { .libnewrow { grid-template-columns:minmax(0,1fr); } .libnew .seg { flex-wrap:wrap; } }
 #main[data-sec="use"] .cn { display:none; }  /* an element's code name, beside its name for people */
 .qdetail { display:flex; flex-direction:column; gap:2px; margin-top:4px; font-size:12px; color:#475467; }
 .qdetail i { font-style:normal; font-weight:700; color:#98a2b3; margin-right:6px; }
