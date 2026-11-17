@@ -170,16 +170,16 @@ def ontology_new(s, a, who) -> dict:
     ontology applies), files (the definition files held) or empty. `base` names the ontology the modules come from."""
     start = str(a.get("start") or "")
     if start not in ("pack", "base", "files", "empty"):
-        raise ValueError("시작 방법을 선택하지 않아 만들지 못했습니다. 시작 방법을 선택해 주세요.")
+        raise ValueError("시작 방법을 선택하지 않아 생성하지 못했습니다. 시작 방법을 선택해 주세요.")
     came = s.library_id
     base = None
     if start in ("pack", "base"):
         base = next((x for x in s.libraries if x["id"] == str(a.get("base") or came)), None)
         if base is None:
-            raise ValueError("기반 온톨로지를 찾지 못해 만들지 못했습니다. 기반 온톨로지를 다시 선택해 주세요.")
+            raise ValueError("기반 온톨로지를 찾지 못해 생성하지 못했습니다. 기반 온톨로지를 다시 선택해 주세요.")
         modules = [str(m) for m in (a.get("modules") or [])] if start == "pack" else []
         if start == "pack" and not modules:
-            raise ValueError("적용할 모듈이 없어 만들지 못했습니다. 도메인 팩 모듈을 하나 이상 선택해 주세요.")
+            raise ValueError("적용할 모듈이 없어 생성하지 못했습니다. 도메인 팩 모듈을 하나 이상 선택해 주세요.")
         if base["id"] != came:
             s.library_use(base["id"])
     try:
@@ -247,19 +247,19 @@ def password(s, a, who) -> dict:
 
     logins = routes.SERVER.get("logins")
     if who is None or logins is None or logins.users.path is None:
-        raise ValueError("이 서버에서는 비밀번호를 바꿀 수 없습니다. 시스템 관리자에게 요청해 주세요.")
+        raise ValueError("비밀번호를 변경할 수 없는 계정이어서 변경하지 못했습니다. 시스템 관리자에게 재설정을 요청해 주세요.")
     now = time.time()
     tries = [t for t in _wrong.get(who.id, []) if now - t < 60]
     if len(tries) >= WRONG_PER_MINUTE:
-        raise ValueError("지금 비밀번호를 여러 번 틀려 잠시 바꿀 수 없습니다. 1분 뒤 다시 시도해 주세요.")
+        raise ValueError("현재 비밀번호 입력 오류가 반복되어 변경하지 못했습니다. 1분 후 다시 시도해 주세요.")
     current, new = str(a.get("current") or ""), str(a.get("new") or "")
     if logins.users.verify(who.id, current) is None:
         _wrong[who.id] = [*tries, now]
-        raise ValueError("지금 비밀번호가 맞지 않아 바꾸지 못했습니다. 다시 입력해 주세요.")
+        raise ValueError("현재 비밀번호가 맞지 않아 변경하지 못했습니다. 다시 입력해 주세요.")
     if len(new) < PASSWORD_MIN:
-        raise ValueError(f"새 비밀번호가 {PASSWORD_MIN}자보다 짧아 바꾸지 못했습니다. {PASSWORD_MIN}자 이상으로 입력해 주세요.")
+        raise ValueError(f"새 비밀번호가 {PASSWORD_MIN}자보다 짧아 변경하지 못했습니다. {PASSWORD_MIN}자 이상으로 입력해 주세요.")
     if new == current:
-        raise ValueError("새 비밀번호가 지금 비밀번호와 같아 바꾸지 못했습니다. 다른 비밀번호를 입력해 주세요.")
+        raise ValueError("새 비밀번호가 현재 비밀번호와 같아 변경하지 못했습니다. 다른 비밀번호를 입력해 주세요.")
     logins.users.add(who.id, new, name=who.name, roles=list(who.roles))
     _wrong.pop(who.id, None)
     with logins.lock:

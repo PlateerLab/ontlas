@@ -83,7 +83,7 @@ def drafts_view(s) -> dict:
     for r in waiting:
         if r["verification"]:
             tally["verification"][r["verification"]] = tally["verification"].get(r["verification"], 0) + 1
-        for a in r["areas"] or ["그 밖"]:
+        for a in r["areas"] or ["기타"]:
             tally["area"][a] = tally["area"].get(a, 0) + 1
         if r["module_label"]:
             tally["module"][r["module_label"]] = tally["module"].get(r["module_label"], 0) + 1
@@ -116,9 +116,9 @@ def _refused(e: Exception) -> str:
 
     msg = str(e)
     if "is AXIOM; it is settled by legal review" in msg:
-        return "AXIOM 규칙은 법무 검토로만 확정합니다. 이 화면에서는 승인하거나 거절하지 않습니다."
+        return "AXIOM 후보여서 승인하거나 거절하지 못했습니다. 법무 검토로 확정해 주세요."
     if msg.startswith("a review of a rule card"):
-        return "승인 또는 거절만 할 수 있습니다."
+        return "지원하지 않는 검토 결과여서 처리하지 못했습니다. 승인 또는 거절을 선택해 주세요."
     return _edit_text(msg)
 
 
@@ -129,9 +129,9 @@ def decide(s, a, who) -> dict:
 
     ref, verdict = str(a.get("ref") or ""), str(a.get("verdict") or "")
     if verdict not in ("approve", "reject"):
-        raise ValueError("승인 또는 거절만 할 수 있습니다.")
+        raise ValueError("지원하지 않는 검토 결과여서 처리하지 못했습니다. 승인 또는 거절을 선택해 주세요.")
     if s.studio.composition is None:
-        raise ValueError("모듈로 구성된 온톨로지가 아니어서 규칙 초안을 검토하지 못했습니다.")
+        raise ValueError("모듈로 구성된 온톨로지가 아니어서 규칙 초안을 검토하지 못했습니다. 모듈 라이브러리에서 모듈을 구성해 주세요.")
     fields = a.get("fields") if isinstance(a.get("fields"), dict) else {}
     kind, _, name = ref.partition(":")
     try:
@@ -143,7 +143,7 @@ def decide(s, a, who) -> dict:
             d = next((x for x in s.manage_state()["decisions"] if x["name"] == table), None)
             r = next((x for x in (d or {}).get("rules", []) if x["id"] == rid), None)
             if r is None:
-                raise ValueError("규칙을 찾지 못했습니다. 화면을 새로고침해 주세요.")
+                raise ValueError("규칙을 찾을 수 없어 처리하지 못했습니다. 화면을 새로고침해 주세요.")
             if verdict == "reject":
                 s._ws().apply("delete_rule", {"decision": table, "id": rid})
             else:
@@ -151,7 +151,7 @@ def decide(s, a, who) -> dict:
                                               "cite": str(fields.get("source") or r.get("cite") or ""),
                                               "owner": str(fields.get("owner") or r.get("owner") or ""), "status": "approved"})
         else:
-            raise ValueError("규칙을 찾지 못했습니다. 화면을 새로고침해 주세요.")
+            raise ValueError("규칙을 찾을 수 없어 처리하지 못했습니다. 화면을 새로고침해 주세요.")
     except EditError as e:
         raise ValueError(_refused(e)) from None
     return {"ok": True, **drafts_view(s)}

@@ -42,36 +42,36 @@
   const isOntoAdmin = () => hasRole();
   const canEdit = () => hasRole('editor', 'approver');
   const canApprove = () => hasRole('approver');
-  const WORK_ROLE = { admin: '관리자', approver: '영역 담당', editor: '편집', viewer: '조회' };
+  const WORK_ROLE = { admin: '관리자', approver: '승인자', editor: '편집자', viewer: '조회자' };
   const workRole = () => { const rs = inTeam() && S.me.user ? S.me.user.roles || [] : ['admin']; return WORK_ROLE[['admin', 'approver', 'editor', 'viewer'].find((r) => rs.includes(r)) || 'viewer']; };
 
   // a screen that is not one of the older tabs says what it is: area (work, admin, bare, auth), its words, how it is drawn
   const V2 = {};
   const screen = (key, def) => { V2[key] = def; };
 
-  const PARTS = [['sem', '시멘틱 매니저', 'scale'], ['ont', '온톨로지 매니저', 'nodes'], ['bnd', '데이터 바인더', 'plug'], ['qa', '품질 관리', 'check'], ['ops', '운영', 'pulse']];
+  const PARTS = [['sem', 'Semantic Layer', 'scale'], ['ont', 'Ontology', 'nodes'], ['bnd', 'Data Binding', 'plug'], ['qa', 'Quality', 'check'], ['ops', 'Operations', 'pulse']];
   // the menu's screens: the tab its link opens, its part, its word, and every tab that is this screen
   const MENU = [
     ['semrules', 'sem', '규칙', ['semrules', 'mgrules', 'rules', 'mgfuncs']],
     ['ruleagent', 'sem', '규칙 초안', ['ruleagent']],
-    ['objmgr', 'ont', '오브젝트 관리', ['objmgr']],
-    ['objects', 'ont', '엔티티 관리', ['objects', 'states']],
+    ['objmgr', 'ont', 'Object', ['objmgr']],
+    ['objects', 'ont', 'Entity', ['objects', 'states']],
     ['model', 'ont', '그래프 탐색', ['model', 'onto']],
-    ['lexicon', 'ont', '용어사전', ['lexicon']],
+    ['lexicon', 'ont', '용어 사전', ['lexicon']],
     ['concepts', 'ont', '개념 초안', ['concepts', 'data', 'convert']],
-    ['library', 'ont', '온톨로지', ['library']],
+    ['library', 'ont', '모듈 라이브러리', ['library']],
     ['changes', 'ont', '변경 요청 · 버전', ['changes', 'versions']],
-    ['db', 'bnd', '데이터 소스 연결', ['db']],
-    ['sources', 'bnd', '데이터 매핑', ['sources']],
-    ['bind', 'bnd', 'Entity 바인딩', ['bind', 'records', 'record', 'graph']],
-    ['query', 'bnd', '쿼리', ['query']],
-    ['actions', 'bnd', '액션', ['actions', 'decide']],
-    ['check', 'qa', '검증질문 관리', ['check']],
+    ['db', 'bnd', '데이터 소스', ['db']],
+    ['sources', 'bnd', 'Mapping', ['sources']],
+    ['bind', 'bnd', 'Entity Binding', ['bind', 'records', 'record', 'graph']],
+    ['query', 'bnd', '질의', ['query']],
+    ['actions', 'bnd', 'Action', ['actions', 'decide']],
+    ['check', 'qa', '검증 질문', ['check']],
     ['flow', 'qa', '검증', ['flow']],
     ['adapters', 'ops', '저장소 · 엔진', ['adapters', 'vectors']],
     ['connect', 'ops', '연동 · API', ['connect']],
     ['roles', 'ops', '접근 정책', ['roles']],
-    ['monitor', 'ops', '파이프라인 모니터링', ['monitor']],
+    ['monitor', 'ops', '파이프라인 관제', ['monitor']],
     ['evidence', 'ops', '근거 지도', ['evidence', 'docs', 'explorer', 'map']],
   ];
   const ADMIN = [
@@ -89,7 +89,7 @@
   const areaOf = (tab) => (V2[tab] && V2[tab].area) || (ADMIN_KEYS.includes(tab) ? 'admin' : 'work');
   const firstAdmin = (group) => { const g = ADMIN.find((x) => x[0] === group); const hit = g && g[2].find((x) => V2[x[0]]); return hit ? hit[0] : ''; };
 
-  // where the person is, as the bar on top says it: 시멘틱 매니저 › 규칙 › 규칙 추가 · 편집
+  // where the person is, as the bar on top says it: Semantic Layer › 규칙 › 규칙 추가 · 편집
   function crumbs() {
     const tab = curTab(), v = V2[S.tab];
     if (v && v.crumb) return (typeof v.crumb === 'function' ? v.crumb() : v.crumb);
@@ -130,19 +130,19 @@
     const cur = libs.find((x) => x.id === st.library_id);
     const dom = (st.layers.find((l) => l.kind === 'domain') || st.layers[0] || { modules: [] }).modules[0];
     const name = area === 'admin' ? '관리' : area === 'bare' ? '온톨로지 전환' : (cur ? cur.label : st.title || '온톨로지');
-    const sub = area === 'admin' ? '누르면 온톨로지로 전환' : area === 'bare' ? `최근 사용 · ${cur ? cur.label : st.title || ''}`
-      : `${dom ? `v${dom.version} · ` : ''}온톨로지 ${Math.max(libs.length, 1)}개 중`;
+    const sub = area === 'admin' ? '온톨로지 작업으로 전환' : area === 'bare' ? `최근 사용 · ${cur ? cur.label : st.title || ''}`
+      : `${dom ? `v${dom.version} · ` : ''}온톨로지 ${Math.max(libs.length, 1)}개`;
     const role = workRole();
     const row = (x) => { const on = area === 'work' && x.id === st.library_id;
       return `<button class="k-opt${on ? ' on' : ''}" data-act="swlib" data-id="${esc(x.id)}"><span>${esc(x.label)}</span><span class="k-chip w">${esc(role)}</span>${on ? ki('check', 16, 1.75) : ''}</button>`; };
     const rows = libs.length ? libs.map(row).join('') : `<button class="k-opt${area === 'work' ? ' on' : ''}" data-act="swlib" data-id=""><span>${esc(st.title || '온톨로지')}</span><span class="k-chip w">${esc(role)}</span></button>`;
-    const all = V2.ontologies ? `<a class="k-opt${S.tab === 'ontologies' ? ' on' : ''}" href="#ontologies">${ki('layers')}<span>모든 온톨로지 보기</span></a>` : '';
+    const all = V2.ontologies ? `<a class="k-opt${S.tab === 'ontologies' ? ' on' : ''}" href="#ontologies">${ki('layers')}<span>전체 온톨로지</span></a>` : '';
     const make = V2['ontology-new'] && canMakeLibrary() ? `<a class="k-opt${S.tab === 'ontology-new' ? ' on' : ''}" href="#ontology-new">${ki('plus')}<span>온톨로지 만들기</span></a>` : '';
     const onto = isOntoAdmin() && firstAdmin('onto'), sys = isSysAdmin() && firstAdmin('sys');
     const inOnto = area === 'admin' && ADMIN[0][2].some((x) => x[0] === S.tab), inSys = area === 'admin' && !inOnto;
     const admin = onto || sys ? `<p class="k-optg sep">관리</p>${onto ? `<a class="k-opt${inOnto ? ' on' : ''}" href="#${onto}">${ki('sliders')}<span>이 온톨로지 관리</span></a>` : ''}${sys ? `<a class="k-opt${inSys ? ' on' : ''}" href="#${V2['sys-users'] ? 'sys-users' : sys}">${ki('shield')}<span>시스템 관리</span></a>` : ''}` : '';
     return `<details class="k-switch"${area === 'bare' ? ' style="flex:0 1 288px;min-width:240px"' : ''}><summary aria-label="온톨로지 전환">${ki(area === 'admin' ? 'sliders' : 'layers', 18)}<span><b>${esc(name)}</b><small>${esc(sub)}</small></span>${ki('chevD', 16, 1.75)}</summary>
-      <div class="k-pop"><p class="k-optg">내가 참여한 온톨로지</p>${rows}${all}${make}${admin}</div></details>`;
+      <div class="k-pop"><p class="k-optg">참여 온톨로지</p>${rows}${all}${make}${admin}</div></details>`;
   }
 
   // how far the definition has come, L0 to L3, from the Entities' levels; with no source the last two wait for one
@@ -154,7 +154,7 @@
     const low = Math.min(...ls), at = Math.min(low + 1, 3);
     const share = (l) => Math.round((ls.filter((x) => x >= l).length / ls.length) * 100);
     const bar = (l) => (l <= low ? '<i class="done"></i>' : `<i${share(l) ? ` style="background:linear-gradient(90deg,#171717 ${share(l)}%,#E6E6E8 ${share(l)}%)"` : ''}></i>`);
-    const say = noSource() ? '데이터 미연결 · 정의 · 규칙 조회와 판정은 연결 없이 동작' : 'L2 · L3은 데이터 매핑과 바인딩 검사 결과로 측정';
+    const say = noSource() ? '데이터 소스 미연결' : '데이터 소스 연결됨';
     return `<a class="k-foot" href="#objmgr" title="Object별 성숙도"><div><span>성숙도</span><span>${low >= 3 ? 'L3 완료' : `L${at} 진행 중`}</span></div>
       <div class="k-lv" role="img" aria-label="성숙도 L${low} 완료">${[0, 1, 2, 3].map(bar).join('')}${[0, 1, 2, 3].map((l) => `<span${l === at && low < 3 ? ' class="now"' : ''}>L${l}</span>`).join('')}</div><p>${esc(say)}</p></a>`;
   }
@@ -184,7 +184,7 @@
     const onto = isOntoAdmin() && firstAdmin('onto') ? `<div class="k-navg"><p class="k-navh"><b>온톨로지 관리</b></p>${target}${ADMIN[0][2].map(link).join('')}</div>` : '';
     const sys = isSysAdmin() && firstAdmin('sys') ? `<div class="k-navg${onto ? ' sep' : ''}"><p class="k-navh"><b>시스템 관리</b></p>${ADMIN[1][2].map(link).join('')}</div>` : '';
     const ver = S.me && S.me.version ? `<div class="k-foot tight"><div><span>설치 버전</span><span class="k-m12 k-ink">${esc(S.me.version)}</span></div></div>` : '';
-    return `<div class="k-navs">${onto}${sys}</div><p class="k-sidenote">온톨로지 작업으로 돌아가려면 위에서 온톨로지를 고릅니다.</p>${ver}`;
+    return `<div class="k-navs">${onto}${sys}</div>${ver}`;
   }
 
   function renderSide() {
@@ -219,7 +219,7 @@
   // the head: the screen's name, one or two sentences on what is done here, and what can be started from it
   const kHead = (title, lead, actions = '', meta = '') => `<section class="k-ph"><div><h1>${esc(title)}${meta ? `<small>${esc(meta)}</small>` : ''}</h1>${lead ? `<p class="k-lead">${esc(lead)}</p>` : ''}</div>${actions ? `<div class="k-pha">${actions}</div>` : ''}</section>`;
   // the screens this one leads to, at the foot: [[hash, word], ...]
-  const kNext = (links) => `<nav class="k-next" aria-label="이어지는 화면"><span>이어지는 화면</span>${links.filter((x) => known(x[0].split('?')[0])).map(([h, w]) => `<a class="k-lnk" href="#${h}">${esc(w)}${ki('chevR', 14, 1.75)}</a>`).join('')}</nav>`;
+  const kNext = (links) => `<nav class="k-next" aria-label="관련 화면"><span>관련 화면</span>${links.filter((x) => known(x[0].split('?')[0])).map(([h, w]) => `<a class="k-lnk" href="#${h}">${esc(w)}${ki('chevR', 14, 1.75)}</a>`).join('')}</nav>`;
   const kChip = (word, tone = '') => `<span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span>`;
   const kLayer = (layer) => `<span class="k-layer ${esc(String(layer).toLowerCase())}"><i aria-hidden="true"></i>${esc(LAYER_WORD[String(layer).toLowerCase()] || layer)}</span>`;
   // a card: its title with what sits at the right of it, then its body as given
@@ -227,18 +227,18 @@
   const kKv = (k, v) => `<div class="k-kv"><span>${esc(k)}</span><span>${v}</span></div>`;
   // the row that names what is chosen in a list, with what can be done to it at the right
   const kBar = (label, code, name, actions) => `<div class="k-bar" role="toolbar" aria-label="${esc(label)}"><span class="k-s">${esc(label)}</span>${code ? `<span class="k-code k-ink">${esc(code)}</span>` : ''}<span class="k-14">${esc(name)}</span><span class="k-push">${actions}</span></div>`;
-  const kEmpty = (title, say, actions = '') => `<section class="k-empty"><h2>${esc(title)}</h2><p>${esc(say)}</p>${actions ? `<div class="k-h">${actions}</div>` : ''}</section>`;
+  const kEmpty = (title, say = '', actions = '') => `<section class="k-empty"><h2>${esc(title)}</h2>${say ? `<p>${esc(say)}</p>` : ''}${actions ? `<div class="k-h">${actions}</div>` : ''}</section>`;
 
   // sign-in: no menu and no bar, the form in the middle
   function renderLogin() {
     $('#app').classList.add('auth');
     $('#top').innerHTML = '';
     $('#side').innerHTML = '';
-    $('#main').innerHTML = (V2.login ? V2.login.view() : `<div class="k-auth">${brand('#')}<main><section class="k-card"><div><h1 class="k-h1">로그인</h1><p class="k-p s" style="margin-top:4px">계정으로 로그인합니다</p></div>
+    $('#main').innerHTML = (V2.login ? V2.login.view() : `<div class="k-auth">${brand('#')}<main><section class="k-card"><div><h1 class="k-h1">로그인</h1></div>
       <label class="k-f">아이디<input type="text" id="luser" autocomplete="username"></label>
       <label class="k-f">비밀번호<input type="password" id="lpw" autocomplete="current-password"></label>
       <button class="k-btn pri wide" data-act="login">로그인</button>
-      <p class="k-p xs">계정은 관리자에게 요청합니다.</p></section></main></div>`);
+      </section></main></div>`);
   }
 
   document.addEventListener('click', (ev) => {  // the list closes when something outside it is chosen

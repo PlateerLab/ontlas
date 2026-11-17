@@ -1,4 +1,4 @@
-  // ==== 품질 관리 (검증질문 관리 · 검증) and two screens of 운영 (파이프라인 모니터링 · 근거 지도) ===================
+  // ==== Quality (검증 질문 · 검증) and two screens of Operations (파이프라인 관제 · 근거 지도) ======================
   // The questions and what they measure come from the definition (S.mg.st.questions) and the check (S.qa, the same
   // answer the older 검증 tab kept); the pass conditions from the flow (S.fl, S.flset); the board from S.mon.st.
 
@@ -35,9 +35,9 @@
   const qaVia = (q) => (q.decision ? 'decision' : q.query ? 'query' : '');
   // whether it can be measured as things stand, and the word for it when it cannot
   function qaWaits(q) {
-    if (q.grading === 'llm') return ['모델 필요', 'LLM 심사는 검증 실행에서 측정하지 않습니다'];
-    if (qaVia(q) === 'query' && noSource()) return ['연결 후', '데이터 소스를 연결하면 측정합니다'];
-    if (qaVia(q) === 'decision' && noSource() && !Object.keys(q.values || {}).length) return ['연결 후', '레코드 키로만 측정하는 질문입니다. 데이터 소스를 연결하거나 판정 값을 넣으면 측정합니다'];
+    if (q.grading === 'llm') return ['측정 제외', 'LLM 심사'];
+    if (qaVia(q) === 'query' && noSource()) return ['연결 필요', '데이터 소스 미연결'];
+    if (qaVia(q) === 'decision' && noSource() && !Object.keys(q.values || {}).length) return ['연결 필요', '데이터 소스 미연결 · 판정 값 없음'];
     return null;
   }
   // the Object a question is about: the one its decision's target Entity is filed under
@@ -95,30 +95,30 @@
     const byWords = out.keywords.length && ['keywords', 'evidence'].includes(out.grading);
     if (d.via === 'decision') {
       const dec = qaDecision(d.decision);
-      if (!dec) return { error: '판정할 결정표가 없어 저장하지 못했습니다. 결정표를 골라 주세요.' };
+      if (!dec) return { error: '결정표가 선택되지 않아 저장하지 못했습니다. 결정표를 선택해 주세요.' };
       const values = {}, expect = {};
       for (const i of dec.inputs || []) { const x = qaTyped(d[`v:${i.name}`], i.type); if (x !== undefined) values[i.name] = x; }
       for (const o of dec.outputs || []) { const x = qaTyped(d[`e:${o.name}`], o.type); if (x !== undefined) expect[o.name] = x; }
       const nan = Object.entries({ ...values, ...expect }).find(([, x]) => typeof x === 'number' && Number.isNaN(x));
       if (nan) return { error: `${nan[0]} 값이 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.` };
       const key = (d.key || '').trim();
-      if (!key && !Object.keys(values).length) return { error: '판정 값과 레코드 키가 모두 비어 있어 저장하지 못했습니다. 판정 값을 입력하거나 레코드 키를 입력해 주세요.' };
+      if (!key && !Object.keys(values).length) return { error: '판정 값과 레코드 키가 모두 비어 있어 저장하지 못했습니다. 판정 값 또는 레코드 키를 입력해 주세요.' };
       const missing = Object.keys(values).length ? (dec.inputs || []).filter((i) => !(i.name in values)) : [];
-      if (missing.length) return { error: `판정 값이 빠져 있어 저장하지 못했습니다: ${missing.map((i) => i.label).join(', ')}. 값이 없으면 '${QA_NONE}'을 골라 주세요.` };
-      if (!Object.keys(expect).length && !byWords) return { error: '정답이 없어 저장하지 못했습니다. 기대하는 판정 결과를 하나 이상 입력해 주세요.' };
+      if (missing.length) return { error: `${missing.map((i) => i.label).join(', ')} 판정 값이 비어 있어 저장하지 못했습니다. 값이 없는 경우 ${QA_NONE}을 선택해 주세요.` };
+      if (!Object.keys(expect).length && !byWords) return { error: '정답이 없어 저장하지 못했습니다. 정답 판정 결과를 하나 이상 입력해 주세요.' };
       return { args: { ...out, decision: dec.name, key, values, expect } };
     }
     if (d.via === 'query') {
       let params = {}, expect = {};
       try { params = (d.params || '').trim() ? JSON.parse(d.params) : {}; } catch (_) { return { error: 'Parameter가 JSON 형식이 아니어서 저장하지 못했습니다. {"이름": "값"} 형식으로 입력해 주세요.' }; }
-      if ((d.expectjson || '').trim()) { try { expect = JSON.parse(d.expectjson); } catch (_) { return { error: '정답이 JSON 형식이 아니어서 저장하지 못했습니다. 예시처럼 입력해 주세요.' }; } }
+      if ((d.expectjson || '').trim()) { try { expect = JSON.parse(d.expectjson); } catch (_) { return { error: '정답이 JSON 형식이 아니어서 저장하지 못했습니다. JSON 형식으로 입력해 주세요.' }; } }
       else if ((d.rows || '').trim() !== '') { expect = { rows: Number(d.rows) }; if (Number.isNaN(expect.rows)) return { error: '기대 행 수가 숫자가 아니어서 저장하지 못했습니다. 숫자를 입력해 주세요.' }; }
-      else if (!byWords) return { error: '정답이 없어 저장하지 못했습니다. 기대하는 행 수를 입력해 주세요.' };
-      if (!d.query) return { error: '값을 읽을 쿼리가 없어 저장하지 못했습니다. 등록된 쿼리를 골라 주세요.' };
+      else if (!byWords) return { error: '정답이 없어 저장하지 못했습니다. 기대 행 수를 입력해 주세요.' };
+      if (!d.query) return { error: '질의가 선택되지 않아 저장하지 못했습니다. 등록된 질의를 선택해 주세요.' };
       return { args: { ...out, query: d.query, params, expect } };
     }
     const words = csv(d.answer);
-    if (!words.length && !out.keywords.length) return { error: '정답이 없어 저장하지 못했습니다. 답에 들어 있어야 할 말을 정답이나 키워드에 입력해 주세요.' };
+    if (!words.length && !out.keywords.length) return { error: '정답이 없어 저장하지 못했습니다. 정답 또는 키워드를 입력해 주세요.' };
     return { args: { ...out, type: 'definition', expect: words.length === 1 ? words[0] : words } };
   }
 
@@ -130,44 +130,44 @@
       if (i.type === 'boolean') return sel(key, [['', expected ? '확인 안 함' : '입력 안 함'], ['true', '예'], ['false', '아니요'], ...(expected ? [] : [['null', QA_NONE]])], cur);
       if (i.values && i.values.length) return sel(key, [['', '입력 안 함'], ...i.values.map((x) => [String(x), (i.labels || {})[x] || String(x)]), ['null', QA_NONE]], cur);
       const num = ['integer', 'decimal', 'number'].includes(i.type);
-      return `<input class="k-in" type="text" data-in="${inp}" data-k="${esc(key)}" value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${expected ? '비우면 확인하지 않음' : num ? `숫자 · 없으면 ${QA_NONE}` : `없으면 ${QA_NONE}`}">`;
+      return `<input class="k-in" type="text" data-in="${inp}" data-k="${esc(key)}" value="${esc(cur ?? '')}"${num ? ' inputmode="decimal"' : ''} placeholder="${expected ? '확인 안 함' : num ? '숫자' : ''}">`;
     };
     if (d.via === 'decision') {
       const dec = qaDecision(d.decision);
-      const hint = (i) => (i.days_since ? `${i.property_label || i.property}에서 지난 일수` : i.param ? '판정 Parameter' : '');
+      const hint = (i) => (i.days_since ? `${i.property_label || i.property} 경과일` : i.param ? '판정 Parameter' : '');
       const ins = dec ? dec.inputs.map((i) => `<label class="k-f">${esc(i.label)}${control(`v:${i.name}`, i, d[`v:${i.name}`], false)}${hint(i) ? `<span class="k-hint">${esc(hint(i))}</span>` : ''}</label>`).join('') : '';
       const outs = dec ? (dec.outputs || []).map((o) => `<label class="k-f"><span>정답 · <span class="k-code">${esc(o.name)}</span></span>${control(`e:${o.name}`, { ...o, values: [] }, d[`e:${o.name}`], true)}</label>`).join('') : '';
       if (only) return outs;
       return `<label class="k-f">결정표${sel('decision', (S.st.decisions || []).map((x) => [x.name, x.label]), d.decision, true)}</label>
-        <label class="k-f">레코드 키<input class="k-in" type="text" data-in="${inp}" data-k="key" value="${esc(d.key)}" placeholder="예: I1001"><span class="k-hint">선택 · 데이터 소스를 연결하면 이 레코드로 다시 측정</span></label>
-        ${ins ? `<div class="k-full qa-group"><p class="k-s">판정 값 · 값을 넣으면 데이터 소스 없이 측정</p><div class="k-g2">${ins}</div></div>` : ''}
-        ${outs ? `<div class="k-full qa-group"><p class="k-s">정답 · 기대하는 판정 결과</p><div class="k-g2">${outs}</div></div>` : ''}`;
+        <label class="k-f">레코드 키<input class="k-in" type="text" data-in="${inp}" data-k="key" value="${esc(d.key)}" placeholder="예: I1001"></label>
+        ${ins ? `<div class="k-full qa-group"><p class="k-s">판정 값</p><div class="k-g2">${ins}</div></div>` : ''}
+        ${outs ? `<div class="k-full qa-group"><p class="k-s">정답</p><div class="k-g2">${outs}</div></div>` : ''}`;
     }
     if (d.via === 'query') {
-      const answer = (d.expectjson || '').trim() ? `<div class="k-full"><label class="k-f">정답<textarea class="k-in mono" rows="3" data-in="${inp}" data-k="expectjson">${esc(d.expectjson)}</textarea><span class="k-hint">쿼리 결과와 비교할 값(JSON)</span></label></div>`
-        : `<label class="k-f">정답 · 기대 행 수<input class="k-in" type="text" inputmode="numeric" data-in="${inp}" data-k="rows" value="${esc(d.rows)}" placeholder="예: 2"></label>`;
+      const answer = (d.expectjson || '').trim() ? `<div class="k-full"><label class="k-f">정답<textarea class="k-in mono" rows="3" data-in="${inp}" data-k="expectjson">${esc(d.expectjson)}</textarea><span class="k-hint">JSON 형식</span></label></div>`
+        : `<label class="k-f">기대 행 수<input class="k-in" type="text" inputmode="numeric" data-in="${inp}" data-k="rows" value="${esc(d.rows)}" placeholder="예: 2"></label>`;
       if (only) return answer;
-      return `<label class="k-f">쿼리${sel('query', (S.st.queries || []).map((x) => [x.name, x.label]), d.query)}</label>
+      return `<label class="k-f">질의${sel('query', (S.st.queries || []).map((x) => [x.name, x.label]), d.query)}</label>
         <label class="k-f">Parameter<input class="k-in mono" type="text" data-in="${inp}" data-k="params" value="${esc(d.params)}" placeholder='예: {"customer": "C001"}'></label>${answer}`;
     }
-    return `<div class="k-full"><label class="k-f">정답<textarea class="k-in" rows="3" data-in="${inp}" data-k="answer">${esc(d.answer)}</textarea><span class="k-hint">답에 들어 있어야 할 말 · 여럿이면 쉼표로 나눔</span></label></div>`;
+    return `<div class="k-full"><label class="k-f">정답<textarea class="k-in" rows="3" data-in="${inp}" data-k="answer">${esc(d.answer)}</textarea><span class="k-hint">쉼표로 구분</span></label></div>`;
   }
 
   function qaFormCard(d, x) {
     if (d.type === 'decision') d.via = 'decision'; else if (d.type === 'definition') d.via = ''; else if (!d.via) d.via = (S.st.queries || []).length ? 'query' : 'decision';
     const o = (v, w, cur) => opt(v, w, cur);
-    const types = [['definition', '정의형'], ...((S.st.decisions || []).length ? [['decision', '판정형']] : []), ...((S.st.queries || []).length || (S.st.decisions || []).length ? [['value', noSource() ? '값 조회형 · 연결 후' : '값 조회형']] : [])];
+    const types = [['definition', '정의형'], ...((S.st.decisions || []).length ? [['decision', '판정형']] : []), ...((S.st.queries || []).length || (S.st.decisions || []).length ? [['value', noSource() ? '값 조회형 · 연결 필요' : '값 조회형']] : [])];
     const via = d.type === 'value' && (S.st.queries || []).length && (S.st.decisions || []).length
-      ? `<label class="k-f">값을 읽는 곳<select class="k-in" data-in="itf" data-k="via" data-re>${o('query', '등록된 쿼리', d.via)}${o('decision', '결정표', d.via)}</select></label>` : '';
+      ? `<label class="k-f">조회 대상<select class="k-in" data-in="itf" data-k="via" data-re>${o('query', '등록된 질의', d.via)}${o('decision', '결정표', d.via)}</select></label>` : '';
     const words = ['keywords', 'evidence'].includes(d.grading) || d.via === '' || (d.keywords || '').trim();
-    return `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2><span class="k-s">* 표시 없는 항목도 모두 저장 전 검사를 거칩니다</span></div><div class="k-cb"><div class="k-g2">
-        <label class="k-f">질문 ID<input class="k-in mono${x ? ' qa-ro' : ''}" type="text" data-in="itf" data-k="id" value="${esc(d.id)}"${x ? ' readonly' : ' placeholder="비워 두면 자동"'}><span class="k-hint">추가할 때 자동 부여</span></label>
+    return `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
+        <label class="k-f">질문 ID<input class="k-in mono${x ? ' qa-ro' : ''}" type="text" data-in="itf" data-k="id" value="${esc(d.id)}"${x ? ' readonly' : ' placeholder="자동 부여"'}></label>
         <label class="k-f">유형<select class="k-in" data-in="itf" data-k="type" data-re>${types.map(([v, w]) => o(v, w, d.type)).join('')}</select></label>
         <div class="k-full"><label class="k-f">질문<textarea class="k-in" rows="3" data-in="itf" data-k="text">${esc(d.text)}</textarea></label></div>
         ${via}${qaAskFields(d, 'itf')}
         <label class="k-f">평가 방법<select class="k-in" data-in="itf" data-k="grading" data-re>${o('', d.via === '' ? '기본 · 키워드 포함' : '기본 · 판정 일치', d.grading)}${Object.entries(QA_GRADING).filter(([k]) => k !== (d.via === '' ? 'match' : '')).map(([k, w]) => o(k, w, d.grading)).join('')}</select></label>
         <label class="k-f">세트<select class="k-in" data-in="itf" data-k="holdout">${o('', '개발 세트', d.holdout)}${o('1', '보류 세트', d.holdout)}</select></label>
-        ${words ? `<label class="k-f">키워드<input class="k-in" type="text" data-in="itf" data-k="keywords" value="${esc(d.keywords)}" placeholder="예: 14일, 고객센터"><span class="k-hint">${d.grading === 'evidence' ? '근거에 들어 있어야 할 말' : '답에 들어 있어야 할 말'} · 쉼표로 나눔</span></label>` : ''}
+        ${words ? `<label class="k-f">키워드<input class="k-in" type="text" data-in="itf" data-k="keywords" value="${esc(d.keywords)}" placeholder="예: 14일, 고객센터"><span class="k-hint">쉼표로 구분</span></label>` : ''}
         <label class="k-f">담당<input class="k-in" type="text" data-in="itf" data-k="owner" value="${esc(d.owner)}" placeholder="예: 클레임 담당"></label>
       </div></div></section>`;
   }
@@ -193,22 +193,22 @@
 
   function qaFormChecks(d, x) {
     const out = [], a = qaArgs(d);
-    out.push(a.error ? { say: '아직 저장할 수 없음', sub: a.error.split('. ').slice(-1)[0], tone: 'bad' } : { say: '질문과 정답이 채워짐', tone: 'ok' });
+    out.push(a.error ? { say: '필수 항목 누락', sub: a.error.split('. ').slice(-1)[0], tone: 'bad' } : { say: '필수 항목 입력됨', tone: 'ok' });
     const same = qaQuestions().find((q) => q.id !== (x ? x.id : '') && q.text.replace(/\s+/g, '') === (d.text || '').replace(/\s+/g, '') && (d.text || '').trim());
-    out.push(same ? { say: `같은 질문이 있음 · ${same.id}`, tone: 'warn' } : { say: '같은 질문 없음', tone: 'ok' });
-    if (!x && (d.id || '').trim() && qaFind(d.id.trim())) out.push({ say: `질문 ID ${d.id.trim()}은 이미 있음`, sub: '다른 ID를 입력하거나 비워 두면 자동으로 붙습니다', tone: 'bad' });
+    out.push(same ? { say: `중복 질문 · ${same.id}`, tone: 'warn' } : { say: '중복 질문 없음', tone: 'ok' });
+    if (!x && (d.id || '').trim() && qaFind(d.id.trim())) out.push({ say: `질문 ID 중복 · ${d.id.trim()}`, tone: 'bad' });
     if (a.error) return out;
     const t = qaAttempt(d);
-    if (!t || t.busy || !t.res) out.push({ say: '지금 버전에서 답을 확인하는 중', tone: 'note', word: '확인 중' });
-    else if (!t.res.ok) out.push({ say: '지금 버전에서 확인하지 못함', sub: t.res.error, tone: 'warn' });
-    else if (!t.res.measured) out.push({ say: '지금은 측정하지 않음', sub: t.res.note || '', tone: 'note' });
-    else if (t.res.passed) out.push({ say: '지금 버전에서 정답', sub: t.res.grounded ? '답에 규칙 또는 쿼리, 출처, 버전이 모두 있음' : `근거 부족 · ${(t.res.gaps || []).join(', ')}`, tone: t.res.grounded ? 'ok' : 'note' });
-    else out.push({ say: `지금 버전에서 오답 · 기대 ${qaSay(t.res.expected)} · 실제 ${t.res.error || qaSay(t.res.got)}`, tone: 'warn', word: '확인 필요' });
+    if (!t || t.busy || !t.res) out.push({ say: '현재 버전 답 확인 중', tone: 'note', word: '확인 중' });
+    else if (!t.res.ok) out.push({ say: '현재 버전 답 확인 실패', sub: t.res.error, tone: 'warn' });
+    else if (!t.res.measured) out.push({ say: '측정 제외', sub: t.res.note || '', tone: 'note' });
+    else if (t.res.passed) out.push({ say: '현재 버전 정답', sub: t.res.grounded ? '근거 · 출처 · 버전 포함' : `근거 부족 · ${(t.res.gaps || []).join(', ')}`, tone: t.res.grounded ? 'ok' : 'note' });
+    else out.push({ say: `현재 버전 오답 · 기대 ${qaSay(t.res.expected)} · 실제 ${t.res.error || qaSay(t.res.got)}`, tone: 'warn', word: '확인 필요' });
     return out;
   }
 
   // a field of a question as the screens name it, and its value in the same words the form uses
-  const QA_FIELD = { id: '질문 ID', text: '질문', expect: '정답', type: '유형', grading: '평가 방법', holdout: '세트', keywords: '키워드', owner: '담당', decision: '결정표', key: '레코드 키', query: '쿼리', params: 'Parameter', values: '판정 값' };
+  const QA_FIELD = { id: '질문 ID', text: '질문', expect: '정답', type: '유형', grading: '평가 방법', holdout: '세트', keywords: '키워드', owner: '담당', decision: '결정표', key: '레코드 키', query: '질의', params: 'Parameter', values: '판정 값' };
   const qaFieldWord = (f) => { const [head, ...rest] = String(f).split('.'); return `${QA_FIELD[head] || head}${rest.length ? ` · ${rest.join('.')}` : ''}`; };
   function qaFieldSay(f, v) {
     const head = String(f).split('.')[0];
@@ -233,7 +233,6 @@
 
   item('question', {
     word: '검증 질문', under: 'check', list: 'check',
-    hint: '검증질문 관리에서 ‘+ 질문’을 누르면 추가 화면이, 항목의 ‘편집’을 누르면 편집 화면이 열립니다',
     load: qaManage,
     find: (id) => qaFind(id), code: (x) => x.id, name: (x) => x.text, element: (x) => `question:${x.id}`,
     draft: (x) => qaDraft(x),
@@ -250,26 +249,26 @@
     uses: async (x) => {
       if (!S.fl) await qaLoadFlow();  // the accuracy target it is measured against
       const n = qaQuestions().length, gate = ((S.fl && S.fl.steps) || []).flatMap((s) => s.gates || []).find((g) => g.stage === 'check' && g.condition === 'min_accuracy');
-      return [{ say: '검증 결과', sub: '지난 실행 결과에서 이 질문의 기록은 남고 다음 실행부터 빠집니다', href: 'flow' },
-        { say: '통과 조건', sub: `질문 수가 ${n} → ${n - 1}로 줄어듭니다${gate ? ` · 정답률 목표 ${gateValue(gate, gate.limit)}는 남은 질문으로 측정합니다` : ''}`, href: 'flow' }];
+      return [{ say: '검증 결과', sub: '다음 실행부터 제외', href: 'flow' },
+        { say: '통과 조건', sub: `질문 수 ${n} → ${n - 1}${gate ? ` · 정답률 목표 ${gateValue(gate, gate.limit)}` : ''}`, href: 'flow' }];
     },
     remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_question', args: { id: x.id } }); S.qa2.sel = ''; S.qa2.pdOf = ''; },
     history: qaHistory,
     revert: async (x, e) => {
-      if (!e.raw) throw new Error('이 시점에는 질문이 없어 되돌리지 못했습니다. 다른 시점을 골라 주세요.');
+      if (!e.raw) throw new Error('선택한 시점에 질문이 없어 되돌리지 못했습니다. 다른 시점을 선택해 주세요.');
       const was = qaDraft({ ...e.raw, type: e.raw.type || (e.raw.decision ? 'decision' : e.raw.query ? 'value' : 'definition'), values: e.raw.values || {}, keywords: e.raw.keywords || [], grading: e.raw.grading || '' });
       S.mg.st = await api('qa/question/save', { ...qaArgs(was).args, id: x.id });
       S.qa2.pdOf = '';
     },
   });
 
-  // ---- QA-01 검증질문 관리 -----------------------------------------------------------------------------------------
+  // ---- QA-01 검증 질문 -------------------------------------------------------------------------------------------
 
   function qaPanel(q) {
     if (S.qa2.pdOf !== q.id) { S.qa2.pd = qaDraft(q); S.qa2.pdOf = q.id; }
     const d = S.qa2.pd, edit = canEdit(), off = edit ? '' : ' disabled';
     const grade = (k, w) => `<label class="k-ck mid"><input type="radio" name="qagrade" value="${k}" data-in="qaPd" data-k="grading" data-re${(d.grading || (d.via === '' ? 'keywords' : 'match')) === k ? ' checked' : ''}${off}>${esc(w)}${k === 'keywords' && d.keywords.trim() ? ` · ‘${esc(csv(d.keywords).join(', '))}’` : ''}</label>`;
-    const basis = d.via === 'decision' ? `결정표 · ${(qaDecision(d.decision) || { label: d.decision }).label}` : d.via === 'query' ? `등록된 쿼리 · ${((S.st.queries || []).find((x) => x.name === d.query) || { label: d.query }).label}` : '정의 · 용어사전 · 문서';
+    const basis = d.via === 'decision' ? `결정표 · ${(qaDecision(d.decision) || { label: d.decision }).label}` : d.via === 'query' ? `등록된 질의 · ${((S.st.queries || []).find((x) => x.name === d.query) || { label: d.query }).label}` : '정의 · 용어 사전 · 문서';
     const body = edit ? qaAskFields(d, 'qaPd', true) : '';
     const answer = edit ? '' : `<label class="k-f">정답<input class="k-in qa-ro" type="text" value="${esc(qaSay(q.expect))}" disabled></label>`;
     const words = ['keywords', 'evidence'].includes(d.grading || (d.via === '' ? 'keywords' : '')) || d.keywords.trim();
@@ -277,31 +276,31 @@
       <p class="k-code k-mut k-b" style="margin:0">${esc(q.id)}</p>
       <label class="k-f">질문<input class="k-in${edit ? '' : ' qa-ro'}" type="text" data-in="qaPd" data-k="text" value="${esc(d.text)}"${off}></label>
       ${edit ? (body ? `<div class="k-g2 qa-pf">${body}</div>` : '') : answer}
-      <label class="k-f">근거<input class="k-in qa-ro" type="text" value="${esc(basis)}" disabled><span class="k-hint">답의 근거는 판정에 쓰인 규칙의 조항, 쿼리의 정의, 문서에서 나옵니다</span></label>
+      <label class="k-f">근거<input class="k-in qa-ro" type="text" value="${esc(basis)}" disabled></label>
       <fieldset class="k-v" style="margin:0;padding:0;border:0"><legend class="k-s" style="padding:0;margin-bottom:8px;float:left;width:100%">평가 방법</legend>
         ${d.via === '' ? '' : grade('match', QA_GRADING.match)}${grade('keywords', QA_GRADING.keywords)}${grade('evidence', QA_GRADING.evidence)}${grade('llm', QA_GRADING.llm)}</fieldset>
       ${words && edit ? `<label class="k-f">키워드<input class="k-in" type="text" data-in="qaPd" data-k="keywords" value="${esc(d.keywords)}" placeholder="예: 14일, 고객센터"></label>` : ''}
       <div class="k-wrap g8">${kChip(QA_TYPE[q.type] || q.type)}${kChip(q.holdout ? '보류 세트' : '개발 세트')}${q.owner ? kChip(`담당자 · ${q.owner}`) : ''}${q.module_label ? kChip(q.module_label) : ''}${q.pending ? kChip('작성 중인 변경', 'warn') : ''}</div>
-      ${edit ? `<div class="k-h end" style="margin-top:4px"><button class="k-btn" data-act="qaHold" data-id="${esc(q.id)}"${S.qa2.busy ? ' disabled' : ''}>${q.holdout ? '개발 세트로' : '보류 세트로'}</button><button class="k-btn pri" data-act="qaPdSave"${S.qa2.busy ? ' disabled' : ''}>저장</button></div>` : ''}</section>`;
+      ${edit ? `<div class="k-h end" style="margin-top:4px"><button class="k-btn" data-act="qaHold" data-id="${esc(q.id)}"${S.qa2.busy ? ' disabled' : ''}>${q.holdout ? '개발 세트로 이동' : '보류 세트로 이동'}</button><button class="k-btn pri" data-act="qaPdSave"${S.qa2.busy ? ' disabled' : ''}>저장</button></div>` : ''}</section>`;
   }
 
   function qaImportCard() {
     const f = S.qa2.imp;
     if (!f) return '';
-    return `<section class="k-card"><div class="k-ch"><h2>목록 불러오기</h2><span class="k-s">YAML 또는 JSON으로 적은 검증 질문 목록</span></div><div class="k-cb">
-      <label class="k-f"><textarea class="k-in mono" rows="6" data-in="qaImpText" aria-label="검증 질문 목록" placeholder="- {id: G1, text: &quot;C001 고객의 주문은 몇 건인가요?&quot;, query: ordersOfCustomer, params: {customer: C001}, expect: {rows: 2}}">${esc(f.text)}</textarea></label>
-      <div class="k-h"><button class="k-btn pri" data-act="qaImpGo"${f.busy ? ' disabled' : ''}>${f.busy ? '불러오는 중' : '불러오기'}</button><button class="k-btn" data-act="qaImpX">닫기</button><span class="k-s">불러온 질문은 작성 중인 변경 요청에 담깁니다</span></div></div></section>`;
+    return `<section class="k-card"><div class="k-ch"><h2>목록 불러오기</h2><span class="k-s">YAML · JSON</span></div><div class="k-cb">
+      <label class="k-f"><textarea class="k-in mono" rows="6" data-in="qaImpText" aria-label="검증 질문 목록" placeholder="- {id: G1, text: &quot;C001 고객 주문 건수&quot;, query: ordersOfCustomer, params: {customer: C001}, expect: {rows: 2}}">${esc(f.text)}</textarea></label>
+      <div class="k-h"><button class="k-btn pri" data-act="qaImpGo"${f.busy ? ' disabled' : ''}>${f.busy ? '불러오는 중' : '불러오기'}</button><button class="k-btn" data-act="qaImpX">닫기</button></div></div></section>`;
   }
 
   function qaSetView() {
     const m = S.mg.st, edit = canEdit();
-    const lead = '정답이 정해진 평가 질문 세트를 관리합니다. 질문마다 정답, 근거, 평가 방법을 둡니다. 개발에 쓰지 않는 보류 세트를 따로 남겨 과적합을 막습니다.';
+    const lead = '정답이 정해진 검증 질문 세트를 관리합니다.';
     const acts = `${edit ? `<button class="k-btn" data-act="qaImp">목록 불러오기</button><a class="k-btn" href="${itemHref('question', 'form')}">${ki('plus', 16, 1.75)}질문</a>` : ''}<button class="k-btn" data-act="qaRunGo">${ki('play', 16, 1.75)}검증 실행</button>`;
-    const next = kNext([['semrules', '규칙'], ['search', '검색 · 질문에서 저장'], ['flow?edit=1', '품질 목표']]);
-    if (!m) return kHead('검증질문 관리', lead, acts) + qaWait('검증 질문을 불러오는 중입니다.');
-    if (m.error) return kHead('검증질문 관리', lead) + kEmpty('일시적인 문제가 있습니다', m.error, '<button class="k-btn" data-act="qaReload">다시 시도</button>');
+    const next = kNext([['semrules', '규칙'], ['search', '검색 · 질문'], ['flow?edit=1', '통과 조건']]);
+    if (!m) return kHead('검증 질문', lead, acts) + qaWait('검증 질문을 불러오는 중입니다.');
+    if (m.error) return kHead('검증 질문', lead) + kEmpty('검증 질문을 불러오지 못했습니다', m.error, '<button class="k-btn" data-act="qaReload">다시 시도</button>');
     const qs = m.questions || [];
-    if (!qs.length) return `${kHead('검증질문 관리', lead, acts)}${qaImportCard()}${kEmpty('아직 검증 질문이 없습니다', '정답이 정해진 질문을 추가하면 규칙이나 정의를 바꿀 때마다 같은 질문으로 다시 확인합니다. 검색 · 질문에서 맞은 답을 저장할 수도 있습니다.', edit ? `<a class="k-btn pri" href="${itemHref('question', 'form')}">질문 추가</a>${known('search') ? '<a class="k-btn" href="#search">검색 · 질문</a>' : ''}` : '')}${next}`;
+    if (!qs.length) return `${kHead('검증 질문', lead, acts)}${qaImportCard()}${kEmpty('등록된 검증 질문이 없습니다', '', edit ? `<a class="k-btn pri" href="${itemHref('question', 'form')}">질문 추가</a>${known('search') ? '<a class="k-btn" href="#search">검색 · 질문</a>' : ''}` : '')}${next}`;
     const dev = qs.filter((q) => !q.holdout), hold = qs.filter((q) => q.holdout);
     if (S.qa2.set === 'holdout' && !hold.length) S.qa2.set = 'dev';
     const list = S.qa2.set === 'holdout' ? hold : dev;
@@ -310,21 +309,21 @@
     const n = (f) => qs.filter(f).length;
     const decs = qs.filter((q) => q.type === 'decision'), onValues = decs.filter((q) => Object.keys(q.values || {}).length).length;
     const tile = (label, value, sub, dashed) => `<div class="${dashed ? 'qa-dash' : 'k-stat'}"><p class="k-s" style="margin:0">${label}</p><p class="k-big">${value}</p>${sub ? `<p class="k-s" style="margin:4px 0 0">${sub}</p>` : ''}</div>`;
-    const tiles = `<section class="k-wrap" aria-label="질문 세트 현황">${tile('질문', count(qs.length), '')}${tile('정의형', count(n((q) => q.type === 'definition')), '연결 없이 측정')}
-      ${tile('판정형', count(decs.length), !decs.length || onValues === decs.length ? '연결 없이 측정' : noSource() ? `연결 없이 측정 ${onValues} · 연결 후 ${decs.length - onValues}` : `값 기준 ${onValues} · 레코드 기준 ${decs.filter((q) => q.key).length}`)}
-      ${tile('값 조회형', count(n((q) => q.type === 'value')), noSource() ? '데이터 소스 연결 후 측정' : '데이터 소스에서 측정', noSource())}${tile('보류 세트', count(hold.length), '개발 세트와 따로 측정')}</section>`;
+    const tiles = `<section class="k-wrap" aria-label="질문 세트 현황">${tile('질문', count(qs.length), '')}${tile('정의형', count(n((q) => q.type === 'definition')), '연결 불필요')}
+      ${tile('판정형', count(decs.length), !decs.length || onValues === decs.length ? '연결 불필요' : noSource() ? `값 기준 ${onValues} · 연결 필요 ${decs.length - onValues}` : `값 기준 ${onValues} · 레코드 기준 ${decs.filter((q) => q.key).length}`)}
+      ${tile('값 조회형', count(n((q) => q.type === 'value')), noSource() ? '연결 필요' : '데이터 소스 기준', noSource())}${tile('보류 세트', count(hold.length), '별도 측정')}</section>`;
     const row = (q) => { const on = sel && q.id === sel.id, w = qaWaits(q);
-      return `<tr class="${on ? 'on' : ''}" data-act="qaPick" data-id="${esc(q.id)}"><td class="k-code${on ? ' k-b' : ''}"><button class="qa-id" data-act="qaPick" data-id="${esc(q.id)}"${on ? ' aria-current="true"' : ''}>${esc(q.id)}</button></td><td class="${on ? 'b' : ''}">${esc(q.text)}${q.pending ? ` ${kChip('새로 추가', 'warn')}` : ''}</td>
-        <td>${kChip(QA_TYPE[q.type] || q.type, q.type === 'decision' ? 'b' : '')}</td><td>${esc(qaObjectOf(q) || '-')}</td><td>${w ? qaDash(w[0], w[1]) : kChip('지금', 'ok')}</td></tr>`; };
+      return `<tr class="${on ? 'on' : ''}" data-act="qaPick" data-id="${esc(q.id)}"><td class="k-code${on ? ' k-b' : ''}"><button class="qa-id" data-act="qaPick" data-id="${esc(q.id)}"${on ? ' aria-current="true"' : ''}>${esc(q.id)}</button></td><td class="${on ? 'b' : ''}">${esc(q.text)}${q.pending ? ` ${kChip('신규', 'warn')}` : ''}</td>
+        <td>${kChip(QA_TYPE[q.type] || q.type, q.type === 'decision' ? 'b' : '')}</td><td>${esc(qaObjectOf(q) || '-')}</td><td>${w ? qaDash(w[0], w[1]) : kChip('측정 가능', 'ok')}</td></tr>`; };
     const w = m.workspace || {}, mine = (w.edits || []).filter((e) => String(e.target).startsWith('question:')).length;
-    const pending = mine ? `<p class="k-note b">검증 질문 변경 ${mine}건이 작성 중인 변경 요청에 있습니다. 올려서 승인되면 검증에 반영됩니다. <a href="#changes">변경 요청 · 버전</a></p>` : '';
-    return `${kHead('검증질문 관리', lead, acts)}${sel ? itemBar('question', sel.id, sel.id, sel.text) : ''}${pending}${qaImportCard()}${tiles}
+    const pending = mine ? `<p class="k-note b">작성 중인 변경 요청 · 검증 질문 ${mine}건 <a href="#changes">변경 요청 · 버전</a></p>` : '';
+    return `${kHead('검증 질문', lead, acts)}${sel ? itemBar('question', sel.id, sel.id, sel.text) : ''}${pending}${qaImportCard()}${tiles}
       <div class="k-cols"><section class="k-card" aria-labelledby="qa-ql" style="flex:3 1 560px"><div class="k-ch"><h2 id="qa-ql">질문 세트</h2><div class="k-push"><div class="k-seg" role="group" aria-label="세트"><button class="${S.qa2.set === 'dev' ? 'on' : ''}" data-act="qaSetTab" data-v="dev">개발 ${dev.length}</button><button class="${S.qa2.set === 'holdout' ? 'on' : ''}" data-act="qaSetTab" data-v="holdout"${hold.length ? '' : ' disabled'}>보류 ${hold.length}</button></div></div></div>
-        <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">ID</th><th scope="col">질문</th><th scope="col">유형</th><th scope="col">Object</th><th scope="col">측정</th></tr></thead><tbody>${list.map(row).join('') || '<tr><td colspan="5" class="mut">이 세트에 질문이 없습니다.</td></tr>'}</tbody></table></div></section>
+        <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">ID</th><th scope="col">질문</th><th scope="col">유형</th><th scope="col">Object</th><th scope="col">측정</th></tr></thead><tbody>${list.map(row).join('') || '<tr><td colspan="5" class="mut">질문이 없습니다.</td></tr>'}</tbody></table></div></section>
         ${sel ? qaPanel(sel) : ''}</div>${next}`;
   }
 
-  screen('check', { area: 'work', word: '검증질문 관리', view: qaSetView,
+  screen('check', { area: 'work', word: '검증 질문', view: qaSetView,
     after: () => { if (!S.mg.st && !S.mg.busy) loadManage(); } });
 
   Object.assign(INPUT, {
@@ -348,12 +347,12 @@
     qaImpGo: async () => {
       const f = S.qa2.imp;
       if (!f || f.busy) return;
-      if (!f.text.trim()) { toast('목록이 없어 불러오지 못했습니다. YAML 또는 JSON 목록을 붙여 넣어 주세요.', true); return; }
+      if (!f.text.trim()) { toast('목록이 없어 불러오지 못했습니다. YAML 또는 JSON 목록을 입력해 주세요.', true); return; }
       f.busy = true; render();
       try {
         const r = await api('manage/questions', { text: f.text });
         S.mg.st = r;
-        if (r.failed.length) { f.busy = false; toast(`${r.added.length}건을 불러오고 ${r.failed.length}건은 불러오지 못했습니다. ${r.failed[0]}`, true); } else { S.qa2.imp = null; toast(`검증 질문 ${r.added.length}건을 작성 중인 변경 요청에 담았습니다.`); }
+        if (r.failed.length) { f.busy = false; toast(`${r.added.length}건을 추가하고 ${r.failed.length}건은 추가하지 못했습니다. ${r.failed[0]}`, true); } else { S.qa2.imp = null; toast(`검증 질문 ${r.added.length}건을 추가했습니다.`); }
       } catch (e) { f.busy = false; fail(e); }
       render();
     },
@@ -364,7 +363,7 @@
       try {
         S.mg.st = await api('manage/edit', { op: 'update_question', args: { id: q.id, holdout: !q.holdout } });
         S.qa2.set = q.holdout ? 'dev' : 'holdout'; S.qa2.pdOf = '';
-        toast(`${q.id}${josa(q.id, '을', '를')} ${q.holdout ? '개발' : '보류'} 세트로 옮겼습니다. 작성 중인 변경 요청에 담겼습니다.`);
+        toast(`${q.id}${josa(q.id, '을', '를')} ${q.holdout ? '개발' : '보류'} 세트로 이동했습니다.`);
       } catch (e) { fail(e); }
       S.qa2.busy = false; render();
     },
@@ -376,7 +375,7 @@
       try {
         const r = await api('qa/question/save', a.args);
         S.mg.st = r; S.qa2.pdOf = '';
-        toast('저장했습니다. 작성 중인 변경 요청에 담겼습니다.');
+        toast('작성 중인 변경 요청에 저장했습니다.');
       } catch (e) { fail(e); }
       S.qa2.busy = false; render();
     },
@@ -407,42 +406,42 @@
   const qaExpected = (x) => { const q = qaFind(x.id); return x.expected === null || x.expected === undefined || x.expected === '' || (typeof x.expected === 'object' && !Object.keys(x.expected).length) ? (q && (q.keywords || []).length ? `키워드 ${q.keywords.join(', ')}` : '-') : qaSay(x.expected); };
   const qaGates = () => ((S.fl && S.fl.steps) || []).flatMap((s) => s.gates || []);
   // a pass condition as the screens say it: 정답률 ≥ 90%, DB 대조 오류 0
-  const QA_GATE = { 'bind.max_errors': 'DB 대조 오류', 'bind.max_warnings': 'DB 대조 경고', 'index.min_found': '문서 검색 적중률', 'query.min_agree': '저장소 간 쿼리 결과 일치율',
+  const QA_GATE = { 'bind.max_errors': 'Binding 검사 오류', 'bind.max_warnings': 'Binding 검사 경고', 'index.min_found': '문서 검색 적중률', 'query.min_agree': '저장소 간 질의 결과 일치율',
     'decide.min_agreement': '판정 일치율', 'check.min_accuracy': '정답률', 'check.min_grounded': '근거 제시율', 'check.max_value_errors': '거래 값 오류' };
   const qaGateSay = (g) => `${QA_GATE[`${g.stage}.${g.condition}`] || g.label} ${g.condition.startsWith('min_') ? `≥ ${gateValue(g, g.limit)}` : Number(g.limit) === 0 ? '0' : `≤ ${gateValue(g, g.limit)}`}`;
   const qaGate = (stage, cond) => qaGates().find((g) => g.stage === stage && g.condition === cond) || null;
   // why an answer was wrong, and the screen that mends it: [word, hash]
   function qaCause(x) {
-    if (x.diagnosis === 'mapping') return ['매핑', 'sources'];
+    if (x.diagnosis === 'mapping') return ['Mapping', 'sources'];
     if (x.diagnosis === 'data') return ['소스 값', 'db'];
     if (x.error && x.diagnosis !== 'rule') return ['실행 오류', ''];
     const q = qaFind(x.id) || {};
     if (q.decision || x.diagnosis === 'rule') return ['규칙', 'semrules'];
-    return q.query ? ['쿼리', 'query'] : ['정의', 'objects'];
+    return q.query ? ['질의', 'query'] : ['정의', 'objects'];
   }
 
   function qaAskCard() {
     const a = S.qa2.ask, res = a.res;
     const open = '<section class="k-card pad k-v g12" aria-labelledby="qa-try" style="flex:2 1 480px"><h2 class="k-h2" id="qa-try">질문 테스트</h2>';
-    const box = `<label class="qa-ask">${ki('chat', 18, 1.75)}<span class="k-hide">질문</span><input class="k-g0 k-14" id="qaask" type="text" data-in="qaAskText" value="${esc(a.text)}" placeholder="${esc((S.st.questions || [])[0] ? `예: ${S.st.questions[0].text}` : '질문을 입력합니다')}"><button class="k-lnk" data-act="qaAskGo"${a.busy ? ' disabled' : ''}>${a.busy ? '묻는 중' : '질문'}</button></label>`;
-    if (!res) return `${open}${box}<p class="k-p s">질문 하나를 지금 버전에 물어 답과 근거를 봅니다. 맞은 답은 검증 질문으로 저장합니다.</p></section>`;
+    const box = `<label class="qa-ask">${ki('chat', 18, 1.75)}<span class="k-hide">질문</span><input class="k-g0 k-14" id="qaask" type="text" data-in="qaAskText" value="${esc(a.text)}" placeholder="${esc((S.st.questions || [])[0] ? `예: ${S.st.questions[0].text}` : '질문 입력')}"><button class="k-lnk" data-act="qaAskGo"${a.busy ? ' disabled' : ''}>${a.busy ? '확인 중' : '질문'}</button></label>`;
+    if (!res) return `${open}${box}</section>`;
     if (res.error) return `${open}${box}<p class="k-note bad">${esc(res.error)}</p></section>`;
     const d = (res.decisions || [])[0] || null;
     const val = (e) => (e.value === null || e.value === undefined ? QA_NONE : typeof e.value === 'boolean' ? (e.value ? '예' : '아니요') : e.kind === 'days_since' ? `${e.value}일` : String(e.value));
     const chips = d ? [`레코드 · ${d.target_label} ${d.key}`, `판정 · ${d.label}`, ...d.evidence.slice(0, 4).map((e) => `${e.label} · ${val(e)}`)]
-      : res.record ? [`레코드 · ${res.record.label} ${res.record.key}`] : res.query ? [`등록된 쿼리 · ${res.query.label}`] : [res.route === 'none' ? '찾을 대상 없음' : '문서와 정의에서 찾기'];
+      : res.record ? [`레코드 · ${res.record.label} ${res.record.key}`] : res.query ? [`등록된 질의 · ${res.query.label}`] : [res.route === 'none' ? '찾을 대상 없음' : '문서 · 정의 검색'];
     const badge = answerBadge(res)[1];
     const uniq = (xs) => [...new Set(xs.filter(Boolean))].join(' · ');
     const rules = d ? uniq(d.rules.map((x) => x.id)) : '', cites = d ? uniq(d.rules.map((x) => x.cite)) : '', vers = d ? uniq(d.rules.map((x) => `${x.module_label} ${x.version}`)) : '';
-    const main = d ? `${d.verdict}${d.reason ? ` · ${d.reason}` : ''}` : res.route === 'none' ? '답하지 않았습니다' : (res.answer || '');
+    const main = d ? `${d.verdict}${d.reason ? ` · ${d.reason}` : ''}` : res.route === 'none' ? '답변 없음' : (res.answer || '');
     const basis = d ? [rules && `규칙 ${rules}`, cites && `근거 ${cites}`, vers, badge].filter(Boolean).join(' · ')
-      : [badge, res.sources && res.sources.length ? `근거 ${res.sources.length}건` : '', res.route === 'none' ? (res.reason || '근거 없이 추측하지 않습니다') : ''].filter(Boolean).join(' · ');
-    const saved = a.fb === 'saved' ? '<p class="k-note b">검증 질문을 작성 중인 변경 요청에 담았습니다. <a href="#check">검증질문 관리</a></p>' : '';
-    const bad = a.fb === 'bad' ? `<p class="k-note warn">판정에 쓴 값과 규칙을 확인합니다. ${known('semrules') ? '<a href="#semrules">규칙</a>' : ''}${d ? ` · <a href="#record?type=${encodeURIComponent(d.target)}&key=${encodeURIComponent(d.key)}">${esc(d.target_label)} ${esc(d.key)}</a>` : ''}</p>` : '';
+      : [badge, res.sources && res.sources.length ? `근거 ${res.sources.length}건` : '', res.route === 'none' ? (res.reason || '근거 없음') : ''].filter(Boolean).join(' · ');
+    const saved = a.fb === 'saved' ? '<p class="k-note b">작성 중인 변경 요청에 검증 질문을 저장했습니다. <a href="#check">검증 질문</a></p>' : '';
+    const bad = a.fb === 'bad' ? `<p class="k-note warn">확인 대상 · ${known('semrules') ? '<a href="#semrules">규칙</a>' : ''}${d ? ` · <a href="#record?type=${encodeURIComponent(d.target)}&key=${encodeURIComponent(d.key)}">${esc(d.target_label)} ${esc(d.key)}</a>` : ''}</p>` : '';
     return `${open}${box}
-      <div class="k-h g6"><span class="k-s">이렇게 이해했습니다</span>${chips.map((c) => kChip(c)).join('')}</div>
+      <div class="k-h g6"><span class="k-s">질문 해석</span>${chips.map((c) => kChip(c)).join('')}</div>
       <div class="qa-answer"><p class="k-15" style="margin:0;font-weight:600">${esc(main)}</p><p class="k-i3 k-13" style="margin:0">${esc(basis)}</p>${d ? `<p class="k-s" style="margin:0">판단 과정 · ${policyStep(d)}</p>` : ''}</div>
-      <div class="k-pha"><span class="k-s">이 답이 맞나요?</span><button class="k-btn${a.fb === 'good' ? ' qa-on' : ''}" data-act="qaAskFb" data-v="good" aria-pressed="${a.fb === 'good'}">맞아요</button><button class="k-btn${a.fb === 'bad' ? ' qa-on' : ''}" data-act="qaAskFb" data-v="bad" aria-pressed="${a.fb === 'bad'}">틀려요</button>
+      <div class="k-pha"><span class="k-s">답변 평가</span><button class="k-btn${a.fb === 'good' ? ' qa-on' : ''}" data-act="qaAskFb" data-v="good" aria-pressed="${a.fb === 'good'}">정답</button><button class="k-btn${a.fb === 'bad' ? ' qa-on' : ''}" data-act="qaAskFb" data-v="bad" aria-pressed="${a.fb === 'bad'}">오답</button>
         ${canEdit() && a.fb !== 'saved' && res.route !== 'none' ? '<button class="k-lnk k-push" data-act="qaAskSave">검증 질문으로 저장</button>' : ''}</div>${saved}${bad}</section>`;
   }
 
@@ -450,7 +449,7 @@
   function qaSettingsCard() {
     const f = S.flset;
     if (!f || f.busy) return qaWait('통과 조건을 불러오는 중입니다.');
-    if (f.error) return kEmpty('일시적인 문제가 있습니다', f.error);
+    if (f.error) return kEmpty('통과 조건을 불러오지 못했습니다', f.error);
     const s = f.settings;
     const stages = f.stages.filter((x) => !['source', 'define'].includes(x.id)).map((x) => `<label class="k-ck pill"><input type="checkbox" data-in="fstage" data-k="${x.id}"${s.off.includes(x.id) ? '' : ' checked'}>${esc(x.label)}</label>`).join('');
     const conds = Object.entries(f.conditions).map(([stage, cs]) => cs.map((c) => {
@@ -463,7 +462,7 @@
     const maps = dec && q ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">결정표</th><th scope="col">처리 기록 컬럼</th></tr></thead><tbody>
       ${dec.inputs.map((i) => `<tr><td>입력 <span class="k-code">${esc(i)}</span></td><td>${colSel('inputs', i, (a.inputs || {})[i])}</td></tr>`).join('')}${dec.outputs.map((o) => `<tr><td>결과 <span class="k-code">${esc(o)}</span></td><td>${colSel('expect', o, (a.expect || {})[o])}</td></tr>`).join('')}</tbody></table></div>` : '';
     const list = s.values = s.values || [];
-    const WORD = { query: '대조 쿼리', key: '대상 번호 컬럼', truth: '거래 시스템 값 컬럼', by: '온톨로지 값', output: '결과 이름' };
+    const WORD = { query: '대조 질의', key: '대상 번호 컬럼', truth: '거래 시스템 값 컬럼', by: '온톨로지 값', output: '결과 이름' };
     const sel = (i, k, options, cur) => `<select class="k-in sm" data-in="fval" data-i="${i}" data-k="${k}" aria-label="${WORD[k]}" title="${WORD[k]}"><option value="">${WORD[k]}</option>${options.map(([x, y]) => opt(x, y, cur)).join('')}</select>`;
     const vrow = (v, i) => {
       const vq = f.queries.find((x) => x.name === v.query), vcols = ((vq || {}).columns || []).map((c) => [c, c]);
@@ -472,88 +471,87 @@
         ${sel(i, 'by', [...f.decisions.map((d) => [`decision:${d.name}`, `결정 · ${d.label || d.name}`]), ...(f.functions || []).map((x) => [`function:${x.name}`, `함수 · ${x.label || x.name}`])], ans.decision ? `decision:${ans.decision}` : (ans.function ? `function:${ans.function}` : ''))}${sel(i, 'output', outs.map((o) => [o, o]), ans.output)}
         <button class="k-lnk bad" data-act="fvaldel" data-i="${i}" aria-label="${esc(v.label || '항목')} 삭제">삭제</button></div>`;
     };
-    return `<section class="k-card" id="qa-edit" aria-labelledby="qa-edit-h"><div class="k-ch"><h2 id="qa-edit-h">통과 조건 편집</h2><span class="k-s">변경 요청도 저장한 조건으로 검토합니다</span><div class="k-push"><button class="k-btn" data-act="qaEdit">닫기</button><button class="k-btn pri" data-act="flowsave">저장</button></div></div>
-      <div class="k-cb"><div class="qa-group"><p class="k-s">측정할 단계</p><div class="k-wrap g8">${stages}</div></div>
-        <div class="qa-group"><p class="k-s">통과 조건 · 비우면 조건 없음</p><div class="qa-g3">${conds}</div></div>
-        <div class="qa-group"><p class="k-s">판정 일치율 · 과거 처리 기록을 결정표로 다시 판정해 비교</p><div class="k-g2">
+    return `<section class="k-card" id="qa-edit" aria-labelledby="qa-edit-h"><div class="k-ch"><h2 id="qa-edit-h">통과 조건 편집</h2><div class="k-push"><button class="k-btn" data-act="qaEdit">닫기</button><button class="k-btn pri" data-act="flowsave">저장</button></div></div>
+      <div class="k-cb"><div class="qa-group"><p class="k-s">측정 단계</p><div class="k-wrap g8">${stages}</div></div>
+        <div class="qa-group"><p class="k-s">통과 조건</p><div class="qa-g3">${conds}</div></div>
+        <div class="qa-group"><p class="k-s">판정 일치율</p><div class="k-g2">
           <label class="k-f">결정표<select class="k-in" data-in="fagree" data-kind="decision"><option value="">사용 안 함</option>${f.decisions.map((d) => opt(d.name, d.label, a.decision)).join('')}</select></label>
-          <label class="k-f">처리 기록 쿼리<select class="k-in" data-in="fagree" data-kind="query"><option value="">-</option>${f.queries.map((x) => opt(x.name, x.label, a.query)).join('')}</select></label></div>${maps}</div>
-        <div class="qa-group" data-row="values"><p class="k-s">거래 값 대조 · 온톨로지가 낸 값과 거래 시스템이 기록한 값을 건별로 비교</p>${list.map(vrow).join('')}<div><button class="k-btn sm" data-act="fvaladd">${ki('plus', 14, 1.75)}항목 추가</button></div></div>
-        ${(f.raised || []).length ? '<p class="k-p s">도메인 팩이 더 높은 조건을 정한 항목은 그 조건을 적용합니다.</p>' : ''}</div></section>`;
+          <label class="k-f">처리 기록 질의<select class="k-in" data-in="fagree" data-kind="query"><option value="">-</option>${f.queries.map((x) => opt(x.name, x.label, a.query)).join('')}</select></label></div>${maps}</div>
+        <div class="qa-group" data-row="values"><p class="k-s">거래 값 대조</p>${list.map(vrow).join('')}<div><button class="k-btn sm" data-act="fvaladd">${ki('plus', 14, 1.75)}항목 추가</button></div></div>
+        </div></section>`;
   }
 
   function qaRunView() {
     const r = S.qa, fl = S.fl && !S.fl.busy && !S.fl.error ? S.fl : null;
-    const lead = '평가 질문 세트를 버전마다 다시 돌려 결과를 확인합니다. 정답률과 근거 제시율은 지금 측정하고 판정 일치율과 거래 값 정확도는 데이터 바인더 연결 후 측정합니다.';
+    const lead = '검증 질문을 실행하고 결과와 통과 조건을 확인합니다.';
     const busy = !r || r.busy;
     const ver = qaVersion(), dirty = S.mg.st && S.mg.st.workspace && S.mg.st.workspace.dirty;
-    const last = S.qa2.ranAt ? `<span class="k-s">마지막 실행 오늘 ${esc(S.qa2.ranAt)}${ver ? ` · 버전 ${esc(ver)}` : ''}${dirty ? ' · 작성 중인 변경은 올린 뒤 측정' : ''}</span>` : '';
+    const last = S.qa2.ranAt ? `<span class="k-s">마지막 실행 ${esc(S.qa2.ranAt)}${ver ? ` · 버전 ${esc(ver)}` : ''}${dirty ? ' · 작성 중인 변경 미반영' : ''}</span>` : '';
     const head = kHead('검증', lead, `${last}<button class="k-btn pri" data-act="qaRunNow"${busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}${busy ? '검증 중' : '검증 실행'}</button>`);
-    const next = kNext([['check', '검증질문 관리'], ['semrules', '오답 → 규칙 보완'], ['objects', '오답 → 정의 보완'], ['changes', '통과하면 배포']]);
-    if (busy) return head + qaWait('검증 질문을 지금 버전에 묻는 중입니다.') + next;
-    if (r.error) return head + kEmpty('일시적인 문제가 있습니다', r.error, '<button class="k-btn" data-act="qaRunNow">다시 시도</button>') + next;
+    const next = kNext([['check', '검증 질문'], ['semrules', '규칙'], ['objects', 'Entity'], ['changes', '변경 요청 · 버전']]);
+    if (busy) return head + qaWait('검증 질문을 실행하는 중입니다.') + next;
+    if (r.error) return head + kEmpty('검증을 실행하지 못했습니다', r.error, '<button class="k-btn" data-act="qaRunNow">다시 시도</button>') + next;
     const res = r.results, asked = res.filter((x) => x.passed !== null), right = asked.filter((x) => x.passed), wrong = asked.filter((x) => !x.passed), waits = res.filter((x) => x.passed === null);
-    if (!res.length) return head + kEmpty('아직 검증 질문이 없습니다', '정답이 정해진 질문을 추가하면 버전마다 같은 질문으로 다시 확인합니다.', '<a class="k-btn pri" href="#check">검증질문 관리</a>') + next;
+    if (!res.length) return head + kEmpty('등록된 검증 질문이 없습니다', '', '<a class="k-btn pri" href="#check">검증 질문</a>') + next;
     // the four measures against their targets
     const gAcc = qaGate('check', 'min_accuracy'), gGr = qaGate('check', 'min_grounded'), gAg = qaGate('decide', 'min_agreement'), gVal = qaGate('check', 'max_value_errors');
     const tile = (label, big, sub, tone) => `<div class="qa-tile${tone === 'warn' ? ' warn' : tone === 'wait' ? ' wait' : ''}"><p class="k-s" style="margin:0">${esc(label)}</p><p class="k-big${tone === 'warn' ? ' warn' : tone === 'wait' ? ' mut' : ''}">${esc(big)}</p><p class="${tone === 'warn' ? 'k-warn k-13' : tone === 'ok' ? 'k-ok k-13' : 'k-s'}" style="margin:4px 0 0">${esc(sub)}</p></div>`;
     const share = (v) => `${Math.round(v * 100)}%`;
     const goal = (g) => (g && !g.unmeasured ? gateValue(g, g.limit) : '');
-    const accT = !asked.length ? tile('정답률', noSource() ? '연결 후' : '-', '측정한 질문이 없음', 'wait')
+    const accT = !asked.length ? tile('정답률', noSource() ? '연결 필요' : '-', '측정 질문 없음', 'wait')
       : tile('정답률', share(r.accuracy), `${right.length} / ${asked.length}${goal(gAcc) ? ` · 목표 ${goal(gAcc)}${gAcc.passed ? ' 충족' : ''}` : ''}`, gAcc && !gAcc.passed ? 'warn' : gAcc ? 'ok' : '');
     const grounded = asked.filter((x) => x.grounded).length;
-    const grT = !asked.length ? tile('근거 제시율', noSource() ? '연결 후' : '-', '측정한 질문이 없음', 'wait')
+    const grT = !asked.length ? tile('근거 제시율', noSource() ? '연결 필요' : '-', '측정 질문 없음', 'wait')
       : tile('근거 제시율', share(r.grounded), goal(gGr) ? `목표 ${goal(gGr)}${gGr.passed ? ' 충족' : ` · ${grounded} / ${asked.length}`}` : `근거 있는 답 ${grounded} / ${asked.length}`, gGr && !gGr.passed ? 'warn' : gGr ? 'ok' : '');
     const dstep = fl ? fl.steps.find((x) => x.id === 'decide') : null, ag = dstep && dstep.agreement;
     const agT = ag && ag.cases ? tile('판정 일치율 · 실제 처리 대비', pct(ag.rate), `${ag.agree} / ${ag.cases}${goal(gAg) ? ` · 목표 ${goal(gAg)}${gAg.passed ? ' 충족' : ''}` : ''}`, gAg && !gAg.passed ? 'warn' : gAg ? 'ok' : '')
-      : tile('판정 일치율 · 실제 처리 대비', noSource() ? '연결 후' : !fl ? '-' : '설정 전', noSource() ? (gAg ? `목표 ${gateValue(gAg, gAg.limit)}` : '과거 처리 기록과 대조') : !fl ? '측정하는 중' : '통과 조건 편집에서 처리 기록 쿼리를 지정', 'wait');
+      : tile('판정 일치율 · 실제 처리 대비', noSource() ? '연결 필요' : !fl ? '-' : '미설정', noSource() ? (gAg ? `목표 ${gateValue(gAg, gAg.limit)}` : '과거 처리 기록 대조') : !fl ? '측정 중' : '처리 기록 질의 미지정', 'wait');
     const v = S.val || {}, vLabel = v.ok && v.items && v.items.length ? `${v.items.slice(0, 3).map((x) => x.label).join(' · ')} 오류` : '거래 값 오류';
     const valT = v.ok && v.configured !== false ? tile(vLabel, `${count(v.errors)}건`, `${count(v.cases)}건 대조${gVal ? ` · 목표 ${gateValue(gVal, gVal.limit)}건` : ''}`, v.errors ? 'warn' : 'ok')
       : !noSource() && v.error && v.configured !== false ? tile(vLabel, '측정 실패', String(v.error).split('. ')[0], 'warn')
-        : tile(vLabel, noSource() ? '연결 후' : '설정 전', noSource() ? (gVal ? `목표 ${gateValue(gVal, gVal.limit)}건` : '거래 시스템 값과 대조') : '통과 조건 편집에서 거래 값 대조 항목을 지정', 'wait');
+        : tile(vLabel, noSource() ? '연결 필요' : '미설정', noSource() ? (gVal ? `목표 ${gateValue(gVal, gVal.limit)}건` : '거래 시스템 값 대조') : '대조 항목 미지정', 'wait');
     // the answers, by how they came out
-    const tabs = [['wrong', '틀림', wrong], ['right', '맞음', right], ['wait', waits.every((x) => x.unmeasured === 'no_source') ? '연결 후' : '측정 안 함', waits]];
+    const tabs = [['wrong', '오답', wrong], ['right', '정답', right], ['wait', waits.every((x) => x.unmeasured === 'no_source') ? '연결 필요' : '측정 제외', waits]];
     const on = tabs.some(([k, , l]) => k === S.qa2.result && l.length) ? S.qa2.result : (wrong.length ? 'wrong' : right.length ? 'right' : 'wait');
     const shown = tabs.find((t) => t[0] === on)[2];
     const idCell = (x) => `<td class="k-code">${canEdit() ? `<a class="k-ink" href="${itemHref('question', 'form', x.id)}" title="편집">${esc(x.id)}</a>` : esc(x.id)}</td>`;
     const row = (x) => {
-      if (on === 'wait') return `<tr data-row="q:${esc(x.id)}">${idCell(x)}<td>${esc(x.text)}</td><td>${esc(qaExpected(x))}</td><td>${qaDash(x.unmeasured === 'no_source' ? '연결 후' : '측정 안 함', x.note || '')}</td></tr>`;
-      if (on === 'right') return `<tr data-row="q:${esc(x.id)}">${idCell(x)}<td>${esc(x.text)}</td><td>${esc(qaExpected(x))} · <span class="k-ok">${x.grading === 'keywords' || x.grading === 'evidence' ? '들어 있음' : '같음'}</span></td><td>${x.grounded ? kChip('근거 있음', 'ok') : `<span class="k-s">근거 부족 · ${esc((x.gaps || []).join(', '))}</span>`}</td></tr>`;
+      if (on === 'wait') return `<tr data-row="q:${esc(x.id)}">${idCell(x)}<td>${esc(x.text)}</td><td>${esc(qaExpected(x))}</td><td>${qaDash(x.unmeasured === 'no_source' ? '연결 필요' : '측정 제외', x.note || '')}</td></tr>`;
+      if (on === 'right') return `<tr data-row="q:${esc(x.id)}">${idCell(x)}<td>${esc(x.text)}</td><td>${esc(qaExpected(x))} · <span class="k-ok">${x.grading === 'keywords' || x.grading === 'evidence' ? '포함' : '일치'}</span></td><td>${x.grounded ? kChip('근거 있음', 'ok') : `<span class="k-s">근거 부족 · ${esc((x.gaps || []).join(', '))}</span>`}</td></tr>`;
       const [word, tab] = qaCause(x), d = DIAGNOSIS[x.diagnosis], q = qaFind(x.id) || {};
       const differs = (x.differs || []).map((m) => `${m.label || m.input} 질문 ${qaSay(m.given)} · 레코드 ${qaSay(m.read)}`).join(' / ');
       return `<tr data-row="q:${esc(x.id)}">${idCell(x)}<td>${esc(x.text)}${d || differs ? `<div class="k-s" style="margin-top:4px">${esc(d ? d[2] : '')}${differs ? ` ${esc(differs)}` : ''}</div>` : ''}</td><td>${esc(qaExpected(x))} · <span class="k-bad">${esc(x.error || qaSay(x.got))}</span></td>
         <td><div class="k-h g6">${tab && known(tab) ? `<a class="k-chip warn" href="#${tab}">${esc(word)}</a>` : kChip(word, 'warn')}${q.decision || q.query ? `<button class="k-lnk" data-act="chkopen" data-id="${esc(x.id)}">열기</button>` : ''}${canEdit() && !x.error && x.got !== null && typeof x.got !== 'string' ? `<button class="k-lnk" data-act="chkexpect" data-id="${esc(x.id)}">정답 갱신</button>` : ''}</div></td></tr>`;
     };
     const results = `<section class="k-card" aria-labelledby="qa-res" style="flex:3 1 560px"><div class="k-ch"><h2 id="qa-res">결과</h2><div class="k-push"><div class="k-seg" role="group" aria-label="결과 필터">${tabs.map(([k, w, l]) => `<button class="${k === on ? 'on' : ''}" data-act="qaResTab" data-v="${k}"${l.length ? '' : ' disabled'}>${w} ${l.length}</button>`).join('')}</div></div></div>
-      <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">ID</th><th scope="col" style="width:38%">질문</th><th scope="col">${on === 'wait' ? '기대' : '기대 · 실제'}</th><th scope="col">${on === 'right' ? '근거' : on === 'wait' ? '측정' : '원인'}</th></tr></thead><tbody>${shown.map(row).join('') || '<tr><td colspan="4" class="mut">해당하는 질문이 없습니다.</td></tr>'}</tbody></table></div>
-      <p class="k-cf">오답은 원인별로 묶어 담당 화면으로 넘깁니다 · 정의 → ${known('objects') ? '<a href="#objects">엔티티 관리</a>' : '엔티티 관리'}, 규칙 → <a href="#semrules">규칙</a>, 매핑 → <a href="#sources">데이터 매핑</a></p></section>`;
+      <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">ID</th><th scope="col" style="width:38%">질문</th><th scope="col">${on === 'wait' ? '기대' : '기대 · 실제'}</th><th scope="col">${on === 'right' ? '근거' : on === 'wait' ? '측정' : '원인'}</th></tr></thead><tbody>${shown.map(row).join('') || '<tr><td colspan="4" class="mut">질문이 없습니다.</td></tr>'}</tbody></table></div></section>`;
     // what the wrong answers point at
     const by = {};
     wrong.forEach((x) => { const w = qaCause(x)[0]; by[w] = (by[w] || 0) + 1; });
     const lack = right.filter((x) => !x.grounded).length;
     const line = (w, n, mut = false) => `<div class="k-14${mut ? ' k-mut' : ''}" style="display:flex;justify-content:space-between;gap:12px"><span>${w}</span>${typeof n === 'number' ? `<b>${n}</b>` : `<span>${n}</span>`}</div>`;
-    const causes = `<section class="k-card pad k-v" aria-labelledby="qa-cause"><h2 class="k-h2" id="qa-cause">오답 원인</h2>${line('정의', by['정의'] || 0)}${line('규칙', by['규칙'] || 0)}${line('쿼리', by['쿼리'] || 0)}${by['실행 오류'] ? line('실행 오류', by['실행 오류']) : ''}
-      ${noSource() ? line('매핑 · 소스 값', '연결 후', true) : line('매핑 · 소스 값', (by['매핑'] || 0) + (by['소스 값'] || 0))}${lack ? line('근거 부족 · 답은 맞음', lack) : ''}</section>`;
+    const causes = `<section class="k-card pad k-v" aria-labelledby="qa-cause"><h2 class="k-h2" id="qa-cause">오답 원인</h2>${line('정의', by['정의'] || 0)}${line('규칙', by['규칙'] || 0)}${line('질의', by['질의'] || 0)}${by['실행 오류'] ? line('실행 오류', by['실행 오류']) : ''}
+      ${noSource() ? line('Mapping · 소스 값', '연결 필요', true) : line('Mapping · 소스 값', (by['Mapping'] || 0) + (by['소스 값'] || 0))}${lack ? line('근거 부족 정답', lack) : ''}</section>`;
     const st = r.stages, c = r.conformance;
-    const stageLine = (k, w) => { const x = st && st[k]; return !x || !x.questions ? '' : line(w, x.measured ? `${x.passed} / ${x.measured} 통과${x.measured < x.questions ? ` · 대기 ${x.questions - x.measured}` : ''}` : `연결 후 · ${x.questions}문항`, !x.measured); };
+    const stageLine = (k, w) => { const x = st && st[k]; return !x || !x.questions ? '' : line(w, x.measured ? `${x.passed} / ${x.measured} 통과${x.measured < x.questions ? ` · 대기 ${x.questions - x.measured}` : ''}` : `연결 필요 · ${x.questions}문항`, !x.measured); };
     const sets = r.sets && r.sets.holdout && r.sets.holdout.questions ? line('개발 · 보류 세트 정답률', `${pct(r.sets.dev.accuracy)} · ${pct(r.sets.holdout.accuracy)}`) : '';
-    const conf = c && c.queries ? line('저장소 간 쿼리 결과 일치', `${c.queries.filter((x) => x.agree).length} / ${c.queries.length}`) : '';
-    const lines = `${stageLine('values', '값 기준 · 질문에 적은 값')}${stageLine('record', '레코드 기준 · 데이터 소스')}${sets}${conf}`;
-    const stagesCard = lines ? `<section class="k-card pad k-v" aria-labelledby="qa-stage"><h2 class="k-h2" id="qa-stage">측정 단계</h2><p class="k-p s">질문에 적은 값으로 먼저 측정하고, 데이터 소스가 있으면 같은 질문을 레코드로 다시 측정합니다</p>${lines}</section>` : '';
+    const conf = c && c.queries ? line('저장소 간 질의 결과 일치', `${c.queries.filter((x) => x.agree).length} / ${c.queries.length}`) : '';
+    const lines = `${stageLine('values', '값 기준')}${stageLine('record', '레코드 기준')}${sets}${conf}`;
+    const stagesCard = lines ? `<section class="k-card pad k-v" aria-labelledby="qa-stage"><h2 class="k-h2" id="qa-stage">측정 단계</h2>${lines}</section>` : '';
     // where the stores disagree on a registered query, and where a value differs from the one the trade system recorded
     const apart = c && c.queries ? c.queries.filter((x) => !x.agree) : [];
-    const apartCard = apart.length ? `<section class="k-card" aria-labelledby="qa-apart"><div class="k-ch"><h2 id="qa-apart">저장소 간 결과가 다른 쿼리</h2>${kChip(String(apart.length), 'warn')}</div>
+    const apartCard = apart.length ? `<section class="k-card" aria-labelledby="qa-apart"><div class="k-ch"><h2 id="qa-apart">저장소 간 결과 불일치 질의</h2>${kChip(String(apart.length), 'warn')}</div>
       ${apart.slice(0, 8).map((x) => `<a class="k-row" data-row="conf:${esc(x.name)}" href="#query?query=${encodeURIComponent(x.name)}"><span class="k-col"><span class="k-ink k-14">${esc(x.label)}</span><span class="k-s">${Object.entries(x.rows).map(([b, n]) => `${esc(b)} ${n === null ? '오류' : `${n}행`}`).join(' · ')}</span></span>${ki('chevR', 16, 1.75)}</a>`).join('')}</section>` : '';
     const off = v.ok && v.items ? v.items.filter((x) => x.errors) : [];
-    const offCard = off.length ? `<section class="k-card" aria-labelledby="qa-off" data-row="values"><div class="k-ch"><h2 id="qa-off">거래 값이 다른 건</h2>${kChip(`${v.errors}건`, 'warn')}</div>
+    const offCard = off.length ? `<section class="k-card" aria-labelledby="qa-off" data-row="values"><div class="k-ch"><h2 id="qa-off">거래 값 불일치</h2>${kChip(`${v.errors}건`, 'warn')}</div>
       ${off.map((x) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(x.label)} · 오류 ${x.errors} / ${x.cases}건</span><span class="k-s">${x.mismatches.slice(0, 5).map((m) => `${esc(m.key)} 온톨로지 ${show(m.answer)} · 거래 시스템 ${show(m.truth)}`).join(' / ')}</span></span></div>`).join('')}</section>` : '';
     // the conditions a version must meet before it is deployed
     const gates = qaGates();
     const met = gates.filter((g) => g.passed && !g.unmeasured).length, due = gates.filter((g) => !g.unmeasured).length;
-    const gline = (g) => `<li${g.unmeasured ? ' class="k-mut"' : ''}><span>${esc(qaGateSay(g))}${g.by ? ` <span class="k-s">· ${esc(g.by)}</span>` : ''}</span>${g.unmeasured ? qaDash('연결 후', qaNote(g)) : g.passed ? kChip('충족', 'ok') : `<button class="k-chip warn" data-act="issopen" data-key="${esc(gateKey(g))}" title="조치 보기">${gateValue(g, g.value)} · 미달</button>`}</li>`;
-    const pass = `<section class="k-card" aria-labelledby="qa-pass" style="flex:1 1 360px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-pass">버전 배포 전 통과 조건</h2>${due ? `<span class="k-chip ${met === due ? 'ok' : 'warn'} k-push">${met} / ${due}</span>` : gates.length ? `<span class="k-push">${qaDash('연결 후', '데이터 소스를 연결하면 측정합니다')}</span>` : ''}</div>
-      ${!fl ? `<p class="k-cf">${S.fl && S.fl.error ? esc(S.fl.error) : '통과 조건을 측정하는 중입니다.'}</p>` : gates.length ? `<ul class="qa-gates k-14">${gates.map(gline).join('')}</ul>` : '<p class="k-cf">정한 통과 조건이 없습니다.</p>'}
-      <div class="qa-passfoot"><span class="k-s">변경 요청도 같은 조건으로 검토합니다</span>${isOntoAdmin() ? `<button class="k-btn" data-act="qaEdit" aria-expanded="${S.qa2.edit}">조건 편집</button>` : ''}</div></section>`;
+    const gline = (g) => `<li${g.unmeasured ? ' class="k-mut"' : ''}><span>${esc(qaGateSay(g))}${g.by ? ` <span class="k-s">· ${esc(g.by)}</span>` : ''}</span>${g.unmeasured ? qaDash('연결 필요', qaNote(g)) : g.passed ? kChip('충족', 'ok') : `<button class="k-chip warn" data-act="issopen" data-key="${esc(gateKey(g))}" title="조치 보기">${gateValue(g, g.value)} · 미달</button>`}</li>`;
+    const pass = `<section class="k-card" aria-labelledby="qa-pass" style="flex:1 1 360px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-pass">배포 통과 조건</h2>${due ? `<span class="k-chip ${met === due ? 'ok' : 'warn'} k-push">${met} / ${due}</span>` : gates.length ? `<span class="k-push">${qaDash('연결 필요', '데이터 소스 미연결')}</span>` : ''}</div>
+      ${!fl ? `<p class="k-cf">${S.fl && S.fl.error ? esc(S.fl.error) : '통과 조건을 측정하는 중입니다.'}</p>` : gates.length ? `<ul class="qa-gates k-14">${gates.map(gline).join('')}</ul>` : '<p class="k-cf">설정된 통과 조건이 없습니다.</p>'}
+      <div class="qa-passfoot">${isOntoAdmin() ? `<button class="k-btn" data-act="qaEdit" aria-expanded="${S.qa2.edit}">조건 편집</button>` : ''}</div></section>`;
     return `${head}<section class="k-wrap" aria-label="목표 대비">${accT}${grT}${agT}${valT}</section>
       <div class="k-cols">${results}<div class="k-c2">${causes}${stagesCard}${apartCard}${offCard}</div></div>
       <div class="k-cols">${pass}${qaAskCard()}</div>${S.qa2.edit && isOntoAdmin() ? qaSettingsCard() : ''}${next}`;
@@ -570,7 +568,7 @@
 
   async function qaAsk() {
     const a = S.qa2.ask, text = a.text.trim();
-    if (!text) { toast('질문이 없어 묻지 못했습니다. 질문을 입력해 주세요.', true); return; }
+    if (!text) { toast('질문이 없어 확인하지 못했습니다. 질문을 입력해 주세요.', true); return; }
     if (a.busy) return;
     Object.assign(a, { busy: true, fb: '' });
     render();
@@ -594,14 +592,14 @@
       try {
         const r = await api('qa/question/save', { new: true, type: 'decision', text: res.question, decision: d.name, key: d.key, expect: d.outputs });
         S.mg.st = r; S.qa2.ask.fb = 'saved'; S.qa2.sel = r.id;
-        toast(`검증 질문 ${r.id}${josa(r.id, '을', '를')} 작성 중인 변경 요청에 담았습니다.`);
+        toast(`검증 질문 ${r.id}${josa(r.id, '을', '를')} 작성 중인 변경 요청에 저장했습니다.`);
         render();
       } catch (e) { fail(e); }
     },
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'qaask') { ev.preventDefault(); qaAsk(); } });
 
-  // ---- OPS-03 파이프라인 모니터링 ----------------------------------------------------------------------------------
+  // ---- OPS-03 파이프라인 관제 --------------------------------------------------------------------------------------
   // The board the server measures (S.mon.st) is read again every few seconds while the screen is open; only the parts
   // that move are drawn again, so what a person is reading stays where it is.
 
@@ -621,27 +619,27 @@
     const approve = `<li class="qa-step${waits ? ' warn' : ''}"><span class="qa-steph"><a class="k-b" href="#${known('changes') ? 'changes' : 'inbox'}">승인</a><i class="k-dot${waits ? ' warn' : ''}" role="img" aria-label="${waits ? '주의' : '정상'}"></i></span><span class="${waits ? 'k-warn k-13' : 'k-s'}">변경 요청 대기 ${waits}${inbox ? ` · 할 일 ${inbox}` : ''}</span></li>`;
     const ver = qaVersion();
     const deploy = `<li class="qa-step"><span class="qa-steph"><a class="k-b" href="#changes">배포</a><i class="k-dot" role="img" aria-label="정상"></i></span><span class="k-s">${esc(ver || '-')}${waits ? ` · 검토 중 ${waits}` : ''}</span></li>`;
-    const source = noSource() ? `<li class="qa-step dash"><span class="qa-steph"><b class="k-b">소스 차이 검사</b>${kChip('선택')}</span><span class="k-s">미연결</span></li>` : '';
+    const source = noSource() ? `<li class="qa-step dash"><span class="qa-steph"><b class="k-b">소스 차이 검사</b>${kChip('선택 사항')}</span><span class="k-s">미연결</span></li>` : '';
     return m.floors.map(tile).join('') + approve + deploy + source;
   }
 
   function qaMonRules(m) {
     const gates = qaGates();
     const rule = (title, sub, chip, warn, act = '') => `<div class="qa-rule${warn ? ' warn' : ''}"><span class="qa-ruleh"><b class="k-b">${esc(title)}</b>${chip}</span><span class="k-s">${esc(sub)}</span>${act}</div>`;
-    const fromGate = (g) => (g.unmeasured ? rule(qaGateSay(g), qaNote(g) || '데이터 소스가 필요한 모니터링', qaDash('연결 후'), false)
-      : g.passed ? rule(qaGateSay(g), `현재 ${gateValue(g, g.value)} · 점검할 때마다 측정`, kChip('정상', 'ok'), false)
+    const fromGate = (g) => (g.unmeasured ? rule(qaGateSay(g), qaNote(g) || '데이터 소스 필요', qaDash('연결 필요'), false)
+      : g.passed ? rule(qaGateSay(g), `현재 ${gateValue(g, g.value)}`, kChip('정상', 'ok'), false)
         : rule(qaGateSay(g), `현재 ${gateValue(g, g.value)}`, `<button class="k-chip warn" data-act="issopen" data-key="${esc(gateKey(g))}">알림 · 조치 보기</button>`, true));
     const gated = new Set(gates.filter((g) => !g.passed && !g.unmeasured).map((g) => gateKey(g)));
     const others = m.issues.filter((x) => !gated.has(x.id) && !String(x.id).startsWith('gate:')).map((x) => rule(x.title, x.detail || '', `<button class="k-chip ${x.level === 'bad' ? 'bad' : 'warn'}" data-act="issopen" data-id="${esc(x.id)}">알림${x.members && x.members.length ? ` ${x.members.length + 1}` : ''} · 조치 보기</button>`, true));
     const rows = others.join('') + gates.map(fromGate).join('');
-    return rows || `<p class="k-cf">${S.fl && S.fl.busy ? '통과 조건을 측정하는 중입니다.' : '정한 통과 조건이 없고 활성 알림도 없습니다.'}</p>`;
+    return rows || `<p class="k-cf">${S.fl && S.fl.busy ? '통과 조건을 측정하는 중입니다.' : '설정된 통과 조건과 알림이 없습니다.'}</p>`;
   }
 
   function qaMonLog() {
     const l = S.qa2.log;
     if (!l) return '<p class="k-cf">기록을 불러오는 중입니다.</p>';
     if (l.error) return `<p class="k-cf">${esc(l.error)}</p>`;
-    if (!l.rows.length) return '<p class="k-cf">아직 기록이 없습니다. 판정, 액션 요청과 승인, 변경 요청, 파이프라인 점검이 여기에 남습니다.</p>';
+    if (!l.rows.length) return '<p class="k-cf">기록이 없습니다.</p>';
     const basis = (r) => [r.rules.length ? r.rules.join(' · ') : '', r.change || '', ...r.versions.slice(0, 1).map((v) => `${v.label} ${v.version}`), r.versions.length > 1 ? `외 ${r.versions.length - 1}` : ''].filter(Boolean).join(' · ');
     return `<div class="k-x"><table class="k-t s"><thead><tr><th scope="col">시각</th><th scope="col">종류</th><th scope="col">내용</th><th scope="col">근거 · 버전</th></tr></thead><tbody>
       ${l.rows.map((r) => `<tr><td class="k-code" title="${esc(r.at)}">${esc(String(r.at).slice(0, 10) === new Date().toISOString().slice(0, 10) ? qaHm(r.at) : qaWhen(r.at))}</td><td>${kChip(r.kind, r.tone)}</td><td>${esc(r.text)}</td><td class="i3">${esc(basis(r) || '-')}</td></tr>`).join('')}</tbody></table></div>
@@ -654,24 +652,24 @@
     if (!fl || fl.busy) return '<p class="k-cf">단계별 값을 측정하는 중입니다.</p>';
     if (fl.error) return `<p class="k-cf">${esc(fl.error)}</p>`;
     const say = (s) => {
-      if (s.id === 'source') return noSource() ? '데이터 소스 미연결 · 정의와 규칙은 연결 없이 동작' : `${esc(BACKEND_KIND[(s.kind || s.dialect || '').toLowerCase()] || s.kind || '')} · 테이블 ${count(s.tables.length)} · ${count(s.rows)}행`;
+      if (s.id === 'source') return noSource() ? '데이터 소스 미연결' : `${esc(BACKEND_KIND[(s.kind || s.dialect || '').toLowerCase()] || s.kind || '')} · 테이블 ${count(s.tables.length)} · ${count(s.rows)}행`;
       if (s.id === 'define') return `도메인 팩 ${s.modules.length} · Entity ${count(s.objects)} · Relation ${count(s.links)} · Property ${count(s.properties)}${s.computed ? ` · 계산 ${s.computed}` : ''}`;
       if (s.id === 'bind') { const c = s.checked || {}; return `테이블 ${count(c.tables || 0)} · 컬럼 ${count(c.columns || 0)} · 문제 ${s.findings}`; }
-      if (s.id === 'project') return s.backends.length ? `${esc(s.backends.join(', '))} · Node ${count(s.nodes)} · Edge ${count(s.edges)}${s.sync && s.sync.at ? ` · 마지막 다시 읽기 ${esc(s.sync.at.replace('T', ' '))}` : ''}` : '그래프 저장소 없음';
+      if (s.id === 'project') return s.backends.length ? `${esc(s.backends.join(', '))} · Node ${count(s.nodes)} · Edge ${count(s.edges)}${s.sync && s.sync.at ? ` · 최근 동기화 ${esc(s.sync.at.replace('T', ' '))}` : ''}` : '그래프 저장소 없음';
       if (s.id === 'index') return `문서 ${s.documents} · 항목 ${s.sections} · 청크 ${s.chunks}${s.questions ? ` · 검색 적중 ${s.found} / ${s.questions}` : ''}`;
-      if (s.id === 'query') return `등록된 쿼리 ${s.queries} · 쿼리 언어 ${s.targets}개${s.conformance && !s.conformance.error ? ` · 저장소 간 일치 ${s.conformance.agree} / ${s.conformance.queries}` : ''}`;
-      if (s.id === 'decide') return `결정표 ${s.decisions} · 규칙 ${s.rules} · 액션 ${s.actions}${s.agreement && s.agreement.cases ? ` · 판정 일치율 ${pct(s.agreement.rate)}` : ''}`;
-      return !s.questions ? '등록된 검증 질문 없음' : s.accuracy === null || s.accuracy === undefined ? `검증 질문 ${s.questions} · 측정 안 함` : `검증 질문 ${s.questions} · 정답률 ${Math.round(s.accuracy * 100)}% · 근거 제시율 ${Math.round((s.grounded || 0) * 100)}%`;
+      if (s.id === 'query') return `등록된 질의 ${s.queries} · 질의 언어 ${s.targets}개${s.conformance && !s.conformance.error ? ` · 저장소 간 일치 ${s.conformance.agree} / ${s.conformance.queries}` : ''}`;
+      if (s.id === 'decide') return `결정표 ${s.decisions} · 규칙 ${s.rules} · Action ${s.actions}${s.agreement && s.agreement.cases ? ` · 판정 일치율 ${pct(s.agreement.rate)}` : ''}`;
+      return !s.questions ? '등록된 검증 질문 없음' : s.accuracy === null || s.accuracy === undefined ? `검증 질문 ${s.questions} · 측정 제외` : `검증 질문 ${s.questions} · 정답률 ${Math.round(s.accuracy * 100)}% · 근거 제시율 ${Math.round((s.grounded || 0) * 100)}%`;
     };
-    const gate = (g) => (g.unmeasured ? qaDash(`${qaGateSay(g)} · 연결 후`, qaNote(g)) : g.passed ? kChip(`${qaGateSay(g)} · 현재 ${gateValue(g, g.value)}`, 'ok') : `<button class="k-chip warn" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(qaGateSay(g))} · 현재 ${gateValue(g, g.value)}</button>`);
+    const gate = (g) => (g.unmeasured ? qaDash(`${qaGateSay(g)} · 연결 필요`, qaNote(g)) : g.passed ? kChip(`${qaGateSay(g)} · 현재 ${gateValue(g, g.value)}`, 'ok') : `<button class="k-chip warn" data-act="issopen" data-key="${esc(gateKey(g))}">${esc(qaGateSay(g))} · 현재 ${gateValue(g, g.value)}</button>`);
     const rows = fl.steps.map((s, i) => { const tab = FLOW[i] ? FLOW[i][3] : '';
-      return `<tr><td class="b nw">${i + 1}. ${esc(STEP_WORD[s.id] || s.id)}${s.on === false ? ` ${kChip('꺼짐')}` : ''}</td><td>${say(s)}${s.id === 'project' && s.backends.length && canEdit() ? ' <button class="k-lnk" data-act="sync">데이터 소스 다시 읽기</button>' : ''}</td><td><div class="k-h g6">${(s.gates || []).map(gate).join('') || '<span class="k-s">-</span>'}</div></td><td class="nw">${tab && known(tab) ? `<a class="k-lnk" href="#${tab}">열기${ki('chevR', 14, 1.75)}</a>` : ''}</td></tr>`; }).join('');
+      return `<tr><td class="b nw">${i + 1}. ${esc(STEP_WORD[s.id] || s.id)}${s.on === false ? ` ${kChip('꺼짐')}` : ''}</td><td>${say(s)}${s.id === 'project' && s.backends.length && canEdit() ? ' <button class="k-lnk" data-act="sync">데이터 소스 동기화</button>' : ''}</td><td><div class="k-h g6">${(s.gates || []).map(gate).join('') || '<span class="k-s">-</span>'}</div></td><td class="nw">${tab && known(tab) ? `<a class="k-lnk" href="#${tab}">열기${ki('chevR', 14, 1.75)}</a>` : ''}</td></tr>`; }).join('');
     return `<div class="k-x"><table class="k-t s"><thead><tr><th scope="col">단계</th><th scope="col">측정 값</th><th scope="col">통과 조건</th><th scope="col"></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
-  const STEP_WORD = { source: '데이터 소스', define: '온톨로지 정의', bind: '바인딩 검사', project: '그래프 저장소 반영', index: '문서 · 벡터 색인', query: '쿼리', decide: '판정 · 처리', check: '검증' };
+  const STEP_WORD = { source: '데이터 소스', define: '온톨로지 정의', bind: 'Binding 검사', project: '그래프 저장소 반영', index: '문서 · 벡터 색인', query: '질의', decide: '판정 · 처리', check: '검증' };
 
   function qaMonScene(m) {
-    const short = { source: '원천', convert: '변환', ontology: '구축', store: '저장소', use: '활용', verify: '검증' };
+    const short = { source: '소스', convert: '변환', ontology: '구축', store: '저장소', use: '활용', verify: '검증' };
     const seg = [['', '전체'], ...m.floors.map((f) => [f.id, short[f.id] || f.label])].map(([k, l]) => `<button class="${S.mon.focus === k ? 'on' : ''}" data-act="mfocus" data-k="${k}">${esc(l)}</button>`).join('');
     const active = m.faults.find((f) => f.on);
     const fault = m.faults.length && isOntoAdmin() ? `<select class="k-in sm" style="width:auto;max-width:220px" data-in="mfault" aria-label="장애 테스트 항목"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
@@ -683,16 +681,16 @@
 
   function qaMonView() {
     const m = S.mon.st;
-    const lead = '자료 수집부터 버전 배포까지 처리 상태를 한눈에 봅니다. 판정과 승인 기록은 결정 로그로 남겨 재평가에 씁니다. 모니터링 규칙은 조건이 맞으면 알립니다.';
+    const lead = '파이프라인 처리 상태, 결정 로그, 알림 규칙을 확인합니다.';
     const next = kNext([['inbox', '할 일 · 알림'], ['connect', '연동 · API'], ['evidence', '근거 지도']]);
-    if (!m) return kHead('파이프라인 모니터링', lead) + qaWait('파이프라인을 점검하는 중입니다.') + next;
-    const head = kHead('파이프라인 모니터링', lead, `<span id="qa-monchip">${qaMonChip(m)}</span><button class="k-btn" data-act="qaMonCheck"${S.qa2.monBusy ? ' disabled' : ''}>${ki('reload', 16, 1.75)}${S.qa2.monBusy ? '점검 중' : '재점검'}</button>`);
-    const audit = known('sys-audit') && isSysAdmin() ? ' · 시스템 전체 활동은 <a href="#sys-audit">감사 로그</a>' : '';
-    return `${head}<section class="k-card pad k-v g12" aria-labelledby="qa-pl"><div class="k-h sb"><h2 class="k-h2" id="qa-pl">처리 상태</h2><span class="k-h g12"><span class="k-s" id="qa-monat">마지막 점검 ${esc(hms(m.measured_at))}</span><button class="k-lnk" data-act="qaMonSceneGo" aria-expanded="${S.qa2.scene}">${S.qa2.scene ? '그림 접기' : '그림으로 보기'}</button></span></div>
+    if (!m) return kHead('파이프라인 관제', lead) + qaWait('파이프라인을 점검하는 중입니다.') + next;
+    const head = kHead('파이프라인 관제', lead, `<span id="qa-monchip">${qaMonChip(m)}</span><button class="k-btn" data-act="qaMonCheck"${S.qa2.monBusy ? ' disabled' : ''}>${ki('reload', 16, 1.75)}${S.qa2.monBusy ? '점검 중' : '재점검'}</button>`);
+    const audit = known('sys-audit') && isSysAdmin() ? '<a class="k-lnk k-push" href="#sys-audit">감사 로그</a>' : '';
+    return `${head}<section class="k-card pad k-v g12" aria-labelledby="qa-pl"><div class="k-h sb"><h2 class="k-h2" id="qa-pl">처리 상태</h2><span class="k-h g12"><span class="k-s" id="qa-monat">마지막 점검 ${esc(hms(m.measured_at))}</span><button class="k-lnk" data-act="qaMonSceneGo" aria-expanded="${S.qa2.scene}">${S.qa2.scene ? '그림 접기' : '그림 보기'}</button></span></div>
         <ol class="qa-steps" id="qa-montiles">${qaMonTiles(m)}</ol>${S.qa2.scene ? qaMonScene(m) : ''}</section>
-      <div class="k-cols"><section class="k-card" aria-labelledby="qa-log" style="flex:3 1 560px"><div class="k-ch"><h2 id="qa-log">결정 로그</h2><span class="k-s k-push">판정 · 승인 기록 · 재평가에 사용${audit}</span></div><div id="qa-monlog">${qaMonLog()}</div></section>
-        <section class="k-card" aria-labelledby="qa-watch" style="flex:2 1 340px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-watch">모니터링 규칙</h2>${isOntoAdmin() ? '<a class="k-lnk k-push" href="#flow?edit=1">알림 기준</a>' : ''}</div><div id="qa-monrules">${qaMonRules(m)}</div></section></div>
-      <section class="k-card" aria-labelledby="qa-stg"><div class="k-ch"><h2 id="qa-stg">단계별 측정</h2><span class="k-s">단계마다 지금 값과 통과 조건</span><div class="k-push"><button class="k-lnk" data-act="qaMonSteps" aria-expanded="${S.qa2.steps}">${S.qa2.steps ? '접기' : '펼치기'}</button></div></div>${S.qa2.steps ? qaMonSteps() : ''}</section>${next}`;
+      <div class="k-cols"><section class="k-card" aria-labelledby="qa-log" style="flex:3 1 560px"><div class="k-ch"><h2 id="qa-log">결정 로그</h2>${audit}</div><div id="qa-monlog">${qaMonLog()}</div></section>
+        <section class="k-card" aria-labelledby="qa-watch" style="flex:2 1 340px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-watch">알림 규칙</h2>${isOntoAdmin() ? '<a class="k-lnk k-push" href="#flow?edit=1">알림 기준</a>' : ''}</div><div id="qa-monrules">${qaMonRules(m)}</div></section></div>
+      <section class="k-card" aria-labelledby="qa-stg"><div class="k-ch"><h2 id="qa-stg">단계별 측정</h2><div class="k-push"><button class="k-lnk" data-act="qaMonSteps" aria-expanded="${S.qa2.steps}">${S.qa2.steps ? '접기' : '보기'}</button></div></div>${S.qa2.steps ? qaMonSteps() : ''}</section>${next}`;
   }
 
   async function qaMonLoadLog() {
@@ -722,7 +720,7 @@
     S.qa2.monTimer = setTimeout(qaMonTick, QA_MON_EVERY);
   }
 
-  screen('monitor', { area: 'work', word: '파이프라인 모니터링', view: qaMonView,
+  screen('monitor', { area: 'work', word: '파이프라인 관제', view: qaMonView,
     after: () => {
       const m = S.mon.st;
       if (m && S.qa2.scene && $('#mscene')) { window.SpaceScene.mount($('#mscene'), m); S.mon.shape = m.shape; window.SpaceScene.focus(S.mon.focus); }
@@ -736,7 +734,7 @@
     qaMonCheck: async () => {  // measured again now: the stages, the conditions, then the board
       if (S.qa2.monBusy) return;
       S.qa2.monBusy = true; render();
-      try { S.fl = await api('flow'); S.fl.at = new Date().toTimeString().slice(0, 5); S.mon.st = await api('monitor'); await qaMonLoadLog(); toast(`다시 점검했습니다. 통과 조건 ${S.mon.st.gates.met} / ${S.mon.st.gates.all} 충족`); } catch (e) { fail(e); }
+      try { S.fl = await api('flow'); S.fl.at = new Date().toTimeString().slice(0, 5); S.mon.st = await api('monitor'); await qaMonLoadLog(); toast(`재점검했습니다. 통과 조건 ${S.mon.st.gates.met} / ${S.mon.st.gates.all} 충족`); } catch (e) { fail(e); }
       S.qa2.monBusy = false; render();
     },
     qaMonSceneGo: () => { S.qa2.scene = !S.qa2.scene; render(); },
@@ -765,34 +763,33 @@
 
   function qaEvView() {
     const ev = S.qa2.ev;
-    const lead = '정의와 규칙의 근거가 되는 자료(정책서, 정의서, 용어집)를 한곳에서 관리합니다. 어떤 자료가 어느 Object를 채우는지 보고 근거가 빠진 곳을 찾습니다.';
+    const lead = '정의와 규칙의 근거 자료를 Object별로 확인합니다.';
     const head = kHead('근거 지도', lead) + qaEvTabs();
-    const next = kNext([['ruleagent', '규칙 초안'], ['concepts', '개념 초안'], ['objmgr', '오브젝트 관리'], ['objects', '엔티티 관리']]);
-    if (!ev) return head + qaWait('자료와 정의를 맞춰 보는 중입니다.') + next;
-    if (ev.error) return head + kEmpty('일시적인 문제가 있습니다', ev.error, '<button class="k-btn" data-act="qaEvReload">다시 시도</button>') + next;
+    const next = kNext([['ruleagent', '규칙 초안'], ['concepts', '개념 초안'], ['objmgr', 'Object'], ['objects', 'Entity']]);
+    if (!ev) return head + qaWait('근거 지도를 불러오는 중입니다.') + next;
+    if (ev.error) return head + kEmpty('근거 지도를 불러오지 못했습니다', ev.error, '<button class="k-btn" data-act="qaEvReload">다시 시도</button>') + next;
     const docs = ev.documents;
     const upload = canEdit() ? `<a class="k-btn" href="#catalog">${ki('plus', 16, 1.75)}자료 업로드</a>` : '';
-    if (!docs.length && !ev.objects.length) return head + kEmpty('아직 자료가 없습니다', '정책서나 정의서를 올리면 어떤 자료가 어느 Object의 근거인지 여기서 봅니다.', upload) + next;
+    if (!docs.length && !ev.objects.length) return head + kEmpty('등록된 자료가 없습니다', '', upload) + next;
     const CELL = { all: ['qa-c all', '있음'], some: ['qa-c some', '일부'], none: ['qa-c none', '없음'] };
     const cell = (o, d) => { const c = o.cells[d.name], [cls, w] = CELL[c.state];
       return `<td class="tight">${c.count ? `<button class="${cls}" data-act="qaEvDoc" data-doc="${esc(d.name)}" title="${esc(`${d.name} · ${c.entities.join(', ')}${c.count > c.entities.length ? ` 외 ${c.count - c.entities.length}` : ''}`)}">${w}${c.state === 'some' ? ` ${c.count}/${o.entities}` : ''}</button>` : `<span class="${cls}">${w}</span>`}</td>`; };
-    const src = (o) => `<td class="tight qa-srccol">${!ev.connected ? '<span class="qa-c wait">연결 후</span>' : `<a class="qa-c ${o.source === 'all' ? 'all' : o.source === 'some' ? 'some' : 'none'}" href="#sources" title="소스 테이블에 바인딩된 Entity ${o.bound} / ${o.entities}">${o.source === 'all' ? '있음' : o.source === 'some' ? `일부 ${o.bound}/${o.entities}` : '없음'}</a>`}</td>`;
-    const legend = [['all', '있음'], ['some', '일부'], ['none', '없음'], ...(ev.connected ? [] : [['wait', '연결 후']])].map(([k, w]) => `<span class="qa-leg"><i class="qa-c ${k}"></i>${w}</span>`).join('');
+    const src = (o) => `<td class="tight qa-srccol">${!ev.connected ? '<span class="qa-c wait">연결 필요</span>' : `<a class="qa-c ${o.source === 'all' ? 'all' : o.source === 'some' ? 'some' : 'none'}" href="#sources" title="Binding Entity ${o.bound} / ${o.entities}">${o.source === 'all' ? '있음' : o.source === 'some' ? `일부 ${o.bound}/${o.entities}` : '없음'}</a>`}</td>`;
+    const legend = [['all', '있음'], ['some', '일부'], ['none', '없음'], ...(ev.connected ? [] : [['wait', '연결 필요']])].map(([k, w]) => `<span class="qa-leg"><i class="qa-c ${k}"></i>${w}</span>`).join('');
     const matrix = `<section class="k-card" aria-labelledby="qa-map" style="flex:3 1 ${Math.max(640, 300 + docs.length * 92)}px"><div class="k-ch"><h2 id="qa-map">Object × 자료</h2><div class="k-wrap g8 k-push k-i3 k-13">${legend}</div></div>
       ${ev.objects.length ? `<div class="k-x"><table class="k-t"><thead><tr><th class="k-13" scope="col">Object</th>${docs.map((d) => `<th class="c" scope="col" title="${esc(d.kind_label)}">${esc(d.name)}</th>`).join('')}<th class="c qa-srccol" scope="col">소스 DB</th></tr></thead>
         <tbody>${ev.objects.map((o) => `<tr><td class="b nw" style="padding:8px 12px">${esc(o.label)}<span class="k-s">@${esc(o.name)}</span></td>${docs.map((d) => cell(o, d)).join('')}${src(o)}</tr>`).join('')}</tbody></table></div>
-        <p class="k-cf">Object ${ev.objects.length}개 · 칸은 그 자료에 이름이 나오는 Entity 수입니다${ev.connected ? '' : ' · 소스 DB 열은 데이터 바인더 연결 후 채워집니다'} · 칸을 누르면 근거 자료로 이동</p>` : '<p class="k-cf">Object가 없습니다. 오브젝트 관리에서 Object를 정의하면 자료와 맞춰 봅니다.</p>'}</section>`;
+        <p class="k-cf">Object ${ev.objects.length}개 · 칸: 자료에 언급된 Entity 수</p>` : '<p class="k-cf">Object가 없습니다.</p>'}</section>`;
     const gapRow = (g) => `<a class="qa-gap" href="#${g.kind === 'rule' ? 'semrules' : 'objmgr'}"><span class="k-14"><b class="k-b">${esc(g.who)}</b> · ${esc(g.what)}</span><span class="k-s">${esc(g.sub)}</span></a>`;
     const gaps = `<section class="k-card" aria-labelledby="qa-gap"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-gap">근거 누락</h2>${ev.gaps.length ? kChip(String(ev.gaps.length), 'warn') : kChip('없음', 'ok')}</div>
-      ${ev.gaps.slice(0, 8).map(gapRow).join('') || '<p class="k-cf">모든 Object에 이름이 나오는 자료가 있고 규칙마다 근거 조항이 있습니다.</p>'}${ev.gaps.length > 8 ? `<p class="k-cf line">8 / ${ev.gaps.length}건 표시</p>` : ''}</section>`;
-    const unbound = ev.unbound_total ? `<section class="k-v qa-orph" aria-labelledby="qa-orph"><h2 class="k-15" id="qa-orph" style="margin:0;font-weight:600">소스 매핑이 아직 없는 Entity</h2><p class="k-s" style="margin:0">문서에만 있는 개념, 식별 키 후보와 소스 후보를 기록해 두면 데이터 매핑에서 이어 사용합니다</p>
+      ${ev.gaps.slice(0, 8).map(gapRow).join('') || '<p class="k-cf">근거 누락이 없습니다.</p>'}${ev.gaps.length > 8 ? `<p class="k-cf line">8 / ${ev.gaps.length}건 표시</p>` : ''}</section>`;
+    const unbound = ev.unbound_total ? `<section class="k-v qa-orph" aria-labelledby="qa-orph"><h2 class="k-15" id="qa-orph" style="margin:0;font-weight:600">Mapping 미정 Entity</h2>
       ${ev.unbound.slice(0, 6).map((u) => `<div class="k-14" style="display:flex;justify-content:space-between;gap:12px"><span>${esc(u.label)}<span class="k-s">@${esc(u.name)}</span></span><span class="k-mut">${esc(u.why)}</span></div>`).join('')}${ev.unbound_total > 6 ? `<span class="k-s">외 ${ev.unbound_total - 6}개</span>` : ''}
-      <a class="k-lnk flat" href="#objects">엔티티 관리에서 보기${ki('chevR', 14, 1.75)}</a></section>` : '';
+      <a class="k-lnk flat" href="#objects">Entity 보기${ki('chevR', 14, 1.75)}</a></section>` : '';
     const STATE = { embedded: 'ok', pending: 'b', failed: 'bad', off: '', none: '' };
     const rows = docs.map((d) => `<tr><td><button class="qa-docname" data-act="qaEvDoc" data-doc="${esc(d.name)}"><b class="k-b">${esc(d.name)}</b></button><br><span class="k-s">${esc(d.kind_label)}${d.fixed ? ' · 기본 자료' : ' · 업로드'}</span></td><td>항목 ${count(d.sections)} · 청크 ${count(d.passages)}</td><td>Entity ${count(d.entities)} · 언급 ${count(d.mentions)}회</td><td>${kChip(d.state_label, STATE[d.state] || '')}</td></tr>`).join('');
-    const materials = `<section class="k-card" aria-labelledby="qa-mat"><div class="k-ch"><h2 id="qa-mat">자료</h2>${kChip(String(docs.length))}${known('ai') ? '<span class="k-s k-push">초안 생성은 AI 초안 생성 화면에서 실행합니다</span>' : '<span class="k-push"></span>'}${upload}</div>
-      ${docs.length ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">자료</th><th scope="col">구성</th><th scope="col">정의와 닿는 곳</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="k-cf">원문과 항목별 근거, 관계 추출은 <a href="#docs">문서</a>에서, 파일과 테이블까지 함께 보려면 <a href="#explorer">자산 탐색기</a>에서 봅니다</p>` : '<p class="k-cf">아직 자료가 없습니다. 정책서나 정의서를 올리면 여기에 나옵니다.</p>'}</section>`;
+    const materials = `<section class="k-card" aria-labelledby="qa-mat"><div class="k-ch"><h2 id="qa-mat">자료</h2>${kChip(String(docs.length))}<span class="k-push"></span>${upload}</div>
+      ${docs.length ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">자료</th><th scope="col">구성</th><th scope="col">정의 연결</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="k-cf">등록된 자료가 없습니다.</p>'}</section>`;
     return `${head}<div class="k-cols">${matrix}<div class="qa-side" style="flex:2 1 320px;min-width:0">${gaps}${unbound}</div></div>${materials}${next}`;
   }
 

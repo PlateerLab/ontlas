@@ -13,8 +13,8 @@ QUESTION_KEYS = ("text", "decision", "key", "query", "params")  # what update_qu
 META_KEYS = ("type", "holdout", "grading", "keywords", "owner")
 # an audit event as the log names it: (word, tone)
 EVENT = {"decided": ("판정", "b"), "answered": ("질문 답변", ""), "function_ran": ("함수 실행", ""),
-         "requested": ("액션 요청", "warn"), "approved": ("승인", "ok"), "auto_approved": ("자동 승인", "ok"),
-         "rejected": ("반려", "bad"), "executed": ("원천 반영", "ok"), "written": ("원천 기록", "ok"),
+         "requested": ("Action 요청", "warn"), "approved": ("승인", "ok"), "auto_approved": ("자동 승인", "ok"),
+         "rejected": ("반려", "bad"), "executed": ("데이터 소스 반영", "ok"), "written": ("데이터 소스 기록", "ok"),
          "called": ("외부 호출", ""), "call_failed": ("외부 호출 실패", "bad"), "rolled_back": ("되돌림", "warn"),
          "stale": ("재검사 실패", "bad")}
 CHANGE_EVENT = {"proposed": ("변경 요청", ""), "approved": ("승인", "ok"), "rejected": ("반려", "bad")}
@@ -38,10 +38,10 @@ def _question(a: dict, onto) -> dict:
         raise ValueError("질문이 없어 저장하지 못했습니다. 질문을 입력해 주세요.")
     kind = str(a.get("type") or "")
     if kind not in QUESTION_TYPES:
-        raise ValueError("유형이 없어 저장하지 못했습니다. 정의형, 판정형, 값 조회형 가운데 하나를 골라 주세요.")
+        raise ValueError("유형이 없어 저장하지 못했습니다. 정의형, 판정형, 값 조회형 중 하나를 선택해 주세요.")
     grading = str(a.get("grading") or "")
     if grading and grading not in GRADINGS:
-        raise ValueError("평가 방법이 올바르지 않아 저장하지 못했습니다. 평가 방법을 다시 골라 주세요.")
+        raise ValueError("평가 방법이 올바르지 않아 저장하지 못했습니다. 평가 방법을 다시 선택해 주세요.")
     out: dict[str, Any] = {"text": text, "type": kind, "grading": grading, "holdout": bool(a.get("holdout")),
                            "keywords": _keywords(a.get("keywords")), "owner": str(a.get("owner") or "").strip()}
     by_words = bool(out["keywords"]) and grading in ("keywords", "evidence")  # held right by its words, not by a value
@@ -49,31 +49,31 @@ def _question(a: dict, onto) -> dict:
     if a.get("decision"):
         name = str(a["decision"])
         if name not in onto.decisions:
-            raise ValueError("판정할 결정표가 없어 저장하지 못했습니다. 결정표를 골라 주세요.")
+            raise ValueError("결정표가 선택되지 않아 저장하지 못했습니다. 결정표를 선택해 주세요.")
         given = a.get("values") if isinstance(a.get("values"), dict) else {}
         values = {str(k): v for k, v in given.items() if v != ""}  # None stays: the value is given as none
         key = str(a.get("key") or "").strip()
         if not key and not values:
-            raise ValueError("판정 값이나 레코드 키가 없어 저장하지 못했습니다. 판정 값을 하나 이상 입력하거나 레코드 키를 입력해 주세요.")
+            raise ValueError("판정 값이나 레코드 키가 없어 저장하지 못했습니다. 판정 값 또는 레코드 키를 입력해 주세요.")
         expect = expect if isinstance(expect, dict) else {}
         if not expect and not by_words:
-            raise ValueError("정답이 없어 저장하지 못했습니다. 기대하는 판정 결과를 하나 이상 입력해 주세요.")
+            raise ValueError("정답이 없어 저장하지 못했습니다. 정답 판정 결과를 하나 이상 입력해 주세요.")
         out.update(decision=name, key=key, values=values, expect=expect)
     elif a.get("query"):
         name = str(a["query"])
         if name not in onto.queries:
-            raise ValueError("값을 읽을 쿼리가 없어 저장하지 못했습니다. 등록된 쿼리를 골라 주세요.")
+            raise ValueError("질의가 선택되지 않아 저장하지 못했습니다. 등록된 질의를 선택해 주세요.")
         params = a.get("params") if isinstance(a.get("params"), dict) else {}
         if expect in (None, "", {}, []) and not by_words:
-            raise ValueError("정답이 없어 저장하지 못했습니다. 기대하는 행 수를 입력해 주세요.")
+            raise ValueError("정답이 없어 저장하지 못했습니다. 기대 행 수를 입력해 주세요.")
         out.update(query=name, params=params, expect=expect if expect not in (None, "") else {})
     else:
         if kind != "definition":
-            raise ValueError("무엇으로 답할지 정해지지 않아 저장하지 못했습니다. 결정표나 쿼리를 골라 주세요.")
+            raise ValueError("판정 대상이 없어 저장하지 못했습니다. 결정표 또는 질의를 선택해 주세요.")
         words = expect if isinstance(expect, list) else [expect] if isinstance(expect, str) and expect.strip() else []
         words = [str(w).strip() for w in words if str(w).strip()]
         if not words and not out["keywords"]:
-            raise ValueError("정답이 없어 저장하지 못했습니다. 답에 들어 있어야 할 말을 정답이나 키워드에 입력해 주세요.")
+            raise ValueError("정답이 없어 저장하지 못했습니다. 정답 또는 키워드를 입력해 주세요.")
         out["expect"] = words[0] if len(words) == 1 else words
     return out
 
@@ -119,18 +119,18 @@ def question_save(s, a, who) -> dict:
     qid = str(a.get("id") or "").strip()
     cur = next((q for q in onto.questions if q.id == qid), None)
     if a.get("new") and cur is not None:
-        raise ValueError(f"질문 ID {qid}은(는) 이미 있어 저장하지 못했습니다. 다른 ID를 입력하거나 비워 두면 자동으로 붙습니다.")
+        raise ValueError(f"질문 ID {qid}이(가) 이미 있어 저장하지 못했습니다. 다른 ID를 입력해 주세요.")
     q = _question(a, onto)
     try:
         if cur is None:
             qid = qid or _next_id([x.id for x in onto.questions])
             if not re.fullmatch(r"[\w.\-]{1,40}", qid):
-                raise ValueError("질문 ID에 쓸 수 없는 글자가 있어 저장하지 못했습니다. 영문, 숫자, - _ . 만 사용해 주세요.")
+                raise ValueError("질문 ID에 사용할 수 없는 문자가 있어 저장하지 못했습니다. 영문, 숫자, - _ . 만 입력해 주세요.")
             ws.apply("add_question", {"id": qid, **q})
         elif _asks(q, cur) != _as_asked(cur):
             if cur.decision and cur.params:  # add_question writes no parameters beside a decision: they would be lost
-                raise ValueError("이 질문은 Parameter와 함께 판정하도록 정의되어 있어 질문 문장과 판정 대상을 바꾸지 못했습니다. "
-                                 "정답, 판정 값, 평가 방법은 바꿀 수 있습니다.")
+                raise ValueError("Parameter로 판정하는 질문이어서 질문과 판정 대상을 변경하지 못했습니다. "
+                                 "정답, 판정 값, 평가 방법만 변경해 주세요.")
             ws.apply("delete_question", {"id": qid})
             try:
                 ws.apply("add_question", {"id": qid, **q})
@@ -148,7 +148,7 @@ def question_save(s, a, who) -> dict:
             if not cur.decision:
                 changed.pop("values", None)
             if not changed:
-                raise ValueError("바뀐 내용이 없어 저장하지 못했습니다. 값을 고친 뒤 다시 저장해 주세요.")
+                raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 값을 변경한 뒤 다시 저장해 주세요.")
             ws.apply("update_question", {"id": qid, **changed})
     except EditError as e:
         raise ValueError(_edit_text(str(e))) from None
@@ -284,7 +284,7 @@ def evidence(s, a, who) -> dict:
             whole = len(lacking) == len(ents)
             gaps.append({"kind": "object", "object": area.name, "who": area.label or area.name,
                          "what": "자료 근거 없음" if whole else f"Entity {len(lacking)}개 자료 근거 없음",
-                         "sub": ("이 Object의 Entity가 어느 자료에도 나오지 않습니다" if whole else
+                         "sub": ("자료에 언급된 Entity 없음" if whole else
                                  ", ".join(lacking[:4]) + (f" 외 {len(lacking) - 4}" if len(lacking) > 4 else ""))})
     for d in o.decisions.values():
         bare = [r.id for r in d.rules if not r.cite]

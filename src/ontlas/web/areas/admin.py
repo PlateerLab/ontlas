@@ -31,7 +31,7 @@ CAPABILITIES = [
     ("자료 업로드 · 초안 생성", "upload"),
     ("초안 적용", "draft/apply"),
     ("변경 요청 승인 · 버전 배포", "change/decide"),
-    ("액션 승인 · 되돌리기", "approve"),
+    ("Action 승인 · 되돌리기", "approve"),
     ("데이터 소스 연결", "connect"),
     ("저장소 · 임베딩 설정", "space/store"),
     ("검증 통과 조건 저장", "flow/save"),
@@ -42,8 +42,8 @@ CAPABILITIES = [
 ROLE_WORD = {"viewer": "조회", "editor": "편집", "approver": "영역 담당", "admin": "관리자"}  # as the screens name the roles
 CHANGE_EVENT = {"proposed": "변경 요청", "approved": "승인 · 배포", "rejected": "반려", "marked": "항목 검토", "commented": "댓글"}
 # the screens the language model works behind: [what it does there, the screen]
-MODEL_USES = [("질문 답변 · 자연어 질의", "search"), ("AI 초안 생성", "ai"), ("정책서로 규칙 초안", "ruleagent"),
-              ("문서의 관계 읽기", "evidence"), ("개념 초안", "concepts")]
+MODEL_USES = [("질문 답변 · 자연어 질의", "search"), ("AI 초안 생성", "ai"), ("정책서 규칙 초안", "ruleagent"),
+              ("문서 관계 추출", "evidence"), ("개념 초안", "concepts")]
 
 
 def bind(**parts: Any) -> None:
@@ -155,7 +155,7 @@ def users(s, a, who) -> dict:
 def user_save(s, a, who) -> dict:
     store = _users()
     if store is None:
-        raise ValueError("이 서버는 사용자 파일 없이 시작해 사용자를 저장하지 못했습니다. 서버를 --users 와 함께 다시 시작해 주세요.")
+        raise ValueError("사용자 파일이 지정되지 않아 사용자를 저장하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
     uid, name = str(a.get("id") or "").strip(), " ".join(str(a.get("name") or "").split())[:80]
     roles = [str(r) for r in a.get("roles") or []]
     password, new = str(a.get("password") or ""), bool(a.get("new"))
@@ -171,7 +171,7 @@ def user_save(s, a, who) -> dict:
     if (new or password) and len(password) < PASSWORD_MIN:
         raise ValueError(f"비밀번호가 {PASSWORD_MIN}자보다 짧아 저장하지 못했습니다. {PASSWORD_MIN}자 이상 입력해 주세요.")
     if not new and "admin" in store.users[uid].roles and "admin" not in roles and not _admins(store, without=uid):
-        raise ValueError("마지막 관리자의 관리 역할은 뺄 수 없어 저장하지 못했습니다. 다른 사용자에게 먼저 관리 역할을 주세요.")
+        raise ValueError("마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
     if new:
         store.add(uid, password, name=name, roles=roles)
         _note(s, who, "user", f"사용자 {name or uid}({uid}) 추가 · 역할 {_said(roles)}")
@@ -193,14 +193,14 @@ def user_save(s, a, who) -> dict:
 def user_drop(s, a, who) -> dict:
     store, logins = _users(), _logins()
     if store is None:
-        raise ValueError("이 서버는 사용자 파일 없이 시작해 사용자를 폐기하지 못했습니다.")
+        raise ValueError("사용자 파일이 지정되지 않아 사용자를 폐기하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
     uid = str(a.get("id") or "")
     if uid not in store.users:
         raise LookupError(f"사용자 {uid}")
     if who is not None and who.id == uid:
-        raise ValueError("로그인한 본인 계정은 폐기할 수 없어 처리하지 못했습니다. 다른 관리자가 폐기해 주세요.")
+        raise ValueError("본인 계정은 폐기할 수 없어 처리하지 못했습니다. 다른 관리자에게 요청해 주세요.")
     if "admin" in store.users[uid].roles and not _admins(store, without=uid):
-        raise ValueError("마지막 관리자는 폐기할 수 없어 처리하지 못했습니다. 다른 사용자에게 먼저 관리 역할을 주세요.")
+        raise ValueError("마지막 관리자는 폐기할 수 없어 처리하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
     gone = store.users.pop(uid)
     _write(store)
     with logins.lock:  # whoever is signed in as that person is signed out now
@@ -400,18 +400,18 @@ def system(s, a, who) -> dict:
     journal = st.changes.journal
     host = who is not None  # what the machine runs is said to an admin who signed in, not to a visitor
     python = platform.python_version() if host else ".".join(platform.python_version_tuple()[:2])
-    parts = [{"name": "앱 서버", "detail": f"Python {python}" + (f" · {platform.system()} {platform.release()}" if host else ""), "state": "ok"}]
+    parts = [{"name": "애플리케이션 서버", "detail": f"Python {python}" + (f" · {platform.system()} {platform.release()}" if host else ""), "state": "ok"}]
     for b in con["stores"]:
-        parts.append({"name": "원천 DB" if b["source"] else "그래프 저장소", "detail": f"{b['kind']} · {b['language']}" + (f" · 응답 {b['ms']}ms" if b["state"] == "ok" else ""),
+        parts.append({"name": "소스 DB" if b["source"] else "그래프 저장소", "detail": f"{b['kind']} · {b['language']}" + (f" · 응답 {b['ms']}ms" if b["state"] == "ok" else ""),
                       "state": b["state"], "error": b["error"]})
     for v in con["vectors"]:
         parts.append({"name": "벡터 저장소", "detail": v["kind"], "state": v["state"], "error": v["error"]})
     emb = con["embedder"]
     parts.append({"name": "임베딩 모델", "detail": f"{emb['kind']} · {emb['dim']}차원" + (f" · {emb['name']}" if emb.get("name") else ""), "state": "ok"})
     llm = con["llm"]
-    parts.append({"name": "언어 모델", "detail": ("OpenAI 호환 API" if llm["kind"] == "openai" else llm["kind"] or "연결 없음")
+    parts.append({"name": "언어 모델", "detail": ("OpenAI 호환 API" if llm["kind"] == "openai" else llm["kind"] or "미연결")
                   + (f" · 마지막 호출 {llm['at'].replace('T', ' ')}" if llm["at"] else ""), "state": llm["state"], "error": llm["error"]})
-    parts.append({"name": "외부 API", "detail": "REST /v1 · MCP" if con["rest"] else "토큰 없이 시작해 꺼져 있음", "state": "ok" if con["rest"] else "off"})
+    parts.append({"name": "외부 API", "detail": "REST /v1 · MCP" if con["rest"] else "사용 안 함", "state": "ok" if con["rest"] else "off"})
     held = None
     if sessions is not None and not getattr(sessions, "team", False):
         with sessions.lock:
@@ -454,9 +454,9 @@ def ai(s, a, who) -> dict:
 def ai_test(s, a, who) -> dict:
     """One short call to the language model, timed: it answers or it says why not."""
     if s.llm is None:
-        raise ValueError("언어 모델이 연결되어 있지 않아 시험하지 못했습니다. 서버를 --llm-url 과 함께 시작해 주세요.")
+        raise ValueError("언어 모델이 연결되어 있지 않아 테스트하지 못했습니다. 서버를 --llm-url 옵션으로 시작해 주세요.")
     if not _ask_gate().allow():
-        raise ValueError("분당 질문 한도를 넘어 시험하지 못했습니다. 1분 뒤 다시 시도해 주세요.")
+        raise ValueError("분당 질문 한도를 넘어 테스트하지 못했습니다. 1분 뒤 다시 시도해 주세요.")
     llm, _ = s._budgeted()
     started = time.perf_counter()
     try:

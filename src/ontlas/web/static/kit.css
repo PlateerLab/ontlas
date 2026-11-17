@@ -209,7 +209,7 @@ a.k-row:hover, button.k-row:hover { background:var(--bg); color:var(--ink); }
 .k-note.b { background:var(--blue-wash); border:1px solid var(--blue-line); color:var(--blue-t); }
 .k-note.bad { background:var(--bad-soft); border:1px solid var(--bad-line); color:var(--bad); }
 .k-pre { margin:0; padding:12px 16px; border-radius:8px; background:var(--ink); color:#fff; font-family:var(--mono); font-size:13px; line-height:1.6; overflow-x:auto; white-space:pre-wrap; }
-.k-empty { background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); padding:32px 24px; display:flex; flex-direction:column; gap:8px; align-items:flex-start; min-height:220px; box-sizing:border-box; }
+.k-empty { background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); padding:32px 24px; display:flex; flex-direction:column; gap:12px; align-items:flex-start; min-height:160px; box-sizing:border-box; }
 .k-empty h2 { margin:0; font-size:18px; font-weight:500; }
 .k-empty p { margin:0 0 8px; font-size:14px; color:var(--muted); line-height:1.6; flex:1; }
 .k-tile { display:flex; flex-direction:column; gap:2px; padding:12px 16px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); min-width:132px; text-decoration:none; }

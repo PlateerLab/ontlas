@@ -134,5 +134,5 @@ def test_only_the_change_in_use_is_taken_back_and_not_over_unsent_edits(session)
     with pytest.raises(ValueError, match="작성 중인 변경"):
         call("POST", "ont2/rollback", s, {"change": first["id"]})
     s.manage_propose()
-    with pytest.raises(ValueError, match="가장 최근"):
+    with pytest.raises(ValueError, match="최근 배포 변경 요청이 아니어서"):
         call("POST", "ont2/rollback", s, {"change": first["id"]})

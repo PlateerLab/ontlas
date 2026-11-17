@@ -15,8 +15,8 @@ from ontlas.web.routes import get, post
 _REST: dict[str, Any] = {"rest": None}
 
 # what the audit trail calls an agent's call, in the page's words
-EVENT_WORD = {"decided": "판정", "answered": "답변", "validated": "값 검증", "function_ran": "함수 실행", "requested": "액션 요청",
-              "executed": "액션 실행", "auto_approved": "자동 승인"}
+EVENT_WORD = {"decided": "판정", "answered": "답변", "validated": "값 검증", "function_ran": "함수 실행", "requested": "Action 요청",
+              "executed": "Action 실행", "auto_approved": "자동 승인"}
 
 
 def register_rest(rest) -> None:
@@ -74,7 +74,7 @@ def try_call(s, a, who) -> dict:
 
     path, role = str(a.get("path") or ""), str(a.get("policy") or "")
     if path not in s.TRY:
-        raise ValueError("이 화면에서는 조회와 판정 API만 실행할 수 있습니다.")
+        raise ValueError("실행할 수 없는 API라 요청하지 못했습니다. 판정 · 값 검증 · 용어 해석 · 개념 조회 API를 선택해 주세요.")
     if role and role not in s.studio.onto.roles:
         raise LookupError(f"접근 정책 {role}")
     body = {k: v for k, v in (a.get("body") or {}).items() if k != "library"}  # this page is on one library already
@@ -96,8 +96,8 @@ def reindex(s, a, who) -> dict:
     try:
         r = sp.index()
     except (VectorError, OSError, EmbedError) as e:
-        raise ValueError(f"다시 색인하지 못했습니다. {e}") from None
+        raise ValueError(f"색인 오류로 재색인하지 못했습니다. {e}") from None
     if r.get("embed_error"):
-        raise ValueError(f"임베딩 모델이 응답하지 않아 다시 색인하지 못했습니다. {r['embed_error']}")
+        raise ValueError(f"임베딩 모델이 응답하지 않아 재색인하지 못했습니다. {r['embed_error']} 임베딩 모델 연결을 확인해 주세요.")
     s.event("adapter", f"재색인 · 청크 {r['chunks']}개")
     return {"ok": True, "chunks": r["chunks"], "errors": r.get("errors") or {}, "space": s.space_state()}

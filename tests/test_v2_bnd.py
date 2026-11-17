@@ -1,4 +1,4 @@
-"""What the 데이터 바인더 screens ask: a registered query as its screen shows it and its change or removal as an edit,
+"""What the Data Binding screens ask: a registered query as its screen shows it and its change or removal as an edit,
 a query read into every store's language without being run, the SQL an Entity's binding makes, and an action tried
 without a request being made."""
 import json
@@ -106,7 +106,7 @@ def test_the_sql_of_a_binding_reads_the_bound_properties_from_the_table(session)
     assert out["sql"].startswith("SELECT") and '"order_items"' in out["sql"] and '"item_status"' in out["sql"]
     assert "line_total" not in out["sql"]  # a computed property reads no column
     concept = get(session, "bnd/binding", entity="Party")
-    assert concept["sql"] == "" and "바인딩하지 않은" in concept["error"]
+    assert concept["sql"] == "" and "테이블이 지정되지 않은" in concept["error"]
     with pytest.raises(LookupError):
         get(session, "bnd/binding", entity="Nope")
 
@@ -144,5 +144,5 @@ def test_a_try_says_what_is_missing_and_who_may_not_ask(session):
     by = {c["name"]: c for c in out["checks"]}
     assert not out["ok"] and not by["parameters"]["passed"] and by["parameters"]["detail"] == "reason 값 없음"
     assert by["role"]["passed"] == session.studio.onto.roles["support_agent"].can("request", "requestReturn")
-    with pytest.raises(ValueError, match="배포하지 않은 액션"):
+    with pytest.raises(ValueError, match="배포되지 않은 Action"):
         post(session, "bnd/action/try", action="notThere", role="operator")

@@ -1,4 +1,4 @@
-"""What the later screens of 온톨로지 매니저 ask beyond the session's own routes: the change request being written
+"""What the later screens of Ontology ask beyond the session's own routes: the change request being written
 (its title and what it will be numbered), how one term of the lexicon came to read as it does, and taking the last
 deployed change back as a new version."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ TERM_FIELD_WORD = {"term": "용어", "english": "영문 표기", "kind": "구분
                    "synonyms": "동의어", "abbreviations": "약어", "channels": "채널 표기", "hidden": "숨은 표기",
                    "related": "관련어", "broader": "상위어", "narrower": "하위어", "confusable": "혼동주의",
                    "avoid": "쓰지 않는 표현", "source": "출처", "cite": "근거", "owner": "담당자", "status": "상태"}
-STATUS_WORD = {"pending": "검토 중", "approved": "배포", "rejected": "반려"}
+STATUS_WORD = {"pending": "검토 중", "approved": "배포됨", "rejected": "반려됨"}
 TITLE_MAX, DESCRIPTION_MAX = 60, 500
 
 
@@ -57,10 +57,10 @@ def draft_save(s, a, who) -> dict:
     if not title:
         raise ValueError("제목이 없어 저장하지 못했습니다. 변경 요청의 제목을 입력해 주세요.")
     if len(title) > TITLE_MAX or len(description) > DESCRIPTION_MAX:
-        raise ValueError(f"제목은 {TITLE_MAX}자, 설명은 {DESCRIPTION_MAX}자까지 입력할 수 있어 저장하지 못했습니다. 줄여서 다시 저장해 주세요.")
+        raise ValueError(f"제목 {TITLE_MAX}자, 설명 {DESCRIPTION_MAX}자를 넘어 저장하지 못했습니다. 길이를 줄여 주세요.")
     ws = s._ws()
     if not _titled(ws) and ws.current is not None and title == ws.current.label:
-        raise ValueError("직전에 배포한 변경 요청과 제목이 같아 저장하지 못했습니다. 이번 변경을 가리키는 제목을 입력해 주세요.")
+        raise ValueError("직전 배포 변경 요청과 제목이 같아 저장하지 못했습니다. 다른 제목을 입력해 주세요.")
     ws.module.label, ws.module.description = title, description
     return {"ok": True, **_draft(s)}
 
@@ -237,9 +237,9 @@ def rollback(s, a, who) -> dict:
     cid = str(a.get("change") or "")
     cur = s._space_version()
     if not cid or cid != cur["change"]:
-        raise ValueError("가장 최근에 배포한 변경만 되돌릴 수 있어 처리하지 못했습니다. 운영 버전을 만든 변경을 골라 주세요.")
+        raise ValueError("최근 배포 변경 요청이 아니어서 롤백하지 못했습니다. 운영 버전의 변경 요청을 선택해 주세요.")
     if s._ws().dirty:
-        raise ValueError("작성 중인 변경이 있어 롤백하지 못했습니다. 작성 중인 변경을 올리거나 폐기한 뒤 다시 시도해 주세요.")
+        raise ValueError("작성 중인 변경 요청이 있어 롤백하지 못했습니다. 작성 중인 변경 요청을 등록하거나 폐기해 주세요.")
     cr = s.studio.changes.requests[cid]
     was = (cr.review or {}).get("from_version") or ""
     lib = s.studio.changes.store or s.studio.library
@@ -254,7 +254,7 @@ def rollback(s, a, who) -> dict:
         return {"ok": True, "pending": True, "change": change}
     out = s.decide_change(change["id"], True)
     if not out["ok"]:
-        s.studio.changes.reject(change["id"], by=s.who, reason="롤백한 정의가 흐름 통과 조건을 충족하지 못함")
+        s.studio.changes.reject(change["id"], by=s.who, reason="롤백 정의의 통과 조건 미충족")
         raise ValueError(out["error"])
     if cr.module == WORKSPACE:
         s.workspace = None

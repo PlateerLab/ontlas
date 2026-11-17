@@ -157,7 +157,7 @@ def test_a_rule_draft_is_recorded_with_what_its_check_found_and_follows_its_chan
     try:
         assert get(session, "home/ai")["jobs"][0]["state"] == "filed"
         requests["T1"].status = "approved"
-        assert get(session, "home/ai")["jobs"][0]["state_label"] == "배포"
+        assert get(session, "home/ai")["jobs"][0]["state_label"] == "배포됨"
     finally:
         del requests["T1"]
 

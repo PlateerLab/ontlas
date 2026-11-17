@@ -168,7 +168,7 @@ def test_a_person_changes_their_own_password_and_every_sign_in_of_theirs_ends(se
         for _ in range(entry.WRONG_PER_MINUTE):
             with pytest.raises(ValueError):
                 change(session, {"current": "guess-guess-guess", "new": "third-password-3"}, kim)
-        with pytest.raises(ValueError, match="1분 뒤"):
+        with pytest.raises(ValueError, match="1분 후"):
             change(session, {"current": "second-password-2", "new": "third-password-3"}, kim)
         # where nobody signs in there is no password, and the session's keeping is said instead
         routes.SERVER.clear()

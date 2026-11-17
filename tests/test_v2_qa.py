@@ -73,7 +73,7 @@ def test_what_did_not_change_is_not_rewritten_and_nothing_changed_is_said(s):
     same = {"id": "Q2", "type": q["type"], "text": q["text"], "decision": q["decision"], "key": q["key"],
             "values": q["values"], "expect": q["expect"], "grading": q["grading"], "holdout": q["holdout"],
             "keywords": q["keywords"], "owner": q["owner"]}
-    with pytest.raises(ValueError, match="바뀐 내용이 없어"):
+    with pytest.raises(ValueError, match="변경된 내용이 없어"):
         save(s, same, None)
     save(s, {**same, "holdout": True, "owner": "고객센터"}, None)
     now = pending(s, "Q2")
@@ -124,7 +124,7 @@ def test_a_question_filed_under_one_type_may_ask_another_way(s):
     save(s, args, None)
     now = pending(s, "OP6")
     assert now["owner"] == "배송팀" and now["type"] == "value" and now["decision"] == q["decision"] and now["values"] == q["values"]
-    with pytest.raises(ValueError, match="무엇으로 답할지"):
+    with pytest.raises(ValueError, match="판정 대상이 없어"):
         save(s, {"new": True, "type": "value", "text": "얼마인가요?", "expect": {"rows": 1}}, None)
 
 

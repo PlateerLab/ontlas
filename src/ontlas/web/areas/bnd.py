@@ -1,4 +1,4 @@
-"""데이터 바인더: what its screens ask beyond the routes the older tabs already had.
+"""Data Binding: what its screens ask beyond the routes the older tabs already had.
 
 - a registered query as its screen shows it (where it starts, the relations it follows, what it takes and returns,
   who uses it), and its change or removal as an edit like any other,
@@ -95,7 +95,7 @@ def query_check(s, a, who) -> dict:
     try:
         q = Query.from_dict(a.get("query"))
     except (IRError, TypeError, ValueError, KeyError, AttributeError) as e:
-        return {"ok": False, "error": f"쿼리 정의를 읽지 못했습니다. {str(e).splitlines()[0] if str(e) else type(e).__name__}",
+        return {"ok": False, "error": f"질의 정의 형식이 맞지 않아 읽지 못했습니다. {str(e).splitlines()[0] if str(e) else type(e).__name__}",
                 "translations": []}
     out, params = [], set()
     for target, label in TARGETS:
@@ -155,7 +155,7 @@ def binding(s, a, who) -> dict:
     target = f"sql:{dialect}" if dialect and st.backend().capabilities.language == "sql" else "sql:postgres"
     out: dict[str, Any] = {"entity": name, "table": t.table or "", "target": target, "sql": "", "error": "", "pending": pending}
     if not t.table:
-        out["error"] = "테이블에 바인딩하지 않은 Entity라 만들 SQL이 없습니다."
+        out["error"] = "테이블이 지정되지 않은 Entity라 SQL을 생성하지 못했습니다."
         return out
     props = [p for p in all_props(onto, name) if not find_prop(onto, name, p).expr]
     try:
@@ -205,7 +205,7 @@ def action_try(s, a, who) -> dict:
     name = str(a.get("action") or "")
     act = onto.actions.get(name)
     if act is None:
-        raise ValueError("아직 배포하지 않은 액션이라 실행해 보지 못했습니다. 변경 요청을 올려 반영한 뒤 다시 실행해 주세요.")
+        raise ValueError("배포되지 않은 Action이라 테스트를 실행하지 못했습니다. 변경 요청을 승인한 뒤 다시 실행해 주세요.")
     role = str(a.get("role") or "")
     key = str(a.get("key") or "").strip()
     given = a.get("params") if isinstance(a.get("params"), dict) else {}
@@ -218,7 +218,7 @@ def action_try(s, a, who) -> dict:
         checks.append({"name": "role", "title": "권한", "passed": ok,
                        "detail": (f"{r.label or r.name} 요청 가능" if ok else f"{(r.label or r.name) if r else '접근 정책 없음'}에 요청 권한 없음")})
     _, problems = check_parameters(act.parameters, dict(given))
-    checks.append({"name": "parameters", "title": "파라미터", "passed": not problems,
+    checks.append({"name": "parameters", "title": "Parameter", "passed": not problems,
                    "detail": "; ".join(_problem_said(x) for x in problems) if problems else (", ".join(f"{k} {v}" for k, v in given.items() if v not in ("", None)) or "입력값 없음")})
     current = None
     if key and connected:
@@ -243,7 +243,7 @@ def action_try(s, a, who) -> dict:
             checks.append({"name": c.name, "title": title, "passed": c.passed, "detail": detail})
         outside = st.actions._outside(actor, "request", act, key)
         if outside:
-            checks.append({"name": "scope", "title": "행 범위", "passed": False, "detail": "이 접근 정책의 범위 밖의 레코드"})
+            checks.append({"name": "scope", "title": "행 범위", "passed": False, "detail": "접근 정책 범위 밖 레코드"})
     else:  # no record to read: each condition is asked on the values given for it
         for c in act.criteria:
             if not c.decision:

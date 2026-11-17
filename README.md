@@ -56,11 +56,11 @@ separate copy.
 
 | Module | What it does | Where it is on the page |
 |---|---|---|
-| **Ontlas Studio** | Define and check: Objects, the Entities under them and their properties and relations, the workspace, validation questions and the flow's pass conditions | 온톨로지 매니저, 품질 관리 |
-| **Ontlas Map** | Bind the definition to source tables, columns and codes, and to the words people use for it; check the definition against the database | 데이터 바인더, 온톨로지 매니저 › 용어사전 |
-| **Ontlas Rule** | Formulas and decision criteria in three layers (AXIOM, Custom, Standard): rule cards, decision tables in plain words, parameters, functions and computed properties | 시멘틱 매니저 › 규칙 |
-| **Ontlas Query** | Answers from checked definitions: one query compiled for whatever store a deployment has, search over documents and records, the REST API and MCP tools | 검색 · 질문, 데이터 바인더 › 쿼리, 운영 › 연동 · API |
-| **Ontlas Guard** | What people and agents may do: actions with criteria and approval, roles, masking and row scope, change requests tried on a copy before they apply, and the versions they make | 데이터 바인더 › 액션, 운영 › 접근 정책, 온톨로지 매니저 › 변경 요청 · 버전 |
+| **Ontlas Studio** | Define and check: Objects, the Entities under them and their properties and relations, the workspace, validation questions and the flow's pass conditions | Ontology, Quality |
+| **Ontlas Map** | Bind the definition to source tables, columns and codes, and to the words people use for it; check the definition against the database | Data Binding, Ontology › 용어 사전 |
+| **Ontlas Rule** | Formulas and decision criteria in three layers (AXIOM, Custom, Standard): rule cards, decision tables in plain words, parameters, functions and computed properties | Semantic Layer › 규칙 |
+| **Ontlas Query** | Answers from checked definitions: one query compiled for whatever store a deployment has, search over documents and records, the REST API and MCP tools | 검색 · 질문, Data Binding › 질의, Operations › 연동 · API |
+| **Ontlas Guard** | What people and agents may do: actions with criteria and approval, roles, masking and row scope, change requests tried on a copy before they apply, and the versions they make | Data Binding › Action, Operations › 접근 정책, Ontology › 변경 요청 · 버전 |
 
 ## What it is for
 
@@ -116,19 +116,19 @@ Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the lib
 that offers more than one ontology (`--library`) opens on 온톨로지 선택; picking one opens its 홈, and the list at the top
 left of every screen switches between them afterwards. 홈 shows where the ontology stands: how far its definition has
 come (L0 개념 to L3 검증), its four parts with their numbers, the Objects, what waits, and the six steps of starting.
-The menu holds 홈, AI 초안 생성 and five parts: 시멘틱 매니저, 온톨로지 매니저, 데이터 바인더, 품질 관리 and 운영.
+The menu holds 홈, AI 초안 생성 and five parts: Semantic Layer, Ontology, Data Binding, Quality and 운영.
 
-**2. Define the ontology (온톨로지 매니저).** A definition has three levels: an **Object** is a top-level
+**2. Define the ontology (Ontology).** A definition has three levels: an **Object** is a top-level
 classification (주문, 상품, 결제: an area of the business with a definition of its own), an **Entity** is a concept under
-it (주문, 주문상품) and a **Property** is a value an Entity carries. None of it needs data. 오브젝트 관리 lists the Objects
-with their Entities, rules, maturity and owner; 엔티티 관리 is a tree of Entities by Object with the chosen one's
+it (주문, 주문상품) and a **Property** is a value an Entity carries. None of it needs data. Object lists the Objects
+with their Entities, rules, maturity and owner; Entity is a tree of Entities by Object with the chosen one's
 definition, grounds, readers, YAML and comments, its Properties, restrictions and state transitions; 그래프 탐색 draws
 Objects, Entities and Relations as a graph whose edges are edited beside it, with the diagram workspace one button
 away. Every item has its own screens: **추가 · 편집** (a form that checks while you type), **삭제** (what uses the item is
-listed before anything is asked) and **히스토리** (each change with its fields before and after, who and why). Saving
+listed before anything is asked) and **이력** (each change with its fields before and after, who and why). Saving
 does not change the ontology in use: the edit joins the change request being written (step 6).
 
-**3. Rules (시멘틱 매니저).** 규칙 opens on the three layers a rule belongs to, AXIOM (laws and integrity, checked
+**3. Rules (Semantic Layer).** 규칙 opens on the three layers a rule belongs to, AXIOM (laws and integrity, checked
 first), Custom (a customer's) and Standard (the common ones), with the rule cards and decision table rules in one list
 (see [Rules in three layers](#rules-in-three-layers)). 판정 테스트 decides on values typed in and shows the path the
 decision took through the layers; the checks name overlaps, unreachable rules and gaps; the parameters, metrics and
@@ -137,13 +137,13 @@ AXIOM card is changed as a change request to the module that defines it. The dec
 words, rows by dragging, the hit policy, boundary values and past cases recomputed) opens from the rule. 규칙 초안
 lists the drafts that wait, with what each stands on, and a reviewer approves, corrects or takes one out.
 
-**4. Connect data (데이터 바인더), when you want live values.** Definitions, rules and decisions on typed values
+**4. Connect data (Data Binding), when you want live values.** Definitions, rules and decisions on typed values
 work without it. 자료 업로드 in the top bar takes files and whole folders; each file says what it became (table data, a
 definition sheet, a document, raw material). AI 초안 생성 turns them into drafts (Entities, Properties and Relations
 from tables and definition sheets, a decision table from policy text) that are reviewed on 개념 초안 and 규칙 초안.
-데이터 소스 연결 connects a database, 데이터 매핑 sets each Property against its column and says where they differ,
-Entity 바인딩 binds an Entity and shows the SQL it makes with a preview of rows, 쿼리 keeps the registered queries (each
-read into nine store languages, run as an access policy) and 액션 the things an agent may ask to be done, with their
+데이터 소스 connects a database, Mapping sets each Property against its column and says where they differ,
+Entity Binding binds an Entity and shows the SQL it makes with a preview of rows, 질의 keeps the registered queries (each
+read into nine store languages, run as an access policy) and Action the things an agent may ask to be done, with their
 preconditions and approval. From the command line:
 
 ```bash
@@ -157,7 +157,7 @@ ontlas serve my-studio/studio.yaml
 A database needs `pip install "ontlas[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
-**5. Check it (품질 관리).** 검증질문 관리 keeps the questions with known answers by kind (정의 · 판정 · 값 조회), with a
+**5. Check it (Quality).** 검증 질문 keeps the questions with known answers by kind (정의 · 판정 · 값 조회), with a
 held-out set apart; 검증 runs them, says why a wrong one is wrong, and shows the pass conditions as measured, which are
 edited there.
 
@@ -168,7 +168,7 @@ ontlas conformance my-studio/studio.yaml    # every registered query on every ba
 ontlas gates my-studio/studio.yaml          # the flow's pass conditions, measured
 ```
 
-**6. Review and approve (온톨로지 매니저 › 변경 요청 · 버전).** The edits saved on the item screens wait as the change
+**6. Review and approve (Ontology › 변경 요청 · 버전).** The edits saved on the item screens wait as the change
 request being written: what changes, in the order saved, each undone on its own, tried on a copy, then filed. A filed
 request opens with each element before and after, what reads it, comments, the regression test and the pass
 conditions, and is rejected or approved into a new version; the versions are listed with compare, export and rollback.
@@ -178,7 +178,7 @@ The author cannot approve their own in a team. The same review from the command 
 ontlas review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
 ```
 
-**7. Use it and plug it in (검색 · 질문, 운영 › 연동 · API).** The box in the top bar (`Ctrl K`) jumps to any screen,
+**7. Use it and plug it in (검색 · 질문, Operations › 연동 · API).** The box in the top bar (`Ctrl K`) jumps to any screen,
 Object, decision table or query; 검색 · 질문 answers a question with what it understood, the verdict, the layers it
 went through and its sources. 연동 · API gives the four ways an agent or a platform takes the ontology (REST, the
 OpenAPI document, MCP, a database connection a platform lends), each with something to copy, and a playground that
@@ -200,26 +200,26 @@ the admin screens; the foot of the menu shows how far the definition has come.
 | | 온톨로지 선택 · 온톨로지 만들기 | Pick the ontology to work in, with its domain pack, maturity and version; make one from domain pack modules, an existing ontology, files (definition drafts or an OWL vocabulary) or nothing, and export it as a studio folder |
 | | 홈 | See the maturity in four steps, the four parts, the Objects, what waits and the steps of starting |
 | | AI 초안 생성 | Make drafts from uploaded material and follow them to their review |
-| 시멘틱 매니저 | 규칙 | See the rules by layer, try a decision on typed values, read the checks, and keep the parameters, metrics and functions (see step 3) |
+| Semantic Layer | 규칙 | See the rules by layer, try a decision on typed values, read the checks, and keep the parameters, metrics and functions (see step 3) |
 | | 규칙 초안 | Review the rule drafts: approve, correct and approve, or take out |
-| 온톨로지 매니저 | 오브젝트 관리 | List the Objects with their definition, Entities, rules, maturity and owner |
-| | 엔티티 관리 | Keep Entities, Properties, restrictions and state transitions |
+| Ontology | Object | List the Objects with their definition, Entities, rules, maturity and owner |
+| | Entity | Keep Entities, Properties, restrictions and state transitions |
 | | 그래프 탐색 | See and edit Relations as a graph; open the diagram workspace |
-| | 용어사전 | Keep the terms, the relations between expressions and the customer wording; bring a glossary in |
+| | 용어 사전 | Keep the terms, the relations between expressions and the customer wording; bring a glossary in |
 | | 개념 초안 | Review the Entities and Relations drawn from uploaded tables |
-| | 온톨로지 | See the size, the layers with their modules, the versions and the module library; export |
+| | 모듈 라이브러리 | See the size, the layers with their modules, the versions and the module library; export |
 | | 변경 요청 · 버전 | File, review, approve and roll back changes (see step 6) |
-| 데이터 바인더 | 데이터 소스 연결 | Connect a database or a platform's connection and see which tables are read |
-| | 데이터 매핑 | Set Properties against columns and codes, and see where they differ |
-| | Entity 바인딩 | Bind an Entity to a table, with the SQL it makes, a preview and the checks; the records are browsed from here |
-| | 쿼리 | Keep registered queries, read them into each store's language and run them as an access policy |
-| | 액션 | Define actions with preconditions and approval, try them, and handle requests |
-| 품질 관리 | 검증질문 관리 | Keep the questions with known answers and the held-out set |
+| Data Binding | 데이터 소스 | Connect a database or a platform's connection and see which tables are read |
+| | Mapping | Set Properties against columns and codes, and see where they differ |
+| | Entity Binding | Bind an Entity to a table, with the SQL it makes, a preview and the checks; the records are browsed from here |
+| | 질의 | Keep registered queries, read them into each store's language and run them as an access policy |
+| | Action | Define actions with preconditions and approval, try them, and handle requests |
+| Quality | 검증 질문 | Keep the questions with known answers and the held-out set |
 | | 검증 | Run the questions, read why a wrong one is wrong, and set the pass conditions |
-| 운영 | 저장소 · 엔진 | See every store, query language, reasoner and embedding as measured now |
+| Operations | 저장소 · 엔진 | See every store, query language, reasoner and embedding as measured now |
 | | 연동 · API | Copy the address, command or settings for each way in, and call the API as a policy |
 | | 접근 정책 | Say what each caller may read, see and run |
-| | 파이프라인 모니터링 | See the stages as they change, the log of decisions and the conditions that raise an alert |
+| | 파이프라인 관제 | See the stages as they change, the log of decisions and the conditions that raise an alert |
 | | 근거 지도 | Cross Objects with the documents that name their Entities and find what has no ground |
 | 상단 | 검색 · 질문 · 자료 업로드 · 할 일 · 알림 · 내 계정 | Search or ask, upload material, settle what waits, and see your roles, the guide and the way out |
 | 관리 | 온톨로지 설정 · 멤버 · 권한 | See the names, the quality targets and how approval works; export; see the users and what each role may do |
@@ -275,7 +275,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
   </tr>
   <tr>
     <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/rule-layers.png" alt="규칙: AXIOM, Custom and Standard with their counts, the rules in one list, and a test that decides on typed values"></td>
-    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/objects.png" alt="오브젝트 관리: the Objects with their Entities, rules, maturity and owner, and the chosen one beside the list"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/objects.png" alt="Object: the Objects with their Entities, rules, maturity and owner, and the chosen one beside the list"></td>
   </tr>
   <tr>
     <td><b>Rules in three layers.</b> AXIOM (laws and integrity, checked first), a customer's Custom rules and the common Standard ones, each with the modules that wrote them; every rule card with its statement, source, owner and status, and the AXIOM checks on the values in force.</td>
@@ -612,7 +612,7 @@ When each opened and closed is written to the journal.
 the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/monitor.png" alt="파이프라인 모니터링: the stages as tiles, the log of decisions and the conditions that raise an alert" width="920">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/monitor.png" alt="파이프라인 관제: the stages as tiles, the log of decisions and the conditions that raise an alert" width="920">
 </p>
 
 Nothing on it is scripted. Every number comes from the space as it is now, so it works on any ontology, including a
@@ -1008,7 +1008,7 @@ Held-out questions are reported apart from the ones a definition is tuned on (`s
 
 ## Manage objects, properties and relations
 
-The modelling workspace (온톨로지 매니저 › 그래프 탐색 › 다이어그램 작업 공간) is where the definition is changed: the Entities as cards on a canvas
+The modelling workspace (Ontology › 그래프 탐색 › 다이어그램 작업 공간) is where the definition is changed: the Entities as cards on a canvas
 with their keys, properties and named relations, grouped by Object; a tree by Object (or by module) with what is wrong; and the picked
 element's form, data, uses, YAML and comments, each a view of the same element. One switch away the same objects,
 properties and relations stand in three columns with a form under the picked row. Every element carries a status
@@ -1049,7 +1049,7 @@ the workspace module, is tried on a copy and is approved like any other change. 
 module editor and file it, and it comes back as a new version. With `--library-write`, what is switched on stays on across a restart; if a
 kept module no longer fits the source, the studio starts from its file's own list and says so.
 
-용어사전 holds what people call each definition: preferred and English labels, synonyms and abbreviations, what each
+용어 사전 holds what people call each definition: preferred and English labels, synonyms and abbreviations, what each
 screen calls it, hidden labels used only for matching, related, broader and narrower terms, and pairs that must not be
 swapped (결제금액 ≠ 주문금액, with why). A term names its definition (`concept: property:Payment.amount`); conflicts (one
 label on two definitions, a synonym that is also a pair not to swap, a definition that is not there) are reported, never

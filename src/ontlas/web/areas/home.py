@@ -15,7 +15,7 @@ from ontlas.web.routes import get, post
 FOUND_MAX = 40
 JOBS_MAX = 30
 # what a found entry is called on the page, and the screen that shows it
-FOUND = {"object": ("Entity", "def", "objects"), "query": ("쿼리", "def", "query"), "action": ("액션", "def", "actions"),
+FOUND = {"object": ("Entity", "def", "objects"), "query": ("질의", "def", "query"), "action": ("Action", "def", "actions"),
          "rule": ("규칙", "rule", "semrules"), "document": ("자료", "doc", "evidence"), "term": ("용어", "term", "lexicon")}
 
 
@@ -128,7 +128,7 @@ def find(s, a, who) -> dict:
 
     text = " ".join(str(a.get("q") or "").split())[:300]
     if not text:
-        raise ValueError("검색어가 없어 찾지 못했습니다. 찾을 내용을 입력해 주세요.")
+        raise ValueError("검색어가 없어 검색하지 못했습니다. 검색어를 입력해 주세요.")
     s._sync_space()
     tools = StudioTools(s.studio, actor_id=s.who or "page")
     tools.terms = s._terms()
@@ -180,12 +180,12 @@ def _job_state(s, job: dict) -> tuple[str, str]:
         d = s.pending[0] if s.pending else None
         if d is not None and d.label == job.get("label") and len(d.objects) == job["made"].get("objects"):
             return "waiting", "검토 대기"
-        return "done", "검토 끝"
+        return "done", "검토 완료"
     hit = [c for c in s.studio.changes.requests.values() if c.module == job.get("module")]
     if not hit:
         return "waiting", "검토 대기"
     last = hit[-1]
-    return ("filed", "변경 요청 검토 중") if last.status == "pending" else ("done", "배포" if last.status == "approved" else "반려")
+    return ("filed", "변경 요청 검토 중") if last.status == "pending" else ("done", "배포됨" if last.status == "approved" else "반려됨")
 
 
 def _ai_state(s) -> dict:
@@ -241,7 +241,7 @@ def ai_job(s, a, who) -> dict:
                             "files": _materials(s)["included"]}
     if kind == "concepts":
         if not s.pending:
-            raise ValueError("만든 초안이 없어 기록하지 못했습니다. 초안을 먼저 생성해 주세요.")
+            raise ValueError("생성된 초안이 없어 기록하지 못했습니다. 초안을 먼저 생성해 주세요.")
         d = s.pending[0]
         left = len(getattr(d, "skipped", None) or [])
         job = {**base, "label": d.label, "scope": str((d.origin or {}).get("detail") or d.label),
@@ -249,12 +249,12 @@ def ai_job(s, a, who) -> dict:
     elif kind == "rules":
         out = (s._draft or {}).get("out")
         if not out or not out.get("ok"):
-            raise ValueError("만든 규칙 초안이 없어 기록하지 못했습니다. 규칙 초안을 먼저 생성해 주세요.")
+            raise ValueError("생성된 규칙 초안이 없어 기록하지 못했습니다. 규칙 초안을 먼저 생성해 주세요.")
         job = {**base, "label": out.get("label") or out.get("decision") or "", "module": out.get("module") or "",
                "scope": str(a.get("scope") or out.get("target") or ""),
                "made": {"rules": len(out.get("rules") or []), "all": len(out.get("rules") or []), "excluded": len(out.get("issues") or [])}}
     else:
-        raise ValueError("초안의 종류(concepts, rules)가 없어 기록하지 못했습니다.")
+        raise ValueError("초안 종류가 없어 기록하지 못했습니다. 초안 종류를 지정해 주세요.")
     jobs = _jobs(s)
     jobs.insert(0, job)
     del jobs[JOBS_MAX:]

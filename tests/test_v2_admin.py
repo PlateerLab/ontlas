@@ -124,7 +124,7 @@ def test_the_system_says_what_it_runs_on_and_is_limited_by(session, routes):
     d = routes.GET["admin/system"](session, {}, None)
     assert d["version"] == __version__ == routes.GET["admin/version"](session, {}, None)["version"]
     names = [p["name"] for p in d["parts"]]
-    assert names[0] == "앱 서버" and "임베딩 모델" in names and "언어 모델" in names
+    assert names[0] == "애플리케이션 서버" and "임베딩 모델" in names and "언어 모델" in names
     assert next(p for p in d["parts"] if p["name"] == "언어 모델")["state"] == "off"  # no model was given
     assert d["limits"]["files"] == session.data.files and d["sessions"] is None and d["ask_per_minute"] is None
     assert d["usage"] == {"files": 0, "mb": 0.0}
