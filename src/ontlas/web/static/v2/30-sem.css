@@ -1,0 +1,74 @@
+/* 시멘틱 매니저: what the rules screens need beyond the kit */
+
+/* the three layers, in the order a decision checks them */
+.smr-strip { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); overflow:hidden; }
+.smr-ly { display:flex; align-items:center; gap:16px; padding:16px 20px; border:0; background:transparent; font-family:inherit; text-align:left; color:var(--ink); min-width:0; }
+.smr-ly + .smr-ly { border-left:1px solid var(--row); }
+.smr-ly.on { background:var(--blue-wash); }
+.smr-ly .k-s { overflow-wrap:anywhere; }
+.smr-n { font-size:28px; font-weight:500; font-variant-numeric:tabular-nums; }
+
+/* a choice shown as a mark: which Object, which layer */
+.smr-picks { display:flex; gap:6px; flex-wrap:wrap; }
+select.smr-pick { width:auto; max-width:200px; min-height:28px; padding:2px 26px 2px 8px !important; border:0; border-radius:6px; background-color:transparent; color:var(--muted); font-family:inherit; font-size:12px;
+  background-position:right 6px center !important; background-size:14px 14px !important; }
+select.smr-pick.on { background-color:var(--blue-soft); color:var(--blue-t); font-weight:500; }
+
+.smr-cite { display:inline-flex; align-items:baseline; gap:4px; overflow-wrap:anywhere; }
+.k-t td .smr-cite { white-space:normal; }
+.smr-rules { table-layout:fixed; min-width:640px; }
+.smr-rules td.smr-id { white-space:normal; overflow-wrap:anywhere; }
+.smr-facts { display:grid; grid-template-columns:max-content minmax(0, 1fr); gap:6px 16px; align-items:baseline; }
+.smr-facts:empty { display:none; }
+.smr-facts .k-chip { white-space:normal; }
+
+/* 판정 테스트 */
+.smr-sim { flex:2 1 340px; }
+.smr-ins { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; align-items:end; }
+.smr-steps { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px; font-size:13px; }
+.smr-step { display:flex; gap:8px; align-items:flex-start; padding:8px 12px; border-radius:8px; }
+.smr-step.passed { background:var(--bg); }
+.smr-step.fired { background:var(--blue-soft); }
+.smr-step.off { border:1px dashed var(--dash); color:var(--muted); }
+.smr-step > .k-g { min-width:0; overflow-wrap:anywhere; }
+.smr-step > b, .smr-step > span:last-child { white-space:nowrap; }
+.smr-res { padding:16px; border-radius:10px; background:var(--ink); color:#fff; }
+.smr-res > p { margin:0; }
+.smr-res > p:first-child { color:#A1A1AA; }
+.smr-verdict { font-size:24px; font-weight:500; display:flex; align-items:center; gap:8px; }
+.smr-res .k-dot { background:#4CC38A; }
+.smr-res .k-dot.no { background:#E8B4B0; }
+.smr-src { font-family:var(--mono); font-size:12px; color:#C4C4CA; overflow-wrap:anywhere; }
+.smr-reg { margin:0; padding:12px; border-radius:8px; background:var(--warn-soft); color:#5E3900; font-size:13px; }
+
+.smr-pair { display:flex; flex-wrap:wrap; gap:24px; align-items:stretch; }
+.smr-pair > section { flex:1 1 320px; }
+
+/* 규칙 초안 */
+.smr-imp { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; }
+.smr-line { padding:12px 20px; border-bottom:1px solid var(--row); }
+.smr-line:first-child { padding:16px 20px; }
+.smr-tile { width:32px; height:32px; border-radius:8px; background:var(--blue-wash); color:var(--blue); display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.smr-typed > summary { display:inline-flex; }
+.smr-drow { display:flex; flex-direction:column; gap:6px; padding:12px 16px; border:0; border-top:1px solid var(--row); background:none; color:var(--ink); font-family:inherit; font-size:14px; text-align:left; width:100%; }
+.smr-drow:hover { background:var(--bg); }
+.smr-drow.on { background:var(--blue-wash); }
+.smr-drow .k-chip { white-space:normal; text-align:left; }
+.smr-part { padding:16px 20px; border-bottom:1px solid var(--row); }
+.smr-part:first-child { padding:20px; }
+.smr-ground { flex:1 1 240px; min-width:0; padding:12px; border-radius:10px; border:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+
+/* the item forms: a condition of a decision row, a row of a list */
+.smr-cond { display:grid; grid-template-columns:minmax(120px, 1fr) minmax(120px, 160px) minmax(0, 1.4fr); gap:8px; align-items:center; }
+.smr-row { display:flex; gap:8px; align-items:center; }
+.smr-row > .k-in { flex:1 1 0; min-width:0; }
+
+@media (max-width:760px) {
+  .smr-strip { grid-template-columns:minmax(0, 1fr); }
+  .smr-ly + .smr-ly { border-left:0; border-top:1px solid var(--row); }
+  .smr-cond { grid-template-columns:minmax(0, 1fr); }
+  .smr-row { flex-wrap:wrap; }
+}
+@media (max-width:480px) {
+  .smr-ins { grid-template-columns:minmax(0, 1fr); }
+}

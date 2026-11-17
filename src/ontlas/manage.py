@@ -30,6 +30,7 @@ LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "ci
 PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
 METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
 IDENTITY_FIELDS = ("label", "table", "members", "rules")
+CARD_REVIEW_FIELDS = ("statement", "conditions", "result", "exceptions", "source", "owner")  # what a reviewer may correct
 FUNCTION_FIELDS = ("label", "description", "runtime", "target", "version", "owner", "status", "inputs", "outputs", "expr",
                    "decision", "query", "entry", "call", "depends", "cite")
 
@@ -804,6 +805,35 @@ class Workspace(TermEdits):
         else:
             (self.module.extend.get("rule_cards") or {}).pop(cid, None)
             self._removed("rule_cards").append(cid)
+        return f"rule_card:{cid}"
+
+    def _review_rule_card(self, a: dict) -> str:
+        """A reviewer's word on a card: approved, with what the reviewer corrected in its text, or taken out. A Standard
+        card is reviewed here as a Custom one is; an AXIOM card is settled by legal review, in its own module."""
+        cid, verdict = str(a.get("id") or ""), str(a.get("verdict") or "")
+        card = next((c for c in self.composed().cards if c["id"] == cid), None)
+        if card is None:
+            raise EditError(f"rule card '{cid}' is unknown")
+        if card["layer"] == "axiom":
+            raise EditError(f"rule card '{cid}' is AXIOM; it is settled by legal review in its module")
+        if verdict not in ("approve", "reject"):
+            raise EditError("a review of a rule card is approve or reject")
+        cards = self.module.body.get("rule_cards") or []
+        own = next((c for c in cards if c.get("id") == cid), None)
+        if verdict == "reject":
+            if own is not None:
+                self.module.body["rule_cards"] = [c for c in cards if c.get("id") != cid]
+            else:
+                (self.module.extend.get("rule_cards") or {}).pop(cid, None)
+                self._removed("rule_cards").append(cid)
+            return f"rule_card:{cid}"
+        fields = {k: copy.deepcopy(a[k]) for k in CARD_REVIEW_FIELDS if k in a}
+        fields["status"] = "approved"
+        self._card_checked({**{k: card[k] for k in CARD_FIELDS if card.get(k) is not None and k != "layer"}, **fields})
+        if own is not None:
+            own.update(fields)
+        else:
+            self._section("extend", "rule_cards").setdefault(cid, {}).update(fields)
         return f"rule_card:{cid}"
 
     def _action_spec(self, a: dict) -> dict:
