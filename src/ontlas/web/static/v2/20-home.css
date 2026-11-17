@@ -1,0 +1,76 @@
+/* 홈, AI 초안 생성, 검색 · 질문, 자료 업로드: what these four screens need beyond the kit */
+
+/* ---- 홈 ---- */
+.hm-mat { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); padding:16px 24px 24px; column-gap:24px; row-gap:20px; }
+.hm-matg { margin:0 0 -8px; border-bottom:1px solid var(--row); padding-bottom:8px; }
+.hm-bar { height:6px; border-radius:2px; display:block; }
+.hm-lvh { display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; gap:8px; }
+.hm-parts { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); }
+.hm-part { padding:20px 24px; text-decoration:none; min-width:0; }
+.hm-part + .hm-part { border-left:1px solid var(--row); }
+.hm-part:hover, .hm-step:hover { background:var(--bg); color:var(--ink); }
+.hm-part:first-child { border-radius:12px 0 0 12px; } .hm-part:last-child { border-radius:0 12px 12px 0; }
+.hm-part .k-big { margin:0; }
+.hm-part .k-big > span { font-weight:400; }
+.hm-row { display:flex; flex-wrap:wrap; gap:24px; align-items:stretch; }
+.hm-row > .k-card { min-width:0; }
+.hm-obj { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; font-family:inherit; font-size:14px; color:var(--ink); text-decoration:none; max-width:100%; }
+.hm-obj:hover { border-color:#C4C4CA; color:var(--ink); }
+.hm-obj.dash { border-style:dashed; color:var(--ink3); }
+.hm-steps { display:grid; grid-template-columns:140px repeat(6, minmax(0, 1fr)); }
+.hm-step { padding:16px 20px; border-left:1px solid var(--row); text-decoration:none; min-width:0; }
+.hm-step.now { box-shadow:inset 0 2px 0 var(--blue); }
+.hm-step:last-child { border-radius:0 12px 12px 0; }
+@media (max-width:1280px) {
+  .hm-steps { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .hm-steps > div:first-child { grid-column:1 / -1; flex-direction:row; align-items:baseline; gap:12px; padding-bottom:4px; }
+  .hm-step { border-left:0; border-top:1px solid var(--row); border-radius:0; }
+  .hm-step:nth-child(3n), .hm-step:nth-child(3n + 1) { border-left:1px solid var(--row); }
+}
+@media (max-width:1100px) {
+  .hm-mat { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .hm-matg { display:none; }
+  .hm-parts { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .hm-part { border-radius:0 !important; }
+  .hm-part:nth-child(3) { border-left:0; }
+  .hm-part:nth-child(n + 3) { border-top:1px solid var(--row); }
+}
+@media (max-width:640px) {
+  .hm-mat, .hm-parts { grid-template-columns:minmax(0, 1fr); }
+  .hm-part + .hm-part { border-left:0; border-top:1px solid var(--row); }
+  .hm-steps { grid-template-columns:minmax(0, 1fr); }
+  .hm-step { border-left:0 !important; }
+}
+
+/* ---- 검색 · 질문 ---- */
+.sq-box { display:flex; align-items:center; gap:12px; min-height:52px; padding:0 16px; border:1px solid var(--blue); border-radius:10px; background:#fff; }
+.sq-box input { border:0; outline:none; background:transparent; font-family:inherit; font-size:16px; color:var(--ink); min-width:0; padding:0; }
+.sq-box:focus-within { outline:2px solid var(--blue-line); }
+.sq-fb { padding-top:12px; border-top:1px solid var(--row); }
+.sq-fix { border:1px solid var(--line) !important; min-height:0; padding:0 6px; }
+.sq-fix:hover { border-color:var(--blue-line) !important; color:var(--blue-t); }
+.k-btn.sel { border-color:var(--blue); background:var(--blue-wash); }
+.sq-in { border:1px solid var(--row); border-radius:8px; }
+.sq-why .asteps { margin:0; }
+.sq-why table.tight { font-size:13px; }
+
+/* ---- 자료 업로드 ---- */
+.up-drop { align-items:center; padding:32px 16px; border:1px dashed var(--dash); border-radius:10px; background:var(--panel); text-align:center; color:var(--muted); }
+.up-drop.over { border-color:var(--blue); background:var(--blue-wash); }
+.up-drop .k-14 { color:var(--ink); }
+.up-tool { padding:0 20px 12px; }
+.up-bulk { margin:0 20px 12px; padding:8px 12px; border-radius:8px; background:var(--blue-wash); border:1px solid var(--blue-line); }
+.k-card > .k-x > .ctable { min-width:980px; }
+.k-card > .k-x > .ctable th { background:var(--panel); color:var(--muted); font-weight:500; border-bottom:1px solid var(--line); padding:8px 12px; }
+.k-card > .k-x > .ctable th:first-child, .k-card > .k-x > .ctable td:first-child { padding-left:20px; }
+.k-card > .k-x > .ctable td { padding:10px 12px; border-bottom:1px solid var(--row); }
+.k-card > .k-x > .ctable tr:last-child > td { border-bottom:0; }
+
+/* ---- AI 초안 생성 ---- */
+.ai-ticks { display:flex; flex-wrap:wrap; gap:8px 24px; }
+.ai-guide { border-top:1px solid var(--row); }
+.ai-guide > .k-kv:first-child { border-top:0; }
+.k-card > .k-x > .ctable .chip { border-radius:6px; padding:0 6px; font-size:12px; font-weight:400; }
+.k-card > .k-x > .ctable .chip.b { background:var(--blue-soft); border-color:var(--blue-soft); color:var(--blue-t); font-weight:500; }
+.k-card > .k-x > .ctable .chip.ok { background:var(--ok-soft); border-color:var(--ok-soft); color:var(--ok); font-weight:500; }
+.k-card > .k-x > .ctable .chip.bad { background:var(--bad-soft); border-color:var(--bad-soft); color:var(--bad); font-weight:500; }
