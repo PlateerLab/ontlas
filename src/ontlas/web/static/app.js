@@ -581,6 +581,7 @@
   const XGEN_WORD = '<svg class="xword" viewBox="128 0 72 32" aria-hidden="true"><path d="M137.98 10.0889L140.191 6H147.779L142.142 15.9863L148.001 26H140.263L137.977 21.8135L135.708 26H128L133.806 15.9893L128.194 6H135.806L137.98 10.0889Z"/><path d="M196.336 8.0835V23.9173H194.102L185.984 12.3481H185.852V23.9173H183.419V8.0835H185.675L193.792 19.6745H193.947V8.0835H196.336Z"/><path d="M168.419 23.9173V8.0835H178.332V10.1611H170.821V14.9506H177.808V17.0064H170.821V21.8397H178.419V23.9173H168.419Z"/><path d="M160.847 13.0211C160.258 11.0945 158.842 9.92961 156.75 9.92961C154.091 9.92961 152.043 12.0802 152.043 16.0006C152.043 19.9209 154.07 22.0715 156.859 22.0715C159.376 22.0715 161.043 20.4362 161.086 17.8376H157.208V15.799H163.418V17.6359C163.418 21.7355 160.672 24.3342 156.837 24.3342C152.566 24.3342 149.668 21.1307 149.668 16.0006C149.668 10.8257 152.653 7.66699 156.728 7.66699C160.149 7.66699 162.764 9.8624 163.309 13.0211H160.847Z"/></svg>';
   function render() {
     if (!S.st) return;
+    if (S.me && S.me.team && !S.me.user) return;  // signed out: the sign-in form stays, whatever finishes loading behind it
     renderTop();
     renderSide();
     const views = { graph: viewGraph, model: viewModel, changes: viewChanges, home: viewHome, inbox: viewInbox, records: viewRecords, record: viewRecord, rules: viewRules, map: viewMap, docs: viewDocs, vectors: viewVectors, adapters: viewAdapters, explorer: viewExplorer, search: viewSearch, connect: viewConnect, monitor: viewMonitor, guide: viewGuide, flow: viewFlow, catalog: viewCatalog, db: viewDb, convert: viewConvert, data: viewData, library: viewLibrary, onto: viewOnto, query: viewQuery, decide: viewDecide, check: viewCheck, bind: viewBind,
@@ -707,7 +708,7 @@
     try { S.home.box = await api('inbox'); S.home.err = false; } catch (e) { S.home.box = null; S.home.err = true; }  // a failed load is not an empty list
     S.home.busy = false;
     $('#app').classList.toggle('ibfail', S.home.err);
-    if (S.tab === 'home' || S.tab === 'inbox') render(); else renderSide();
+    if (S.tab === 'home' || S.tab === 'inbox') render(); else { renderSide(); renderTop(); }
   }
 
   async function loadHomeFlow() {
@@ -7625,6 +7626,7 @@ ${controls}${body}`;
   function readHash() {
     const [tab, query] = location.hash.slice(1).split('?');
     if (TABLE_TABS.includes(tab) && !V2[tab]) { S.tab = 'model'; S.md.view = 'table'; S.md.arrive = tab; } else S.tab = tab || 'home';
+    if (!known(S.tab)) S.tab = 'state';  // an address that is no screen: said as that, with the way back
     if (tab === 'model') S.md.view = 'diagram';  // 그래프 탐색 is the diagram; the table is the Entity screen (#objects)
     S.land = query ? Object.fromEntries(new URLSearchParams(query)) : null;
     S.hit = ''; S.hitDone = '';
@@ -9325,7 +9327,6 @@ ${controls}${body}`;
 
   /*PARTS*/
   readHash();
-  if (!known(S.tab)) S.tab = 'home';
   setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
   wire();
   load().catch(fail);

@@ -263,4 +263,4 @@
     return rows;
   }
   // what a person without the right to a screen sees in its place
-  const noAccess = () => kEmpty('이 화면을 볼 권한이 없습니다', '온톨로지 관리자나 시스템 관리자에게 권한을 요청합니다. 온톨로지 작업 화면은 그대로 사용할 수 있습니다.', '<a class="k-btn pri" href="#home">홈으로</a>');
+  const noAccess = () => stateBlock(areaOf(S.tab) === 'admin' ? 'admin' : 'forbidden');
