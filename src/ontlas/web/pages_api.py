@@ -799,7 +799,8 @@ class PagesMixin:
                    "source": "출발 Entity", "target": "도착 Entity", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
                    "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
-                   "area": "Object", "layer": "계층", "owner": "담당", "status": "상태"}
+                   "area": "Object", "layer": "계층", "owner": "담당", "status": "상태", "transform": "변환식",
+                   "source_type": "원천 자료형", "labels": "코드 변환표", "columns": "키 컬럼"}
 
     def _field_diff(self, el: str, a: dict | None, b: dict | None, after=None) -> list[dict]:
         """What differs, one field at a time, in a person's words: a rule's condition by its input's name."""

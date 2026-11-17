@@ -336,7 +336,7 @@
       meta = `${x.by} 요청 · ${x.detail} · 검토한 그대로 적용됩니다`; to = 'href="#data"';
       buttons = canApplyDraft() ? '<button class="k-btn sm pri" data-act="drequestapply">적용</button><button class="k-btn sm" data-act="drequestdrop">반려</button>' : x.mine ? '<button class="k-btn sm" data-act="drequestdrop">요청 거두기</button>' : '';
     } else {
-      meta = `${x.detail} · ${selfApply() ? '검토 후 적용해야' : '변경 요청을 올려야'} 반영됩니다`; to = 'href="#model?left=changes"';
+      meta = `${x.detail} · ${selfApply() ? '검토 후 적용해야' : '변경 요청을 올려야'} 반영됩니다`; to = 'href="#changes"';
     }
     return `<div class="k-row" data-row="${esc(x.kind)}:${esc(x.id)}"><a class="k-col ent-go" ${to.startsWith('href') ? to : `href="#" ${to}`}><span class="k-ink k-14">${esc(x.title)}</span><span class="k-s">${esc(meta)}</span></a><span class="k-h end">${buttons}<span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span></span><a class="ent-go" ${to.startsWith('href') ? to : `href="#" ${to}`} aria-label="${esc(x.title)} 열기">${ki('chevR', 16, 1.75)}</a></div>`;
   }

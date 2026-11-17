@@ -148,6 +148,8 @@ IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "qu
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
+    (r"^query '(.+)' comes from its module$", r"쿼리 '\1'은(는) 모듈이 정의한 것이라 여기서 바꾸지 못했습니다. 다른 키로 새 쿼리를 추가해 주세요."),
+    (r"^query '(.+)' is unknown$", r"쿼리 '\1'을(를) 찾을 수 없어 처리하지 못했습니다."),
     (r"^query '(.+)' already exists$", r"질의 '\1'이(가) 이미 있어 저장하지 못했습니다. 다른 영문 이름을 입력해 주세요."),
     (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^hit policy priority needs a priority on every rule; (.+) have none$", r"우선순위 방식은 규칙마다 우선순위가 있어야 합니다. \1에 우선순위를 먼저 정해 주세요."),

@@ -9249,7 +9249,6 @@ ${controls}${body}`;
       }
       if (ev.key === 'Enter' && items[S.pal.i]) { ev.preventDefault(); const k = items[S.pal.i][0]; closeFloats(); location.hash = '#' + k; }
     });
-    $('#top').addEventListener('change', (ev) => { if (ev.target.dataset.top === 'pipe') pipelineCall({ op: 'use', id: ev.target.value }); });
     $('#side').addEventListener('change', (ev) => { if (ev.target.dataset.side === 'lib') libraryUse(ev.target.value); });  // the ontology the admin screens are about
     main.addEventListener('input', (ev) => { const t = ev.target; if (t.dataset && INPUT[t.dataset.in]) INPUT[t.dataset.in](t); });
     main.addEventListener('dragstart', (ev) => {

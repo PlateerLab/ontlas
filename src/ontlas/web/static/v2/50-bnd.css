@@ -1,0 +1,86 @@
+/* 데이터 바인더: what its five screens need beyond the kit */
+.bnd-pg { display:contents; font-size:16px; line-height:1.5; }
+.bnd-pg > * { flex-shrink:0; min-width:0; }
+.bnd-pg h2, .bnd-pg h3 { margin:0; }
+
+/* 데이터 소스 연결 */
+.bnd-src { flex:2 1 520px; min-width:0; padding:16px 20px; border-radius:12px; border:1px dashed var(--dash); background:var(--panel); box-sizing:border-box; }
+.bnd-src.on { border:1px solid var(--line); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+.bnd-ico { width:36px; height:36px; border-radius:8px; background:var(--sunk); display:inline-flex; align-items:center; justify-content:center; color:var(--ink3); flex:none; }
+.bnd-say { flex:1 1 220px; padding:12px; border-radius:8px; background:var(--ok-soft); line-height:1.6; font-size:13px; }
+.bnd-say.w { background:#fff; border:1px solid var(--line); }
+.bnd-two { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+.bnd-fine { margin:0; padding:8px 12px; border-radius:8px; background:var(--bg); }
+.bnd-dash { padding:16px 20px; border-radius:12px; border:1px dashed var(--dash); }
+.k-t th.bnd-dashl, .k-t td.bnd-dashl { border-left:1px dashed var(--dash); }
+.bnd-status { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:#fff; line-height:1.6; }
+
+/* the numbers at the top of a screen */
+.bnd-stat { flex:1 1 180px; padding:16px; box-sizing:border-box; min-width:0; }
+.bnd-stat.dash { border-radius:12px; border:1px dashed var(--dash); }
+.bnd-stat.warn { border:1px solid var(--warn-line); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); background:var(--warn-wash); }
+.bnd-stat.s5 { flex-basis:170px; }
+
+/* 데이터 매핑 */
+.k-t tr.bnd-diff > td { background:var(--warn-wash); }
+.k-t tr.bnd-diff.on > td { background:var(--blue-wash); }
+.bnd-why { padding:16px 20px; border-radius:12px; background:var(--warn-soft); }
+
+/* Entity 바인딩 */
+.bnd-tree { background:#fff; border:1px solid var(--line); border-radius:12px; box-sizing:border-box; box-shadow:0 1px 2px rgba(0,0,0,.04); flex:0 1 304px; min-width:240px; padding:8px; }
+.bnd-find { display:flex; align-items:center; gap:8px; min-height:40px; margin:4px 4px 8px; padding:0 8px; border:1px solid var(--line2); border-radius:8px; box-sizing:border-box; color:var(--muted); }
+.bnd-find input { border:0; outline:none; flex:1; min-width:0; font-family:inherit; font-size:14px; background:transparent; color:var(--ink); padding:0; }
+.bnd-find:focus-within { border-color:var(--blue); outline:2px solid var(--blue-line); }
+.bnd-area { display:flex; align-items:center; gap:6px; min-height:40px; margin-top:6px; padding:0 8px 0 6px; border-radius:8px; background:var(--sunk); font-weight:600; font-size:14px; color:var(--ink); width:100%; border:0; font-family:inherit; text-align:left; box-sizing:border-box; }
+.bnd-area > svg { color:var(--muted); }
+.bnd-area > .n { margin-left:auto; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
+.bnd-ents { margin:2px 0 4px 12px; padding-left:8px; border-left:1px solid var(--line2); display:flex; flex-direction:column; }
+.bnd-enta { display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:36px; padding:0 8px; border-radius:6px; color:var(--ink2); font-size:14px; text-decoration:none; border:0; background:none; font-family:inherit; text-align:left; width:100%; box-sizing:border-box; }
+.bnd-enta:hover { background:var(--panel); color:var(--ink2); }
+.bnd-enta.on { background:var(--blue-soft); color:var(--blue-d); font-weight:500; }
+.bnd-enta > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bnd-enta > .n { font-size:12px; color:var(--muted); white-space:nowrap; }
+.bnd-enta > .n.b { color:var(--blue-t); font-weight:500; }
+.bnd-enta.on > .n.b { color:var(--blue-d); }
+.bnd-ent { display:inline-flex; align-items:center; padding:0 4px; border-radius:4px; border:1px solid var(--blue-line); color:var(--blue-t); font-size:12px; font-weight:600; white-space:nowrap; }
+.bnd-h { margin:0; font-size:24px; font-weight:600; line-height:1.3; }
+.bnd-step { margin:0; font-size:15px; font-weight:600; }
+.bnd-key { padding:12px; border-radius:10px; background:var(--bg); }
+.bnd-box { border:1px solid var(--row); border-radius:10px; }
+.bnd-sql { margin:0; padding:16px 20px; background:var(--panel); border-top:1px solid var(--row); font-family:var(--mono); font-size:13px; line-height:1.7; white-space:pre; overflow-x:auto; }
+.bnd-checks { list-style:none; margin:0; padding:0 20px; display:flex; flex-wrap:wrap; gap:0 24px; }
+.bnd-checks > li { flex:1 1 300px; display:flex; gap:8px; padding:8px 0; border-top:1px solid var(--row); min-width:0; }
+.bnd-checks > li > svg { margin-top:3px; }
+.bnd-prev { margin:12px 20px 20px; padding:12px; border-radius:10px; border:1px dashed var(--dash); display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; }
+.bnd-prev.on { display:block; border-style:solid; border-color:var(--row); padding:0; overflow:hidden; }
+.bnd-sel { width:100%; padding:0 12px; border:1px solid var(--line2); border-radius:8px; background:#fff; min-height:32px; font-size:13px; color:var(--ink); font-family:inherit; box-sizing:border-box; }
+
+/* 쿼리 · 액션: the list on the left */
+.bnd-qrow { display:flex; flex-direction:column; gap:2px; padding:12px 16px; border-top:1px solid var(--row); color:var(--ink); text-decoration:none; border-left:0; border-right:0; border-bottom:0; background:none; font-family:inherit; font-size:16px; text-align:left; width:100%; box-sizing:border-box; }
+.bnd-qrow:hover { background:var(--bg); }
+.bnd-qrow.on { background:var(--blue-wash); }
+.bnd-qrow b { font-weight:500; }
+.bnd-arow { display:flex; flex-direction:column; gap:6px; padding:16px; border:0; border-top:1px solid var(--row); background:none; font-family:inherit; font-size:16px; text-align:left; width:100%; box-sizing:border-box; color:var(--ink); }
+.bnd-arow:first-child { border-top:0; border-radius:12px 12px 0 0; }
+.bnd-arow:hover { background:var(--bg); }
+.bnd-arow.on { background:var(--blue-wash); }
+.bnd-arow b { font-weight:500; }
+.bnd-code { margin:0; padding:16px 20px; background:var(--ink); color:#E8E9EB; font-family:var(--mono); font-size:13px; line-height:1.7; white-space:pre-wrap; overflow-x:auto; max-height:420px; }
+.bnd-code span { color:inherit; }
+.bnd-sec { padding:12px 20px; border-bottom:1px solid var(--row); }
+.bnd-out { margin:0; padding:8px 12px; border-radius:8px; background:var(--bg); line-height:1.6; font-family:var(--mono); font-size:13px; white-space:normal; overflow-wrap:anywhere; }
+.bnd-rowed { display:flex; gap:8px; align-items:center; }
+.bnd-rowed > .k-in { flex:1 1 0; min-width:0; }
+.bnd-ticks { display:flex; flex-wrap:wrap; gap:8px; }
+
+@media (max-width:640px) {
+  .bnd-two { grid-template-columns:minmax(0, 1fr); }
+  .bnd-tree { flex:1 1 100%; }
+  .bnd-h { font-size:20px; }
+}
+.k-t th.bnd-arrow, .k-t td.bnd-arrow { width:24px; padding-left:0; padding-right:0; color:var(--muted); }
+
+/* a field that cannot be changed here reads as such (the kit's rule for inputs inside a label is stronger than its :disabled) */
+.k-f > input.k-in:disabled, .k-f > textarea.k-in:disabled { background:var(--panel); color:var(--muted); }
+.bnd-res { border:1px solid var(--row); border-radius:10px; overflow:hidden; min-width:0; }
+.bnd-ir > summary { cursor:pointer; }

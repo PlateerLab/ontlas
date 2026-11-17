@@ -116,14 +116,12 @@
     const upload = canEdit() ? `<a class="k-tbtn${S.tab === 'catalog' ? ' on' : ''}" href="#catalog">${ki('upload', 17, 1.75)}<span class="w">자료 업로드</span></a>` : '';
     const inbox = `<a class="k-tbtn${S.tab === 'inbox' ? ' on' : ''}" href="#inbox" aria-label="할 일 ${waits}건">${ki('inbox', 17, 1.75)}<span class="w">할 일</span>${waits ? `<span class="n">${waits}</span>` : ''}</a>`;
     const me = `<a class="k-me${S.tab === 'me' ? ' on' : ''}" href="#me" aria-label="내 계정">${ki('user', 18, 1.75)}</a>`;
-    // which data the screens read, while there is more than one to choose from
-    const pipes = area === 'work' && st.pipelines.length > 1 ? `<select class="k-in sm" style="width:auto;max-width:200px" data-top="pipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select>` : '';
     const repo = area === 'work' && REPO_TABS.has(S.tab) ? `<button class="k-tbtn" data-act="repopick" aria-label="레포지토리 선택">${ki('box', 17)}<span class="k-cut" style="max-width:160px">${esc(st.repository.label)}</span>${ki('chevD', 16, 1.75)}</button>` : '';
     if (area === 'bare') {
       $('#top').innerHTML = `${brand()}${switcher('bare')}${crumb}${inbox}${me}`;
       return;
     }
-    $('#top').innerHTML = area === 'admin' ? `${menu}${crumb}${inbox}${me}` : `${menu}${crumb}${repo}${pipes}${find}${upload}${inbox}${me}`;
+    $('#top').innerHTML = area === 'admin' ? `${menu}${crumb}${inbox}${me}` : `${menu}${crumb}${repo}${find}${upload}${inbox}${me}`;
   }
 
   // the list at the top left: the ontologies the person works in, every ontology, and the way into the admin screens

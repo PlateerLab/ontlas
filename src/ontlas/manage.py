@@ -836,6 +836,52 @@ class Workspace(TermEdits):
             self._section("extend", "rule_cards").setdefault(cid, {}).update(fields)
         return f"rule_card:{cid}"
 
+    def _query_spec(self, name: str, a: dict, spec: dict) -> None:
+        from ontlas.ir import IRError, Query
+
+        if "query" in a:
+            q = a["query"]
+            try:
+                Query.from_dict(q)
+            except (IRError, TypeError, ValueError, KeyError, AttributeError) as e:
+                raise EditError(f"query {name}: {e}") from None
+            spec["query"] = q
+            params = _query_params(self.composed().ontology, q if isinstance(q, dict) else {})
+            if params:
+                spec["params"] = params
+            else:
+                spec.pop("params", None)
+        for k in ("label", "description"):
+            if k in a:
+                if a[k]:
+                    spec[k] = str(a[k])
+                else:
+                    spec.pop(k, None)
+
+    def _new_query(self, a: dict) -> str:
+        """A query added with what it takes: add_query keeps its label and definition only."""
+        name = str(a.get("name") or "")
+        if not _IDENT.match(name):
+            raise EditError(f"query name '{name}' must be letters, digits and _ starting with a letter")
+        if name in self.composed().ontology.queries:
+            raise EditError(f"query '{name}' already exists")
+        spec: dict[str, Any] = {"label": str(a.get("label") or name)}
+        self._query_spec(name, {"query": a.get("query"), "description": a.get("description")}, spec)
+        self._section("body", "queries")[name] = spec
+        return f"query:{name}"
+
+    def _update_query(self, a: dict) -> str:
+        name = str(a.get("name") or "")
+        if name not in self.composed().ontology.queries:
+            raise EditError(f"query '{name}' is unknown")
+        if not self._owns("queries", name):  # a module's query cannot be extended: one under another name takes its place
+            raise EditError(f"query '{name}' comes from its module")
+        self._query_spec(name, a, self._section("body", "queries")[name])
+        return f"query:{name}"
+
+    def _delete_query(self, a: dict) -> str:
+        return self._gone_entry("queries", "query", a, self.composed().ontology.queries)
+
     def _delete_states(self, a: dict) -> str:
         """Take an Entity's state machine out. Where the Entity is another module's, the removal is this module's."""
         name = str(a.get("object") or "")
@@ -1109,6 +1155,34 @@ def row_rule(type_name: str, spec: dict) -> dict:
         if str(ref).startswith(f"{here}.") and side(who):
             return {"type": type_name, "via": via, "property": str(ref).split(".", 1)[1], **side(who)}
     return {"type": type_name, "raw": spec}
+
+
+def _query_params(onto, q: dict) -> dict[str, str]:
+    """The values a query takes when it is run ({"param": name} in its conditions), each with the type of the property
+    it is compared with."""
+    from ontlas.check import find_prop
+
+    nodes = q.get("match") or {}
+    out: dict[str, str] = {}
+
+    def walk(x: Any) -> None:
+        if isinstance(x, dict):
+            for arg in x.values():
+                if isinstance(arg, list) and len(arg) == 2 and isinstance(arg[0], str) and isinstance(arg[1], dict) and "param" in arg[1]:
+                    alias, _, prop = arg[0].partition(".")
+                    try:
+                        kind = find_prop(onto, nodes.get(alias, ""), prop).type
+                    except Exception:  # a reference the compiler will refuse says so itself
+                        kind = "string"
+                    out[str(arg[1]["param"])] = "string" if kind == "enum" else kind
+                else:
+                    walk(arg)
+        elif isinstance(x, list):
+            for y in x:
+                walk(y)
+
+    walk(q.get("where"))
+    return out
 
 
 def _removals(d: dict) -> set[str]:
