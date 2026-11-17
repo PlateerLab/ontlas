@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from ontlas.embed import shared_wording
+from ontlas.words import fix as with_particles
 
 KEY = re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z]{1,6}[-_]?\d[\w-]*|(?<!\d)\d{4,}(?!\d)")
 PLAIN = {"가능", "여부", "결과", "판정", "금액", "기준"}  # words of a decision's name that say nothing of what it decides
@@ -235,7 +236,7 @@ def _unknown(tools, text: str, found: list[dict]) -> tuple[str, list[dict]]:
         by = _GROUPED_BY.search(text)
         for m in metrics:  # a metric asked by a dimension it is not defined over: the split is what is missing
             if by and by.group(1) not in (m.label, m.name):
-                reason += f" 지표 {m.label or m.name}은(는) {by.group(1)}별로 나누어 계산하도록 정의되어 있지 않습니다."
+                reason += with_particles(f" 지표 {m.label or m.name}은(는) {by.group(1)}별로 나누어 계산하도록 정의되어 있지 않습니다.")
     else:
         reason = "질문에서 정의된 Entity, 지표, 판정, 문서를 찾지 못했습니다. 레코드 번호(예: I1001)나 정의의 이름을 넣어 다시 물어보세요."
     ask = [{"who": m.owner, "about": f"지표 {m.label or m.name}"} for m in metrics if m.owner]
@@ -266,7 +267,7 @@ def _picked(tools, pick: dict) -> tuple[str, str, Any]:
     onto = tools.studio.onto
     name = str(pick.get("decision") or "")
     if name and name not in onto.decisions:
-        raise ValueError(f"판정 '{name}'을(를) 찾지 못해 다시 묻지 못했습니다. 판정을 다시 골라 주세요.")
+        raise ValueError(with_particles(f"판정 '{name}'을(를) 찾지 못해 다시 묻지 못했습니다. 판정을 다시 골라 주세요."))
     type_name = onto.decisions[name].target if name else str(pick.get("type") or "")
     key = str(pick.get("key") or "").strip()
     t = onto.objects.get(type_name)
@@ -277,7 +278,7 @@ def _picked(tools, pick: dict) -> tuple[str, str, Any]:
     except (KeyError, ValueError, RuntimeError):
         found = None
     if found is None:
-        raise ValueError(f"{t.label or type_name} {key}이(가) 없어 다시 묻지 못했습니다. 번호를 확인해 주세요.")
+        raise ValueError(with_particles(f"{t.label or type_name} {key}이(가) 없어 다시 묻지 못했습니다. 번호를 확인해 주세요."))
     try:
         at = parse_datetime(pick.get("at") or None)
     except ValueError:

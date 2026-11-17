@@ -17,23 +17,25 @@
   S.it = { key: '' };
   const itemParam = (k) => new URLSearchParams(location.hash.split('?')[1] || '').get(k) || '';
   const itemHref = (kind, what, id) => `#${kind}-${what}${id ? `?id=${encodeURIComponent(id)}` : ''}`;
-  const ITEM_PARTICLE = { Object: '를', Entity: '를', Relation: '을', Action: '을', Mapping: '을', Binding: '을' };
-  const itemObj = (word) => word + (ITEM_PARTICLE[word] || josa(word, '을', '를'));
+  const itemObj = (word) => word + josa(word, '을', '를');
+  const formWord = (def) => `${def.word} ${def.adds ? '추가' : '추가 · 편집'}`;  // an item that is only ever added
 
   function item(kind, def) {
     ITEM[kind] = def;
     const base = { area: def.area || 'work', under: def.under, find: false, may: def.may };
     const crumb = def.crumb ? (w) => ({ crumb: () => [...def.crumb, w] }) : () => ({});
-    screen(`${kind}-form`, { ...base, word: `${def.word} 추가 · 편집`, ...crumb(`${def.word} 추가 · 편집`), view: () => itemForm(kind), after: () => itemLoad(kind, 'form') });
+    screen(`${kind}-form`, { ...base, word: formWord(def), ...crumb(formWord(def)), view: () => itemForm(kind), after: () => itemLoad(kind, 'form') });
     if (def.direct) return;
     screen(`${kind}-delete`, { ...base, word: `${def.word} 삭제`, ...crumb(`${def.word} 삭제`), view: () => itemDelete(kind), after: () => itemLoad(kind, 'delete') });
     screen(`${kind}-history`, { ...base, word: `${def.word} 이력`, ...crumb(`${def.word} 이력`), view: () => itemHistory(kind), after: () => itemLoad(kind, 'history') });
   }
 
   // what can be done to a chosen item, as the buttons at the right of the row that names it
+  const itemLocked = (def, x) => (def.locked && x ? def.locked(x) : '');  // why this item cannot be changed, if it cannot
   function itemActs(kind, id, { edit = true, history = true, del = true } = {}) {
     const def = ITEM[kind];
     if (!def) return '';
+    if (def.locked && itemLocked(def, def.find(id))) { edit = false; del = false; }
     return `${edit && canEdit() ? `<a class="k-btn" href="${itemHref(kind, 'form', id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}${history && !def.direct ? `<a class="k-btn" href="${itemHref(kind, 'history', id)}">${ki('history', 16, 1.75)}이력</a>` : ''}${del && !def.direct && canEdit() ? `<a class="k-btn dan" href="${itemHref(kind, 'delete', id)}">삭제</a>` : ''}`;
   }
   const itemBar = (kind, id, code, name, opt) => (ITEM[kind] ? kBar(`선택한 ${ITEM[kind].word}`, code, name, itemActs(kind, id, opt)) : '');
@@ -93,8 +95,8 @@
     const def = ITEM[kind], it = itemState(kind, 'form'), isNew = !it.id;
     const lead = (def.lead && def.lead.form) || `${itemObj(def.word)} 추가하거나 편집합니다.`;
     const saveWord = def.saveWord || (def.direct ? '저장' : '변경 요청에 저장');
-    const shut = def.can ? def.can() : '';  // a form that cannot be saved on this server shows that state alone
-    const head = kHead(`${def.word} 추가 · 편집`, lead, `<a class="k-btn" href="#${def.list}">취소</a>${it.ready && !it.missing && !it.err && !shut && canEdit() ? `<button class="k-btn pri" data-act="itsave"${it.busy ? ' disabled' : ''}>${esc(it.busy ? '저장 중' : saveWord)}</button>` : ''}`);
+    const shut = (def.can ? def.can() : '') || itemLocked(def, it.x);  // a form that cannot be saved shows that state alone
+    const head = kHead(formWord(def), lead, `<a class="k-btn" href="#${def.list}">취소</a>${it.ready && !it.missing && !it.err && !shut && canEdit() ? `<button class="k-btn pri" data-act="itsave"${it.busy ? ' disabled' : ''}>${esc(it.busy ? '저장 중' : saveWord)}</button>` : ''}`);
     if (!it.ready) return head + itemWait();
     if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
@@ -117,11 +119,12 @@
   function itemDelete(kind) {
     const def = ITEM[kind], it = itemState(kind, 'delete');
     const head = kHead(`${def.word} 삭제`, (def.lead && def.lead.delete) || `사용처를 확인하고 삭제를 요청합니다.`,
-      it.ready && !it.missing ? `<a class="k-btn" href="${itemHref(kind, 'history', it.id)}">${ki('history', 16, 1.75)}이력</a>${canEdit() ? `<a class="k-btn" href="${itemHref(kind, 'form', it.id)}">편집</a>` : ''}` : '');
+      it.ready && !it.missing ? `<a class="k-btn" href="${itemHref(kind, 'history', it.id)}">${ki('history', 16, 1.75)}이력</a>${canEdit() && !itemLocked(def, it.x) ? `<a class="k-btn" href="${itemHref(kind, 'form', it.id)}">편집</a>` : ''}` : '');
     if (!it.ready) return head + itemWait();
     if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
     if (!canEdit()) return head + kEmpty('삭제 권한이 없습니다', '', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
+    if (itemLocked(def, it.x)) return head + kEmpty(itemLocked(def, it.x), '', `<a class="k-btn" href="#${def.list}">목록으로</a>`);
     const code = def.code ? def.code(it.x) : def.name(it.x);
     const uses = (it.uses || []).map((u) => `<${u.href ? `a href="#${u.href}"` : 'div'} class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(u.say)}</span>${u.sub ? `<span class="k-s">${esc(u.sub)}</span>` : ''}</span>${u.href ? ki('chevR', 16, 1.75) : ''}</${u.href ? 'a' : 'div'}>`).join('')
       || '<div class="k-row"><span class="k-s">사용처 없음</span></div>';
@@ -141,7 +144,7 @@
   function itemHistory(kind) {
     const def = ITEM[kind], it = itemState(kind, 'history');
     const head = kHead(`${def.word} 이력`, (def.lead && def.lead.history) || `${def.word}의 변경 이력을 조회합니다.`,
-      `<a class="k-btn" href="#${def.list}">목록으로</a>${it.ready && !it.missing && canEdit() ? `<a class="k-btn pri" href="${itemHref(kind, 'form', it.id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}`);
+      `<a class="k-btn" href="#${def.list}">목록으로</a>${it.ready && !it.missing && canEdit() && !itemLocked(def, it.x) ? `<a class="k-btn pri" href="${itemHref(kind, 'form', it.id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}`);
     if (!it.ready) return head + itemWait();
     if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
@@ -156,7 +159,7 @@
       ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">항목</th><th scope="col">값</th></tr></thead><tbody>${sel.all.map((r) => `<tr><td class="b">${esc(r.label)}</td><td>${said(r.value)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">항목</th><th scope="col">이전</th><th scope="col">이후</th></tr></thead><tbody>${sel.rows.map((r) => `<tr><td class="b">${esc(r.label)}</td><td class="k-bad">${said(r.before)}</td><td class="k-ok">${said(r.after)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">변경 항목 없음</td></tr>'}</tbody></table></div>`;
     const detail = !sel ? '<p class="k-cf">선택된 변경이 없습니다.</p>' : `${table}${kKv('변경자', esc(sel.who || '-'))}${kKv('시각', when(sel.at) || '-')}${sel.cp ? kKv('변경 요청', `<a href="#changes?id=${encodeURIComponent(sel.cp)}">${esc(sel.cp)}</a>`) : ''}${kKv('사유', esc(sel.say))}
-      ${def.revert && canEdit() && sel.deployed && sel !== all[0] ? `<div class="k-cb" style="padding-top:12px"><div class="k-h"><button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button></div></div>` : ''}`;
+      ${def.revert && canEdit() && !itemLocked(def, it.x) && sel.deployed && sel !== all[0] ? `<div class="k-cb" style="padding-top:12px"><div class="k-h"><button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button></div></div>` : ''}`;
     return `${head}${bar}<div class="k-cols"><div class="k-c2"><section class="k-card"><div class="k-ch"><h2>변경 이력</h2><span class="k-s">${all.length}건</span><div class="k-push"><div class="k-seg"><button class="${it.hdep ? '' : 'on'}" data-act="ithdep" data-v="">전체</button><button class="${it.hdep ? 'on' : ''}" data-act="ithdep" data-v="1">배포</button></div></div></div>${rows}</section></div>
       <div class="k-c3"><section class="k-card"><div class="k-ch"><h2>${sel ? `${esc([sel.ver, sel.mark].filter(Boolean).join(' ') || '선택한 변경')} 변경 내용` : '변경 내용'}</h2>${sel ? `<div class="k-push"><div class="k-seg"><button class="${it.hall ? '' : 'on'}" data-act="ithall" data-v="">변경 항목</button><button class="${it.hall ? 'on' : ''}" data-act="ithall" data-v="1">전체 항목</button></div></div>` : ''}</div>${detail}</section>
       </div></div>`;
@@ -202,7 +205,7 @@
         const el = !def.direct && String(it.d.reason || '').trim() && def.element ? (out.element || (it.x ? def.element(it.x) : '')) : '';
         if (el) await api('element/comment', { id: el, text: it.d.reason }).catch(() => {});  // why, kept beside the item
         S.it = { key: '' };
-        toast(out.said || (def.direct ? '저장했습니다.' : '작성 중인 변경 요청에 저장했습니다.'));
+        toast(out.said || (def.direct ? `${itemObj(def.word)} 저장했습니다.` : '작성 중인 변경 요청에 저장했습니다.'));
         location.hash = '#' + (out.go || def.list);
       } catch (e) { it.busy = false; render(); fail(e); }
     },

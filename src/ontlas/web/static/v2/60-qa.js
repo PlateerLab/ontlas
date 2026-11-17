@@ -4,7 +4,7 @@
 
   S.qa2 = { set: 'dev', sel: '', pd: null, pdOf: '', imp: null, result: '', edit: false, ranAt: '', busy: false,
     ask: { text: '', busy: false, res: null, fb: '' }, attempt: { sig: '', busy: false, res: null, timer: 0 },
-    scene: false, log: null, monTimer: 0, monBusy: false, steps: false, ev: null, evBusy: false, docWant: '', gapN: 0, hitOf: '' };
+    scene: false, log: null, monTimer: 0, monBusy: false, steps: false, ev: null, evBusy: false, docWant: '', secWant: '', gapN: 0, hitOf: '' };
 
   const QA_TYPE = { definition: '정의형', decision: '판정형', value: '값 조회형' };
   const QA_GRADING = { match: '판정 일치', keywords: '키워드 포함', evidence: '근거 포함', llm: 'LLM 심사' };
@@ -873,7 +873,11 @@
       if (want && dg && !dg.busy && dg.nodes && S.dgx.of === dg) {  // came from a cell of the map: that document in the middle
         S.qa2.docWant = '';
         const n = dg.nodes.find((x) => x.module === 'document' && x.label === want);
-        if (n && S.dgx.sel !== n.id) dgxPick(n.id);
+        // a section named with it is picked inside that document
+        const sec = n && S.qa2.secWant ? dg.nodes.find((x) => x.module === 'section' && x.label === S.qa2.secWant && dg.edges.some((e) => (e.source === n.id && e.target === x.id) || (e.target === n.id && e.source === x.id))) : null;
+        S.qa2.secWant = '';
+        const go = sec || n;
+        if (go && S.dgx.sel !== go.id) dgxPick(go.id);
       }
     } });
   screen('explorer', { area: 'work', word: '자산 탐색기', under: 'evidence', view: () => qaEvTabs() + viewExplorer(),

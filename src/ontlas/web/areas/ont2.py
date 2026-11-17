@@ -4,6 +4,7 @@ deployed change back as a new version."""
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 from weakref import WeakKeyDictionary
 
@@ -268,7 +269,7 @@ def term_note(s, a, who) -> dict:
         raise ValueError("변경 사유가 없어 남기지 못했습니다. 변경 사유를 입력해 주세요.")
     fields = [f for f in a.get("fields") or [] if f in TERM_FIELD_WORD]
     _keep(s, {"term": tid, "fields": fields, "text": text, "by": who.name if who is not None else (s.who or "page"),
-              "at": s.studio.now().isoformat(timespec="minutes"), "after": len(s.studio.changes.requests)})
+              "at": datetime.now().isoformat(timespec="minutes"), "after": len(s.studio.changes.requests)})  # when it was said, as a request is stamped
     return {"ok": True}
 
 

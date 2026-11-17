@@ -44,7 +44,7 @@ def test_a_record_page_tells_its_history_and_what_can_happen_next(session):
     r = session.record_page("OrderItem", "I1001")
     assert r["state"]["now"] == "RETURN_REQUESTED"
     assert not r["actions"][0]["ready"]  # the request it would make is already made
-    assert not any(h.get("pending") for h in r["history"]) and {h["event"] for h in r["history"]} >= {"요청", "승인", "원천 반영"}
+    assert not any(h.get("pending") for h in r["history"]) and {h["event"] for h in r["history"]} >= {"요청", "승인", "데이터 반영"}
     with pytest.raises(LookupError):
         session.record_page("OrderItem", "I9999")
 
@@ -93,7 +93,7 @@ def test_a_change_is_reviewed_element_by_element_against_how_the_studio_stands_n
     cells = {f["field"]: (f["before"], f["after"]) for f in rule["fields"]}
     assert cells["when.days_since_delivery"] == ("<= 14", "<= 21") and cells["cite"][1] == "ACME 운영 정책 4.2"
     assert rule["fields"][0]["label"].startswith("조건 · ") and rule["change"] == "changed"
-    assert "액션 반품 신청" in rule["readers"]  # what the rule reaches
+    assert "Action 반품 신청" in rule["readers"]  # what the rule reaches
     assert d["before"]["decide.min_agreement"] >= next(g["value"] for g in d["gates"] if g["stage"] == "decide")
     assert not d["can_decide"] and d["can_mark"]  # its author cannot approve it
     assert d["module_label"] == "관리 변경" and "검증 질문 A1" in d["affected"] and not d["self_approve"]
@@ -151,7 +151,7 @@ def test_a_record_graph_grows_by_relation_and_finds_what_joins_two_records(sessi
     assert far["ok"] is False or ("Customer", "C002") == (far["nodes"][0]["type"], far["nodes"][0]["key"])
     with pytest.raises(ValueError):  # an unknown type is said before any path is tried
         session.record_path("Customer", "C001", "Nowhere", "X")
-    assert "결정 반품 가능 여부" in session.element_readers("object:OrderItem")["readers"]
+    assert "규칙 반품 가능 여부" in session.element_readers("object:OrderItem")["readers"]
 
 
 def test_a_record_is_found_by_its_key_or_its_name_whatever_its_type(session):

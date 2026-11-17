@@ -7,9 +7,11 @@
 """
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any
 
 from ontlas.web.routes import get, post
+from ontlas.words import fix as with_particles
 
 # the callers of /v1, handed over by the server once it has made them (see register_rest); None where /v1 is off
 _REST: dict[str, Any] = {"rest": None}
@@ -56,7 +58,7 @@ def targets(s, a, who) -> dict:
     trail holds of it (decisions, answers, functions, action requests: the calls that are recorded)."""
     rest = _REST["rest"]
     on = bool(getattr(s.data, "rest", False))
-    month = s.studio.now().strftime("%Y-%m")
+    month = dt.datetime.now().strftime("%Y-%m")  # the audit trail is stamped by the machine's clock, so the month is too
     rows = [_target(rest, tools, month) for _, tools in rest.clients] if rest is not None else []
     roles = set(s.studio.onto.roles)
     for r in rows:
@@ -79,14 +81,14 @@ def _tried_on(s, role: str):
         ws = None
     if ws is None or not ws.dirty:
         if role and role not in deployed:
-            raise ValueError(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요.")
+            raise ValueError(with_particles(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요."))
         return s.studio, False
     try:
         comp = ws.composed()
     except ModuleError:
         raise ValueError("작성 중인 변경 요청의 정의 오류로 정책을 시험하지 못했습니다. 변경 요청을 확인해 주세요.") from None
     if role and role not in comp.ontology.roles:
-        raise ValueError(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요.")
+        raise ValueError(with_particles(f"접근 정책 {role}이(가) 없어 실행하지 못했습니다. 접근 정책을 다시 선택해 주세요."))
     if not role or (role in deployed and f"role:{role}" not in element_diff(s.studio.onto, comp.ontology)["changed"]):
         return s.studio, False
     return trial(s.studio, list(comp.modules), FlowSettings(off=["project"])), True

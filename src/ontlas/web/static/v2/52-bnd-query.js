@@ -91,7 +91,7 @@
     if (!Q.st) return head + '<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>';
     if (Q.err) return head + kEmpty('불러오지 못했습니다', Q.err);
     const all = Q.st.queries;
-    const asked = itemParam('sel') || itemParam('query');  // ?query= is the older link, which also runs the query the older way
+    const asked = itemParam('sel') || itemParam('query');  // ?query= is the older link to the same choice
     if (asked && bndQOf(asked) && Q.asked !== asked) { Q.asked = asked; Q.sel = asked; }
     if (!bndQOf(Q.sel)) Q.sel = (all[0] || {}).name || '';
     const x = bndQOf(Q.sel);

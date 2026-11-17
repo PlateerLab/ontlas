@@ -76,13 +76,15 @@ class GatewayBackend(Backend):
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 out = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            word = {401: "인증이 거절되었습니다. 토큰을 확인해 주세요.", 403: "이 연결을 사용할 권한이 없습니다.",
-                    404: "연결을 찾을 수 없거나 이 계정에 공유되지 않았습니다."}.get(e.code, f"서비스가 {e.code}로 응답했습니다.")
+            word = {401: "인증이 거절되어 질의 서비스에 요청하지 못했습니다. 토큰을 확인해 주세요.",
+                    403: "이 연결을 쓸 권한이 없어 질의 서비스에 요청하지 못했습니다. 연결 권한을 확인해 주세요.",
+                    404: "연결을 찾지 못해 질의 서비스에 요청하지 못했습니다. 연결 번호와 공유 여부를 확인해 주세요."}.get(
+                e.code, f"질의 서비스가 {e.code} 오류를 돌려줘 요청하지 못했습니다. 서비스 상태를 확인해 주세요.")
             raise GatewayError(word) from None
         except (OSError, ValueError):
-            raise GatewayError("쿼리 서비스가 응답하지 않습니다. 주소와 네트워크를 확인해 주세요.") from None
+            raise GatewayError("질의 서비스가 응답하지 않아 요청하지 못했습니다. 주소와 네트워크를 확인해 주세요.") from None
         if out.get(f["success"]) is False:
-            raise GatewayError(str(out.get(f["error"]) or "쿼리를 실행하지 못했습니다."))
+            raise GatewayError(str(out.get(f["error"]) or "질의 서비스가 실행을 거절해 결과를 받지 못했습니다. 질의를 확인해 주세요."))
         columns = [str(c) for c in out.get(f["columns"]) or []]
         rows = out.get(f["rows"]) or []
         if rows and isinstance(rows[0], dict):
@@ -106,10 +108,10 @@ class GatewayBackend(Backend):
         return res
 
     def run(self, sql: str, args: tuple = ()) -> int:
-        raise PermissionError("쿼리 게이트웨이는 읽기 전용입니다. 원천에는 쓰지 않습니다.")
+        raise PermissionError("질의 서비스 연결은 읽기 전용이라 쓰지 못했습니다. 쓰기 가능한 데이터 소스를 연결해 주세요.")
 
     def run_many(self, statements: list[tuple[str, tuple]]) -> int:
-        raise PermissionError("쿼리 게이트웨이는 읽기 전용입니다. 원천에는 쓰지 않습니다.")
+        raise PermissionError("질의 서비스 연결은 읽기 전용이라 쓰지 못했습니다. 쓰기 가능한 데이터 소스를 연결해 주세요.")
 
     def columns(self, table: str) -> dict[str, str] | None:
         dialect = self.capabilities.dialect

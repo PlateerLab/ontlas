@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import importlib
 import re
-from datetime import datetime
 from dataclasses import replace
+from datetime import datetime
 from typing import Any, Callable
 
 from ontlas.actions import check_parameters, parameter_spec

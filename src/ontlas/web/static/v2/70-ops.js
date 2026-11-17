@@ -194,8 +194,8 @@
       if (done) opsReload(); else render();
     },
     opsStoreDrop: async (t) => {
-      if (!window.confirm(`벡터 저장소 ${t.dataset.name}을(를) 삭제하시겠습니까?`)) return;
-      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); toast(`벡터 저장소 ${t.dataset.name}을(를) 삭제했습니다.`); opsReload(); } catch (e) { fail(e); }
+      if (!window.confirm(`벡터 저장소 ${t.dataset.name}${josa(t.dataset.name, '을', '를')} 삭제합니다.`)) return;
+      try { S.sp = await api('space/store', { op: 'remove', name: t.dataset.name }); toast(`벡터 저장소 ${t.dataset.name}${josa(t.dataset.name, '을', '를')} 삭제했습니다.`); opsReload(); } catch (e) { fail(e); }
     },
   });
 
@@ -243,7 +243,7 @@
       ${way('MCP 서버', '정의 조회 · 규칙 판정 · 검색 도구', `${opsTake(mcpCmd, '명령 복사')}${opsTake(mcpConf, '클라이언트 설정 복사')}`)}
       ${way('REST API', '판정 · 답변 · 정의 조회 API', `${opsTake('Authorization: Bearer <API 토큰>', '인증 헤더 복사')}${opsTake(curl, 'cURL 예시 복사')}<button class="k-btn sm" data-act="cngo" data-to="trypanel">API 실행</button>`)}
       ${way('온톨로지 파일', 'YAML · OWL 내보내기', known('library') ? '<a class="k-btn sm" href="#library">내보내기</a>' : '')}
-      ${way('플랫폼 DB 연결', '플랫폼 관리 DB 연결 · 읽기 전용 소스', `${opsTake(gateway, '스튜디오 파일 설정 복사')}${S.st.data.connect && known('db') ? '<a class="k-btn sm" href="#db">플랫폼 연결 입력</a>' : ''}`)}
+      ${way('플랫폼 DB 연결', '플랫폼 관리 DB 연결 · 읽기 전용 데이터 소스', `${opsTake(gateway, '스튜디오 파일 설정 복사')}${S.st.data.connect && known('db') ? '<a class="k-btn sm" href="#db">플랫폼 연결 입력</a>' : ''}`)}
       </div></section>`;
     // the addresses: every tool /v1 serves, each with its own address to copy
     const toolRows = i.tools.map((t) => `<tr><td><span class="k-code k-ink">${esc(t.method)} ${esc(t.path)}</span><br><span class="k-m12">${esc(t.name)}</span></td><td>${esc(TOOL_WORD[t.name] || t.description)}</td>
@@ -279,17 +279,6 @@
     if ((r.scope || {}).attribute) out.push(r.scope.attribute);
     return [...new Set(out)];
   }
-  // the body as the panel sends it: an elapsed-days value given as a date goes under the date's own name, which is how
-  // /v1 takes a date for it (delivered_at: 2026-10-20T09:00:00 for days_since_delivery)
-  function opsTryBody(c, i) {
-    const body = tryBody(c, i), d = c.api === 'decide' && c.mode === 'values' ? i.decisions.find((x) => x.name === c.decision) : null;
-    for (const x of d ? d.inputs : []) {
-      const v = body.values[x.name];
-      if (x.days_since && x.property && typeof v === 'string') { delete body.values[x.name]; body.values[x.property] = v; }
-    }
-    return body;
-  }
-
   // one /v1 call made from the page: what is sent is what a platform sends, as the access policy picked would make it
   function opsTry(i) {
     const c = tryState(i), api = tryApi(c), NONE = '값 없음';
@@ -351,7 +340,7 @@
 
   // the request as it goes out: its body, the same as a cURL line, the same as the settings of an XGEN HTTP request node
   function opsTryCode(c, i) {
-    const base = location.origin, body = opsTryBody(c, i), path = tryApi(c)[2];
+    const base = location.origin, body = tryBody(c, i), path = tryApi(c)[2];
     const lib = i.library && i.libraries > 1 ? { library: i.library.id } : {};
     const flat = JSON.stringify({ ...lib, ...body });
     const curl = `curl -X POST ${base}${path} \\\n  -H "Authorization: Bearer $ONTLAS_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${flat}'`;
@@ -472,7 +461,7 @@
       if (c.api === 'terms' && !c.text.trim()) { toast('문장을 입력해 주세요.', true); return; }
       c.busy = true; c.saved = false; render();
       const principal = Object.fromEntries(opsWho(opsTryPolicy()).map((k) => [k, String(S.ops.who[k] || '').trim()]).filter(([, v]) => v));
-      try { c.res = await api('ops/try', { path: tryApi(c)[2], policy: S.ops.tryPol, principal, body: opsTryBody(c, S.conn) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
+      try { c.res = await api('ops/try', { path: tryApi(c)[2], policy: S.ops.tryPol, principal, body: tryBody(c, S.conn) }); } catch (e) { c.res = { status: 400, body: { error: e.message } }; }
       c.busy = false; render();
     },
   });
@@ -651,12 +640,11 @@
     if (v === null || v === undefined || v === '' || !m || m.error) return v;
     const of = (list) => (n) => (list.find((x) => x.name === n) || {}).label || n;
     const lists = { read: mgLabel, run: of([...m.decisions, ...m.functions, ...m.queries]), request: of(m.actions), execute: of(m.actions), documents: String, unmask: String };
-    if (Array.isArray(v) && lists[head]) return v.map((n) => (n === '*' ? '전체' : lists[head](n))).join(' · ') || '없음';
+    const names = Array.isArray(v) ? v : typeof v === 'string' && lists[head] ? v.split(', ') : null;  // a list comes said as "a, b"
+    if (names && lists[head]) return names.map((n) => (n === '*' ? '전체' : lists[head](n))).join(' · ') || '없음';
     if (['mask', '가림'].includes(head)) return OPS_MASK[v] || v;
     if (head === 'row_filters' && v && typeof v === 'object' && !Array.isArray(v)) return opsRowSay(m, opsRowRule(rest.split('.')[0], v));
-    const where = (w) => (typeof w === 'string' ? w : [...(w.via || []), w.property].join(' › '));
-    if (head === 'scope' && /^types\./.test(rest)) return where(v);
-    if (head === 'scope' && typeof v === 'object' && !Array.isArray(v)) return Object.entries(v).map(([t, w]) => `${mgLabel(t)} · ${where(w)}`).join(', ');
+    if (head === 'scope' && typeof v === 'object' && !Array.isArray(v)) return Object.entries(v).map(([t, w]) => `${mgLabel(t)} · ${typeof w === 'string' ? w : [...(w.via || []), w.property].join(' › ')}`).join(', ');
     return v;
   }
   // a row filter as the policy form reads it, the way the server reads it: one compare on the Entity's own Property, or
@@ -677,20 +665,6 @@
       if (String(ref).startsWith(`${here}.`) && side(who)) return { type, via, property: String(ref).split('.').slice(1).join('.'), ...side(who) };
     }
     return { type, raw: spec };
-  }
-  // the lines of a whole policy: the keys of one row filter, or of one scoped Entity, come back together as one line
-  function opsRoleLines(all) {
-    const out = [], at = {};
-    for (const r of all) {
-      const path = String(r.label).split('.'), n = path[0] === 'row_filters' ? 2 : path[0] === 'scope' && path[1] === 'types' ? 3 : 0;
-      if (!n || path.length <= n) { out.push(r); continue; }
-      const key = path.slice(0, n).join('.');
-      if (!at[key]) { at[key] = { label: key, value: {} }; out.push(at[key]); }
-      let o = at[key].value;
-      path.slice(n, -1).forEach((k) => { o = o[k] = o[k] || {}; });
-      o[path[path.length - 1]] = r.value;
-    }
-    return out;
   }
 
   function opsPolicyForm(d, x) {
@@ -786,13 +760,13 @@
     remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; return { go: 'roles' }; },
     history: async (x) => (await itemHistoryOf({ word: '접근 정책', element: (y) => `role:${y.name}` }, x)).map((e) => ({ ...e,
       rows: e.rows.map((r) => ({ ...r, label: opsRoleWord(r.label), before: opsRoleSaid(r.label, r.before), after: opsRoleSaid(r.label, r.after) })),
-      all: opsRoleLines(e.all).map((r) => ({ ...r, label: opsRoleWord(r.label), value: opsRoleSaid(r.label, r.value) })) })),
+      all: e.all.map((r) => ({ ...r, label: opsRoleWord(r.label), value: opsRoleSaid(r.label, r.value) })) })),
   });
 
   // ---- a vector store added beside the one in use (an install that allows connections) -----------------------------
 
   item('store', {
-    word: '저장소', under: 'adapters', list: 'adapters', direct: true, may: () => isSysAdmin(),
+    word: '저장소', under: 'adapters', list: 'adapters', direct: true, adds: true, may: () => isSysAdmin(),
     lead: { form: '벡터 저장소를 추가합니다.' },
     load: async () => { if (!opsGood(S.sp)) S.sp = await api('space'); },
     // a server that does not connect to stores outside shows that state alone, with no form and no save

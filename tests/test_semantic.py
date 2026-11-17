@@ -293,7 +293,7 @@ def test_a_value_an_axiom_bounds_is_refused_on_the_page_in_its_words(session):
     with pytest.raises(ValueError) as e:
         session.manage_edit("update_parameter", {"name": "return_window_days", "value": 5})
     assert str(e.value) == ("반품 기간 값은 AXIOM 규칙 law-return-min-days에 따라 7 이상이어야 하므로 저장하지 못했습니다. "
-                            "관리 변경에서 5(으)로 정한 값입니다.")
+                            "관리 변경에서 5로 정한 값입니다.")
     assert not session.manage_state()["workspace"]["dirty"]
     session.manage_edit("update_parameter", {"name": "return_window_days", "value": 10})  # longer is fine
     s = session.semantic_state()
@@ -308,13 +308,13 @@ def test_a_value_an_axiom_bounds_is_refused_on_the_page_in_its_words(session):
     assert session.manage_propose()["change"]["status"] == "approved"
     out = session.attach("commerce-law")
     assert not out["ok"] and out["error"] == ("반품 기간 값은 AXIOM 규칙 law-return-min-days에 따라 7 이상이어야 하므로 "
-                                              "적용하지 못했습니다. 관리 변경에서 5(으)로 정한 값입니다.")
+                                              "적용하지 못했습니다. 관리 변경에서 5로 정한 값입니다.")
 
 
 def test_axiom_rules_are_not_edited_moved_or_removed_on_the_page(session):
     d = next(x for x in session.manage_state()["decisions"] if x["name"] == "returnEligibility")
     assert [(r["id"], r["layer"]) for r in d["rules"][:2]] == [("not-delivered", "axiom"), ("vip-window", "custom")]
-    said = "AXIOM 규칙 'not-delivered'은(는) 여기서 바꾸거나 옮기거나 지울 수 없습니다."
+    said = "AXIOM 규칙 'not-delivered'는 여기서 바꾸거나 옮기거나 지울 수 없습니다."
     for op, args in (("update_rule", {"when": {}, "then": {"eligible": True}}), ("delete_rule", {}), ("move_rule", {"to": 3})):
         with pytest.raises(ValueError) as e:
             session.manage_edit(op, {"decision": "returnEligibility", "id": "not-delivered", **args})
@@ -326,7 +326,7 @@ def test_axiom_rules_are_not_edited_moved_or_removed_on_the_page(session):
     assert sim["pending"] and sim["matched"] == ["in-window"] and sim["layer"] == "custom"  # the workspace wrote it now
     assert [x["said"] for x in sim["path"]["layers"]] == ["통과", "적용", "해당 없음"]
     assert sim["path"]["source"]["module_label"] == session._ws().module.label
-    with pytest.raises(ValueError, match="AXIOM 규칙 'not-delivered'이\\(가\\) 있어"):
+    with pytest.raises(ValueError, match="AXIOM 규칙 'not-delivered'가 든 결정표 'returnEligibility'가 함께 지워져"):
         session.manage_edit("delete_property", {"object": "OrderItem", "name": "delivered_at"})
 
 
@@ -351,16 +351,16 @@ def test_custom_rule_cards_are_added_changed_and_removed_on_the_page(session):
     assert "acme-vip-window" in s["removed"] and not any(c["id"] == "acme-gift-wrap" for c in s["cards"])
     refusals = [
         ("update_rule_card", {"id": "law-return-min-days", "status": "draft"},
-         "규칙 카드 'law-return-min-days'은(는) AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
+         "규칙 카드 'law-return-min-days'는 AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
         ("delete_rule_card", {"id": "law-return-min-days"},
-         "규칙 카드 'law-return-min-days'은(는) AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
+         "규칙 카드 'law-return-min-days'는 AXIOM 규칙이라 작성 중인 변경 요청으로는 바꾸거나 지우지 못했습니다. AXIOM 모듈의 변경 요청으로 바꿔 주세요."),
         ("add_rule_card", {**card, "id": "law-return-min-days"},
-         "규칙 카드 'law-return-min-days'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+         "규칙 카드 'law-return-min-days'가 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
         ("add_rule_card", {**card, "type": "guess"},
-         "규칙 카드 'acme-gift-wrap'의 유형 'guess'은(는) 쓸 수 없습니다. 판정, 계산, 전이, 복원, 순서, 표시, 감시 중에서 골라 주세요."),
+         "규칙 카드 'acme-gift-wrap'의 유형 'guess'는 쓸 수 없습니다. 판정, 계산, 전이, 복원, 순서, 표시, 감시 중에서 골라 주세요."),
         ("add_rule_card", {**card, "layer": "axiom"},
          "여기서 만드는 규칙 카드는 Custom 규칙입니다. 계층을 Custom으로 두고 다시 저장해 주세요."),
-        ("update_rule_card", {"id": "nope"}, "규칙 카드 'nope'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요.")]
+        ("update_rule_card", {"id": "nope"}, "규칙 카드 'nope'를 찾지 못했습니다. 화면을 새로고침해 주세요.")]
     for op, args, said in refusals:
         with pytest.raises(ValueError) as e:
             session.manage_edit(op, args)
@@ -397,7 +397,7 @@ def test_a_rule_and_its_table_take_an_owner_and_a_status_on_the_page(session):
     assert (card["owner"], card["status_label"], card["module"]) == ("고객경험팀", "검토 중", "workspace")
     with pytest.raises(ValueError) as e:
         session.manage_edit("update_decision", {"decision": "returnEligibility", "status": "done"})
-    assert str(e.value) == "상태 'done'은(는) 쓸 수 없습니다. 초안, 검토 중, 승인 중에서 골라 주세요."
+    assert str(e.value) == "상태 'done'은 쓸 수 없습니다. 초안, 검토 중, 승인 중에서 골라 주세요."
 
 
 def test_the_command_line_shows_the_checks_and_the_layers(capsys):

@@ -67,8 +67,8 @@ def test_who_reads_an_item_is_grouped_by_what_the_reader_is(session):
     out = routes.find("GET", "item/uses")(session, {"element": "object:OrderItem"}, None)
     assert out["exists"] and out["label"] == "주문상품"
     kinds = {u["kind"]: u for u in out["uses"]}
-    assert "반품 가능 여부" in kinds["결정"]["names"] and kinds["결정"]["screen"] == "semrules"
-    assert kinds["질의"]["screen"] == "query" and kinds["액션"]["names"] == ["반품 신청"]
+    assert "반품 가능 여부" in kinds["규칙"]["names"] and kinds["규칙"]["screen"] == "semrules"
+    assert kinds["질의"]["screen"] == "query" and kinds["Action"]["names"] == ["반품 신청"]
     with pytest.raises(ValueError):
         routes.find("GET", "item/uses")(session, {"element": ""}, None)
 

@@ -228,8 +228,7 @@ def binding(s, a, who) -> dict:
 def check(s, a, who) -> dict:
     """The definition as the pending edits leave it, against the source's tables, columns, types, keys and values: what
     Mapping and Entity Binding show is what is checked."""
-    from ontlas.bindings import Finding, check_bindings
-    from ontlas.check import columns_of, stored_props
+    from ontlas.bindings import check_bindings
 
     st = s.studio
     if not st.source:
@@ -238,20 +237,6 @@ def check(s, a, who) -> dict:
     backend = st.backend()
     rep = check_bindings(onto, backend)
     findings, checked = list(rep.findings), dict(rep.checked)
-    # a Property an Entity takes from the one it specialises is read from the Entity's own table (as bnd/columns and the
-    # queries read it), and the engine's check reads only the Entity's own Properties: those are checked here
-    for o in onto.objects.values():
-        have = backend.columns(o.table) if o.table else None
-        if have is None:  # no table, or one the engine's check already named
-            continue
-        for p in stored_props(onto, o.name):
-            if p in o.properties or p == o.key:
-                continue
-            for col in columns_of(onto, o.name, p):
-                checked["columns"] = checked.get("columns", 0) + 1
-                if col.lower() not in have:
-                    findings.append(Finding("error", "column", f"property:{o.name}.{p}", f"column '{o.table}.{col}' does not exist",
-                                            {"table": o.table, "column": col}))
     return plain({"ok": not any(f.severity == "error" for f in findings), "checked": checked, "backend": st.source, "pending": pending,
                   "findings": [{**f.__dict__, "detail": _finding_said(f)} for f in findings]})
 

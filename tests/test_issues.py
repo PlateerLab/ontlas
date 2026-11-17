@@ -42,11 +42,11 @@ def test_three_alerts_with_one_cause_are_told_as_one(session):
     assert len(board["alerts"]) == 3 and len(board["issues"]) == 1
     root = board["issues"][0]
     assert root["title"] == "식품 업종 확장 모듈이 없는 컬럼을 읽습니다" and root["bind_title"] == "DB 대조 오류 2건"
-    assert root["cause"]["ref"] == "food" and root["cause"]["at"] and "속성 2개와 질의 1개" in root["cause"]["text"]
+    assert root["cause"]["ref"] == "food" and root["cause"]["at"] and "Property 2개와 질의 1개" in root["cause"]["text"]
     assert [i["element"] for i in root["items"]] == ["property:Sku.expires_on", "property:Sku.storage"]
     assert "skus 테이블 컬럼 8개 중 비슷한 이름이 없습니다." == root["note"]
     assert {m["kind"] for m in root["members"]} == {"query", "check.values"} and root["floors"] == ["ontology", "use", "verify"]
-    assert {"label": "질의 유통기한 임박 단품", "say": "원천 DB 실행 실패"} in root["effects"]
+    assert {"label": "질의 유통기한 임박 단품", "say": "데이터 소스 실행 실패"} in root["effects"]
     assert root["fixes"][0]["recommended"] and root["fixes"][0]["where"] == "now" and root["fixes"][0]["preview"] == "food"  # nothing close and just attached
     rebind, ask = root["fixes"][1:]
     assert rebind["where"] == "here" and len(rebind["steps"]) == 2 and rebind["go"] == {"tab": "model", "el": "property:Sku.expires_on", "field": "column"}
@@ -81,7 +81,7 @@ def test_when_an_issue_opened_outlives_a_restart(session, tmp_path):
 
 def test_a_near_column_is_offered_and_filled_in(session):
     got = built(session, [finding("column", "property:Sku.size", table="skus", column="sizes")])
-    fix = next(f for f in got[0]["fixes"] if f["label"] == "원천 컬럼 다시 지정")
+    fix = next(f for f in got[0]["fixes"] if f["label"] == "소스 컬럼 다시 지정")
     assert fix["recommended"] and fix["go"]["prefill"] == "size" and "비슷한 이름" in got[0]["note"]
 
 

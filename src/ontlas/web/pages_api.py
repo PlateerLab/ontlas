@@ -15,6 +15,7 @@ from ontlas.backends.base import NoSource
 from ontlas.check import all_props, column_of, find_prop
 from ontlas.ir import Agg, And, Cmp, Column, Contains, Edge, Or, Order, Query, Ref
 from ontlas.web.space_api import plain
+from ontlas.words import fix as with_particles
 
 LINK_ROWS = 8  # linked records shown under each relation of a record page
 GRAPH_ROWS = 25  # records one relation adds to the record graph at a time; past it the rest wait behind a count
@@ -314,7 +315,7 @@ class PagesMixin:
             prop = find_prop(o, type_name, p)
             if prop.type in ("date", "datetime") and row.get(p) and not prop.expr:
                 word = re.sub(r"\s*(일시|일자|시각|날짜|일)$", "", prop.label or p) or (prop.label or p)
-                source.append({"at": str(row[p]), "event": word, "actor": "원천 DB", "kind": "source", "proposal": "",
+                source.append({"at": str(row[p]), "event": word, "actor": "데이터 소스", "kind": "source", "proposal": "",
                                "action": ""})
         return waiting + sorted(done[:20] + source, key=lambda x: str(x["at"]), reverse=True)
 
@@ -549,7 +550,7 @@ class PagesMixin:
         """One change request with each element it adds, changes or removes, field by field, what reads that element now,
         the reviewer's word and the comments on it, and the pass conditions as the studio meets them now and after."""
         from ontlas.modules import compose
-        from ontlas.review import _elements
+        from ontlas.review import _cards, _elements
 
         st = self.studio
         cr = st.changes._get(change_id)
@@ -567,8 +568,9 @@ class PagesMixin:
                     else current + [module] if cr.attach else None)
             if mods is not None:
                 try:
-                    after_onto = compose(mods, **st._compose_kw).ontology
-                    before, after = _elements(st.onto), _elements(after_onto)
+                    composed = compose(mods, **st._compose_kw)
+                    after_onto = composed.ontology
+                    before, after = _elements(st.onto, _cards(st.composition)), _elements(after_onto, _cards(composed))
                 except Exception:  # what does not compose is in the review's issues already
                     before, after = {}, {}
         items = []
@@ -580,7 +582,8 @@ class PagesMixin:
                               "label": self._element_label(el, after_onto), "fields": self._field_diff(el, a, b, after_onto),
                               "readers": self._readers(el), "mark": cr.marks.get(el, ""),
                               "comments": [c for c in cr.comments if c["element"] == el]})
-        order = ["object", "property", "link", "decision", "rule", "action", "function", "role", "query", "identity", "question"]
+        order = ["object", "property", "link", "decision", "rule", "rule_card", "parameter", "metric", "action", "function", "role",
+                 "query", "identity", "question"]
         items.sort(key=lambda x: (order.index(x["kind"]) if x["kind"] in order else len(order), x["element"]))
         affected = list(dict.fromkeys(r for x in items for r in x["readers"]))
         out.update({"items": items, "comments": [c for c in cr.comments if not c["element"]], "marks": dict(cr.marks),
@@ -738,10 +741,10 @@ class PagesMixin:
             {"id": "mgrules", "title": "규칙", "part": "Semantic layer", "done": bool(o.decisions or o.actions),
              "detail": f"결정표 {len(o.decisions)} · 액션 {len(o.actions)} · 역할 {len(o.roles)}" if (o.decisions or o.actions or o.roles) else "결정표와 액션, 권한을 정합니다"},
             {"id": "catalog", "title": "데이터 연결", "part": "Data binder", "done": bool(tables), "optional": True,
-             "detail": " · ".join(x for x in (f"원천 테이블 {len(tables)}개" if tables else "", f"파일 {len(kept)}개" if kept else "") if x)
+             "detail": " · ".join(x for x in (f"테이블 {len(tables)}개" if tables else "", f"파일 {len(kept)}개" if kept else "") if x)
              or "연결하지 않아도 정의와 규칙, 판정은 동작합니다"},
             {"id": "check", "title": "검증", "part": "QA", "done": bool(met) and met["all"] > 0 and met["met"] == met["all"],
-             "detail": (f"통과 조건 {met['met']} / {met['all']}" + (f" · 측정 대상 아님 {met['unmeasured']}" if met.get("unmeasured") else "")
+             "detail": (f"통과 조건 {met['met']} / {met['all']}" + (f" · 미측정 {met['unmeasured']}" if met.get("unmeasured") else "")
                         if met else "아직 재지 않음")
              + (f" · 검증 질문 {check.get('right', check.get('passed', ''))} / {check.get('questions', len(o.questions))}" if check.get("questions") else (f" · 검증 질문 {len(o.questions)}개" if o.questions else ""))},
             {"id": "changes", "title": "변경 요청", "part": "", "done": not pending and not waiting,
@@ -793,17 +796,27 @@ class PagesMixin:
                 q = next((q for q in o.questions if q.id == name), None)
                 if q is not None:
                     return q.text or name
+            if kind in ("parameter", "metric"):
+                x = (o.parameters if kind == "parameter" else o.metrics).get(name)
+                if x is not None:
+                    return x.label or name
+        if kind == "rule_card":
+            return f"규칙 카드 {name}"
         return name
 
-    FIELD_WORDS = {"label": "라벨", "type": "타입", "column": "컬럼", "values": "허용값", "required": "필수", "mask": "가림",
+    FIELD_WORDS = {"label": "이름", "type": "타입", "column": "컬럼", "values": "허용값", "required": "필수", "mask": "마스킹",
                    "expr": "계산식", "unit": "단위", "description": "설명", "table": "테이블", "key": "키", "parent": "상위 Entity",
-                   "source": "출발 Entity", "target": "도착 Entity", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
+                   "source": "시작 Entity", "target": "대상 Entity", "cardinality": "카디널리티", "on": "조인 컬럼", "via": "연결 테이블",
                    "inverse": "역방향 이름", "cite": "근거", "text": "질문", "expect": "기대 답", "decision": "결정표", "query": "질의",
                    "params": "Parameter", "hit_policy": "적용 방식", "title": "표시 이름 속성", "states": "상태 전이",
                    "area": "Object", "layer": "계층", "owner": "담당", "status": "상태", "transform": "변환식",
-                   "source_type": "원천 자료형", "labels": "코드 변환표", "columns": "키 컬럼", "from": "시작 Entity",
+                   "source_type": "소스 자료형", "labels": "코드 변환표", "columns": "키 컬럼", "from": "시작 Entity",
                    "to": "끝 Entity", "initial": "초기 상태", "transitions": "허용 전이", "property": "Property",
-                   "inputs": "입력값", "outputs": "출력", "name": "이름", "english": "영문 표기", "definition": "정의"}
+                   "inputs": "입력값", "outputs": "출력", "name": "이름", "english": "영문 표기", "definition": "정의",
+                   "statement": "규칙 내용", "applies_to": "적용 대상", "conditions": "조건", "result": "결과", "exceptions": "예외",
+                   "legal_review": "법무 검토", "implements": "구현 항목", "check": "확인 조건", "risk": "위험",
+                   "verification": "검증 방법", "value": "값", "min": "최솟값", "max": "최댓값", "formula": "산식",
+                   "denominator": "분모", "time": "기준 시각", "scale": "척도"}
     # a stored code as the screens say it; a status not written is the one in use
     VALUE_WORDS = {"status": {"active": "사용 중", "draft": "초안", "deprecated": "폐기 예정", "review": "확인 필요"},
                    "cardinality": {"many_to_one": "N : 1", "one_to_many": "1 : N", "one_to_one": "1 : 1", "many_to_many": "N : M"}}
@@ -837,6 +850,10 @@ class PagesMixin:
                 return f"조건 · {input_label(onto, table, rest)}"
             if head == "then" and rest:
                 return f"결과 · {'사유' if rest == 'reason' else rest}"
+            if kind == "link" and f == "target":  # a Relation runs from one Entity to another
+                return "끝 Entity"
+            if kind == "rule_card" and f in ("source", "type"):  # a card's source is the document it comes from
+                return {"source": "출처", "type": "유형"}[f]
             if f in self.FIELD_WORDS or not rest:
                 return self.FIELD_WORDS.get(f, f)
             return f"{self.FIELD_WORDS.get(head, head)} · {'사유' if rest == 'reason' else rest}"
@@ -846,6 +863,11 @@ class PagesMixin:
             if f in self.VALUE_WORDS and side is not None:
                 v = cell if cell is not None else ("active" if f == "status" else None)
                 return self.VALUE_WORDS[f].get(v, v) if v is not None else None
+            if f in ("source", "target", "parent") and isinstance(cell, str) and cell:  # an Entity by the name it is shown with
+                for o in (self.studio.onto, after):
+                    if o is not None and cell in o.objects:
+                        return o.objects[cell].label or cell
+                return None
             if isinstance(cell, list) and all(isinstance(x, (str, int, float)) for x in cell):
                 return ", ".join(str(x) for x in cell) if cell else None
             if cell is None or table is None or not f.startswith("when.") or rest not in table.inputs:
@@ -867,27 +889,40 @@ class PagesMixin:
         if kind in ("rule", "decision"):
             d = name.split(".")[0]
             out += [f"검증 질문 {q.id}" for q in o.questions if q.decision == d]
-            out += [f"액션 {a.label or a.name}" for a in o.actions.values() if any(c.decision == d for c in a.criteria)]
+            out += [f"Action {a.label or a.name}" for a in o.actions.values() if any(c.decision == d for c in a.criteria)]
             out += [f"함수 {f.label or f.name}" for f in o.functions.values() if f.decision == d]
-            out += [f"역할 {r.label or r.name}" for r in o.roles.values() if d in r.run]
+            out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if d in r.run]
         elif kind == "property" and "." in name:
             t, p = name.split(".", 1)
-            out += [f"결정 {x.label or x.name}" for x in o.decisions.values()
+            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values()
                     if any(p in (i.source.get("property"), i.source.get("days_since")) for i in x.inputs.values())]
             out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f".{p}" in said(q.query)]
-            out += [f"계산 속성 {ot.label or tn} · {prop.label or pn}" for tn, ot in o.objects.items()
+            out += [f"계산 Property {ot.label or tn} · {prop.label or pn}" for tn, ot in o.objects.items()
                     for pn, prop in ot.properties.items() if prop.expr and re.search(rf"\b{re.escape(p)}\b", prop.expr)]
         elif kind == "object":
             out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
-            out += [f"결정 {x.label or x.name}" for x in o.decisions.values() if x.target == name]
-            out += [f"액션 {a.label or a.name}" for a in o.actions.values() if a.target == name]
+            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values() if x.target == name]
+
+            def passes(x) -> bool:  # an input of the table reads through this Entity on its way
+                for i in x.inputs.values():
+                    here = x.target
+                    for step in i.source.get("path") or []:
+                        lk = o.links.get(step) or o.link_by_inverse(step)
+                        if lk is None:
+                            break
+                        here = lk.target if lk.name == step else lk.source
+                        if here == name:
+                            return True
+                return False
+            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values() if x.target != name and passes(x)]
+            out += [f"Action {a.label or a.name}" for a in o.actions.values() if a.target == name]
         elif kind == "link":
             out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
-            out += [f"결정 {x.label or x.name}" for x in o.decisions.values()
+            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values()
                     if any(name in (i.source.get("path") or []) for i in x.inputs.values())]
         elif kind == "query":
             out += [f"검증 질문 {q.id}" for q in o.questions if q.query == name]
-            out += [f"역할 {r.label or r.name}" for r in o.roles.values() if name in r.run]
+            out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if name in r.run]
         return list(dict.fromkeys(out))[:12]
 
     # ---- a decision table tried before it is filed ------------------------------------------------------------------
@@ -933,8 +968,8 @@ class PagesMixin:
                 try:
                     base[k] = None if v in ("", None) else coerce(v, table.inputs[k].type)
                 except ValueError:
-                    raise ValueError(f"{input_label(onto, table, k)} 값 '{v}'이(가) 자료형에 맞지 않아 판정하지 못했습니다. "
-                                     "값을 다시 입력해 주세요.") from None
+                    raise ValueError(with_particles(f"{input_label(onto, table, k)} 값 '{v}'이(가) 자료형에 맞지 않아 판정하지 못했습니다. "
+                                                    "값을 다시 입력해 주세요.")) from None
         values = {i: base.get(i) for i in table.inputs}
 
         def run(vals: dict) -> dict:

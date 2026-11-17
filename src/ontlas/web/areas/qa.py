@@ -8,6 +8,7 @@ from collections import Counter
 from typing import Any
 
 from ontlas.web.routes import get, post
+from ontlas.words import fix as with_particles
 
 QUESTION_KEYS = ("text", "decision", "key", "query", "params")  # what update_question cannot change: written anew
 META_KEYS = ("type", "holdout", "grading", "keywords", "owner")
@@ -121,7 +122,7 @@ def question_save(s, a, who) -> dict:
     qid = str(a.get("id") or "").strip()
     cur = next((q for q in onto.questions if q.id == qid), None)
     if a.get("new") and cur is not None:
-        raise ValueError(f"질문 ID {qid}이(가) 이미 있어 저장하지 못했습니다. 다른 ID를 입력해 주세요.")
+        raise ValueError(with_particles(f"질문 ID {qid}이(가) 이미 있어 저장하지 못했습니다. 다른 ID를 입력해 주세요."))
     q = _question(a, onto)
     try:
         if cur is None:

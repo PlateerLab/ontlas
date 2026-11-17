@@ -323,15 +323,15 @@ def test_a_type_the_unsent_edits_change_is_not_spoken_for_by_the_last_check(sess
 
 
 def test_area_edits_are_said_in_korean_and_filed_as_one_change(session):
-    with pytest.raises(ValueError, match=r"Entity PriceChange, Product, Sku이\(가\) Object 'Product'에 속해 있어 제외하지 못했습니다"):
+    with pytest.raises(ValueError, match=r"Entity PriceChange, Product, Sku가 Object 'Product'에 속해 있어 제외하지 못했습니다"):
         session.manage_edit("delete_area", {"name": "Product"})
-    with pytest.raises(ValueError, match=r"Object 'Nope'을\(를\) 찾지 못했습니다"):
+    with pytest.raises(ValueError, match=r"Object 'Nope'를 찾지 못했습니다"):
         session.manage_edit("update_object", {"name": "Customer", "area": "Nope"})
-    with pytest.raises(ValueError, match=r"Object 'Order'이\(가\) 이미 있어 추가하지 못했습니다"):
+    with pytest.raises(ValueError, match=r"Object 'Order'가 이미 있어 추가하지 못했습니다"):
         session.manage_edit("add_area", {"name": "Order"})
-    with pytest.raises(ValueError, match="이름 '1x'은 영문자로 시작하고"):
+    with pytest.raises(ValueError, match="이름 '1x'는 영문자로 시작하고"):
         session.manage_edit("add_area", {"name": "1x"})
-    with pytest.raises(ValueError, match=r"Object Late의 상태 'gone'은\(는\) 쓸 수 없어 저장하지 못했습니다"):
+    with pytest.raises(ValueError, match=r"Object Late의 상태 'gone'은 쓸 수 없어 저장하지 못했습니다"):
         session.manage_edit("add_area", {"name": "Late", "status": "gone"})
     r = session.manage_edit("add_area", {"name": "Member", "label": "회원", "description": "회원과 등급"})
     assert r["edit"] == {"op": "add_area", "target": "area:Member", "took_out": []}

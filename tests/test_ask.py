@@ -16,7 +16,7 @@ def test_a_question_tries_again_only_while_the_page_can_still_wait(monkeypatch):
     monkeypatch.setattr(api, "ASK_RETRY_WITHIN", -1.0)  # below zero: the clock may not move between fast calls
     out = s.ask("VIP 등급 고객의 이름을 알려 주세요")
     assert not out["ok"] and len(calls) == 1  # out of time: the first answer only
-    assert "not one JSON object" in out["error"] and "응답 시간 한도" in out["error"]  # what the model said, and why
+    assert "답변이 정의와 맞지 않아" in out["error"]  # what the model last said did not hold
 
 
 def test_a_column_named_after_another_property_is_sent_back():

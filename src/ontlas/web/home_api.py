@@ -53,7 +53,7 @@ class HomeMixin:
         parts += [f"통과 조건 미충족 {len(reg['gates_failing'])}" if reg.get("gates_failing") else "",
                   f"통과 조건 충족 {len(reg['gates_passing'])}" if reg.get("gates_passing") else ""]
         if reg.get("unmeasured"):  # questions that read rows, with none to read: neither failed nor passed
-            parts.append(f"원천 미연결로 미측정 {len(reg['unmeasured'])}")
+            parts.append(f"데이터 소스 미연결 · 미측정 {len(reg['unmeasured'])}")
         said_line = " · ".join(p for p in parts if p) or "변화 없음"
         return {**reg, "newly_failing": failing, "gates_failing": [gate(g) for g in reg.get("gates_failing") or []],
                 "gates_passing": [gate(g) for g in reg.get("gates_passing") or []],
@@ -302,7 +302,7 @@ class HomeMixin:
         tables = {t.table for t in bound} | {lk.via.table for lk in o.links.values() if lk.via}
         info = st.source_info()
         if not info["connected"]:
-            state = ("unmeasured", "원천 미연결") if bound else ("empty", "연결 전")
+            state = ("unmeasured", "데이터 소스 미연결") if bound else ("empty", "연결 전")
         elif not bound:
             state = ("empty", "연결 전")
         elif bind is None:
@@ -326,7 +326,7 @@ class HomeMixin:
         elif not current:
             state = ("unmeasured", "다시 측정 필요")
         elif not met["all"]:
-            state = ("unmeasured", "측정 대상 아님")
+            state = ("unmeasured", "미측정")
         elif met["met"] < met["all"]:
             state = ("attention", "미달")
         else:

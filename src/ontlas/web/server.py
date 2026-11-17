@@ -417,8 +417,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                         out = self._route(method, route, a, s, sid)
             except NoSource:  # it reads rows, and this studio holds its definition only: said as that, not as a failure
                 return self._json(409, {"error": NO_SOURCE_SAID.get(route, NO_SOURCE), "no_source": True}, sid=sid, new=new)
-            except LookupError as e:
-                return self._json(400, {"error": f"요청한 항목을 찾을 수 없습니다. {e}"}, sid=sid, new=new)
+            except LookupError as e:  # a sentence of the page's stays; an engine's key is not shown
+                said = str(e.args[0]) if e.args and isinstance(e.args[0], str) else ""
+                return self._json(400, {"error": said if re.search("[가-힣]", said) and said.endswith(".")
+                                        else "요청한 항목을 찾지 못해 처리하지 못했습니다. 화면을 새로고침해 주세요."}, sid=sid, new=new)
             except PermissionError as e:
                 return self._json(403, {"error": str(e)}, sid=sid, new=new)
             except ValueError as e:  # what a visitor sent does not fit: a file, a limit, an empty draft

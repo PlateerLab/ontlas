@@ -363,9 +363,9 @@ def test_the_shop_lexicon_is_shown_with_its_labels_owners_and_confusable_pairs(s
 def test_terms_are_edited_and_imported_from_the_page_and_filed_as_one_change(session):
     with pytest.raises(ValueError, match="용어 편집\\(add_area\\)이 아니어서"):
         session.lexicon_edit("add_area", {"name": "X"})
-    with pytest.raises(ValueError, match="용어 '고객@object:Customer'이\\(가\\) 이미 있어"):
+    with pytest.raises(ValueError, match="용어 '고객@object:Customer'가 이미 있어"):
         session.lexicon_edit("add_term", {"term": "고객", "concept": "object:Customer"})
-    with pytest.raises(ValueError, match="연결한 정의 'object:Nope'을\\(를\\) 찾지 못해"):
+    with pytest.raises(ValueError, match="연결한 정의 'object:Nope'를 찾지 못해"):
         session.lexicon_edit("add_term", {"term": "x", "concept": "object:Nope"})
     r = session.lexicon_edit("add_term", {"term": "반품", "concept": "object:Claim", "synonyms": ["리턴"]})
     assert r["edit"] == {"op": "add_term", "target": "term:반품@object:Claim", "took_out": []}
@@ -422,7 +422,7 @@ def test_the_lexicon_routes_answer_over_http(session):
         code, body = call("/api/lexicon/edit", {"op": "add_term", "args": {"term": "반품", "concept": "object:Claim"}})
         assert code == 200 and body["stats"]["terms"] == 7
         code, body = call("/api/lexicon/edit", {"op": "delete_term", "args": {"id": "없는 말"}})
-        assert code == 400 and body["error"] == "용어 '없는 말'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."
+        assert code == 400 and body["error"] == "용어 '없는 말'을 찾지 못했습니다. 화면을 새로고침해 주세요."
         code, body = call("/api/lexicon/import", {"text": PAIRS, "name": "용어집.csv"})
         assert code == 200 and len(body["report"]["conflicts"]) == 2
         code, body = call("/api/manage/edit", {"op": "update_term", "args": {"id": "반품@object:Claim", "owner": "고객센터"}})
@@ -546,9 +546,9 @@ def test_the_management_state_shows_owners_tiers_and_question_metadata(session):
     assert (qs["Q4"]["grading"], qs["Q4"]["keywords"], qs["Q4"]["owner"]) == ("evidence", ["2.1조"], "고객센터")
     assert (qs["OP7"]["type"], qs["OP7"]["query"], qs["OP7"]["decision"]) == ("definition", "", "")
     assert next(o for o in st["objects"] if o["name"] == "Order")["owner"] == ""
-    with pytest.raises(ValueError, match="Object Order의 단계 'x'은\\(는\\) 1 이상의 정수여야"):
+    with pytest.raises(ValueError, match="Object Order의 차수 'x'가 1 이상의 정수가 아니어서"):
         session.manage_edit("update_area", {"name": "Order", "tier": "x"})
-    with pytest.raises(ValueError, match="키워드로 채점하므로 키워드를"):
+    with pytest.raises(ValueError, match="키워드가 없어 검증 질문 N2를 저장하지"):
         session.manage_edit("add_question", {"id": "N2", "text": "?", "query": "shipmentsInTransit", "grading": "keywords"})
 
 

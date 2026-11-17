@@ -16,6 +16,8 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from ontlas.words import fix as with_particles
+
 LAYERS = ("axiom", "custom", "standard")  # the order a decision checks them in
 LAYER_LABEL = {"axiom": "AXIOM", "custom": "Custom", "standard": "Standard"}
 LAYER_TEXT = {
@@ -213,9 +215,9 @@ def check_cards(cards: list[dict], onto, modules: list) -> list[dict]:
              "set_by": by, "set_by_label": names.get(by, by), "blocking": c["layer"] == "axiom", "passed": None,
              "failed": ""}
         if p is None:
-            f["said"] = f"기준값 {name}이(가) 정의에 없어 확인하지 못했습니다."
+            f["said"] = with_particles(f"기준값 {name}이(가) 정의에 없어 확인하지 못했습니다.")
         elif not _number(p.value):
-            f.update(passed=False, failed="type", said=f"{f['label']} 값 '{p.value}'이(가) 숫자가 아닙니다.")
+            f.update(passed=False, failed="type", said=with_particles(f"{f['label']} 값 '{p.value}'이(가) 숫자가 아닙니다."))
         elif f["min"] is not None and p.value < f["min"]:
             f.update(passed=False, failed="min", said=f"{f['label']} {_num(p.value)}{f['unit']} · {_bounds(f)}이어야 합니다.")
         elif f["max"] is not None and p.value > f["max"]:

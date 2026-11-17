@@ -105,7 +105,7 @@ def test_request_approve_and_the_decision_follows(session):
     assert next(c for c in done["proposal"]["checks"] if c["name"].startswith("decision:"))["detail"].startswith(
         "eligible true")
     assert session.decide("returnEligibility", "I1001")["yes"] is False
-    assert session.audit()[0]["event"] == "원천 반영"
+    assert session.audit()[0]["event"] == "데이터 반영"
     assert session.request("requestReturn", "I1001", {"reason": "x"}, "customer_agent")["proposal"]["status"] == \
         "rejected"
 

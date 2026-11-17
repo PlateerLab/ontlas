@@ -85,9 +85,10 @@ def test_a_team_signs_in_and_works_in_one_studio_by_role(team):
     # a write without the page's own header is refused: another site cannot send it in the user's name
     assert _call(base, "/api/detach", {"name": "fashion"}, cookie=kim, header=False)[0] == 403
     assert _call(base, "/api/detach", {"name": "fashion"}, cookie=park)[0] == 403  # viewer
-    code, out, _ = _call(base, "/api/detach", {"name": "fashion"}, cookie=kim)
+    assert _call(base, "/api/detach", {"name": "fashion"}, cookie=kim)[0] == 403  # an editor files requests; the definition in use is the approver's
+    code, out, _ = _call(base, "/api/detach", {"name": "fashion"}, cookie=lee)
     assert code == 200 and out["ok"]
-    state = _call(base, "/api/state", cookie=park)[1]  # the viewer sees the editor's change: one studio
+    state = _call(base, "/api/state", cookie=park)[1]  # the viewer sees the approver's change: one studio
     assert "fashion" not in {r["name"] for r in state["library"] if r["on"]}
 
     src = _call(base, "/api/module?name=acme-overlay", cookie=kim)[1]["yaml"]
@@ -181,11 +182,11 @@ def test_what_is_switched_on_stays_on_across_a_restart(team):
     from ontlas.config import load_studio
 
     base, root, _ = team
-    kim = _login(base, "kim", "kim-password-1")
-    assert _call(base, "/api/detach", {"name": "fashion"}, cookie=kim)[1]["ok"]
+    lee = _login(base, "lee", "lee-password-1")
+    assert _call(base, "/api/detach", {"name": "fashion"}, cookie=lee)[1]["ok"]
     again = load_studio(root / "library" / "studio.yaml")
     assert "fashion" not in {m.name for m in again.composition.modules}
-    assert _call(base, "/api/attach", {"name": "fashion"}, cookie=kim)[1]["ok"]
+    assert _call(base, "/api/attach", {"name": "fashion"}, cookie=lee)[1]["ok"]
     assert "fashion" in {m.name for m in load_studio(root / "library" / "studio.yaml").composition.modules}
 
 

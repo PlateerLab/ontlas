@@ -71,6 +71,7 @@ select { appearance:none; -webkit-appearance:none; -moz-appearance:none; padding
 
 /* the switch at the top left: the ontologies a person works in, and the way into the admin screens */
 .k-switch { position:relative; flex:none; }
+.k-switch.bare { flex:0 1 288px; min-width:240px; }  /* in the bar of the screens without a menu */
 .k-switch > summary { display:flex; align-items:center; gap:8px; width:100%; min-height:52px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; box-sizing:border-box; color:var(--muted); }
 .k-switch[open] > summary { border-color:var(--blue); background:var(--blue-wash); }
 .k-switch > summary > span { display:flex; flex-direction:column; min-width:0; flex:1; }
@@ -320,7 +321,16 @@ textarea.k-in, .k-f > textarea { padding:8px 12px; min-height:76px; line-height:
 @media (max-width:640px) {
   .k-ph h1, .k-h1 { font-size:24px; }
   .k-g2 { grid-template-columns:minmax(0, 1fr); }
-  .k-crumb { flex-basis:100%; order:-1; }
+  /* the bar stays one line: the screen's own title says where it is, the search box gives way to the buttons */
+  .k-crumb { flex:1 1 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .k-top:has(.k-find) .k-crumb, .app.bare .k-crumb { display:none; }
+  .k-top { flex-wrap:nowrap; }
+  .k-find { flex:1 1 0; overflow:hidden; }
+  .k-find > span:first-of-type { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .app.bare > .k-top { gap:8px; }
+  .app.bare .k-brand span { display:none; }
+  .k-switch.bare { flex:1 1 0; min-width:0; }
+  .k-switch.bare > summary { min-height:44px; }
   .k-tbtn > .w { display:none; }
   .k-kv { flex-wrap:wrap; }
 }

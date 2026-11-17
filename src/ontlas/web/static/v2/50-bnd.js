@@ -250,7 +250,7 @@
       </section>`;
     const first = sel && sel.mark[0] === 'warn' ? sel : diff[0];
     const why = first ? `<section class="k-v bnd-why" aria-labelledby="bnd-df-h"><h2 class="k-15" id="bnd-df-h" style="margin:0;font-weight:600;color:#5E3900">차이 · ${esc(first.name)}</h2>
-      <p class="k-14" style="margin:0;line-height:1.55">${esc(first.found[0] ? (FIX[first.found[0].kind] || first.mark[1]) : '원천 테이블에 컬럼이 없습니다. 컬럼 이름을 맞추거나 원천 테이블에 컬럼을 추가해 주세요.')}</p>
+      <p class="k-14" style="margin:0;line-height:1.55">${esc(first.found[0] ? (FIX[first.found[0].kind] || first.mark[1]) : '소스 테이블에 컬럼이 없습니다. 컬럼 이름을 맞추거나 소스 테이블에 컬럼을 추가해 주세요.')}</p>
       ${first.found[0] && first.found[0].detail ? `<p class="k-code k-13" style="margin:0;white-space:normal">${esc(first.found[0].detail)}</p>` : ''}
       <div class="k-wrap g8">${canEdit() ? `<a class="k-btn" href="${itemHref('map', 'form', first.id)}">Mapping 편집</a>` : ''}<a class="k-lnk" style="color:var(--warn)" href="#bind?row=${encodeURIComponent(`bind:property:${first.id}`)}">Binding 검사 결과</a></div></section>` : '';
     const cp = sel && (sel.p.values || []).length ? sel.p : null;

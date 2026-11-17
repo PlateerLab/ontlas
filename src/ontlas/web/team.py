@@ -3,7 +3,8 @@
     users:
       kim: {name: 김하람, password: "pbkdf2_sha256$260000$<salt>$<hash>", roles: [editor, approver]}
 
-viewer reads and asks; editor changes data and modules and files requests; approver approves changes and actions;
+viewer reads and asks; editor changes data and files requests; approver approves changes and actions and turns a module
+of the definition in use on or off;
 admin also sets the flow and resets the studio. A change is approved by someone other than the person who asked.
 """
 from __future__ import annotations
@@ -22,7 +23,8 @@ ITERATIONS = 260_000
 LEVELS = ("viewer", "editor", "approver", "admin")
 # what each POST route needs; every GET and anything not listed needs viewer
 NEEDS = {
-    "attach": "editor", "detach": "editor", "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
+    "attach": "approver", "detach": "approver",  # the definition the whole team works in changes: as an approval does
+    "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
     "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor", "catalog/use": "editor",
     "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "library": "editor", "catalog/move": "editor", "catalog/trash": "editor",
     "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "editor",

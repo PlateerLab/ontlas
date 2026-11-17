@@ -360,6 +360,16 @@ window.SpaceGraph = (function () {
     else if (st.opt.pick) st.opt.pick(id);
   }
 
+  // a press on a node; the second press of a double one keeps it picked and opens its neighbours, one step out
+  function press(st, id) {
+    const now = performance.now(), again = st.lastTap && st.lastTap.id === id && now - st.lastTap.at < 450;
+    st.lastTap = again ? null : { id, at: now };
+    closePops(st);  // a list left open over the stage closes, as a press on the empty stage closes it
+    if (!again) { tap(st, id); return; }
+    const on = cur || st;  // the first press may have drawn the screen again, with a new graph in its place
+    if (on.graph.hasNode(id) && !on.bundles.has(id) && selected(on) === id && !on.hops) { on.hops = 1; refresh(); }
+  }
+
   function look(st, ids, pad = 70) {  // the camera takes these in; how far it moves is read off the screen, so a rotated stage needs no care
     const r = st.renderer, cam = r.getCamera(), pts = ids.map((id) => r.getNodeDisplayData(id)).filter(Boolean);
     if (!pts.length) return;
@@ -626,7 +636,7 @@ window.SpaceGraph = (function () {
     const hop = (n) => `<button type="button" data-hops="${n}" class="${st.hops === n ? 'on' : ''}">${n}단계</button>`;
     if (!r) box.innerHTML = `<span>이웃 보기</span>${hop(1)}${hop(2)}<i></i><button type="button" data-g="route">경로 보기</button>`;
     else if (r.nodes) box.innerHTML = `<span>${name(r.from)} → ${name(r.to)}</span><b>${r.nodes.length - 1}단계</b>`;
-    else box.innerHTML = `<span>${r.none ? '연결된 경로가 없습니다. 다른 Node를 선택해 주세요' : '도착 Node를 선택해 주세요'}</span>`;
+    else box.innerHTML = `<span>${r.none ? '연결된 경로가 없습니다.' : '도착 Node를 선택해 주세요.'}</span>`;
   }
 
   function paintTools(st) {
@@ -749,7 +759,8 @@ window.SpaceGraph = (function () {
     renderer.on('enterNode', ({ node }) => { st.hover = node; st.stage.style.cursor = 'pointer'; renderer.refresh({ skipIndexation: true }); });
     renderer.on('leaveNode', () => { st.hover = null; st.stage.style.cursor = ''; renderer.refresh({ skipIndexation: true }); });
     const touch = (event) => String(event.original.type).startsWith('touch');
-    renderer.on('clickNode', ({ node, event }) => { st.opened = false; if (touch(event)) tap(st, node); });
+    renderer.on('clickNode', ({ node, event }) => { st.opened = false; if (touch(event)) press(st, node); });
+    renderer.on('doubleClickNode', ({ event }) => event.preventSigmaDefault());  // a double press opens the neighbours (press), the camera stays
     renderer.on('downNode', ({ node, event }) => {
       if (touch(event)) return;
       st.drag = { node, moved: false, x: event.x, y: event.y };  // where it was pressed: a hand's wobble is still a click
@@ -761,7 +772,7 @@ window.SpaceGraph = (function () {
         if (!st.hover) st.stage.style.cursor = titleAt(st, ev) ? 'pointer' : '';
         return;
       }
-      if (!st.drag.moved && Math.hypot(ev.x - st.drag.x, ev.y - st.drag.y) < 4) { ev.preventSigmaDefault(); return; }  // the camera stays put too
+      if (!st.drag.moved && Math.hypot(ev.x - st.drag.x, ev.y - st.drag.y) < 6) { ev.preventSigmaDefault(); return; }  // up to 5px is a press; the camera stays put too
       const p = renderer.viewportToGraph(ev), { node } = st.drag, x = st.bundles.get(node);
       if (x) {  // a bundle carries its members with it
         const a = st.graph.getNodeAttributes(node), dx = p.x - a.x, dy = p.y - a.y;
@@ -783,7 +794,7 @@ window.SpaceGraph = (function () {
       if (!d || d.moved) return;
       st.opened = true;  // the stage reports the click that follows this press too (an opened bundle is no longer under it): that is not a press on the empty stage
       st.tapped = performance.now();
-      tap(st, d.node);
+      press(st, d.node);
     };
     renderer.getMouseCaptor().on('mouseup', drop);
     renderer.on('clickStage', ({ event }) => {
@@ -830,6 +841,10 @@ window.SpaceGraph = (function () {
   function start(el, data, opt) {
     const keep = cur && cur.key === opt.key ? cur : null, sig = signature(data), same = keep && keep.sig === sig ? keep : null;
     const camera = keep ? keep.renderer.getCamera().getState() : null;
+    // the frame the camera is measured in: once a node was dragged it is held, else a node dragged out of the old
+    // frame would widen the new one and move every node on screen when the graph is drawn again
+    const bbox = keep ? keep.renderer.getCustomBBox() : null;
+    const lastTap = keep ? keep.lastTap : null;
     const off = keep ? keep.off : new Set();
     kill();
     frame(el);
@@ -839,7 +854,7 @@ window.SpaceGraph = (function () {
     const st = { el, data, opt, graph, loops, fit, big, key: opt.key, off, sig, hover: null, drag: null, layout: 'forceatlas',
       stage: el.querySelector('.kg-stage'), loopCanvas: el.querySelector('.kg-loops'), bundles: new Map(), links: [], fold: new Set(),
       widths: new Map(), titles: [], only: null, center: same ? same.center : null, hops: same ? same.hops : 0, route: same ? same.route : null,
-      left: same ? same.left : '', back: same ? same.back : null };
+      left: same ? same.left : '', back: same ? same.back : null, lastTap };
     paint(st);
     settle(st, opt.pos);
     const keys = foldable(st).map((x) => x.key);
@@ -863,6 +878,7 @@ window.SpaceGraph = (function () {
     }
     cur = st;
     wire(st);
+    if (bbox) st.renderer.setCustomBBox(bbox);
     if (camera) st.renderer.getCamera().setState(camera);
     sync(st);
     paintTools(st); paintPrefs(st); paintLegend(st); paintFold(st); paintStatus(st);

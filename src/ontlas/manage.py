@@ -58,9 +58,9 @@ class Workspace(TermEdits):
                  compose_kw: dict | None = None):
         self.base, self.kw = [m for m in base if m.name != NAME], dict(compose_kw or {})
         self.current = current
-        start = copy.deepcopy(current.to_dict()) if current else {"module": NAME, "version": "0.1.0",
-                                                                   "kind": "customer", "label": label}
-        start.setdefault("description", "관리 화면(Entity · 속성 · 관계 · 규칙 · 기준값 · 액션 · 권한 · 상태 전이 · 검증 질문)에서 바꾼 내용입니다. 표준 모듈은 변경하지 않고 확장 · 제외로 적용합니다.")
+        # a module filed before keeps what it says; only a new one is given the words (else it reads as changed)
+        start = copy.deepcopy(current.to_dict()) if current else {"module": NAME, "version": "0.1.0", "kind": "customer",
+                                                                   "label": label, "description": "화면에서 편집한 정의"}
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
         self._before: list[dict | None] = []  # the module before each edit, to take any one back
@@ -972,6 +972,8 @@ class Workspace(TermEdits):
             t = str(r.get("type") or "")
             if t not in onto.objects:
                 raise EditError(f"object type '{t}' is unknown")
+            if t in out:  # one rule per type: a second would quietly take the first one's place
+                raise EditError(f"{t}: one row rule per type")
             if r.get("raw"):
                 out[t] = r["raw"]
                 continue
@@ -998,6 +1000,8 @@ class Workspace(TermEdits):
         types: dict[str, Any] = {}
         for r in scope.get("types") or []:
             via = [str(x) for x in r.get("via") or [] if x]
+            if str(r.get("type")) in types:
+                raise EditError(f"{r.get('type')}: one scope rule per type")
             types[str(r.get("type"))] = {"via": via, "property": str(r.get("property"))} if via else str(r.get("property"))
         return {"attribute": str(scope.get("attribute") or ""), "types": types}
 

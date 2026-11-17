@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from ontlas.check import _find_prop, all_props, columns_of
+from ontlas.check import _find_prop, all_props, columns_of, stored_props
 from ontlas.compile.sql import qi
 from ontlas.model import KEY_SEP, Ontology
 
@@ -98,8 +98,9 @@ def check_bindings(onto: Ontology, backend, *, data: bool = True, limit: int = 5
         if have is None:
             out.append(Finding("error", "table", f"object:{o.name}", f"table '{o.table}' does not exist", {"table": o.table}))
             continue
-        for p in sorted(set(o.properties) | {o.key}):
-            prop = o.properties.get(p)
+        # a Property an Entity takes from the one it specialises is read from the Entity's own table too
+        for p in sorted(set(stored_props(onto, o.name)) | {o.key}):
+            prop = _find_prop(onto, o.name, p)
             if prop is not None and prop.expr:
                 continue
             parts = columns_of(onto, o.name, p)

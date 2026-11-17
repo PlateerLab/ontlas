@@ -75,7 +75,7 @@
       <div class="k-v bnd-sec"><p class="k-b k-14" style="margin:0">전제조건 규칙</p><div class="k-wrap g8">${pre || '<span class="k-s">전제조건 없음</span>'}</div></div>
       <div class="k-wrap g16 bnd-sec">${half('처리 후 상태', `<span class="k-13">${a.transition_to ? `${esc(a.target_label)} 상태 → ${esc(a.transition_to)}` : '상태 변경 없음'}${machine ? ` · <a href="#objects?entity=${encodeURIComponent(a.target)}">상태 전이</a>` : ''}</span>${sets ? `<span class="k-13">${esc(sets)}</span>` : ''}`)}
         ${half('승인 기준', `<span class="k-13">${esc(bndApproval(m, a))}</span>`)}</div>
-      <div class="k-wrap g16 bnd-sec">${half('호출 API', a.call && a.call.url ? `<span class="k-code" style="white-space:normal;overflow-wrap:anywhere">${esc(a.call.method || 'POST')} ${esc(a.call.url)}</span>${a.undo && a.undo.url ? '<span class="k-s">되돌리기 호출 있음</span>' : '<span class="k-s">되돌리기 호출 없음</span>'}` : '<span class="k-13">없음 · 원천 값 변경</span>')}
+      <div class="k-wrap g16 bnd-sec">${half('호출 API', a.call && a.call.url ? `<span class="k-code" style="white-space:normal;overflow-wrap:anywhere">${esc(a.call.method || 'POST')} ${esc(a.call.url)}</span>${a.undo && a.undo.url ? '<span class="k-s">되돌리기 호출 있음</span>' : '<span class="k-s">되돌리기 호출 없음</span>'}` : '<span class="k-13">없음 · 소스 값 변경</span>')}
         ${half('권한', rights || '<span class="k-13">요청 가능한 접근 정책 없음</span>')}</div>
       ${a.cite ? `<div class="bnd-sec"><span class="k-s">근거 · ${esc(a.cite)}</span></div>` : ''}
       <div style="padding:12px 20px;display:flex;justify-content:flex-end;gap:8px">${canEdit() ? `<a class="k-btn" href="${itemHref('act', 'form', a.name)}">편집</a>` : ''}<button class="k-btn pri" data-act="bndActGo"${A.busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}테스트 실행</button></div></section>`;

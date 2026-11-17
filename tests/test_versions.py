@@ -121,7 +121,7 @@ def test_without_a_source_a_question_that_reads_rows_is_not_measured_not_failed(
     reg = change["regression"]
     assert "Q2" in reg["unmeasured"] and reg["newly_failing"] == [] and not reg["worse"]
     assert reg["measured"] and "OP7" not in reg["unmeasured"]  # a definition question reads no rows: it is measured
-    assert reg["note"] and "원천 미연결로 미측정" in reg["summary"]
+    assert reg["note"] and "데이터 소스 미연결 · 미측정" in reg["summary"]
     assert change["passed"]
 
 

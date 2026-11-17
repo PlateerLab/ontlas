@@ -113,7 +113,7 @@
       const danger = `<section class="k-card"><div class="k-ch"><h2>위험 구역</h2></div>
           ${risk('다른 서버로 이전', '온톨로지 파일 내보내기', '<a class="k-btn dan" href="/api/export/library">내보내기</a>')}
           ${d.made ? risk('삭제', '세션 생성 온톨로지 · 복구 불가', `<button class="k-btn dan" data-act="libdrop" data-id="${esc(d.id)}">삭제</button>`) : ''}
-          ${inTeam() ? '' : risk('초기화', S.st.data.kept ? '변경 내용 삭제 · 레포지토리 파일 유지' : '업로드 자료 · 변경 내용 삭제', '<button class="k-btn dan" data-act="reset">초기화</button>')}
+          ${inTeam() ? '' : risk('초기화', S.st.data.kept ? '변경 내용 삭제 · 저장소 파일 유지' : '업로드 자료 · 변경 내용 삭제', '<button class="k-btn dan" data-act="reset">초기화</button>')}
           ${known('ontologies') ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ontologies">온톨로지 선택${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
       return `<div class="k-cols"><div class="k-c3 wide">${basic}${naming}${ai}${targets}</div><div class="k-c2 wide">${approval}${out}${danger}</div></div>
         ${kNext([['members', '멤버 · 권한'], ['sys-gov', '거버넌스 정책'], ['changes', '변경 요청 · 버전'], ['home', '홈']])}`;
@@ -235,7 +235,7 @@
       const got = admGot('users') || { users: [], password_min: 10 }, min = got.password_min;
       const admins = got.users.filter((u) => u.roles.includes('admin') && (!x || u.id !== x.id)).length;
       return !d.name.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.id.trim() ? '아이디가 없어 저장하지 못했습니다. 아이디를 입력해 주세요.'
-        : !x && got.users.some((u) => u.id === d.id.trim()) ? `아이디 ${d.id.trim()}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.`
+        : !x && got.users.some((u) => u.id === d.id.trim()) ? `아이디 ${d.id.trim()}${josa(d.id.trim(), '이', '가')} 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.`
           : !x && !d.password ? '비밀번호가 없어 저장하지 못했습니다. 비밀번호를 입력해 주세요.'
             : d.password && d.password.length < min ? `비밀번호가 ${min}자보다 짧아 저장하지 못했습니다. ${min}자 이상 입력해 주세요.`
               : !['viewer', 'editor', 'approver', 'admin'].some((r) => d[`r_${r}`]) ? '역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.'
@@ -380,7 +380,7 @@
         ${kKv('표당 최대 행 · 열', `${Number(lim.rows).toLocaleString('ko-KR')}행 · ${lim.columns}열`)}${d.ask_per_minute ? kKv('분당 질문', `${d.ask_per_minute}회`) : ''}${kKv('온톨로지', `${d.libraries}개`)}</section>`;
       const k = d.keeps;
       const keeps = `<section class="k-card"><div class="k-ch"><h2>기록 보관</h2></div>${kKv('변경 요청 · 감사 기록', k.journal ? `<span class="k-code k-ink">${esc(k.journal_file)}</span> · ${Number(k.journal_kb).toLocaleString('ko-KR')} KB` : '메모리 보관')}
-        ${kKv('승인된 변경', k.library_write ? '라이브러리 폴더 저장' : '현재 공간만 반영')}${kKv('업로드 자료', k.repositories ? '레포지토리 폴더 보관' : '공간 종료 시 삭제')}
+        ${kKv('승인된 변경', k.library_write ? '라이브러리 폴더 저장' : '현재 공간만 반영')}${kKv('업로드 자료', k.repositories ? '저장소 폴더 보관' : '공간 종료 시 삭제')}
         ${known('changes') ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#changes">변경 요청 · 버전${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
       return `${stats}<div class="k-cols"><div class="k-c3 wide">${parts}</div><div class="k-v g24" style="flex:2 1 360px;min-width:0">${usage}${limits}${keeps}</div></div>`;
     });
@@ -472,7 +472,7 @@
       A.testing = false; admAgain('ai'); render();
     },
     admUserDrop: async (t) => {
-      if (!window.confirm(`사용자 ${t.dataset.name}(${t.dataset.id})을(를) 폐기하시겠습니까?`)) return;
+      if (!window.confirm(`사용자 ${t.dataset.name}${josa(t.dataset.name, '을', '를')} 폐기합니다.`)) return;
       try {
         await api('admin/user/drop', { id: t.dataset.id });
         ['users', 'members', 'audit', 'overview'].forEach(admAgain);

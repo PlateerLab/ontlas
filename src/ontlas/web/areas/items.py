@@ -12,14 +12,14 @@ from ontlas.web.routes import get
 
 STATUS_WORD = {"pending": "검토 중", "approved": "배포", "rejected": "반려"}
 # what a reader is, and the screen that shows it
-READER_SCREEN = {"검증 질문": "check", "액션": "actions", "함수": "semrules", "역할": "roles", "결정": "semrules", "질의": "query",
-                 "계산 속성": "objects"}
+READER_SCREEN = {"검증 질문": "check", "Action": "actions", "함수": "semrules", "접근 정책": "roles", "규칙": "semrules", "질의": "query",
+                 "계산 Property": "objects"}
 
 
 def _now_of(s, el: str) -> dict | None:
-    from ontlas.review import _elements
+    from ontlas.review import _cards, _elements
 
-    text = _elements(s.studio.onto).get(el)
+    text = _elements(s.studio.onto, _cards(s.studio.composition)).get(el)
     return json.loads(text) if text is not None else None
 
 

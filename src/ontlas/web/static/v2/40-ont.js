@@ -13,7 +13,6 @@
   const ontVer = (x) => { const lib = (S.st.library || []).find((r) => r.name === x.module); return lib ? `v${lib.version}` : ''; };
   const ontKv = (k, v) => `<div class="ont-kv"><span class="k-mut">${esc(k)}</span><span>${v}</span></div>`;
   const ontDk = (word) => `<span class="k-chip dk">${esc(word)}</span>`;
-  const ONT_KIND = { 결정: '규칙', 질의: '질의', 액션: 'Action', 역할: '접근 정책', '계산 속성': '계산 Property' };
 
   // the rule cards read with the definition: which Entities a rule applies to is said on each card
   function ontSem() {
@@ -549,7 +548,7 @@
   // a change in the words of the forms: their field names, a status and a cardinality in words, and a status left unsaid
   // (an item in use keeps no status) read as 사용 중
   const ONT_FIELD = { label: '한글 이름', description: '정의', owner: '담당자', cite: '근거 자료', tier: '차수', status: '상태', area: '소속 Object',
-    key: '식별 키 후보', table: '소스 후보', parent: '상위 Entity', from: '시작 Entity', to: '끝 Entity', source: '시작 Entity', target: '끝 Entity',
+    key: '식별 키 후보', table: '소스 후보', parent: '상위 Entity', target: '끝 Entity',  // the server says 시작 · 끝 Entity for the rest
     cardinality: '카디널리티', inverse: '역방향 이름', required: '필수' };
   function ontEntries(entries, word, rel) {
     const WORD = { added: '추가', changed: '변경', removed: '삭제' };
@@ -639,7 +638,8 @@
     find: (id) => ontObj(id), code: (o) => ontName(o), name: (o) => ontClip(o.description, 70) || o.label || o.name, element: (o) => `object:${o.name}`,
     draft: (o) => {
       const d = o ? { area: o.area || '', label: o.label || '', name: o.name, owner: o.owner || '', description: o.description || '', key: o.key || '', table: o.table || '', parent: o.parent || '', status: o.status || 'active' }
-        : { area: mgArea(itemParam('area')) ? itemParam('area') : '', label: '', name: '', owner: '', description: '', key: '', table: '', parent: '', status: 'active' };
+        : { area: mgArea(itemParam('area')) ? itemParam('area') : '', label: '', name: '', owner: '', description: '', key: '', table: itemParam('table'), parent: '', status: 'active' };
+      if (!o && d.table && !ontObj(typeName(d.table))) d.name = typeName(d.table);  // + Entity from a table of 데이터 소스
       const props = o ? mgProps(o.name).map(ontPropRow) : [];
       if (itemParam('add') === 'prop') props.push({ was: '', name: '', label: '', type: 'string', values: '', required: false, del: false });
       return { ...d, was: { ...d }, props, reason: '' };
@@ -712,12 +712,12 @@
       const r = await api('item/uses?element=' + encodeURIComponent(`object:${o.name}`));
       // a rule table's rows are rule cards already counted: only a table none of whose rows is among them is said apart
       const counted = (label) => { const t = m.decisions.find((x) => x.label === label || x.name === label); return !!t && cards.some((c) => String(c.id).startsWith(`${t.name}#`)); };
-      const uses = r.uses.map((u) => (u.kind === '결정' ? { ...u, names: u.names.filter((x) => !counted(x)) } : u)).filter((u) => u.names.length);
+      const uses = r.uses.map((u) => (u.kind === '규칙' ? { ...u, names: u.names.filter((x) => !counted(x)) } : u)).filter((u) => u.names.length);
       const ruled = [...cards].sort((x, y) => (y.layer === 'axiom') - (x.layer === 'axiom'));  // the AXIOM rules, which hold a delete, first
       return [rels.length ? { say: `Relation ${rels.length}개`, sub: `${others.slice(0, 3).join(', ')}${others.length > 3 ? ` 외 ${others.length - 3}` : ''}`, href: `model?entity=${encodeURIComponent(o.name)}` } : null,
         kids.length ? { say: `하위 Entity ${kids.length}개`, sub: kids.map((x) => x.label).join(', '), href: 'objects' } : null,
         cards.length ? { say: `규칙 ${cards.length}개${ontLayers(cards) ? ` · ${ontLayers(cards)}` : ''}`, sub: ruled.slice(0, 3).map((c) => c.id).join(', ') + (cards.length > 3 ? ` 외 ${cards.length - 3}` : ''), href: 'semrules' } : null,
-        ...uses.map((u) => ({ say: `${ONT_KIND[u.kind] || u.kind} ${u.names.length}개`, sub: u.names.slice(0, 3).join(', ') + (u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''), href: u.screen })),
+        ...uses.map((u) => ({ say: `${u.kind} ${u.names.length}개`, sub: u.names.slice(0, 3).join(', ') + (u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''), href: u.screen })),
         o.table && !noSource() ? { say: 'Mapping 1개', sub: `${o.table} 테이블 · Property ↔ 컬럼`, href: 'sources' } : null,
         o.states ? { say: '상태 전이 1개', sub: '', href: 'objects' } : null].filter(Boolean);
     },
@@ -795,7 +795,7 @@
       const m = S.mg.st, acts = m.actions.filter((a) => a.target === s.object && (a.transition_to || s.transitions.some((t) => t.action === a.name) || (a.criteria || []).some((c) => (c.states || []).length)));
       const r = await api('item/uses?element=' + encodeURIComponent(`property:${s.object}.${s.property}`));
       return [acts.length ? { say: `Action ${acts.length}개`, sub: acts.map((a) => a.label).join(', '), href: 'actions' } : null,
-        ...r.uses.map((u) => ({ say: `${ONT_KIND[u.kind] || u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 3).join(', ')}${u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''}`, href: u.screen }))].filter(Boolean);
+        ...r.uses.map((u) => ({ say: `${u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 3).join(', ')}${u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''}`, href: u.screen }))].filter(Boolean);
     },
     remove: async (s) => { await ontEdit('delete_states', { object: s.object }); S.ont.ssel = ''; return {}; },
     history: (s) => ontHistory('state', s.object, '상태 전이'),

@@ -84,7 +84,7 @@
       return `<tr class="${on ? 'on' : ''}"><td><span class="k-b" title="${esc(r.name)}">${esc(r.label || r.name)}</span>${r.description ? `<div class="k-xs o2-desc" title="${esc(r.description)}">${esc(r.description)}</div>` : ''}
           <div class="k-h g4" style="margin-top:2px">${canEdit() ? `<button class="k-lnk flat" data-act="medit" data-mod="${esc(r.name)}" style="margin-right:12px">파일 편집</button>` : ''}${first && known('model') ? `<a class="k-lnk flat" href="#model?entity=${encodeURIComponent(first)}">그래프 탐색</a>` : ''}${waiting.map((c) => `<a class="k-chip warn" href="#changes?id=${encodeURIComponent(c.id)}" style="margin-left:8px">${esc(c.id)} 검토 중 → ${esc(c.version)}</a>`).join('')}</div></td>
         <td title="${esc(r.kind_label)}">${esc(r.kind)}</td><td class="k-code">${esc(r.version)}</td><td>${req}</td><td class="i3">${esc(counts(r.counts))}</td>
-        <td><input type="checkbox"${r.on ? ' checked' : ''}${canEdit() ? '' : ' disabled'} data-act="toggle" data-mod="${esc(r.name)}" aria-label="${esc(r.label || r.name)} 적용"></td></tr>`;
+        <td><input type="checkbox"${r.on ? ' checked' : ''}${canApprove() ? '' : ' disabled'} data-act="toggle" data-mod="${esc(r.name)}" aria-label="${esc(r.label || r.name)} 적용"></td></tr>`;
     }).join('');
     const libCard = `<section class="k-card" aria-labelledby="o2lib"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="o2lib">모듈</h2><span class="k-chip">${st.library.length} · 적용 ${st.modules_on}</span>
         <div class="k-seg" role="group" aria-label="종류">${[['all', '전체'], ...kinds].map(([k, w]) => `<button class="${S.kind === k ? 'on' : ''}" data-act="kind" data-kind="${esc(k)}" aria-pressed="${S.kind === k}">${esc(w)}</button>`).join('')}</div>

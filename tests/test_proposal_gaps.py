@@ -100,7 +100,7 @@ def test_an_unknown_answer_says_how_a_metric_is_not_split_and_how_to_ask_again(s
     tools = StudioTools(session.studio)
     reason, ask = _unknown(tools, "고객 등급별 반품률은?", [])
     assert reason.startswith("질문에서 알아들은 것은 지표 반품률입니다.")
-    assert "지표 반품률은(는) 등급별로 나누어 계산하도록 정의되어 있지 않습니다." in reason
+    assert "지표 반품률은 등급별로 나누어 계산하도록 정의되어 있지 않습니다." in reason
     assert ask == [{"who": "고객경험팀", "about": "지표 반품률"}]
     reason, _ = _unknown(tools, "월별로 반품률은 어땠나", [])
     assert "월별로 나누어 계산하도록" in reason
@@ -229,7 +229,7 @@ def test_the_build_steps_say_where_the_space_stands(session):
     assert [by[i]["part"] for i in ids] == ["Ontology manager", "Semantic layer", "Data binder", "QA", ""]
     assert by["model"]["done"] and "Entity" in by["model"]["detail"] and not got["start"]  # the example library is a built ontology
     assert by["mgrules"]["done"] and by["changes"]["done"]  # nothing waits, so the approval step is not owed
-    assert by["catalog"]["done"] and by["catalog"]["optional"] and "원천 테이블" in by["catalog"]["detail"]
+    assert by["catalog"]["done"] and by["catalog"]["optional"] and "테이블" in by["catalog"]["detail"]
     assert got["next"] == "check"  # nothing has been measured yet
     session.catalog_upload("쿠폰.csv", "쿠폰번호,할인율\nCP1,10\nCP2,20\n".encode("utf-8"))
     session.manage_edit("update_object", {"name": "Order", "label": "주문서"})

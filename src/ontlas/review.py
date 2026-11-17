@@ -346,9 +346,17 @@ def tally(results: list) -> dict[str, int]:
     return {**out, "unmeasured": len(rows) - len(live)} if len(rows) > len(live) else out
 
 
-def _elements(onto) -> dict[str, str]:
+def _elements(onto, cards=()) -> dict[str, str]:
+    """Each element of a definition as text, by its name: what a change adds, removes or changes. The rule cards are
+    the composition's, so they come beside the ontology (the module a card is kept in is bookkeeping, not the card)."""
     d = onto.to_dict()
     out: dict[str, str] = {}
+    for section, kind in (("parameters", "parameter"), ("metrics", "metric")):
+        for k, v in (d.get(section) or {}).items():
+            out[f"{kind}:{k}"] = json.dumps(v, sort_keys=True, ensure_ascii=False)
+    for c in cards or ():
+        out[f"rule_card:{c['id']}"] = json.dumps({k: v for k, v in c.items() if k not in ("module", "version")},
+                                                 sort_keys=True, ensure_ascii=False)
     for name, o in (d.get("objects") or {}).items():
         props = o.get("properties") or {}
         out[f"object:{name}"] = json.dumps({k: v for k, v in o.items() if k != "properties"}, sort_keys=True,
@@ -369,16 +377,20 @@ def _elements(onto) -> dict[str, str]:
     return out
 
 
-def element_diff(before, after) -> dict[str, list[str]]:
-    a, b = _elements(before), _elements(after)
+def _cards(composition) -> list:
+    return list(composition.cards) if composition is not None else []
+
+
+def element_diff(before, after, cards=((), ())) -> dict[str, list[str]]:
+    a, b = _elements(before, cards[0]), _elements(after, cards[1])
     return {"added": sorted(b.keys() - a.keys()), "removed": sorted(a.keys() - b.keys()),
             "changed": sorted(k for k in a.keys() & b.keys() if a[k] != b[k])}
 
 
-def element_sides(before, after) -> dict[str, list[dict | None]]:
+def element_sides(before, after, cards=((), ())) -> dict[str, list[dict | None]]:
     """Each element that differs, as it reads on either side ([before, after], None where it is not there). A review
     keeps these: once the change is applied the studio has moved on and can no longer say what it was."""
-    a, b = _elements(before), _elements(after)
+    a, b = _elements(before, cards[0]), _elements(after, cards[1])
     return {k: [json.loads(x[k]) if k in x else None for x in (a, b)]
             for k in sorted(a.keys() | b.keys()) if a.get(k) != b.get(k)}
 
@@ -501,8 +513,9 @@ def review(studio, module: Module, settings: FlowSettings | None = None, *, atta
     report = copy.questions() if settings.on("check") and copy.onto.questions else None
     measured = measure(copy, settings, questions=report)
     results = gates(measured, settings)
-    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto),
-                "elements": element_sides(studio.onto, copy.onto), "measured": measured,
+    cards = (_cards(studio.composition), _cards(copy.composition))
+    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto, cards),
+                "elements": element_sides(studio.onto, copy.onto, cards), "measured": measured,
                 "gates": [asdict(g) for g in results], "passed": all(g.passed for g in results)})
     now = given or studio.flow
     if before is None:

@@ -108,7 +108,7 @@
     const sel = cards.find((c) => c.ref === x.sel);
     if (sel && sel.kind === 'executable' && x.decFor !== sel.ref) { x.decFor = sel.ref; if (x.dec !== sel.decision) { Object.assign(x, { dec: sel.decision, vals: {}, key: '', res: null, simErr: '' }); } }
     if (!x.dec || !m.decisions.some((d) => d.name === x.dec)) Object.assign(x, { dec: (m.decisions[0] || {}).name || '', vals: {}, key: '', res: null });
-    const bar = sel ? itemBar('rule', sel.ref, sel.id, sel.statement, { edit: smrEditable(sel), del: smrEditable(sel) }) : '';
+    const bar = sel ? itemBar('rule', sel.ref, sel.id, sel.statement) : '';
     const violated = st.violations.length ? `<p class="k-note bad"><b>AXIOM 위반 ${st.violations.length}건</b> · ${st.violations.map((v) => esc(v.said)).join(' · ')}</p>` : '';
     const LY_SAY = { axiom: '법령 · 정합성 · 최우선 적용', custom: '고객사 규칙 · Standard보다 우선', standard: '표준 규칙 · 기본 적용' };
     const strip = `<section class="k-card smr-strip" aria-label="적용 우선순위">${st.layers.map((l) => `<button type="button" class="smr-ly${x.layer === l.layer ? ' on' : ''}" data-act="smrLayer" data-k="${esc(l.layer)}" aria-pressed="${x.layer === l.layer}" title="${esc(l.modules.map((y) => `${y.label} ${y.version}`).join(', ') || '정의 모듈 없음')}">
@@ -404,27 +404,27 @@
     const m = S.mg.st, fresh = !c;
     const kinds = fresh ? `<div class="k-full k-h g12"><div class="k-seg" role="group" aria-label="규칙의 종류"><button type="button" class="${d.kind === 'stated' ? 'on' : ''}" data-act="smrKind" data-k="stated">규칙 카드</button><button type="button" class="${d.kind === 'executable' ? 'on' : ''}" data-act="smrKind" data-k="executable"${m.decisions.length ? '' : ' disabled'}>결정표 규칙</button></div></div>` : '';
     if (d.kind === 'executable') {
-      const t = smrTable(d.decision), off = c && !smrEditable(c) ? ' disabled' : '';  // an AXIOM row is read here, not written
+      const t = smrTable(d.decision);
       const conds = t ? t.inputs.map((i) => {
         const part = d.when[i.name] || { op: 'any', value: '' };
         const ops = part.op === 'raw' ? ['raw'] : opsOf(i.type);
-        const at = `data-in="smrWhen" data-k="${esc(i.name)}" data-p="value"${off}`;
+        const at = `data-in="smrWhen" data-k="${esc(i.name)}" data-p="value"`;
         const value = ['any', 'null', 'notnull'].includes(part.op) ? '' : i.type === 'boolean' ? `<select class="k-in" ${at}>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, part.value)).join('')}</select>`
           : (i.values || []).length && ['eq', 'ne'].includes(part.op) ? `<select class="k-in" ${at}>${i.values.map((v) => smrOpt(v, (i.labels || {})[v] || v, part.value)).join('')}</select>`
             : `<input class="k-in" type="text" ${at} value="${esc(part.value ?? '')}" placeholder="${esc(cellHint(i, part.op))}">`;
-        return `<div class="smr-cond"><span class="k-14">${esc(i.label)}</span><select class="k-in" data-in="smrWhen" data-k="${esc(i.name)}" data-p="op" data-re="1" aria-label="${esc(i.label)} 비교"${off}>${ops.map((o) => smrOpt(o, CELL_OPS[o], part.op)).join('')}</select>${value}</div>`;
+        return `<div class="smr-cond"><span class="k-14">${esc(i.label)}</span><select class="k-in" data-in="smrWhen" data-k="${esc(i.name)}" data-p="op" data-re="1" aria-label="${esc(i.label)} 비교">${ops.map((o) => smrOpt(o, CELL_OPS[o], part.op)).join('')}</select>${value}</div>`;
       }).join('') : '';
       const outs = t ? t.outputs.map((o) => {
         const cur = d.then[o.name], word = outWord(t, o.name);
-        return `<label class="k-f">${esc(word)}${o.type === 'boolean' ? `<select class="k-in" data-in="smrThen" data-k="${esc(o.name)}" data-t="boolean"${off}><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, cur === undefined ? '' : String(cur))).join('')}</select>` : `<input class="k-in" type="text" data-in="smrThen" data-k="${esc(o.name)}" data-t="${esc(o.type)}" value="${esc(cur ?? '')}"${off}>`}</label>`;
+        return `<label class="k-f">${esc(word)}${o.type === 'boolean' ? `<select class="k-in" data-in="smrThen" data-k="${esc(o.name)}" data-t="boolean"><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, l]) => smrOpt(k, l, cur === undefined ? '' : String(cur))).join('')}</select>` : `<input class="k-in" type="text" data-in="smrThen" data-k="${esc(o.name)}" data-t="${esc(o.type)}" value="${esc(cur ?? '')}">`}</label>`;
       }).join('') : '';
       return `<section class="k-card" aria-labelledby="smr-f1"><div class="k-ch"><h2 id="smr-f1">기본 정보</h2></div><div class="k-cb"><div class="k-g2">${kinds}
           <label class="k-f">규칙 ID${smrIn('id', d.id, fresh ? 'placeholder="예: gold-window"' : 'disabled')}<span class="k-hint">영문자로 시작 · 영문자, 숫자, _, - 사용</span></label>
           <label class="k-f">결정표<select class="k-in" data-in="smrDecision"${fresh ? '' : ' disabled'}>${m.decisions.map((y) => smrOpt(y.name, y.label, d.decision)).join('')}</select><span class="k-hint">Custom 계층</span></label>
           <div class="k-full k-v"><span class="k-s">조건</span>${conds || '<span class="k-s">선택된 결정표가 없습니다.</span>'}</div>
           <div class="k-full k-g2"><span class="k-s k-full">결과</span>${outs}</div>
-          <label class="k-f">근거 자료 · 절${smrIn('source', d.source, `placeholder="예: 반품 정책서 v1.2 3조" list="smr-docs"${off}`)}</label>
-          <label class="k-f">담당자${smrIn('owner', d.owner, `list="smr-owners"${off}`)}</label>
+          <label class="k-f">근거 자료 · 절${smrIn('source', d.source, 'placeholder="예: 반품 정책서 v1.2 3조" list="smr-docs"')}</label>
+          <label class="k-f">담당자${smrIn('owner', d.owner, 'list="smr-owners"')}</label>
           ${fresh ? `<label class="k-ck mid k-full"><input type="checkbox" data-in="itf" data-k="first"${d.first ? ' checked' : ''}>기존 규칙보다 먼저 적용</label>` : ''}</div></div>${smrLists()}</section>`;
     }
     // a value a card names is a named value of the definition (it follows that value) or a value written on the card itself
@@ -449,7 +449,6 @@
 
   function smrRuleChecks(d, c) {
     const out = [], st = smrSem(), fresh = !c;
-    if (c && !smrEditable(c)) return [{ say: 'AXIOM 결정표 규칙', tone: 'bad', word: '저장 불가' }];
     if (d.kind === 'executable') {
       const t = smrTable(d.decision);
       if (fresh) out.push(!d.id ? { say: '규칙 ID 입력 필요', tone: 'warn' } : !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(d.id) ? { say: '규칙 ID는 영문자로 시작하고 영문자 · 숫자 · _ · - 만 사용', tone: 'bad' } : t && t.rules.some((r) => r.id === d.id) ? { say: `${t.label}에 같은 ID의 규칙이 있음`, tone: 'bad' } : { say: '규칙 ID 사용 가능', tone: 'ok' });
@@ -459,7 +458,7 @@
       if (t) out.push(...smrCellChecks(d, t));
       if (c && c.layer === 'standard') out.push({ say: '저장 후 계층 Standard → Custom', tone: 'note' });
       const over = c ? [...new Set(smrFound().filter((f) => f.decision === d.decision && ['overlap', 'tie'].includes(f.kind) && f.rules.includes(d.id)).flatMap((f) => f.rules).filter((id) => id !== d.id))] : [];
-      if (over.length) out.push({ say: `${over.join(', ')}와 조건 겹침 · ${POLICY_WORD[(t || {}).hit_policy] || ''} 적용`, tone: 'note' });
+      if (over.length) out.push({ say: `${over.join(', ')}${josa(over[over.length - 1], '과', '와')} 조건 겹침 · ${POLICY_WORD[(t || {}).hit_policy] || ''} 적용`, tone: 'note' });
       out.push(d.source ? { say: '근거 자료 입력됨', tone: 'ok' } : { say: '근거 자료 없음', tone: 'warn' });
       const qs = S.st.questions.filter((q) => q.decision === d.decision).length;
       if (qs) out.push({ say: `연결된 검증 질문 ${qs}개`, tone: 'note' });
@@ -498,7 +497,6 @@
   }
 
   function smrRuleValid(d, c) {
-    if (c && !smrEditable(c)) return '정의 모듈의 AXIOM 규칙이어서 저장하지 못했습니다. 모듈 라이브러리에서 모듈 파일을 편집해 주세요.';
     if (!String(d.id || '').trim()) return '규칙 ID가 비어 있어 저장하지 못했습니다. 규칙 ID를 입력해 주세요.';
     if (d.kind === 'executable') {
       const t = smrTable(d.decision);
@@ -571,6 +569,7 @@
     code: (c) => c.id, name: (c) => c.statement,
     element: (c) => (c.kind === 'executable' ? `rule:${c.decision}.${c.rule}` : `rule_card:${c.id}`),
     draft: smrRuleDraft, form: smrRuleForm, checks: smrRuleChecks, valid: smrRuleValid, save: smrRuleSave,
+    locked: (c) => (c.gone ? '삭제 요청된 규칙' : !smrEditable(c) ? 'AXIOM 결정표 규칙 · 편집 불가' : ''),  // a row of a table's AXIOM module
     uses: smrRuleUses,
     history: (c) => (c.kind === 'executable' ? itemHistoryOf(ITEM.rule, c) : smrHistory('card', c.id, '규칙')),
     saves: (d, c) => (smrAxiomCard(c) ? [['저장 대상', 'AXIOM 모듈 변경 요청'], ['등록 위치', '<a href="#changes">변경 요청 · 버전</a> · 검토 대기'], ['반영', '승인 후'], ['회귀 테스트', '등록 시 자동 실행']] : null),
@@ -688,7 +687,7 @@
       else if (num && !range.length) {
         const low = has(d.min) && val < Number(d.min), high = has(d.max) && val > Number(d.max);
         out.push(low || high ? { say: `허용 범위 밖 · ${low ? `${d.min} 이상` : `${d.max} 이하`} 필요`, tone: 'bad' } : { say: '허용 범위 안', tone: 'ok' });
-        if (ax) { const under = has(ax.min) && val < ax.min, over = has(ax.max) && val > ax.max; out.push(under || over ? { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 ${under ? `하한 ${ax.min}` : `상한 ${ax.max}`}을 벗어남`, tone: 'bad' } : { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 범위 안`, tone: 'ok' }); }
+        if (ax) { const under = has(ax.min) && val < ax.min, over = has(ax.max) && val > ax.max; out.push(under || over ? { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 ${under ? `하한 ${ax.min}${josa(String(ax.min), '을', '를')}` : `상한 ${ax.max}${josa(String(ax.max), '을', '를')}`} 벗어남`, tone: 'bad' } : { say: `AXIOM 규칙 ${ax.cards.join(', ')}의 범위 안`, tone: 'ok' }); }
       }
       const readers = v ? v.x.readers || [] : [];
       if (readers.length) out.push({ say: `참조 규칙 ${readers.length}개`, sub: readers.slice(0, 3).join(' · '), tone: 'note' });

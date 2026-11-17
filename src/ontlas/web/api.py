@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+from ontlas import words
 from ontlas.actions import Actor
 from ontlas.backends.base import NoSource
 from ontlas.check import all_props, column_of, find_prop
@@ -58,11 +59,11 @@ def said(e: Exception | str) -> str:
     m = _NO_COLUMN.search(text)
     if m:
         name = next(g for g in m.groups() if g)
-        return f"원천 DB에 {name} 컬럼이 없어 실행하지 못했습니다. DB 대조에서 정의와 원천 DB를 확인해 주세요. ({text})"
+        return f"데이터 소스에 {name} 컬럼이 없어 실행하지 못했습니다. Entity Binding에서 정의와 데이터 소스를 확인해 주세요."
     m = _NO_TABLE.search(text)
     if m:
         name = next(g for g in m.groups() if g)
-        return f"원천 DB에 {name} 테이블이 없어 실행하지 못했습니다. DB 대조에서 정의와 원천 DB를 확인해 주세요. ({text})"
+        return f"데이터 소스에 {name} 테이블이 없어 실행하지 못했습니다. Entity Binding에서 정의와 데이터 소스를 확인해 주세요."
     return text
 
 
@@ -91,8 +92,8 @@ def _merged(base, mine, now):
 
 STATUS_WORD = {"pending": "승인 대기", "stale": "실행 전 재검사 실패", "rejected": "반려", "executed": "실행",
                "failed": "외부 호출 실패", "rolled_back": "되돌림"}
-EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "원천 반영",
-               "written": "원천 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 원천 복원",
+EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "데이터 반영",
+               "written": "데이터 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 데이터 복원",
                "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족", "stale": "실행 전 재검사 실패",
                "decided": "판정 조회", "answered": "질문 답변", "function_ran": "함수 실행"}
 GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_warnings"): "DB 대조 경고 최대",
@@ -100,25 +101,25 @@ GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_w
               ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
               ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소",
               ("check", "max_value_errors"): "거래 값 오류 최대"}
-STAGE_LABEL = {"source": "원천 데이터", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
+STAGE_LABEL = {"source": "데이터 소스", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
 # a studio with no backend holds its definition only: what would read rows says so in these words
-NO_SOURCE = "원천 데이터가 연결되어 있지 않아 값을 읽지 못했습니다. 원천을 연결한 뒤 다시 시도해 주세요."
+NO_SOURCE = "연결된 데이터 소스가 없어 값을 읽지 못했습니다. 데이터 소스를 연결한 뒤 다시 시도해 주세요."
 NO_SOURCE_SAID = {  # by route, where a person asked for something that reads rows (answered 409)
-    "decide": "원천 데이터가 연결되어 있지 않아 레코드 값으로 판정하지 못했습니다. 입력값을 직접 넣어 판정하거나 원천을 연결해 주세요.",
-    "decide/simulate": "원천 데이터가 연결되어 있지 않아 레코드 값을 불러오지 못했습니다. 입력값을 직접 넣어 판정하거나 원천을 연결해 주세요.",
-    "request": "원천 데이터가 연결되어 있지 않아 처리 요청을 접수하지 못했습니다. 원천을 연결한 뒤 다시 요청해 주세요.",
-    "transitions/advance": "원천 데이터가 연결되어 있지 않아 상태 전이를 실행하지 못했습니다. 원천을 연결한 뒤 다시 실행해 주세요.",
-    "sync": "원천 데이터가 연결되어 있지 않아 다시 읽지 못했습니다. 원천을 연결한 뒤 다시 시도해 주세요.",
-    "record": "원천 데이터가 연결되어 있지 않아 레코드를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요.",
-    "record/links": "원천 데이터가 연결되어 있지 않아 레코드를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요.",
-    "record/path": "원천 데이터가 연결되어 있지 않아 레코드 사이의 경로를 찾지 못했습니다. 원천을 연결한 뒤 다시 찾아 주세요.",
-    "metric": "원천 데이터가 연결되어 있지 않아 지표를 계산하지 못했습니다. 원천을 연결한 뒤 다시 계산해 주세요.",
+    "decide": "연결된 데이터 소스가 없어 레코드 값으로 판정하지 못했습니다. 입력값을 직접 넣어 판정하거나 데이터 소스를 연결해 주세요.",
+    "decide/simulate": "연결된 데이터 소스가 없어 레코드 값을 불러오지 못했습니다. 입력값을 직접 넣어 판정하거나 데이터 소스를 연결해 주세요.",
+    "request": "연결된 데이터 소스가 없어 처리 요청을 접수하지 못했습니다. 데이터 소스를 연결한 뒤 다시 요청해 주세요.",
+    "transitions/advance": "연결된 데이터 소스가 없어 상태 전이를 실행하지 못했습니다. 데이터 소스를 연결한 뒤 다시 실행해 주세요.",
+    "sync": "연결된 데이터 소스가 없어 다시 읽지 못했습니다. 데이터 소스를 연결한 뒤 다시 시도해 주세요.",
+    "record": "연결된 데이터 소스가 없어 레코드를 읽지 못했습니다. 데이터 소스를 연결한 뒤 다시 열어 주세요.",
+    "record/links": "연결된 데이터 소스가 없어 레코드를 읽지 못했습니다. 데이터 소스를 연결한 뒤 다시 열어 주세요.",
+    "record/path": "연결된 데이터 소스가 없어 레코드 사이의 경로를 찾지 못했습니다. 데이터 소스를 연결한 뒤 다시 찾아 주세요.",
+    "metric": "연결된 데이터 소스가 없어 지표를 계산하지 못했습니다. 데이터 소스를 연결한 뒤 다시 계산해 주세요.",
 }
-NO_SOURCE_NOTE = "원천 데이터가 연결되어 있지 않아 값을 읽지 않았습니다. 값을 보려면 원천을 연결해 주세요."  # beside an empty answer
-UNMEASURED = {"no_source": "측정 대상 아님 (원천 미연결)",  # a pass condition or a question that reads rows, with none to read
-              "needs_model": "측정 대상 아님 (언어 모델 채점)"}  # a question a model grades: the check has none
+NO_SOURCE_NOTE = "연결된 데이터 소스가 없어 값을 읽지 않았습니다. 데이터 소스를 연결해 주세요."  # beside an empty answer
+UNMEASURED = {"no_source": "미측정 · 데이터 소스 미연결",  # a pass condition or a question that reads rows, with none to read
+              "needs_model": "미측정 · 언어 모델 채점"}  # a question a model grades: the check has none
 READ_ERROR = {
     "encoding": "파일 인코딩을 확인할 수 없어 읽지 못했습니다. UTF-8 또는 CP949로 저장해 다시 업로드해 주세요.",
     "empty": "데이터 행이 없어 테이블을 만들지 못했습니다. 첫 행에 컬럼 이름이 있는지 확인해 주세요.",
@@ -157,7 +158,7 @@ IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자
                 ("already reads as", "용어 표기 중복"),
                 ("is not known, filed as", "규칙 유형 미상"),
                 ("superclasses -> kept", "상위 Entity 하나만 유지"),
-                ("no join binding|no source tables", "원천 Mapping 필요"),
+                ("no join binding|no source tables", "데이터 소스 Mapping 필요"),
                 ("^section ", "모듈에 자리가 없는 구역"),
                 ("relations between Objects", "Object 간 관계"),
                 ("the Entity it reaches is not in the draft", "초안에 없는 Entity 를 가리키는 관계"),
@@ -166,64 +167,71 @@ IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
 LEVEL_LABEL = ("L0 개념", "L1 논리", "L2 연결", "L3 검증")  # what bindings.entity_level gives, as the page says it
 SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
-IMPACT_KINDS = {"질의": "queries", "결정": "decisions", "검증 질문": "questions", "액션": "actions", "역할": "roles",
-                "함수": "functions", "계산 속성": "computed"}  # what _readers says each reader is
+IMPACT_KINDS = {"질의": "queries", "규칙": "decisions", "검증 질문": "questions", "Action": "actions", "접근 정책": "roles",
+                "함수": "functions", "계산 Property": "computed"}  # what _readers says each reader is
 PERSONAL = re.compile(r"연락처|전화|휴대|핸드폰|이메일|메일|주소|주민|생년|생일|계좌|카드번호|phone|mobile|tel|e?mail|address|birth|"
                       r"ssn|account|card_?no", re.I)  # columns a draft suggests hiding
 EDIT_TEXT = [
-    (r"^query '(.+)' is unknown$", r"쿼리 '\1'을(를) 찾을 수 없어 처리하지 못했습니다."),
+    (r"^query '(.+)' is unknown$", r"질의 '\1'을(를) 찾지 못해 처리하지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^query '(.+)' already exists$", r"질의 '\1'이(가) 이미 있어 저장하지 못했습니다. 다른 영문 이름을 입력해 주세요."),
-    (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
+    (r"^query name '(.*)' must be .*$", r"질의 영문 이름 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 저장하지 못했습니다."),
     (r"^hit policy priority needs a priority on every rule; (.+) have none$", r"우선순위 방식은 규칙마다 우선순위가 있어야 합니다. \1에 우선순위를 먼저 정해 주세요."),
-    (r"^hit policy '(.+)' is not one of .*$", r"적용 방식 '\1'은 쓸 수 없습니다."),
-    (r"^type '(.+)' is not one of .*$", r"자료형 '\1'은 쓸 수 없습니다. 문자열, 정수, 소수, 참 · 거짓, 날짜, 일시, 허용값 중에서 골라 주세요."),
-    (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
-    (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
-    (r"^rule '(.+)' is unknown in (\S+)$", r"규칙 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^hit policy '(.+)' is not one of .*$", r"적용 방식 '\1'은(는) 쓸 수 없습니다."),
+    (r"^type '(.+)' is not one of .*$", r"자료형 '\1'은(는) 쓸 수 없습니다. 문자열, 정수, 소수, 참 · 거짓, 날짜, 일시, 허용값 중에서 골라 주세요."),
+    (r"^rule id '(.*)' must be letters, digits, _ and - starting with a letter$", r"규칙 번호 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ · - 만 쓸 수 있어 저장하지 못했습니다."),
+    (r"^rule '(.+)' already exists in (\S+)$", r"규칙 '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+    (r"^rule '(.+)' is unknown in (\S+)$", r"규칙 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^decision (\S+) needs at least one rule$", r"결정표에 규칙이 하나는 있어야 하므로 제외하지 못했습니다."),
     (r"^decision (\S+) has no (?:input|output) '(.+)'$", r"결정표에 '\2' 항목이 없어 저장하지 못했습니다."),
-    (r"^decision '(.+)' (?:is unknown|already exists)$", r"결정표 '\1'을 처리하지 못했습니다. 이름을 확인해 주세요."),
-    (r"^(?:decision|action|role|area) name '(.*)' must be letters, digits and _ starting with a letter$", r"이름 '\1'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^decision '(.+)' (?:is unknown|already exists)$", r"결정표 '\1'을(를) 처리하지 못했습니다. 이름을 확인해 주세요."),
+    (r"^(?:decision|action|role|area) name '(.*)' must be letters, digits and _ starting with a letter$", r"이름 '\1'은(는) 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^role '(.+)' is unknown$", r"접근 정책 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^(\S+): one row rule per type$", r"Entity \1에 행 범위가 둘 이상 있어 저장하지 못했습니다. Entity마다 행 범위를 하나만 지정해 주세요."),
+    (r"^(\S+): one scope rule per type$", r"Entity \1에 조직 범위가 둘 이상 있어 저장하지 못했습니다. Entity마다 조직 범위를 하나만 지정해 주세요."),
+    (r"^(\S+): say what the rows are compared with$", r"Entity \1의 행 범위에 비교할 값이 없어 저장하지 못했습니다. 비교할 값을 입력해 주세요."),
+    (r"^(\S+): the row rule does not reach a property$", r"Entity \1의 행 범위가 Property에 닿지 않아 저장하지 못했습니다. 경로와 Property를 다시 지정해 주세요."),
     (r"^give at least one input$", r"입력값이 없어 결정표를 만들지 못했습니다. 입력값을 선택해 주세요."),
-    (r"^(\S+): '(.+)' is not a literal; quote text as .*$", r"\1 조건의 값 '\2'을 읽지 못했습니다. 값을 확인해 주세요."),
+    (r"^(\S+): '(.+)' is not a literal; quote text as .*$", r"\1 조건의 값 '\2'을(를) 읽지 못했습니다. 값을 확인해 주세요."),
     (r"^(\S+) takes a (\S+)$", r"기준값 \1의 값 형식이 맞지 않아 저장하지 못했습니다."),
     (r"^(.+) must be at least (\S+)$", r"\1 값은 \2 이상이어야 하므로 저장하지 못했습니다."),
     (r"^(.+) must be at most (\S+)$", r"\1 값은 \2 이하여야 하므로 저장하지 못했습니다."),
     (r"^a state machine has at least two states$", r"상태 값이 두 개 이상 있어야 하므로 저장하지 못했습니다."),
-    (r"^a transition goes between states: (\S*) to (\S*)$", r"전이의 상태 값 \1, \2이 상태 목록에 없어 저장하지 못했습니다."),
+    (r"^a transition goes between states: (\S*) to (\S*)$", r"전이의 상태 값 \1, \2이(가) 상태 목록에 없어 저장하지 못했습니다."),
     (r"^unknown edit '(.+)'$", r"지원하지 않는 편집(\1)이라 적용하지 못했습니다."),
     (r"^(object|property|link) name '(.*)' must be letters, digits and _ starting with a letter$",
-     r"이름 '\2'은 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
-    (r"^object type '(.+)' already exists$", r"Entity '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
-    (r"^give the key and the key property$", "키 속성을 정하지 않아 Entity를 추가하지 못했습니다. 키와 키 속성을 입력해 주세요."),
-    (r"^object type '(.+)' is unknown$", r"Entity '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
-    (r"^key '(.+)' is not a property of (.+)$", r"'\1'은 \2의 속성이 아니어서 키로 정하지 못했습니다."),
+     r"이름 '\2'은(는) 영문자로 시작하고 영문자 · 숫자 · _ 만 쓸 수 있어 만들지 못했습니다."),
+    (r"^object type '(.+)' already exists$", r"Entity '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^give the key and the key property$", "키 Property를 정하지 않아 Entity를 추가하지 못했습니다. 키와 키 Property를 입력해 주세요."),
+    (r"^object type '(.+)' is unknown$", r"Entity '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^key '(.+)' is not a property of (.+)$", r"'\1'은(는) \2의 Property가 아니어서 키로 정하지 못했습니다."),
     (r"^the key of (.+) is set where it is defined; change it there$",
      r"\1의 키는 표준 모듈에서 정해져 있어 여기서 바꾸지 못했습니다. 해당 모듈에서 바꿔 주세요."),
-    (r"^(.+) already has '(.+)'$", r"\1에 속성 '\2'이 이미 있어 추가하지 못했습니다."),
-    (r"^(\w+)\.(\w+) is unknown$", r"속성 \1.\2을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+    (r"^(.+) already has '(.+)'$", r"\1에 Property '\2'이(가) 이미 있어 추가하지 못했습니다."),
+    (r"^(\w+)\.(\w+) is unknown$", r"Property \1.\2을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^the type of (.+) comes from its standard; it cannot be changed here$",
-     r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 속성을 추가해 주세요."),
+     r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 Property를 추가해 주세요."),
     (r"^'(.+)' is the key of (.+); delete the object instead$",
-     r"'\1'은 \2의 키라서 지우지 못했습니다. Entity를 지워 주세요."),
+     r"'\1'은(는) \2의 키라서 지우지 못했습니다. Entity를 지워 주세요."),
     (r"^'(.+)' comes from (.+), which (.+) specialises; delete it on (.+)$",
-     r"'\1'은 상위 Entity \2에서 상속 속성이라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
-    (r"^link '(.+)' already exists$", r"관계 '\1'이 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
-    (r"^link '(.+)' is unknown$", r"관계 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+     r"'\1'은(는) 상위 Entity \2에서 상속 Property라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
+    (r"^link '(.+)' already exists$", r"Relation '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),
+    (r"^link '(.+)' is unknown$", r"Relation '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^the endpoints of (.+) come from its standard; add a new link instead$",
-     r"\1의 양 끝 Entity는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 관계를 추가해 주세요."),
+     r"\1의 양 끝 Entity는 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 Relation을 추가해 주세요."),
     (r"^question id '(.*)' is empty or already used$",
-     r"질문 번호 '\1'이 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
-    (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을 찾지 못했습니다. 화면을 새로고침해 주세요."),
+     r"질문 번호 '\1'이(가) 비어 있거나 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
+    (r"^question '(.+)' is unknown$", r"검증 질문 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^question (\S+): type '(.*)' is not one of .*$",
      r"검증 질문 \1의 유형 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 정의형, 판정형, 값 조회형 중에서 골라 주세요."),
     (r"^question (\S+): grading '(.*)' is not one of .*$",
      r"검증 질문 \1의 채점 방식 '\2'은(는) 쓸 수 없어 저장하지 못했습니다. 일치, 키워드, 근거, 모델 채점 중에서 골라 주세요."),
-    (r"^question (\S+): grading by keywords needs keywords$", r"검증 질문 \1은(는) 키워드로 채점하므로 키워드를 하나 이상 입력해 주세요."),
+    (r"^question '?([^':]+)'?: give the record it is about \(key\) or the values it decides on$",
+     r"레코드 키와 판정 값이 없어 검증 질문 \1을(를) 저장하지 못했습니다. 레코드 키 또는 판정 값을 입력해 주세요."),
+    (r"^question (\S+): grading by keywords needs keywords$", r"키워드가 없어 검증 질문 \1을(를) 저장하지 못했습니다. 채점에 쓸 키워드를 입력해 주세요."),
     (r"^question (\S+): give the words a right answer has .*$",
-     r"검증 질문 \1은(는) 정의형이라 정답에 들어갈 키워드나 기대 답변이 있어야 합니다. 키워드 또는 기대 답변을 입력해 주세요."),
+     r"정답과 키워드가 없어 검증 질문 \1을(를) 저장하지 못했습니다. 정답 또는 키워드를 입력해 주세요."),
     (r"^area (\S+): tier '(.*)' is not a whole number from 1$",
-     r"Object \1의 단계 '\2'은(는) 1 이상의 정수여야 하므로 저장하지 못했습니다."),
+     r"Object \1의 차수 '\2'이(가) 1 이상의 정수가 아니어서 저장하지 못했습니다. 차수를 1 이상의 정수로 입력해 주세요."),
     (r"^term '(.+)' already exists$", r"용어 '\1'이(가) 이미 있어 추가하지 못했습니다. 기존 용어를 수정해 주세요."),
     (r"^term '(.+)' is unknown$", r"용어 '\1'을(를) 찾지 못했습니다. 화면을 새로고침해 주세요."),
     (r"^a term needs its word$", "용어가 비어 있어 저장하지 못했습니다. 용어를 입력해 주세요."),
@@ -254,7 +262,7 @@ EDIT_TEXT = [
     (r"^rule '(.+)' of (\S+) is AXIOM; it is not changed, moved or removed here$",
      r"AXIOM 규칙 '\1'은(는) 여기서 바꾸거나 옮기거나 지울 수 없습니다."),
     (r"^(\S+) removes decision '(.+?)', which holds AXIOM rule '(.+?)'$",
-     r"결정표 '\2'에 AXIOM 규칙 '\3'이(가) 있어 이 변경을 적용하지 못했습니다. AXIOM 규칙이 읽는 항목은 지울 수 없습니다."),
+     r"AXIOM 규칙 '\3'이(가) 든 결정표 '\2'이(가) 함께 지워져 적용하지 못했습니다. 이 결정표가 읽는 항목은 남겨 주세요."),
     (r"^status '(.+)' is not one of .*$", r"상태 '\1'은(는) 쓸 수 없습니다. 초안, 검토 중, 승인 중에서 골라 주세요."),
     (r"^rule cards made here are Custom$", "여기서 만드는 규칙 카드는 Custom 규칙입니다. 계층을 Custom으로 두고 다시 저장해 주세요."),
     (r"^rule card '(.+)' already exists$", r"규칙 카드 '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 번호를 입력해 주세요."),
@@ -280,14 +288,16 @@ EDIT_TEXT = [
      r"규칙 카드 '\1'을(를) AXIOM 규칙으로 둘 수 없습니다. AXIOM 규칙은 axiom 모듈에서만 정합니다."),
 ]
 GAP_TEXT = [(r"^no rule matched$", "적용된 규칙 없음"), (r"^rule (\S+) has no cite$", r"규칙 \1 출처 없음"),
-            (r"^(\S+) has no source column$", r"\1 원천 컬럼 없음"), (r"^no version$", "버전 없음"),
+            (r"^(\S+) has no source column$", r"\1 소스 컬럼 없음"), (r"^no version$", "버전 없음"),
             (r"^no answer$", "답 없음")]
 DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives here as its label
+    (r"^(\S+)\.(\S+): the time asked about is before it starts$",
+     "기준 시각이 경과일을 세기 시작하는 시각보다 앞서 판정하지 못했습니다. 기준 시각을 그 이후로 지정해 주세요."),
     (r"^(.+) not found$", r"\1 레코드가 없어 판정하지 못했습니다. 레코드를 다시 골라 주세요."),
     (r"^unknown decision '(.+)'$", "결정표를 찾지 못해 판정하지 못했습니다. 결정표를 다시 골라 주세요."),
     (r"^unknown link '(.+)'$", "입력이 읽는 관계가 정의에 없어 판정하지 못했습니다. 결정표의 입력을 확인해 주세요."),
     (r"^link (.+) has no source binding \(on/via\)$",
-     r"입력이 읽는 관계 '\1'이(가) 원천 테이블과 연결되지 않아 판정하지 못했습니다. 모델링에서 관계의 연결 기준을 지정해 주세요."),
+     r"입력이 읽는 Relation '\1'이(가) 데이터 소스 테이블과 연결되지 않아 판정하지 못했습니다. Mapping에서 Relation의 연결 기준을 지정해 주세요."),
     (r"^(\S+): the path reaches (\d+) objects; use count$",
      r"입력 하나가 레코드 \2건에 닿아 값을 정하지 못했습니다. 결정표의 입력을 건수로 바꿔 주세요."),
     (r"^(\S+): rules \[(.+)\] all match under hit policy 'unique'$",
@@ -299,11 +309,11 @@ DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives h
 
 ISSUE_TEXT = [
     # a definition not bound to a source: it has no text in a language that names tables
-    (r"^(\S+) has no source table and no bound subtype$", r"\1 Entity가 원천 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
-    (r"^link (\S+) has no source binding \(on/via\)$", r"관계 \1에 원천 연결 기준이 없어 SQL로 변환하지 못했습니다. 관계의 연결 기준을 지정해 주세요."),
-    (r"^(\S+) has no bound subtype to stand for it in the graph$", r"\1 Entity와 하위 Entity가 원천 테이블에 연결되어 있지 않아 변환하지 못했습니다. 원천 테이블을 연결해 주세요."),
-    (r"^no version of '(.+?)' satisfies .*$", r"의존 모듈 '\1'을 찾지 못했습니다. requires 항목의 모듈 이름을 확인해 주세요."),
-    (r"^cannot read requirement '(.+?)'.*$", r"requires 값 '\1'을 읽지 못했습니다. name 또는 name>=1.0 형식으로 입력해 주세요."),
+    (r"^(\S+) has no source table and no bound subtype$", r"\1 Entity가 데이터 소스 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. Mapping에서 테이블을 연결해 주세요."),
+    (r"^link (\S+) has no source binding \(on/via\)$", r"Relation \1에 데이터 소스 연결 기준이 없어 SQL로 변환하지 못했습니다. Mapping에서 Relation의 연결 기준을 지정해 주세요."),
+    (r"^(\S+) has no bound subtype to stand for it in the graph$", r"\1 Entity와 하위 Entity가 데이터 소스 테이블에 연결되어 있지 않아 변환하지 못했습니다. Mapping에서 테이블을 연결해 주세요."),
+    (r"^no version of '(.+?)' satisfies .*$", r"의존 모듈 '\1'을(를) 찾지 못했습니다. requires 항목의 모듈 이름을 확인해 주세요."),
+    (r"^cannot read requirement '(.+?)'.*$", r"requires 값 '\1'을(를) 읽지 못했습니다. name 또는 name>=1.0 형식으로 입력해 주세요."),
     (r"^(\S+) requires '(.+?)', which is not attached$", r"\1에 필요한 '\2' 모듈이 적용되어 있지 않습니다. '\2' 모듈을 먼저 적용해 주세요."),
     (r"^(\S+) requires '(.+?)', but (\S+) is attached$", r"\1에 필요한 '\2' 버전과 적용된 \3 버전이 맞지 않습니다. 버전을 확인해 주세요."),
     (r"^modules require each other in a cycle: (.+)$", r"모듈 의존 관계가 순환합니다. \1. requires 항목을 확인해 주세요."),
@@ -316,23 +326,59 @@ ISSUE_TEXT = [
     (r"^(\S+) (?:removes|rewrites) AXIOM rule '(.+?)' of decision '(.+?)'.*$",
      r"결정표 \3의 AXIOM 규칙 '\2'은(는) axiom 모듈만 바꾸거나 지울 수 있어 적용하지 못했습니다."),
     (r"^(\S+) removes decision '(.+?)', which holds AXIOM rule '(.+?)'$",
-     r"결정표 '\2'에 AXIOM 규칙 '\3'이(가) 있어 제외하지 못했습니다."),
+     r"AXIOM 규칙 '\3'이(가) 든 결정표 '\2'이(가) 함께 빠져 제외하지 못했습니다. 이 결정표가 읽는 항목은 남겨 주세요."),
     (r"^(\S+) (?:removes|changes) AXIOM rule card '(.+?)'$",
      r"AXIOM 규칙 카드 '\2'은(는) axiom 모듈만 바꾸거나 지울 수 있어 적용하지 못했습니다."),
-    (r"^(\w+)\.(\w+): type '(.+?)' is not one of .*$", r"\1.\2의 타입 '\3'은 사용할 수 없습니다. string, integer, decimal, boolean, date, datetime, enum 중에서 지정해 주세요."),
+    (r"^(\w+)\.(\w+): type '(.+?)' is not one of .*$", r"\1.\2의 타입 '\3'은(는) 사용할 수 없습니다. string, integer, decimal, boolean, date, datetime, enum 중에서 지정해 주세요."),
     (r"^(\w+)\.(\w+): expected .*$", r"\1.\2의 계산식을 해석하지 못했습니다. 식을 확인해 주세요."),
-    (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 Entity '\2'를 찾지 못했습니다. target 항목을 확인해 주세요."),
-    (r"^link (\S+): endpoints (\S+) -> (\S+) must be object types$", r"관계 \1의 Entity \2 또는 \3을 찾지 못했습니다. 출발 Entity와 도착 Entity를 확인해 주세요."),
-    (r"^(\S+) extends (?:object type|link|decision|role) '(.+?)', which no attached module defines$", r"확장 대상 '\2'를 정의한 모듈이 적용되어 있지 않습니다. 대상 이름과 requires 항목을 확인해 주세요."),
-    (r"^(\S+) changes the type of (\S+) from (\S+) to (\S+)$", r"\2의 타입은 변경할 수 없습니다. \3에서 \4로 바꾸려면 새 속성을 추가해 주세요."),
-    (r"^(\S+) binds (\S+), which is not a property of (\S+)$", r"\2는 \3의 속성이 아니어서 연결하지 못했습니다. 속성 이름을 확인해 주세요."),
-    (r"^(\S+) removes (.+), which is not there$", r"제거 대상 \2를 찾지 못했습니다. 이름을 확인해 주세요."),
-    (r"^(\S+) defines (\S+) '(.+?)', already defined by (\S+?);.*$", r"'\3'은 \4에 이미 정의되어 있습니다. 다른 이름을 사용하거나 확장으로 지정해 주세요."),
-    (r"^module '(.+?)' is not attached$", r"'\1' 모듈이 적용되어 있지 않습니다."),
+    (r"^decision (\S+): target '(.+?)' is unknown$", r"결정 \1의 대상 Entity '\2'을(를) 찾지 못했습니다. target 항목을 확인해 주세요."),
+    (r"^link (\S+): endpoints (\S+) -> (\S+) must be object types$", r"Relation \1의 Entity \2 또는 \3을(를) 찾지 못했습니다. 시작 Entity와 끝 Entity를 확인해 주세요."),
+    (r"^(\S+) extends (?:object type|link|decision|role) '(.+?)', which no attached module defines$", r"확장 대상 '\2'을(를) 정의한 모듈이 적용되어 있지 않습니다. 대상 이름과 requires 항목을 확인해 주세요."),
+    (r"^(\S+) changes the type of (\S+) from (\S+) to (\S+)$", r"\2의 타입은 변경할 수 없습니다. \3에서 \4(으)로 바꾸려면 새 Property를 추가해 주세요."),
+    (r"^(\S+) binds (\S+), which is not a property of (\S+)$", r"\2은(는) \3의 Property가 아니어서 연결하지 못했습니다. Property 이름을 확인해 주세요."),
+    (r"^(\S+) removes (.+), which is not there$", r"제거 대상 \2을(를) 찾지 못했습니다. 이름을 확인해 주세요."),
+    (r"^(\S+) defines (\S+) '(.+?)', already defined by (\S+?);.*$", r"'\3'은(는) \4에 이미 정의되어 있습니다. 다른 이름을 사용하거나 확장으로 지정해 주세요."),
+    (r"^module '(.+?)' is not attached$", r"'\1' 모듈이 적용되어 있지 않아 처리하지 못했습니다. 모듈 라이브러리에서 적용 상태를 확인해 주세요."),
+    # a Relation, a function, a metric the definition check turns down (each issue alone; several are joined by "; ")
+    (r"^link (\S+): inverse name '(.+?)' is already taken$",
+     r"역방향 이름 '\2'이(가) 이미 쓰이고 있어 Relation \1을(를) 저장하지 못했습니다. 다른 역방향 이름을 입력해 주세요."),
+    (r"^inverse '(.+?)' clashes with a (\S+)$", r"역방향 이름 '\1'이(가) 다른 이름과 겹쳐 저장하지 못했습니다. 다른 역방향 이름을 입력해 주세요."),
+    (r"^link (\S+): transitive/symmetric links go from a type to itself$",
+     r"Relation \1의 시작 Entity와 끝 Entity가 달라 전이 · 대칭으로 두지 못했습니다. 시작 Entity와 끝 Entity를 같게 지정해 주세요."),
+    (r"^function (\S+): name is not an identifier$",
+     r"함수 이름 '\1'에 쓸 수 없는 글자가 있어 저장하지 못했습니다. 영문자로 시작하고 영문자 · 숫자 · _ 만 입력해 주세요."),
+    (r"^function (\S+): an expression runs on a target: give both$",
+     r"대상 Entity와 산식이 없어 함수 \1을(를) 저장하지 못했습니다. 대상 Entity와 산식을 입력해 주세요."),
+    (r"^function (\S+): an expression gives one output: name it and give its type$",
+     r"출력값이 하나가 아니어서 함수 \1을(를) 저장하지 못했습니다. 출력값 하나의 이름과 자료형을 입력해 주세요."),
+    (r"^function (\S+): target '(.+?)' is unknown$",
+     r"대상 Entity '\2'이(가) 정의에 없어 함수 \1을(를) 저장하지 못했습니다. 대상 Entity를 다시 골라 주세요."),
+    (r"^function (\S+): decision '(.+?)' is unknown$",
+     r"결정표 '\2'이(가) 정의에 없어 함수 \1을(를) 저장하지 못했습니다. 결정표를 다시 골라 주세요."),
+    (r"^function (\S+): decision '(.+?)' is about (\S+), not (\S+)$",
+     r"결정표 '\2'의 대상 Entity가 달라 함수 \1을(를) 저장하지 못했습니다. 대상 Entity를 \3(으)로 바꿔 주세요."),
+    (r"^function (\S+): query '(.+?)' is unknown$",
+     r"질의 '\2'이(가) 정의에 없어 함수 \1을(를) 저장하지 못했습니다. 질의를 다시 골라 주세요."),
+    (r"^function (\S+): give the name the deployment registered the callable under$",
+     r"등록 이름이 없어 함수 \1을(를) 저장하지 못했습니다. 서버에 등록된 이름을 입력해 주세요."),
+    (r"^function (\S+): url must start with http:// or https://$",
+     r"호출 주소가 http:// 또는 https:// 로 시작하지 않아 함수 \1을(를) 저장하지 못했습니다. 호출 주소를 확인해 주세요."),
+    (r"^function (\S+): method must be one of .*$",
+     r"호출 방식이 올바르지 않아 함수 \1을(를) 저장하지 못했습니다. 호출 방식을 다시 골라 주세요."),
+    (r"^function (\S+): input '(.+?)': .*$",
+     r"입력값 '\2'의 설정이 올바르지 않아 함수 \1을(를) 저장하지 못했습니다. 입력값의 자료형과 범위를 확인해 주세요."),
+    (r"^function (\S+): output '(.+?)' has type .*$",
+     r"출력값 '\2'의 자료형이 올바르지 않아 함수 \1을(를) 저장하지 못했습니다. 자료형을 다시 골라 주세요."),
+    (r"^function (\S+): .*$", r"함수 \1의 정의를 해석하지 못해 저장하지 못했습니다. 입력값과 산식을 확인해 주세요."),
+    (r"^metric (\S+): needs an owner.*$", r"담당자가 없어 지표 \1을(를) 저장하지 못했습니다. 담당자를 입력해 주세요."),
+    (r"^metric (\S+): needs time.*$", r"기준 시각이 없어 지표 \1을(를) 저장하지 못했습니다. 기준 시각을 입력해 주세요."),
+    (r"^metric (\S+): needs a formula$", r"산식이 없어 지표 \1을(를) 저장하지 못했습니다. 산식을 입력해 주세요."),
+    (r"^metric (\S+): .*$", r"지표 \1의 산식을 해석하지 못해 저장하지 못했습니다. 산식과 기준 시각을 확인해 주세요."),
+    (r"^.*alias '(.*?)': unknown object type '(.*?)'.*$", r"산식이 가리키는 Entity를 찾지 못해 저장하지 못했습니다. 산식의 Entity를 확인해 주세요."),
     # a query a person typed
     (r"^unknown label '(.+?)'$", r"'\1' Entity를 찾지 못했습니다. Entity 이름을 확인해 주세요."),
     (r"^give '(.+?)' a label on first use$", r"변수 \1에 Entity 이름을 지정해 주세요. 예: (\1:Customer)"),
-    (r"^(.+) is outside the ontology namespace (.+)$", r"\1은 온톨로지 네임스페이스 \2에 없는 주소입니다."),
+    (r"^(.+) is outside the ontology namespace (.+)$", r"\1은(는) 온톨로지 네임스페이스 \2에 없는 주소입니다."),
     (r"^'return' lists at least one column$", "return 항목에 컬럼을 하나 이상 지정해 주세요."),
     (r"^a query is an object$", "질의는 JSON 객체로 입력해 주세요."),
     (r"^Expecting .* line \d+ column \d+ .*$", "JSON 형식이 올바르지 않습니다."),
@@ -341,20 +387,27 @@ ISSUE_TEXT = [
     (r"^pick at least one input$", "입력을 하나 이상 선택해 주세요."),
     (r"^(\d+) past cases with a result; at least (\d+) are needed$", r"결과가 있는 지난 처리 기록이 \1건입니다. \2건 이상 필요합니다."),
     (r"^(\S+): inputs reach one relation away at most$", r"\1: 입력은 관계 한 단계까지만 지정할 수 있습니다."),
-    (r"^(\S+): '(.+?)' reaches many (\S+); pick a relation to one$", r"\1: 여러 \3로 이어지는 관계입니다. 하나로 이어지는 관계를 선택해 주세요."),
-    (r"^(\S+) is (\S+); inputs are allowed values, true/false or numbers$", r"\1은 \2 타입입니다. 입력에는 허용값, 참 · 거짓, 숫자만 사용할 수 있습니다."),
-    (r"^(\S+) is the result itself$", r"\1은 결과 컬럼이어서 입력으로 사용할 수 없습니다."),
-    (r"^(\S+) is (\S+); the result has to be an allowed-value or true/false property$", r"\1은 \2 타입입니다. 결과는 허용값 또는 참 · 거짓 속성이어야 합니다."),
-    (r"^'(.+?)' is not Type\.property$", r"결과 컬럼 '\1'을 찾지 못했습니다. 다시 선택해 주세요."),
+    (r"^(\S+): '(.+?)' reaches many (\S+); pick a relation to one$", r"\1: 여러 \3(으)로 이어지는 관계입니다. 하나로 이어지는 관계를 선택해 주세요."),
+    (r"^(\S+) is (\S+); inputs are allowed values, true/false or numbers$", r"\1은(는) \2 타입입니다. 입력에는 허용값, 참 · 거짓, 숫자만 사용할 수 있습니다."),
+    (r"^(\S+) is the result itself$", r"\1은(는) 결과 컬럼이어서 입력으로 사용할 수 없습니다."),
+    (r"^(\S+) is (\S+); the result has to be an allowed-value or true/false property$", r"\1은(는) \2 타입입니다. 결과는 허용값 또는 참 · 거짓 Property여야 합니다."),
+    (r"^'(.+?)' is not Type\.property$", r"결과 컬럼 '\1'을(를) 찾지 못했습니다. 다시 선택해 주세요."),
 ]
 
 
+_HANGUL = re.compile("[가-힣]")
+
+
 def _issue_text(msg: str) -> str:
-    """A check's finding, as the page says it; one not listed here keeps its own words."""
+    """A check's finding, as the page says it; one not listed here keeps its own words. Findings a check joined with
+    "; " are said one by one."""
     for pattern, text in ISSUE_TEXT:
         if re.match(pattern, msg):
-            return re.sub(pattern, text, msg)
-    return msg
+            return words.fix(re.sub(pattern, text, msg))
+    if "; " not in msg:
+        return msg
+    parts = [_issue_text(x) for x in dict.fromkeys(x.strip() for x in msg.split("; ") if x.strip())]
+    return " ".join(dict.fromkeys(parts))
 
 
 def mine_label(o, name: str) -> str:
@@ -366,15 +419,17 @@ def _edit_text(msg: str) -> str:
     """A management edit's refusal, as the page says it; checks the definition raises keep their own words."""
     for pattern, text in EDIT_TEXT:
         if re.match(pattern, msg):
-            return re.sub(pattern, text, msg)
-    return f"정의 검사를 통과하지 못해 적용하지 않았습니다. {_issue_text(msg)}"
+            return words.fix(re.sub(pattern, text, msg))
+    said = [_issue_text(x) for x in dict.fromkeys(x.strip() for x in msg.split("; ") if x.strip())] or [_issue_text(msg)]
+    known = [x for x in said if _HANGUL.search(x)]  # the first in words; what the page has no words for stays out of it
+    return known[0] if known else "정의 검사를 통과하지 못해 적용하지 않았습니다. 입력한 항목을 확인해 주세요."
 
 
 def _gap_text(gap: str) -> str:
     """What a question's answer lacks of its grounds, as the page says it."""
     for pattern, text in GAP_TEXT:
         if re.match(pattern, gap):
-            return re.sub(pattern, text, gap)
+            return words.fix(re.sub(pattern, text, gap))
     return gap
 
 
@@ -416,6 +471,23 @@ def _rows_in(section: Any) -> int:
     return sum(len(v) for v in section.values() if isinstance(v, list)) if isinstance(section, dict) else 0
 
 
+def _line_of(e: Exception) -> int | None:
+    """The line a YAML, JSON or Turtle reader stopped at, counted from 1, where it says."""
+    mark = getattr(e, "problem_mark", None) or getattr(e, "context_mark", None)
+    if mark is not None and getattr(mark, "line", None) is not None:
+        return mark.line + 1
+    line = getattr(e, "lineno", None) or getattr(e, "lines", None)
+    return line if isinstance(line, int) else None
+
+
+def _format_failed(what: str, e: Exception, doing: str) -> str:
+    """A file or a text that is not the format it claims, as the page says it: where it stops being one, then the fix."""
+    line = _line_of(e)
+    if line:
+        return f"{what}의 {line}행 형식이 올바르지 않아 {doing}하지 못했습니다. {line}행을 확인해 주세요."
+    return f"{what}의 형식이 올바르지 않아 {doing}하지 못했습니다. 내용을 확인해 주세요."
+
+
 def _definition_doc(name: str, text: str) -> dict:
     """A definition draft's file as the mapping of sections it is: JSON by itself, YAML where PyYAML is installed."""
     try:
@@ -428,7 +500,7 @@ def _definition_doc(name: str, text: str) -> dict:
     except ImportError:
         raise ValueError("YAML 을 읽는 모듈(PyYAML)이 서버에 없어 읽지 못했습니다. JSON 으로 저장해 다시 선택해 주세요.") from None
     except Exception as e:  # yaml.YAMLError, json.JSONDecodeError: where the text stops being the format
-        raise ValueError(f"{name} 파일을 읽지 못했습니다. 형식을 확인해 주세요. {e}"[:300]) from None
+        raise ValueError(_format_failed(f"{name} 파일", e, "읽")) from None
     if not isinstance(doc, dict) or not any(_rows_in(v) for k, v in doc.items() if k != "meta"):
         raise ValueError(f"{name} 파일에 정의 목록이 없어 추가하지 못했습니다. 구역 이름(objects · entities · rules · "
                          "parameters · terms)을 확인해 주세요.")
@@ -583,7 +655,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             msg = f"link {o.links[lk.group(1)].label or lk.group(1)} {lk.group(2)}"
         for pattern, text in DECIDE_TEXT:
             if re.match(pattern, msg):
-                return re.sub(pattern, text, msg)
+                return words.fix(re.sub(pattern, text, msg))
         return msg
 
     # ---- the whole page ------------------------------------------------------------------------------------
@@ -730,8 +802,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         proj = self._reproject()
         warning = _projection_warning(proj)
         self._keep_applied()
-        self._note("detach", f"{', '.join(self._label(x) for x in gone)} 모듈을 해제했습니다. "
-                   f"항목 {len(imp.removed)}개가 제거되었습니다. {warning}".strip(), removed=imp.removed[:12])
+        self._note("detach", f"{', '.join(self._label(x) for x in gone)} 모듈 적용을 해제했습니다.", removed=imp.removed[:12])
         return {"ok": True, "impact": imp.to_dict(), "projection": proj, "warning": warning}
 
     def _keep_applied(self) -> None:
@@ -826,12 +897,12 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return plain({"ok": True, "name": name, "label": st.onto.queries[name].label if name else "",
                       "ir": _ir_text(shown.to_dict()), "params": bound, "translations": translations,
                       "results": results, "agree": agree and len(results) > 1, "source": source,
-                      **self.no_source("원천 데이터가 연결되어 있지 않아 질의를 실행하지 않고 변환 결과만 만들었습니다. "
-                                       "결과를 보려면 원천을 연결해 주세요.")})
+                      **self.no_source("연결된 데이터 소스가 없어 질의를 실행하지 않고 변환 결과만 만들었습니다. "
+                                       "데이터 소스를 연결해 주세요.")})
 
     def run_text(self, language: str, text: str, *, role: str = "", principal: dict | None = None) -> dict:
         if len(text) > 8000:
-            return {"ok": False, "error": "쿼리 길이가 8,000자 한도를 초과해 실행하지 못했습니다. 쿼리를 줄여 다시 입력해 주세요."}
+            return {"ok": False, "error": "질의 길이가 8,000자 한도를 초과해 실행하지 못했습니다. 질의를 줄여 다시 입력해 주세요."}
         try:
             if language == "sparql":
                 from ontlas.parse.sparql import parse_sparql
@@ -844,7 +915,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             else:
                 q = Query.from_dict(json.loads(text))
         except Exception as e:
-            return {"ok": False, "error": f"쿼리 문법을 해석하지 못했습니다. {_issue_text(str(e).split(chr(10))[0])}"}
+            said_back = _issue_text(str(e).split(chr(10))[0])
+            return {"ok": False, "error": said_back if _HANGUL.search(said_back)
+                    else "질의 문법이 올바르지 않아 실행하지 못했습니다. 질의를 확인해 주세요."}
         return self.run_query(q, role=role, principal=principal)
 
     def ask(self, question: str, *, role: str = "", principal: dict | None = None, model: Callable[[str, str], str] | None = None) -> dict:
@@ -856,8 +929,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         gen = IRGenerator(self.studio.onto, llm, role=role or None, terms=self._terms(),
                           runner=probe(self.studio, role=role or None, principal=principal)).generate(question[:500])
         if not gen.ok:
-            return {"ok": False, "error": "질문을 질의로 변환하지 못했습니다. "
-                                          + self._failed(gen.attempts, tries, "질문을 바꿔 다시 입력해 주세요.")}
+            return {"ok": False, "error": self._failed(gen.attempts, tries, "질문을 질의로 변환", "질문을 바꿔 다시 입력해 주세요.")}
         out = self.run_query(gen.registered or gen.query, gen.params, role=role, principal=principal)
         out["attempts"] = len(gen.attempts)
         return out
@@ -885,17 +957,22 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return llm, tries
 
     @staticmethod
-    def _failed(attempts: list, tries: list, fix: str) -> str:
-        """Why the model's attempts came to nothing, and what to do: its server did not answer at all, it never
-        finished an answer, or what it last said was wrong (then `fix`, what the person can change)."""
+    def _failed(attempts: list, tries: list, doing: str, fix: str) -> str:
+        """Why the model's attempts came to nothing, in one sentence and what to do: its server answered with an error,
+        could not be reached or did not answer in time, the model never finished an answer, or what it last said did
+        not hold (then `fix`, what the person can change)."""
         answered = [a for a in attempts if a.raw]  # what the model last said, not the attempt time stopped
         if not answered:
             said_back = " ".join(i for a in attempts for i in a.issues)
+            status = re.search(r"HTTPError (\d{3})", said_back)
+            if status:
+                return f"언어 모델 서버가 {status.group(1)} 오류를 돌려줘 {doing}하지 못했습니다. 언어 모델 서버 상태를 확인해 주세요."
             if re.search(r"HTTPError|URLError|Connection|RemoteDisconnected|gaierror|SSLError", said_back):
-                return "언어 모델 서버가 응답하지 않았습니다. 언어 모델 서버 상태를 확인한 뒤 다시 시도해 주세요."
-            return "언어 모델이 답변을 끝내지 못했습니다. " + fix
-        late = " 응답 시간 한도로 다시 시도하지 못했습니다." if len(tries) < len(attempts) else ""
-        return " / ".join(answered[-1].issues[:3]) + late + " " + fix
+                return f"언어 모델 서버에 연결하지 못해 {doing}하지 못했습니다. 언어 모델 서버 주소와 상태를 확인해 주세요."
+            if re.search(r"Timeout|timed out", said_back) and "AnswerCutOff" not in said_back:
+                return f"언어 모델 서버가 제한 시간 안에 응답하지 않아 {doing}하지 못했습니다. 잠시 뒤 다시 시도해 주세요."
+            return f"언어 모델이 답변을 끝내지 못해 {doing}하지 못했습니다. {fix}"
+        return f"언어 모델의 답변이 정의와 맞지 않아 {doing}하지 못했습니다. {fix}"
 
     def _policy_files(self) -> list[Path]:
         d = self.data.policies
@@ -956,7 +1033,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if comp is None:
             return {"ok": False, "error": "모듈로 구성된 스페이스가 아니어서 규칙 초안을 모듈로 만들지 못했습니다."}
         if target and target not in self.studio.onto.objects:
-            raise ValueError(f"대상 Entity {target} 이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요.")
+            raise ValueError(words.fix(f"대상 Entity {target}이(가) 정의에 없어 규칙 초안을 만들지 못했습니다. 대상을 다시 선택해 주세요."))
         import yaml
 
         from ontlas.policy import CALL_SECONDS, CALL_TOKENS, PolicyDrafter
@@ -967,8 +1044,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             text, target=target, name=str(name or ""))
         late = len(tries) < len(d.attempts)
         if d.module is None:
-            return {"ok": False, "error": "정책서를 결정표로 바꾸지 못했습니다. "
-                                          + self._failed(d.attempts, tries, "정책서 내용을 줄이거나 대상을 바꿔 다시 시도해 주세요.")}
+            return {"ok": False, "error": self._failed(d.attempts, tries, "정책서를 결정표로 변환",
+                                                       "정책서 내용을 줄이거나 대상을 바꿔 다시 시도해 주세요.")}
         (dname, table), = d.module.body["decisions"].items()
         return plain({
             "ok": True, "module": d.module.name, "label": d.module.label, "decision": dname, "target": table["target"],
@@ -1110,8 +1187,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if p.status == "executed":  # inside its limits it ran at once
             self._reproject()
         state = {"pending": "접수했습니다", "executed": "자동 승인했습니다"}.get(p.status, "반려했습니다")
-        self._note("request", f"{actor.id}의 {self._obj_label(p.target)} {key} {self._proposal(p)['label']} 요청을 {state}.",
-                   proposal=p.id)
+        self._note("request", f"{actor.id}의 {self._obj_label(p.target)} {key} {self._proposal(p)['label']} 요청을 {state}.")
         return {"ok": True, "proposal": self._proposal(p)}
 
     def _approver(self) -> Actor:
@@ -1127,7 +1203,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except (ActionError, PermissionError) as e:
             return {"ok": False, "error": f"되돌릴 수 없는 상태라 되돌리지 못했습니다. {e}"}
         proj = self._reproject()
-        self._note("approve", f"{self._proposal(p)['label']} 요청을 실행 전 값으로 되돌렸습니다.", projection=proj, proposal=p.id)
+        self._note("approve", f"{self._proposal(p)['label']} 요청을 실행 전 값으로 되돌렸습니다.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def pending_actions(self) -> dict:
@@ -1163,7 +1239,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
         said = {"executed": "요청을 승인했습니다", "failed": "요청의 외부 호출이 실패해 실행 전 값으로 복원했습니다"}.get(p.status, "요청을 반려했습니다")
-        self._note("approve", f"{self._proposal(p)['label']} {said}.", projection=proj, proposal=p.id)
+        self._note("approve", f"{self._proposal(p)['label']} {said}.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
     def function_run(self, name: str, key: str, params: dict) -> dict:
@@ -1173,7 +1249,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if f is not None and f.target and not self.studio.backends:  # it runs on a row, and there are none to read
             return {"ok": False, "no_source": True, "error": NO_SOURCE}
         if f is not None and f.target and key and self.studio.fetch(f.target, key) is None:
-            return {"ok": False, "error": f"{self._obj_label(f.target)} {key}을(를) 찾을 수 없어 실행하지 못했습니다. 번호를 확인해 주세요."}
+            return {"ok": False, "error": words.fix(f"{self._obj_label(f.target)} {key}을(를) 찾지 못해 실행하지 못했습니다. 번호를 확인해 주세요.")}
         try:
             return {"ok": True, **plain(self.studio.function(name, key or None, params, by=self.who, trial=True))}
         except NoSource:
@@ -1191,7 +1267,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             return {"ok": True, "configured": False, "items": []}
         if not self.studio.backends:
             return {"ok": False, "configured": True, "no_source": True, "items": [],
-                    "error": "원천 데이터가 연결되어 있지 않아 거래 값을 대조하지 못했습니다. 원천을 연결한 뒤 다시 대조해 주세요."}
+                    "error": "연결된 데이터 소스가 없어 거래 값을 대조하지 못했습니다. 데이터 소스를 연결한 뒤 다시 대조해 주세요."}
         try:
             out = self.studio.value_accuracy(specs)
         except Exception as e:  # a query that no longer runs or a service that does not answer: what the page should say
@@ -1398,7 +1474,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._adopt(target["studio"])
         self.origin, self._library_rows, self.log = target["origin"], target["rows"], target["log"]
         self.pipeline, self.pending, self.draft_request, self.workspace, self._ws_sig = pid, None, None, None, ()
-        self.event("pipeline", f"{target['label']}(으)로 전환")
+        self.event("pipeline", words.fix(f"{target['label']}(으)로 전환"))
         return {"ok": True}
 
     # ---- libraries: other studio files the deployment offers, each with its own pipelines ---------------------------
@@ -1438,7 +1514,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.pipeline, self.library_id = pid, lid
         self.pending, self.draft_request, self.workspace, self._ws_sig = None, None, None, ()
         self._measured, self._measured_of, self._watch = {}, None, None
-        self.event("library", f"{target['label']}(으)로 전환")
+        self.event("library", words.fix(f"{target['label']}(으)로 전환"))
         return {"ok": True}
 
     # ---- a library made on the page: from definition files, on the one that is open, or with nothing in it ---------
@@ -1495,7 +1571,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if not label:
             raise ValueError("이름이 없어 만들지 못했습니다. 이름을 입력해 주세요.")
         if any(x["label"] == label for x in self.libraries):
-            raise ValueError(f"같은 이름의 온톨로지({label})가 있어 만들지 못했습니다. 다른 이름을 입력해 주세요.")
+            raise ValueError(words.fix(f"같은 이름의 온톨로지 {label}이(가) 있어 만들지 못했습니다. 다른 이름을 입력해 주세요."))
         made = [x for x in self.libraries if x.get("made")]
         if len(made) >= LIBRARIES_MADE_MAX:
             raise ValueError(f"만든 온톨로지가 {LIBRARIES_MADE_MAX}개 한도에 도달해 만들지 못했습니다. "
@@ -1558,7 +1634,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except ModuleError:
             raise ValueError(f"{at}의 정의가 서로 맞지 않아 온톨로지를 만들지 못했습니다. 파일 내용을 확인해 주세요.") from None
         except Exception:  # a row that is not shaped as the draft's others
-            raise ValueError(f"{at}을(를) 정의로 읽을 수 없어 온톨로지를 만들지 못했습니다. 파일 내용을 확인해 주세요.") from None
+            raise ValueError(words.fix(f"{at}을(를) 정의로 읽지 못해 온톨로지를 만들지 못했습니다. 파일 내용을 확인해 주세요.")) from None
         if not any(m.elements() or m.body.get("rule_cards") or m.terms for m in mods):
             raise ValueError("파일에서 읽은 정의가 없어 만들지 못했습니다. 구역 이름(objects · entities · rules · parameters · terms)을 "
                              "확인해 주세요.")
@@ -1638,7 +1714,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                                "stamp": datetime.now().isoformat(timespec="seconds")}
             met = tally([g for s in flow["steps"] for g in s["gates"]])
             self.event("measure", f"파이프라인 점검 완료 · 통과 조건 {met['met']} / {met['all']} 충족"
-                       + (f" · 측정 대상 아님 {met['unmeasured']}" if met.get("unmeasured") else ""))
+                       + (f" · 미측정 {met['unmeasured']}" if met.get("unmeasured") else ""))
         return w, fresh
 
     def _issues(self, w: dict, *, changes: int, actions: int, dirty: bool) -> list[dict]:
@@ -1956,7 +2032,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def catalog_import(self, path: str, folder: str = "") -> dict:
         """A folder or a file on the server, its structure kept, for installs that allow the server's disk."""
         if not self.data.allow_connect:
-            raise PermissionError("공개 데모에서는 서버 경로 가져오기가 비활성화되어 있어 처리하지 못했습니다. 파일 업로드를 이용해 주세요.")
+            raise PermissionError("서버 설정에서 서버 경로 가져오기가 꺼져 있어 처리하지 못했습니다. 파일 업로드를 이용해 주세요.")
         typed = str(path).strip().strip('"')
         if not typed:
             raise ValueError("경로가 없어 가져오지 못했습니다. 서버에 있는 파일 또는 폴더 경로를 입력해 주세요.")
@@ -1998,7 +2074,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._hold()
         all_tables = [t for ts in self.uploads.values() for t in ts]
         defs = self._defs()
-        wanted = {str(x) for x in tables} if tables else None
+        wanted = {str(x) for x in tables} if tables is not None else None  # an empty choice chose nothing, not everything
         if not all_tables and defs is not None and defs.tables:  # the schema alone: an empty database, keys and refs
             from ontlas.definitions import schema_backend
 
@@ -2009,7 +2085,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             b = schema_backend(defs, names)
             d = draft(b, name="my-schema", label=(label or "정의서 초안")[:40], lang="ko", rules=r, definitions=defs,
                       origin={"kind": "definitions", "files": list(self.definitions),
-                              "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개(행 없음)"})
+                              "detail": f"정의서 {len(self.definitions)}개 · 테이블 {len(names)}개 · 행 없음"})
             self.pending, self.draft_request = (d, b, [], r), None
             return self.files_state()
         if not all_tables and defs is not None:
@@ -2029,7 +2105,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
     def connect(self, dsn: str, label: str = "", rules: dict | None = None) -> dict:
         if not self.data.allow_connect:
-            raise PermissionError("공개 데모에서는 DB 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
+            raise PermissionError("서버 설정에서 DB 연결이 꺼져 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
 
         from ontlas.config import open_backend
         from ontlas.draft import draft
@@ -2057,7 +2133,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         else:
             path = dsn[len("sqlite:///"):] if dsn.startswith("sqlite:///") else dsn
             if not Path(path).is_file():
-                raise ValueError("연결 주소를 확인할 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql:// "
+                if dsn.startswith("sqlite:") or re.search(r"[\\/]|\.(db|sqlite3?)$", path, re.I):  # a file, named where it is not
+                    raise ValueError(words.fix(f"SQLite 파일 {Path(path).name}이(가) 없어 연결하지 못했습니다. 파일 경로를 확인해 주세요."))
+                raise ValueError("연결 주소의 형식을 알 수 없어 연결하지 못했습니다. postgresql://, mysql://, oracle://, mssql:// "
                                  "주소 또는 SQLite 파일 경로를 입력해 주세요.")
             b = open_backend({"kind": "sqlite", "path": str(Path(path).resolve())}, Path("."))
             where = f"SQLite {Path(path).name}"
@@ -2069,7 +2147,13 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
     def _draft_view(self) -> dict:
         d = self.pending[0]
-        return {"label": d.label, "origin": d.origin, "steps": d.steps(), "names": self._english(d), **self._revised(d)}
+        return {"label": d.label, "origin": d.origin, "steps": d.steps(), "names": self._english(d), "review": d.review,
+                **self._revised(d)}
+
+    def _keep_review(self, **marked) -> None:
+        """What the page last sent of a person's review, kept with the draft, so a reload opens on it."""
+        d = self.pending[0]
+        d.review = {**d.review, **plain(marked)}
 
     def name_for(self, label: str, kind: str = "object") -> dict:
         """The English name for an element a person names by its display name, as drafts name their tables: from the
@@ -2326,6 +2410,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 미리 보지 못했습니다. 초안을 먼저 생성해 주세요.")
+        self._keep_review(choices=choices or {}, standard=list(standard or []))
         if not any(c == "standard" for c in (choices or {}).values()):
             return self.preview_draft(edits)
         try:
@@ -2458,6 +2543,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def preview_draft(self, edits: dict | None = None) -> dict:
         if not self.pending:
             raise ValueError("생성된 초안이 없어 미리 보지 못했습니다. 초안을 먼저 생성해 주세요.")
+        self._keep_review(edits=edits or {})
         try:
             r = self._edit(self.pending[0], edits)
         except ValueError as e:
@@ -2492,9 +2578,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                     load_sqlite(tables, b, row_keys=rules.row_keys, types=asked)
                 except ReadError as e:
                     i = e.info
-                    raise ValueError(f"{i.get('table')}.{i.get('column')} 값 {i.get('value')!r} 을(를) "
-                                     f"{i.get('type')} 타입으로 변환하지 못해 적용하지 못했습니다. 타입을 다시 선택해 "
-                                     "주세요.") from None
+                    raise ValueError(words.fix(f"{i.get('table')}.{i.get('column')} 값 {i.get('value')!r}을(를) {i.get('type')} "
+                                               "타입으로 변환하지 못해 적용하지 못했습니다. 타입을 다시 선택해 주세요.")) from None
         self._stash()
         try:
             self._adopt(studio_from(d, b, library=self.studio.library, use_zen=self.studio.use_zen))
@@ -2646,7 +2731,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             bumped, m.version = m.version, _next_version(lib.versions(m.name))
         cr = self.studio.changes.propose(m, by=self.who, attach=attach)
         self._file_notes(((cr.review or {}).get("elements") or {}).keys(), cr.id)
-        self._note("change", f"{m.label or m.name} {m.version} 변경 요청을 등록했습니다.", change=cr.id)  # passing and the version are in the request
+        self._note("change", f"{m.label or m.name} {m.version} 변경 요청을 등록했습니다.")  # passing and the version are in the request
         return {"ok": True, "change": self._change(cr), "bumped": bumped}
 
     def changes_state(self) -> dict:
@@ -2672,8 +2757,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             cr = ch.requests.get(change_id)
             failed = [g["label"] for g in (self._change(cr)["gates"] if cr else []) if not g["passed"]]
             why = ", ".join(failed) if failed else str(e)
-            return {"ok": False, "error": f"흐름 통과 조건({why})을 충족하지 못해 승인하지 못했습니다. "
-                                          "정의를 수정해 다시 요청해 주세요.",
+            return {"ok": False, "error": words.fix(f"통과 조건 {why}을(를) 충족하지 못해 승인하지 못했습니다. "
+                                                    "정의를 수정해 다시 요청해 주세요."),
                     "change": self._change(cr) if cr else None}
         proj = {}
         if cr.status == "approved":
@@ -2682,7 +2767,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             if cr.module == WORKSPACE:
                 self.workspace = None  # the edits are in the studio now; the next ones start from there
         verb = "승인했습니다" if cr.status == "approved" else "반려했습니다"
-        self._note("change", f"{self._label(cr.module)} {cr.version} 변경 요청을 {verb}.", projection=proj, change=cr.id)
+        self._note("change", f"{self._label(cr.module)} {cr.version} 변경 요청을 {verb}.", projection=proj)
         return {"ok": True, "change": self._change(cr), "projection": proj}
 
     # ---- management: objects, properties, relations, questions as one pending overlay module --------------------
@@ -2708,7 +2793,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         from ontlas.draft import _catalog
         from ontlas.functions import describe as describe_function
         from ontlas.manage import _lineage, row_rule
-        from ontlas.review import element_diff
+        from ontlas.review import _cards, element_diff
 
         ws = self._ws()
         issues: list[str] = []
@@ -2727,7 +2812,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                 pending_check = [asdict(f) for f in check_bindings(o, self.studio.backends[self.studio.source], data=False).findings]
             except Exception:  # the source could not be read: the page goes by the last measurement
                 pending_check = []
-        diff = element_diff(base, o) if ws.dirty else {"added": [], "removed": [], "changed": []}
+        diff = (element_diff(base, o, (_cards(self.studio.composition), _cards(comp))) if ws.dirty
+                else {"added": [], "removed": [], "changed": []})
         touched = set(diff["changed"])  # what the unsent edits change; what they add is marked new
 
         def owner(element: str) -> dict:
@@ -2844,7 +2930,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         parameters = [{"name": p.name, "label": p.label or p.name, "value": p.value, "type": p.type, "unit": p.unit, "min": p.min, "max": p.max,
                        "description": p.description, "cite": p.cite, "pending": f"parameter:{p.name}" in touched, "readers": readers(p.name),
-                       **owner(f"parameter:{p.name}")}
+                       "new": p.name not in base.parameters, **owner(f"parameter:{p.name}")}
                       for p in o.parameters.values()]
         actions = [{"name": a.name, "label": a.label or a.name, "target": a.target, "target_label": mine_label(o, a.target),
                     "parameters": [{"name": k, "label": (v.get("label") if isinstance(v, dict) else "") or k, "type": (v.get("type") if isinstance(v, dict) else v) or "string"}
@@ -2994,7 +3080,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         src = self.studio.backends.get(self.studio.source) if self.studio.source else None
         if src is None:
             return {"ok": False, "no_source": True,
-                    "error": "원천 DB가 연결되어 있지 않아 데이터를 읽지 못했습니다. 원천을 연결한 뒤 다시 열어 주세요."}
+                    "error": "연결된 데이터 소스가 없어 데이터를 읽지 못했습니다. 데이터 소스를 연결한 뒤 다시 열어 주세요."}
         if t is None or not t.table:
             return {"ok": False, "error": "개념 Entity라 연결된 데이터가 없습니다."}
         have = src.columns(t.table) or {}
@@ -3058,7 +3144,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         try:
             doc = yaml.safe_load(text or "")
         except yaml.YAMLError as e:
-            raise ValueError(f"YAML을 읽지 못했습니다. {e}") from None
+            raise ValueError(_format_failed("YAML", e, "저장")) from None
         if kind != "object" or not isinstance(doc, dict) or list(doc) != [name] or not isinstance(doc[name], dict):
             raise ValueError(f"'{name}:' 하나로 시작하는 Entity 정의여야 합니다.")
         new = doc[name]
@@ -3124,7 +3210,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         text = " ".join(str(text or "").split())[:500]
         if not element or not text:
             raise ValueError("댓글이 없어 남기지 못했습니다. 내용을 입력해 주세요.")
-        note = {"at": self.studio.now().isoformat(timespec="minutes"), "by": self.who or "page", "text": text}
+        note = {"at": datetime.now().isoformat(timespec="minutes"), "by": self.who or "page", "text": text}
         self._notes().setdefault(element, []).append(note)
         journal = self.studio.changes.journal
         if journal is not None:
@@ -3205,7 +3291,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             return {"ok": True, "pending": True, "change": change, **self.manage_state()}
         out = self.decide_change(change["id"], True)
         if not out["ok"]:  # the trial did not pass: the edits stay to be fixed, the request goes back with its review
-            cr = self.studio.changes.reject(change["id"], by=self.who, reason="흐름 통과 조건 미충족 · 관리 화면에서 수정")
+            cr = self.studio.changes.reject(change["id"], by=self.who, reason="통과 조건 미충족")
             return {"ok": False, "error": out["error"], "change": self._change(cr), **self.manage_state()}
         self.workspace = None  # approved: what comes next starts from the studio as it now stands
         return {"ok": True, "pending": False, "change": out["change"],
@@ -3248,7 +3334,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         try:
             fs = FlowSettings.from_dict(settings)
         except ValueError:
-            raise ValueError("흐름 설정 값이 올바르지 않아 저장하지 못했습니다. 비율은 0에서 100 사이의 숫자로 입력해 주세요.") from None
+            raise ValueError("통과 조건 값이 올바르지 않아 저장하지 못했습니다. 비율은 0에서 100 사이의 숫자로 입력해 주세요.") from None
         self.studio.settings["flow"] = fs.to_dict()
         saved = plain(fs.to_dict())
         self._flow_seen[self.who] = copy.deepcopy(saved)
@@ -3267,11 +3353,11 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         st = self.studio
         if not st.flow.agreement:
-            return {"ok": False, "error": "판정 일치율 설정이 없어 측정하지 못했습니다. 흐름 설정에서 비교할 결정표와 "
+            return {"ok": False, "error": "판정 일치율 설정이 없어 측정하지 못했습니다. 통과 조건에서 비교할 결정표와 "
                                           "처리 기록 질의를 지정해 주세요."}
         if not st.backends:
-            return {"ok": False, "no_source": True, "error": "원천 데이터가 연결되어 있지 않아 처리 기록을 다시 판정하지 못했습니다. "
-                                                            "원천을 연결한 뒤 다시 측정해 주세요."}
+            return {"ok": False, "no_source": True, "error": "연결된 데이터 소스가 없어 처리 기록을 다시 판정하지 못했습니다. "
+                                                            "데이터 소스를 연결한 뒤 다시 측정해 주세요."}
         edited = pending and self.workspace is not None and self.workspace.dirty and st.composition is not None
         try:
             if edited:
@@ -3309,7 +3395,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def resolve_identity(self, name: str) -> dict:
         src = self.studio.backends.get(self.studio.source)
         if src is None or not getattr(src, "capabilities", None) or not src.capabilities.write:
-            return {"ok": False, "error": "원천 DB에 쓸 수 없어 교차표를 만들지 못했습니다. 쓰기 가능한 원천을 연결해 주세요.",
+            return {"ok": False, "error": "데이터 소스에 쓸 수 없어 교차표를 만들지 못했습니다. 쓰기 가능한 데이터 소스를 연결해 주세요.",
                     **({} if self.studio.backends else {"no_source": True})}
         if self.origin.get("kind") == "connect":
             return {"ok": False, "error": "연결한 DB에는 교차표를 쓰지 않습니다. 사내 설치에서 ontlas 명령으로 실행해 주세요."}
@@ -3323,8 +3409,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             raise NoSource()
         res = self.studio.sync()
         if res.get("error"):
-            return {"ok": False, "error": f"원천을 다시 읽지 못했습니다. {res['error']}"}
-        self._note("sync", "원천 변경분을 반영했습니다." if res["changed"] else "원천에 바뀐 내용이 없습니다.")
+            return {"ok": False, "error": "데이터 소스를 다시 읽지 못했습니다. 데이터 소스 연결을 확인해 주세요."}
+        self._note("sync", "데이터 소스 변경분을 반영했습니다." if res["changed"] else "데이터 소스 변경분이 없습니다.")
         return plain({"ok": True, **res})
 
     # ---- the whole flow, from the source to the checks, with what each stage holds now ----------------------
@@ -3428,14 +3514,14 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                                    "error": said(r.error) if r.error else "", "gaps": [_gap_text(g) for g in r.gaps],
                                    "note": UNMEASURED.get(r.unmeasured, "")} for r in rep.results],
                       "conformance": conf,
-                      **self.no_source("원천 데이터가 연결되어 있지 않아 레코드를 읽는 검증 질문은 측정하지 않았습니다. "
-                                       "측정하려면 원천을 연결해 주세요.")})
+                      **self.no_source("연결된 데이터 소스가 없어 레코드를 읽는 검증 질문은 측정하지 않았습니다. "
+                                       "측정하려면 데이터 소스를 연결해 주세요.")})
 
     def bindings(self) -> dict:
         source = self.studio.source
         if not source:
             return {"ok": False, "no_source": True,
-                    "error": "원천 DB가 연결되어 있지 않아 대조하지 못했습니다. 원천을 연결한 뒤 다시 대조해 주세요."}
+                    "error": "연결된 데이터 소스가 없어 대조하지 못했습니다. 데이터 소스를 연결한 뒤 다시 대조해 주세요."}
         rep = self.studio.check_bindings()
         return plain({"ok": rep.ok, "checked": rep.checked, "backend": source,
                       "findings": [f.__dict__ for f in rep.findings]})
@@ -3493,7 +3579,7 @@ def _word(v: Any) -> str:
 def _projection_warning(proj: dict) -> str:
     if "error" not in proj:
         return ""
-    return "원천 DB가 정의와 일치하지 않아 그래프 저장소에 반영하지 못했습니다. DB 대조에서 확인해 주세요."
+    return "데이터 소스가 정의와 맞지 않아 그래프 저장소에 반영하지 못했습니다. Entity Binding에서 확인해 주세요."
 
 
 _ZEN: bool | None = None

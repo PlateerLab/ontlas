@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.25.1
+
+- **Every control of every screen was pressed, and what did not work is fixed.** Each part was pressed control by
+  control at 1440 and 390 wide, on the example library and a larger one, alone and in a team with each role; an
+  independent pass pressed everything again, and what it still found was fixed in two more rounds. Among them: a new
+  ontology made from an empty one had no modules, exporting an ontology switched to it, two admins saving the quality
+  targets overwrote each other, a reset left the old values on the screen to be saved back, a CSV ignored the filter,
+  a mask listed twice was dropped without a word, a value of the wrong type reached the server, a test of an access
+  policy ran the deployed one instead of the one being written, the counts of differences in Data Binding disagreed from
+  screen to screen, a generated SQL went stale after a mapping changed, a term typed in Korean broke while it was
+  composed, and a request could be filed with nothing in it.
+- **The graphs answer the hand.** 그래프 탐색 runs on the product's graph engine: the wheel and the buttons zoom, a node
+  is picked and named in the bar with its actions, a Relation row picks the Relation, the search finds a node, the
+  chips hide and show, and a node is dragged. On every graph a press that moves a few pixels still picks, a double
+  press keeps the pick and opens the neighbours, a node moved by hand stays put when the graph is drawn again, and the
+  background clears the pick. The document graph zooms around the pointer and with two fingers.
+- **What the screens and the server say is said in the product's words.** Notices are one sentence, errors give the
+  cause and what to do, labels are nouns, no English, internal key or parser text reaches the screen, and a Korean
+  particle follows the word before it (`ontlas.words`) instead of 을(를).
+- **Times are the times things were done.** Requests, decisions, comments, the audit trail, function calls and syncs
+  are stamped by the machine's clock; the studio's clock, which an example studio fixes, stays the date the rules read.
+- **Permissions hold on the server.** Attaching and detaching a module needs an approver; a viewer is offered only the
+  ontology in use; a team's shared session cannot be reset from one person's account; REST answers 403 for an entity
+  outside the caller's policy and 404 for a record that is not there.
+- **The frame holds at 390 wide.** The top bar is one line, the menu drawer closes when a screen or the ontology is
+  picked, and lists close on Escape.
+
 ## 0.25.0
 
 - **The page is rebuilt on the second screen plan.** Every screen has a new frame and a new look: a menu of 홈, AI 초안

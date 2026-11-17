@@ -39,7 +39,7 @@ def test_a_row_says_what_a_part_went_through(session):
     assert doc["kind"] == "file" and doc["path"] == "정책/포장안내.md" and doc["bytes"] == len(DOC)
     assert any(s["text"].startswith("문서 색인 · 청크") for s in doc["status"])
     table = session.explorer_items("table:orders")
-    assert [t["label"] for t in table["trail"]] == ["데이터베이스", "원천 DB"] and table["label"] == "orders"
+    assert [t["label"] for t in table["trail"]] == ["데이터베이스", "데이터 소스"] and table["label"] == "orders"
     assert all(r["kind"] == "column" for r in table["items"]) and any(s["text"].startswith("속성") for r in table["items"] for s in r["status"])
     obj = session.explorer_items("object:Order")
     assert obj["items"] and all(r["kind"] == "property" for r in obj["items"])

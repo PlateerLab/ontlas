@@ -72,7 +72,7 @@ def test_a_query_a_module_defines_is_changed_by_extending_it_and_taken_out_with_
     session.manage_edit("update_query", {"name": "ordersOfCustomer", "label": "다른 이름"})
     assert listed(session, "ordersOfCustomer")["label"] == "다른 이름"
     assert session.manage_undo()["ok"]
-    with pytest.raises(ValueError, match="찾을 수 없어"):
+    with pytest.raises(ValueError, match="찾지 못해"):
         session.manage_edit("update_query", {"name": "nope", "label": "x"})
     out = session.manage_edit("delete_query", {"name": "ordersOfCustomer"})
     assert "question:Q1" in out["edit"]["took_out"]  # the question that asked it goes with it, and the edit says so

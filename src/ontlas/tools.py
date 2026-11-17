@@ -37,6 +37,11 @@ class StudioTools:
         path = space.path_of(name) if space is not None else ""
         return (r is None or r.can_read_document(name, path)) and (not folder or space is None or space.in_folder(name, folder))
 
+    def _readable(self, name: str) -> None:
+        """An object the definition has and this role does not read is refused as such (403), not as unknown."""
+        if self.role and name in self.studio.onto.objects:
+            raise PermissionError(f"role {self.role} may not read '{name}'")
+
     def describe(self) -> dict:
         d = self.studio.describe()
         if self.role:
@@ -88,6 +93,7 @@ class StudioTools:
         """One object and what touches it, for an agent that should not read a whole ontology to answer about one thing."""
         d = self.describe()
         if name not in d["objects"]:
+            self._readable(name)
             raise KeyError(f"unknown object '{name}'")
         onto = self.studio.onto
         t = onto.objects[name]
@@ -247,6 +253,7 @@ class StudioTools:
         from ontlas.values import accepts
 
         if type_name not in self.describe()["objects"]:
+            self._readable(type_name)
             raise KeyError(f"unknown object '{type_name}'")
         if not isinstance(values, dict):
             raise ValueError("values is an object of property names to values")

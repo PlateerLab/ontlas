@@ -295,8 +295,8 @@
     },
     uses: async (x) => {
       const out = [], by = {};
-      (x.used_by || []).forEach((u) => { const k = u.split(' ')[0] === '검증' ? '검증 질문' : u.split(' ')[0]; (by[k] = by[k] || []).push(u.replace(/^(검증 질문|\S+) /, '')); });
-      const to = { '검증 질문': 'check', 질의: 'query', 결정: 'semrules', Action: 'actions', 함수: 'semrules', 역할: 'roles' };
+      (x.used_by || []).forEach((u) => { const k = ['검증 질문', '접근 정책', '계산 Property'].find((w) => u.startsWith(`${w} `)) || u.split(' ')[0]; (by[k] = by[k] || []).push(u.slice(k.length + 1)); });
+      const to = { '검증 질문': 'check', 질의: 'query', 규칙: 'semrules', Action: 'actions', 함수: 'semrules', '접근 정책': 'roles' };
       Object.entries(by).forEach(([k, names]) => out.push({ say: `${k} ${names.length}개`, sub: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}` : ''}`, href: to[k] && known(to[k]) ? to[k] : '' }));
       const others = S.lx.st.rows.filter((r) => r.id !== x.id && [...r.confusable.map((c) => c.term), ...r.related, ...r.broader, ...r.narrower].some((w) => o2Norm(w) === o2Norm(x.term)));
       if (others.length) out.push({ say: `표현 관계 ${others.length}건`, sub: others.slice(0, 3).map((r) => r.term).join(', '), href: 'lexicon' });

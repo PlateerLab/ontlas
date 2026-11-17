@@ -188,7 +188,7 @@
     if (x.kind === 'term') return `<button class="k-row" data-act="sqTerm" data-id="${esc(name)}">${body}</button>`;
     if (x.kind === 'query') return `<a class="k-row" href="#query?query=${encodeURIComponent(name)}">${body}</a>`;
     if (x.kind === 'action') return `<a class="k-row" href="#actions?action=${encodeURIComponent(name)}">${body}</a>`;
-    if (x.kind === 'document') return `<button class="k-row" data-act="sqDoc" data-doc="${esc(x.document || '')}">${body}</button>`;
+    if (x.kind === 'document') return `<button class="k-row" data-act="sqDoc" data-doc="${esc(x.document || '')}" data-sec="${esc(String(x.title || '').split(' › ').slice(1).join(' › '))}">${body}</button>`;
     return `<a class="k-row" href="#${x.go}">${body}</a>`;
   }
 
@@ -305,7 +305,7 @@
     sqMore: () => { S.h2.more = true; render(); },
     sqRefind: () => { S.h2.findFor = null; render(); },  // the screen asks again for what the answer touches
     // a passage opens its document on 근거 지도, as a document of the map does
-    sqDoc: (t) => { S.qa2.docWant = t.dataset.doc; location.hash = '#docs'; },
+    sqDoc: (t) => { S.qa2.docWant = t.dataset.doc; S.qa2.secWant = t.dataset.sec || ''; location.hash = '#docs'; },
     // 규칙 opens with the rule picked: what it read before is let go first, so the pick is not dropped as stale
     sqRule: (t) => { smrFresh(); Object.assign(S.smr, { sel: t.dataset.ref, layer: '', area: '' }); location.hash = '#semrules'; },
     // 용어 사전 opens with the term picked and its row in the list shown, as a link inside that screen opens one

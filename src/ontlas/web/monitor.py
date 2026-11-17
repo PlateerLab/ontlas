@@ -13,10 +13,10 @@ from typing import Any
 from ontlas.preview import MODULE_COLOR, TARGETS
 from ontlas.review import tally
 
-FLOORS = [("source", "①", "원천 데이터", "catalog"), ("convert", "②", "변환", "convert"),
+FLOORS = [("source", "①", "데이터 소스", "catalog"), ("convert", "②", "변환", "convert"),
           ("ontology", "③", "온톨로지 구축", "library"), ("store", "④", "저장소 어댑터", "adapters"), ("use", "⑤", "활용", "search"),
           ("verify", "⑥", "검증", "check")]
-STAGES = {"source": ("source", "원천 데이터", "sources"), "define": ("ontology", "온톨로지 정의", "library"),
+STAGES = {"source": ("source", "데이터 소스", "sources"), "define": ("ontology", "온톨로지 정의", "library"),
           "bind": ("ontology", "DB 대조", "bind"), "project": ("store", "그래프 저장소 반영", "onto"),
           "index": ("store", "문서 · 벡터 색인", "vectors"),
           "query": ("use", "질의", "query"), "decide": ("use", "판정 · 처리", "decide"), "check": ("verify", "검증", "check")}

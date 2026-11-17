@@ -173,6 +173,19 @@ def test_a_draft_that_cannot_finish_ends_the_wait_with_a_reason_in_plain_words()
 
     s.llm = cut
     r = _wait_for(s, s.policy_start(POLICY, target="OrderItem")["job"])
-    assert not r["ok"] and "답변을 끝내지 못했습니다" in r["error"] and "AnswerCutOff" not in r["error"]
+    assert not r["ok"] and "답변을 끝내지 못해 정책서를 결정표로 변환하지 못했습니다" in r["error"] and "AnswerCutOff" not in r["error"]
     r = _wait_for(s, s.policy_start("  ")["job"])
     assert not r["ok"] and "정책서 내용이 없어" in r["error"]
+
+
+def test_why_a_model_gave_no_answer_is_told_by_what_its_server_did():
+    from ontlas.nl import Attempt
+    from ontlas.web.api import StudioSession
+
+    def told(*issues):
+        return StudioSession._failed([Attempt("p", "", [i]) for i in issues], [1] * len(issues), "초안을 생성", "대상을 바꿔 주세요.")
+
+    assert told("the model did not answer: HTTPError 502").startswith("언어 모델 서버가 502 오류를 돌려줘")
+    assert told("the model did not answer: URLError").startswith("언어 모델 서버에 연결하지 못해")
+    assert told("the model did not answer: TimeoutError").startswith("언어 모델 서버가 제한 시간 안에 응답하지 않아")
+    assert told("the model did not answer: AnswerCutOff") == "언어 모델이 답변을 끝내지 못해 초안을 생성하지 못했습니다. 대상을 바꿔 주세요."

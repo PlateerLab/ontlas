@@ -286,7 +286,7 @@
       ${u ? `<label class="k-f">아이디<input class="k-in mono" type="text" value="${esc(u.id)}" readonly></label>` : ''}</div>
       </div></section>`;
     const guide = known('guide') ? `<a class="k-row" href="#guide"><span class="k-col"><span class="k-ink k-14">사용 안내</span><span class="k-s">화면 안내 · 소개 영상</span></span>${ki('chevR', 16, 1.75)}</a>` : '';
-    const reset = isSysAdmin() ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14">초기화</span><span class="k-s">${S.st.data.kept ? '변경 내용 삭제 · 예시 상태 복원 · 레포지토리 파일 유지' : '업로드 데이터 · 변경 내용 삭제 · 예시 상태 복원'}</span></span><span class="k-h end"><button class="k-btn dan" data-act="reset">초기화</button></span></div>` : '';
+    const reset = isSysAdmin() && !inTeam() ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14">초기화</span><span class="k-s">${S.st.data.kept ? '변경 내용 삭제 · 예시 상태 복원 · 저장소 파일 유지' : '업로드 데이터 · 변경 내용 삭제 · 예시 상태 복원'}</span></span><span class="k-h end"><button class="k-btn dan" data-act="reset">초기화</button></span></div>` : '';
     const help = guide || reset ? `<section class="k-card"><div class="k-ch"><h2>사용 안내 · 세션</h2></div>${guide}${reset}</section>` : '';
     const security = `<section class="k-card"><div class="k-ch"><h2>로그인 보안</h2></div>${kKv('계정', team ? '로컬 계정' : '로그인 없음 · 방문자 세션')}${team ? kKv('비밀번호', acct.can_change_password ? `<a class="k-lnk" href="#reset">변경${ki('chevR', 14, 1.75)}</a>` : '<span class="k-s">시스템 관리자 변경</span>') + (acct.hours ? kKv('로그인 유지', `${esc(acct.hours)}시간`) : '')
       : (acct.idle_minutes ? kKv('세션', `미사용 ${esc(acct.idle_minutes)}분 후 종료`) : '')}</section>`;

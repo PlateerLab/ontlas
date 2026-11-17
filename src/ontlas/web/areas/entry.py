@@ -222,13 +222,6 @@ def ontology_new(s, a, who) -> dict:
 def _decided(s) -> list[dict]:
     """What was settled: change requests approved or rejected, action requests that ran or were turned down."""
     out: list[dict] = []
-    # a person's decision is dated by the clock it was made on, as its note in 알림 is; the engine's own stamp (an example
-    # studio keeps a fixed clock) is the date only where the note is gone
-    noted: dict[tuple, str] = {}
-    for n in reversed(list(s.log)):
-        for k in ("change", "proposal"):
-            if n.get(k):
-                noted[(k, n[k])] = n["at"]
     for cr in s.studio.changes.requests.values():
         if cr.status == "pending":
             continue
@@ -236,10 +229,10 @@ def _decided(s) -> list[dict]:
         moved = f"{row['from']} → {row['to']}" if row["from"] else row["to"]  # a module's first version comes from none
         out.append({"kind": "change", "id": cr.id, "title": f"{row['module_label']} {moved}",
                     "status": cr.status, "status_label": row["status_label"], "by": cr.decided_by or "",
-                    "at": noted.get(("change", cr.id)) or row["decided_at"] or cr.at, "detail": row["summary"]})
+                    "at": row["decided_at"] or cr.at, "detail": row["summary"]})
     when: dict[str, str] = {}
     for e in s.studio.actions.audit:
-        when[e.proposal] = noted.get(("proposal", e.proposal)) or e.at
+        when[e.proposal] = e.at
     for p in s.studio.actions.proposals.values():
         if p.status == "pending":
             continue

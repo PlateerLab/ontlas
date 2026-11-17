@@ -11,7 +11,7 @@ import threading
 from typing import Any, Callable
 
 from ontlas.backends.base import NoSource
-from ontlas.decide.table import MissingValues
+from ontlas.decide.table import MissingValues, RecordNotFound
 from ontlas.tools import StudioTools
 
 Handler = Callable[[StudioTools, dict], Any]
@@ -233,6 +233,8 @@ class Rest:
                 return 403, {"error": str(e)}
             except NoSource as e:  # the space holds its definition only: a caller tells this from a bad request
                 return 409, {"error": str(e), "no_source": True}
+            except RecordNotFound as e:  # the key names no record: the caller's to check, not a bad request
+                return 404, {"error": str(e)}
             except MissingValues as e:  # asked on values, some were not given: what to give, not a guess on null
                 return 422, {"error": str(e), "needs_values": True, "decision": e.decision, "missing": e.missing,
                              "invalid": e.invalid}

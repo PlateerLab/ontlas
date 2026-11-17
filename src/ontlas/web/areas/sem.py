@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from ontlas.web.routes import get, post
+from ontlas.words import fix as with_particles
 
 WAITING = ("draft", "review")
 CARD_WORD = {"id": "규칙 ID", "type": "유형", "statement": "규칙 이름", "applies_to": "적용 대상", "conditions": "조건",
@@ -390,8 +391,7 @@ def _propose(s, body: dict) -> dict:
             raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
         m.version = _next_version(lib.versions(m.name))
     cr = s.studio.changes.propose(m, by=s.who)
-    state = "흐름 통과 조건을 모두 충족합니다" if cr.review.get("passed") else "흐름 통과 조건을 충족하지 못했습니다"
-    s._note("change", f"{m.label or m.name} {m.version} 변경을 요청했습니다. {state}.")
+    s._note("change", f"{m.label or m.name} {m.version} 변경 요청을 등록했습니다.")  # passing is in the request
     return s._change(cr)
 
 
@@ -405,9 +405,9 @@ def axiom_card(s, a, who) -> dict:
     comp = s.studio.composition
     card = next((c for c in (comp.cards if comp else []) if c["id"] == cid), None)
     if card is None:
-        raise ValueError(f"규칙 카드 '{cid}'을(를) 찾을 수 없어 처리하지 못했습니다.")
+        raise ValueError(with_particles(f"규칙 카드 '{cid}'을(를) 찾지 못해 처리하지 못했습니다. 화면을 새로고침해 주세요."))
     if card["layer"] != "axiom":
-        raise ValueError(f"규칙 카드 '{cid}'은(는) AXIOM 규칙이 아니어서 이 경로로 바꾸지 못했습니다. 규칙 화면에서 편집해 주세요.")
+        raise ValueError(with_particles(f"규칙 카드 '{cid}'은(는) AXIOM 규칙이 아니어서 이 경로로 바꾸지 못했습니다. 규칙 화면에서 편집해 주세요."))
     module = yaml.safe_load(s.module_source(card["module"])["yaml"]) or {}
     cards = module.get("rule_cards") or []
     own = next((c for c in cards if isinstance(c, dict) and c.get("id") == cid), None)

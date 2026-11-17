@@ -19,6 +19,7 @@ from typing import Any
 from ontlas.compile.sql import qi
 from ontlas.model import CARDINALITIES, TYPES
 from ontlas.modules import SECTIONS, Module, Requirement
+from ontlas.words import fix as with_particles
 
 ENUM_MAX = 20  # past this many distinct values an allowed-value list stops being a useful check
 TEXT_MAX = 40  # values longer than this are free text, not a category
@@ -749,6 +750,7 @@ class Draft:
     terms: list[dict] = field(default_factory=list)  # from a glossary: a dictionary module goes with the draft
     messages: list[dict] = field(default_factory=list)
     api_actions: dict[str, dict] = field(default_factory=dict)  # an API's writing operations, each behind a person
+    review: dict[str, Any] = field(default_factory=dict)  # what a person marked so far (edits, choices, standard): a reload keeps it
 
     def revise(self, *, drop: list[str] = (), labels: dict[str, str] | None = None, keys: dict[str, str] | None = None,
                types: dict[str, str] | None = None, values: dict[str, list[str]] | None = None,
@@ -875,7 +877,7 @@ class Draft:
             o = by_name[s.object]
             for target in dict.fromkeys(t for _, t, _ in s.transitions):
                 name = f"set{o.name}{_pascal(target, 'State')}"
-                out[name] = {"label": words["action"].format(o=o.label, s=target), "target": o.name,
+                out[name] = {"label": with_particles(words["action"].format(o=o.label, s=target)), "target": o.name,
                              "transition_to": target, "approval": True}
         return {**out, **self.api_actions}
 

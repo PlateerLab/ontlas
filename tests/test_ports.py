@@ -92,7 +92,7 @@ def test_the_gateway_never_writes_and_says_what_went_wrong(service):
         g.fetch("DELETE FROM t")
     with pytest.raises(GatewayError, match="토큰"):
         GatewayBackend(service, connection=7, token="bad").fetch("SELECT 1")
-    with pytest.raises(GatewayError, match="공유되지"):
+    with pytest.raises(GatewayError, match="공유 여부"):
         GatewayBackend(service, connection=8, token="good").fetch("SELECT 1")
     with pytest.raises(GatewayError, match="응답하지"):
         GatewayBackend("http://127.0.0.1:9/q", connection=1, timeout=1).fetch("SELECT 1")
@@ -281,7 +281,7 @@ def test_the_page_shows_ports_map_and_document_ontology(session):
     assert all(e["source"] in ids and e["target"] in ids for e in m["edges"])
     words = {n["id"]: n["label"] for n in m["nodes"]}  # stores read as what they are, not as the keys in studio.yaml
     assert words["reasoner:rules"] == "추론기 · 규칙" and words["vector:memory"] == "벡터 저장소 · 메모리"
-    assert words["graph:graph"].startswith("그래프 저장소") and next(n["label"] for n in m["nodes"] if n["table"] == "database") == "원천 DB"
+    assert words["graph:graph"].startswith("그래프 저장소") and next(n["label"] for n in m["nodes"] if n["table"] == "database") == "데이터 소스"
     assert session.space_map_node("reasoner:rules")["label"] == "추론기 · 규칙"
     node = session.space_map_node("document:배송안내")
     assert any(x["kind"] == "vector_store" for x in node["impact"])
@@ -299,7 +299,7 @@ def test_a_store_needs_an_install_that_allows_connections(session):
     with pytest.raises(PermissionError):
         session.space_store("add", kind="qdrant", url="http://127.0.0.1:9")
     session.data.allow_connect = True
-    with pytest.raises(ValueError, match="연결하지 못했습니다|쓰지 못했습니다"):
+    with pytest.raises(ValueError, match="연결하지 못했습니다|추가하지 못했습니다"):
         session.space_store("add", kind="qdrant", url="http://127.0.0.1:9")
     assert list(session.space.stores) == ["memory"]
     assert len(session.space_store("add", "second", "memory")["stores"]) == 2

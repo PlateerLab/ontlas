@@ -16,6 +16,8 @@ import copy
 import re
 from typing import Any, Callable
 
+from ontlas.words import fix as with_particles
+
 STATUSES = ("active", "draft", "review", "deprecated")  # review: a glossary marked it to be checked (확인 필요)
 LABEL_KINDS = ("preferred", "english", "alternative", "abbreviation", "channel", "hidden")
 LABEL_WORD = {"preferred": "대표어", "english": "영문", "alternative": "동의어", "abbreviation": "약어", "channel": "채널 표기",
@@ -233,8 +235,8 @@ def conflicts(terms: list[dict], onto=None) -> list[dict]:
             said = [x for xs in by.values() for x in xs]
             out.append({"kind": "label", "label": said[0]["label"], "terms": [x["id"] for x in said],
                         "concepts": [c for c in by if not c.startswith("term:")],
-                        "text": f"표기 '{said[0]['label']}'을(를) 서로 다른 용어 {', '.join(dict.fromkeys(x['term'] for x in said))}이(가) "
-                                "함께 쓰고 있습니다. 한 용어에만 남기거나 혼동주의로 바꿔 주세요."})
+                        "text": with_particles(f"표기 '{said[0]['label']}'을(를) 서로 다른 용어 {', '.join(dict.fromkeys(x['term'] for x in said))}이(가) "
+                                                      "함께 쓰고 있습니다. 한 용어에만 남기거나 혼동주의로 바꿔 주세요.")})
     same = {}
     for e in es:
         for label, kind in labels(e):
@@ -248,12 +250,12 @@ def conflicts(terms: list[dict], onto=None) -> list[dict]:
                 seen.add(pair)
                 out.append({"kind": "synonym_confusable", "label": c["term"], "terms": [e["id"], same[pair]["id"]],
                             "concepts": [x for x in (e["concept"], same[pair]["concept"]) if x],
-                            "text": f"'{e['term']}'와(과) '{c['term']}'이(가) 동의어이면서 혼동주의로 함께 정해져 있습니다. 하나로 정해 주세요."})
+                            "text": with_particles(f"'{e['term']}'와(과) '{c['term']}'이(가) 동의어이면서 혼동주의로 함께 정해져 있습니다. 하나로 정해 주세요.")})
     if onto is not None:
         for e in es:
             if e["concept"] and concept_of(onto, e["concept"]) is None:
                 out.append({"kind": "missing_concept", "label": e["term"], "terms": [e["id"]], "concepts": [e["concept"]],
-                            "text": f"용어 '{e['term']}'이(가) 연결한 정의 {e['concept']}이(가) 없습니다. 연결을 바꾸거나 비워 주세요."})
+                            "text": with_particles(f"용어 '{e['term']}'이(가) 연결한 정의 {e['concept']}이(가) 없습니다. 연결을 바꾸거나 비워 주세요.")})
     return out
 
 
@@ -460,8 +462,8 @@ def merge(glossary: dict, current: list[dict], onto=None, *, source: str = "") -
             report["skipped"].append({"row": r["row"], "reason": "용어 A 또는 용어 B가 비어 있어 건너뛰었습니다."})
             continue
         if not rel:
-            report["skipped"].append({"row": r["row"], "reason": f"관계 '{r.get('relation', '')}'을(를) 알 수 없어 건너뛰었습니다. "
-                                                                 "동의어, 약어, 관련어, 상위어, 하위어, 혼동주의 중 하나로 적어 주세요."})
+            report["skipped"].append({"row": r["row"], "reason": with_particles(f"관계 '{r.get('relation', '')}'을(를) 알 수 없어 건너뛰었습니다. "
+                                                                                "동의어, 약어, 관련어, 상위어, 하위어, 혼동주의 중 하나로 적어 주세요.")})
             continue
         if rel == "abbreviation" and len(norm(a)) < len(norm(b)):  # PG, 결제대행: the shorter word is the abbreviation
             a, b = b, a

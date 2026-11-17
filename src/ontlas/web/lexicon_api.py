@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ontlas.words import fix as with_particles
+
 TERM_OPS = ("add_term", "update_term", "delete_term")
 
 
@@ -57,12 +59,15 @@ class LexiconMixin:
 
         if path:
             path = clean_path(path)
-            data: Any = self.repositories.read(self.repo, path)
+            try:
+                data: Any = self.repositories.read(self.repo, path)
+            except (LookupError, OSError):
+                raise ValueError(with_particles(f"파일 {path}이(가) 없어 용어집을 가져오지 못했습니다. 자료 업로드에서 경로를 확인해 주세요.")) from None
             name = name or path.rsplit("/", 1)[-1]
         elif text:
             data = text.encode("utf-8")
         else:
-            raise ValueError("용어 파일이 없어 불러오지 못했습니다. 파일 내용이나 카탈로그의 파일 경로를 보내 주세요.")
+            raise ValueError("용어 파일이 없어 가져오지 못했습니다. 파일을 선택해 주세요.")
         glossary = read_glossary(data, name or "glossary.csv")
         ws, comp, _ = self._lexicon_now()
         entries, report = merge(glossary, comp.terms, comp.ontology, source=name)

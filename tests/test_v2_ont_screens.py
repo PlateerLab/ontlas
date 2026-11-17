@@ -51,7 +51,8 @@ def test_unsent_edits_are_the_first_entry_with_the_entity_and_its_properties_tog
     assert (e["status"], e["status_label"], e["deployed"], e["change"], e["kind"]) == ("draft", "작성 중", False, "", "changed")
     rows = {r["label"]: (r["before"], r["after"]) for r in e["rows"]}
     assert rows["설명"] == (None, "주문에 담긴 상품 한 줄")
-    assert rows["주문 수량 · 라벨"] == ("수량", "주문 수량")  # a Property's change is named by the Property
+    assert next(r for r in e["rows"] if r["label"] == "설명")["field"] == "description"  # the screen names it as its form does
+    assert rows["주문 수량 · 이름"] == ("수량", "주문 수량")  # a Property's change is named by the Property
     assert rows["Property 메모"] == (None, "memo")  # a Property that was added
     assert {"label": "key", "value": "item_id"} in e["all"]
 

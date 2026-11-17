@@ -142,7 +142,7 @@ def test_names_and_counts_are_kept_within_limits_and_only_a_made_one_is_dropped(
         session.library_new("도메인 0", "empty")
     with pytest.raises(ValueError, match="한도"):
         session.library_new("하나 더", "empty")
-    with pytest.raises(ValueError, match="삭제할 수 없습니다"):
+    with pytest.raises(ValueError, match="삭제하지 못했습니다"):
         session.library_drop("l1")
     with pytest.raises(LookupError):
         session.library_drop("s9")

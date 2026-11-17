@@ -18,6 +18,7 @@ from ontlas.embed import EmbedError
 from ontlas.preview import KIND_LABEL
 from ontlas.values import normalize
 from ontlas.vectors import VectorError, conformance, known_kinds
+from ontlas.words import fix as with_particles
 
 SEARCH_MAX = 300  # characters of a question
 K_MAX = 20
@@ -86,9 +87,10 @@ class SpaceMixin:
         except (VectorError, OSError, EmbedError) as e:
             st["error"] = _human(e)
         onto = self.studio.onto
-        decided = [q.text for q in onto.questions if q.decision][:2]
+        rows = bool(self.studio.backends)  # with no data source, only what is answered without rows is offered
+        decided = [q.text for q in onto.questions if q.decision and (rows or q.values)][:2]
         totals = [q.label for q in onto.queries.values() if q.label and not q.params and "sum" in str(q.query.get("return"))]  # a query that adds up says most
-        named = (totals or [q.label for q in onto.queries.values() if q.label and not q.params])[:1]
+        named = (totals or [q.label for q in onto.queries.values() if q.label and not q.params])[:1] if rows else []
         from ontlas.relations import default_reader, known_readers
 
         return {**st, "items": docs, "concepts": len(made["concepts"]), "check": check, "can_connect": self.data.allow_connect,
@@ -123,13 +125,13 @@ class SpaceMixin:
         known = {json.dumps(json.loads(k), sort_keys=True) for k in _OPEN}
         wanted = json.dumps(spec, sort_keys=True, default=str)
         if wanted not in known and spec.get("kind") != "hash" and not self.data.allow_connect:
-            raise PermissionError("공개 데모에서는 서버에 준비된 임베딩 모델만 선택할 수 있어 변경하지 못했습니다.")
+            raise PermissionError("서버 설정에 없는 임베딩 모델이라 변경하지 못했습니다. 목록의 임베딩 모델을 골라 주세요.")
         try:
             return open_embedder(spec)
         except ImportError:
-            raise ValueError(f"{spec.get('kind', '')} 임베딩 모델의 패키지가 설치되어 있지 않아 변경하지 못했습니다.") from None
-        except (KeyError, ValueError, EmbedError, OSError) as e:
-            raise ValueError(f"임베딩 모델을 열지 못했습니다. {_human(e)}") from None
+            raise ValueError(f"{spec.get('kind', '')} 임베딩 모델의 패키지가 설치되어 있지 않아 변경하지 못했습니다. 서버에 패키지를 설치해 주세요.") from None
+        except (KeyError, ValueError, EmbedError, OSError):
+            raise ValueError("임베딩 모델을 열지 못해 변경하지 못했습니다. 모델 이름과 서버 설정을 확인해 주세요.") from None
 
     def space_embedder(self, op: str, spec: Any) -> dict:
         """Before a change of model, what it embeds again and about how long; on the change, the stores are refilled."""
@@ -138,14 +140,14 @@ class SpaceMixin:
         if op == "plan":
             try:
                 return plain({"ok": True, **self.space.reembed_plan(e)})
-            except (EmbedError, OSError) as x:
-                raise ValueError(f"새 임베딩 모델로 시간을 재지 못했습니다. {_human(x)}") from None
+            except (EmbedError, OSError):
+                raise ValueError("새 임베딩 모델이 응답하지 않아 변경하지 못했습니다. 모델 상태를 확인해 주세요.") from None
         if op != "use":
-            raise ValueError("요청 형식이 올바르지 않아 처리하지 못했습니다.")
+            raise ValueError("요청 형식이 올바르지 않아 처리하지 못했습니다. 화면을 새로고침해 주세요.")
         before = self.space.embedder.describe()
         r = self.space.use_embedder(e)
         if r.get("embed_error"):
-            raise ValueError(f"새 임베딩 모델로 문서를 임베딩하지 못했습니다. {r['embed_error']}")
+            raise ValueError("새 임베딩 모델로 문서를 임베딩하지 못해 변경하지 못했습니다. 모델 상태를 확인해 주세요.")
         self.event("adapter", f"임베딩 모델 변경 · {before['name']} → {e.describe()['name']}")
         return self.space_state()
 
@@ -157,8 +159,8 @@ class SpaceMixin:
         sp = self.space
         try:
             hits = sp.search(text, max(1, min(int(k or 5), K_MAX)), store=store, folder=str(folder or ""))
-        except (VectorError, OSError, EmbedError) as e:
-            raise ValueError(f"벡터 저장소에서 찾지 못했습니다. {_human(e)}") from None
+        except (VectorError, OSError, EmbedError):
+            raise ValueError("벡터 저장소가 응답하지 않아 찾지 못했습니다. 저장소 · 엔진에서 저장소 상태를 확인해 주세요.") from None
         onto, terms = self.studio.onto, self._terms()
         named = sp.concepts_in(text, onto, terms)
         for h in hits:
@@ -178,8 +180,8 @@ class SpaceMixin:
         tools.terms = self._terms()
         try:
             out = tools.answer_question(text, pick if isinstance(pick, dict) else None, folder=str(folder or ""))
-        except (VectorError, OSError, EmbedError) as e:
-            raise ValueError(f"검색 엔진에서 찾지 못했습니다. {_human(e)}") from None
+        except (VectorError, OSError, EmbedError):
+            raise ValueError("검색 엔진이 응답하지 않아 찾지 못했습니다. 저장소 · 엔진에서 엔진 상태를 확인해 주세요.") from None
         except PermissionError:
             return {"ok": False, "error": "조회 권한이 없어 답변하지 못했습니다. 실행 역할을 확인해 주세요."}
         sp, onto, terms = self.space, self.studio.onto, tools.terms
@@ -201,7 +203,7 @@ class SpaceMixin:
         try:
             kind = llm(ROUTE_SYSTEM, found["question"]).strip().lower()
         except (TimeoutError, OSError, ValueError, RuntimeError):
-            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 근거를 확인해 주세요."}
+            return {"ok": False, "error": "언어 모델이 제한 시간 안에 응답하지 않아 답변을 만들지 못했습니다. 찾은 근거를 확인해 주세요."}
         if "data" in kind and "documents" not in kind:
             def waiting(system: str, user: str) -> str:  # the data stays locked, the wait for a model does not
                 self.lock.release()
@@ -220,11 +222,11 @@ class SpaceMixin:
                                   "total": len(first.get("rows") or [])}}
         lines = [f"[{i + 1}] {s['title']}: {s['text']}" for i, s in enumerate(found["sources"][:5])]
         if not lines:
-            return {"ok": False, "error": "찾은 근거가 없어 답변을 만들지 못했습니다."}
+            return {"ok": False, "error": "찾은 근거가 없어 답변을 만들지 못했습니다. 질문을 바꿔 다시 입력해 주세요."}
         try:
             said = llm(ANSWER_SYSTEM, f"질문: {found['question']}\n\n근거:\n" + "\n".join(lines)).strip()
         except (TimeoutError, OSError, ValueError, RuntimeError):
-            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 근거를 확인해 주세요."}
+            return {"ok": False, "error": "언어 모델이 제한 시간 안에 응답하지 않아 답변을 만들지 못했습니다. 찾은 근거를 확인해 주세요."}
         return {"ok": True, "route": "documents", "answer": said}
 
     def space_answer(self, text: str) -> dict:
@@ -233,13 +235,13 @@ class SpaceMixin:
             return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 답변을 만들지 못했습니다. 찾은 문서를 확인해 주세요."}
         found = self.space_search(text, 4)
         if not found["hits"]:
-            return {"ok": False, "error": "찾은 문서가 없어 답변을 만들지 못했습니다."}
+            return {"ok": False, "error": "찾은 문서가 없어 답변을 만들지 못했습니다. 질문을 바꿔 다시 입력해 주세요."}
         lines = [f"[{i + 1}] {h['document']} / {h['section']}: {h['text']}" for i, h in enumerate(found["hits"])]
         llm, _ = self._budgeted()
         try:
             answer = llm(ANSWER_SYSTEM, f"질문: {found['text']}\n\n근거:\n" + "\n".join(lines)).strip()
         except (TimeoutError, OSError, ValueError, RuntimeError):
-            return {"ok": False, "error": "언어 모델이 제시간에 답하지 못했습니다. 찾은 문서를 확인해 주세요."}
+            return {"ok": False, "error": "언어 모델이 제한 시간 안에 응답하지 않아 답변을 만들지 못했습니다. 찾은 문서를 확인해 주세요."}
         return {"ok": True, "answer": answer, "hits": found["hits"]}
 
     def space_graph(self, folder: str = "") -> dict:
@@ -255,7 +257,7 @@ class SpaceMixin:
         from ontlas.relations import Busy, open_reader
 
         if self.llm is None:
-            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 관계를 추출하지 못했습니다."}
+            return {"ok": False, "error": "언어 모델이 연결되어 있지 않아 관계를 추출하지 못했습니다. AI 운영에서 언어 모델을 연결해 주세요."}
         job = self._reading
         if job and job["out"] is None:
             return {"ok": True, "job": job["id"]}
@@ -275,7 +277,7 @@ class SpaceMixin:
         try:
             r = open_reader(str(reader or ""), llm)
         except ImportError:
-            raise ValueError(f"{reader} 관계 추출 엔진이 설치되어 있지 않아 시작하지 못했습니다.") from None
+            raise ValueError(f"{reader} 관계 추출 엔진이 설치되어 있지 않아 시작하지 못했습니다. 서버에 엔진을 설치해 주세요.") from None
         job = {"id": uuid.uuid4().hex, "out": None, "folder": folder, "reader": r.kind, "done": 0, "total": 0, "stop": False,
                "started": time.time()}
         self._reading = job
@@ -379,27 +381,26 @@ class SpaceMixin:
     def space_store(self, op: str, name: str = "", kind: str = "", url: str = "") -> dict:
         """Another vector store beside the one in use, on an install that allows connections."""
         if not self.data.allow_connect:
-            raise PermissionError("공개 데모에서는 외부 저장소 연결이 비활성화되어 있어 추가하지 못했습니다.")
+            raise PermissionError("서버 설정에서 외부 저장소 연결이 꺼져 있어 추가하지 못했습니다. 서버 관리자에게 설정을 요청해 주세요.")
         name = str(name or kind).strip()[:32]
         if op == "remove":
             self.space.remove_store(name)
             return self.space_state()
         if kind not in known_kinds():
-            raise ValueError(f"벡터 저장소 종류를 확인할 수 없어 추가하지 못했습니다. 지원 종류: {', '.join(known_kinds())}")
+            raise ValueError("벡터 저장소 종류를 알 수 없어 추가하지 못했습니다. 목록의 종류를 골라 주세요.")
         field = "dsn" if kind == "pgvector" else "url"
         try:
             r = self.space.add_store(name, {"kind": kind, field: url.strip()} if kind != "memory" else {"kind": kind})
         except ImportError:
-            raise ValueError(f"{kind} 드라이버가 설치되어 있지 않아 추가하지 못했습니다.") from None
+            raise ValueError(f"{kind} 드라이버가 설치되어 있지 않아 추가하지 못했습니다. 서버에 드라이버를 설치해 주세요.") from None
         except Exception:  # what a driver says may carry the address and the password
             self.space.stores.pop(name, None)
             self.space.errors.pop(name, None)
             raise ValueError(f"{kind} 저장소에 연결하지 못했습니다. 주소와 네트워크를 확인해 주세요.") from None
         if name in r["errors"]:
-            err = r["errors"][name]
             self.space.stores.pop(name, None)
             self.space.errors.pop(name, None)
-            raise ValueError(f"{kind} 저장소에 쓰지 못했습니다. {err}")
+            raise ValueError(f"{kind} 저장소가 응답하지 않아 추가하지 못했습니다. 주소와 실행 상태를 확인해 주세요.")
         self.event("adapter", f"벡터 저장소 {name} 추가")
         return self.space_state()
 
@@ -412,19 +413,19 @@ class SpaceMixin:
         from ontlas.draft import draft
 
         if not self.data.allow_connect:
-            raise PermissionError("공개 데모에서는 플랫폼 연결이 비활성화되어 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
+            raise PermissionError("서버 설정에서 플랫폼 연결이 꺼져 있어 연결하지 못했습니다. 파일 업로드를 이용해 주세요.")
         url = str(url or "").strip()
         if urlparse(url).scheme not in ("http", "https") or not str(connection or "").strip():
-            raise ValueError("쿼리 서비스 주소와 연결 번호가 없어 연결하지 못했습니다. 주소와 연결 번호를 입력해 주세요.")
+            raise ValueError("질의 서비스 주소와 연결 번호가 없어 연결하지 못했습니다. 주소와 연결 번호를 입력해 주세요.")
         wanted: Any = str(connection).strip()
         b = GatewayBackend(url, connection=int(wanted) if wanted.isdigit() else wanted, dialect=dialect or "postgres", token=str(token or "").strip())
-        where = f"쿼리 서비스 {urlparse(url).hostname} · 연결 {wanted}"  # never the token
+        where = f"질의 서비스 {urlparse(url).hostname} · 연결 {wanted}"  # never the token
         r = self._rules(rules)
         try:
             d = draft(b, name="my-db", label=(label or "플랫폼 연결")[:40], lang="ko", rules=r, definitions=self._defs(),
                       origin={"kind": "database", "detail": where})
         except GatewayError as e:
-            raise ValueError(f"{where}에 연결하지 못했습니다. {e}") from None
+            raise ValueError(str(e)) from None  # the service's answer, in the page's words (backends/gateway.py)
         self.pending, self.draft_request = (d, b, [], r), None
         return self.files_state()
 
@@ -471,7 +472,7 @@ class SpaceMixin:
         for e in json.loads((root / "index.json").read_text(encoding="utf-8")):
             d = root / e["id"]
             if not e.get("data"):
-                self.event("pipeline", f"{e['label']}은(는) DB 연결이 필요해 복원하지 않았습니다. DB 연결에서 다시 연결해 주세요.")
+                self.event("pipeline", with_particles(f"{e['label']}은(는) DB 연결이 필요해 복원하지 않았습니다. 데이터 소스를 다시 연결해 주세요."))
                 continue
             try:
                 modules = [Module.from_dict(m) for m in json.loads((d / "modules.json").read_text(encoding="utf-8"))]
@@ -487,8 +488,8 @@ class SpaceMixin:
                     st.project(into=["graph"])
                 except ImportError:  # the graph is an extra: the pipeline still reads its source
                     pass
-            except (OSError, ValueError, KeyError) as err:
-                self.event("pipeline", f"{e['label']}을(를) 복원하지 못했습니다. {err}")
+            except (OSError, ValueError, KeyError):
+                self.event("pipeline", with_particles(f"{e['label']}을(를) 저장된 파일에서 읽지 못해 복원하지 못했습니다. 파이프라인을 다시 만들어 주세요."))
                 continue
             st.space, st.reasoners = self.space, self.studio.reasoners
             self.pipelines.append({"id": e["id"], "label": e["label"], "studio": st, "origin": e.get("origin") or {},
@@ -563,8 +564,8 @@ class SpaceMixin:
             out = plain(answer_metric(self.studio, name, since=since, until=until).to_dict())
             out["notes"] = ["기간을 지정하지 않아 전체 기간 기준입니다." if "no window" in n else n for n in out["notes"]]
             return out
-        except MetricError as e:
-            raise ValueError(f"지표를 계산하지 못했습니다. {e}") from None
+        except MetricError:
+            raise ValueError("지표 산식을 실행하지 못해 계산하지 못했습니다. 지표 산식과 기준 시각을 확인해 주세요.") from None
 
     def conflict_pick(self, cid: str, source: str, reason: str = "") -> dict:
         """A person's pick is a change like any other: it waits in the pending edits and goes through review."""
@@ -575,7 +576,7 @@ class SpaceMixin:
         if c is None:
             raise LookupError(f"출처 충돌 {cid}")
         if source not in {a.source for a in c.answers}:
-            raise ValueError(f"'{source}' is not a source of {c.id}")
+            raise ValueError("선택한 출처가 이 충돌의 출처가 아니어서 정하지 못했습니다. 화면을 새로고침해 주세요.")
         try:  # an edit, so that taking back an earlier edit does not take the pick with it
             self._ws().apply("pick_conflict", {"id": cid, "source": source, "by": self.who, "reason": str(reason or "")[:200]})
         except EditError as e:
@@ -588,7 +589,7 @@ class SpaceMixin:
         if not self.studio.backends:
             raise NoSource()
         if self.studio.actions.writeback is None:
-            raise ValueError("원천에 쓸 수 없어 상태 전이를 실행하지 못했습니다. 쓰기 가능한 원천을 연결해 주세요.")
+            raise ValueError("데이터 소스에 쓸 수 없어 상태 전이를 실행하지 못했습니다. 쓰기 가능한 데이터 소스를 연결해 주세요.")
         moved = self.studio.actions.advance()
         return {"ok": True, "moved": len(moved)}
 
@@ -697,7 +698,7 @@ class SpaceMixin:
         if r is None:
             raise LookupError(f"추론기 {name}")
         if st.projection is None:
-            raise ValueError("그래프 저장소에 반영된 데이터가 없어 추론하지 못했습니다.")
+            raise ValueError("그래프 저장소에 반영된 데이터가 없어 추론하지 못했습니다. 파이프라인 관제에서 그래프 저장소 반영을 실행해 주세요.")
         return r.run(st.onto, st.projection).to_dict()
 
     # ---- the map of the space: the asset ontology ---------------------------------------------------------------------
@@ -862,7 +863,7 @@ class SpaceMixin:
         elif a.kind == "object":
             say(f"속성 {len(_children(cat, a.id, 'property'))}개")
             tables = into("mapsTo")
-            mark({"text": f"테이블 · {tables[0]}", "tone": "ok"} if tables else {"text": "원천 연결 없음", "tone": "warn"})
+            mark({"text": f"테이블 · {tables[0]}", "tone": "ok"} if tables else {"text": "데이터 소스 미연결", "tone": "warn"})
             docs = came("mentions")
             if docs:
                 say(f"언급 문서 {len(docs)}개")
@@ -946,8 +947,8 @@ class SpaceMixin:
         meaning = self.space.embedder.semantic  # a wording embedder finds words, so it does not say meaning
         for h in found:
             a = cat.assets.get(f"document:{h['document']}")
-            if a is not None:
-                words = not meaning or shared_wording(q, h["text"]) > 0
+            words = shared_wording(q, h["text"]) > 0
+            if a is not None and (words or meaning):  # a wording embedder's nearest passage with no word of the question is no match
                 hit(self._explorer_row(x, a), "단어 일치" if words else "의미 유사",
                     snippet=f"{h['section']} · {h['text'][:160]}", score=float(h["score"]))
         layer = {"이름": "name", "경로": "name", "정의": "definition", "단어 일치": "text", "의미 유사": "text"}
@@ -1002,7 +1003,7 @@ class SpaceMixin:
         from ontlas.tools import StudioTools
 
         if path not in self.TRY:
-            raise ValueError("이 화면에서는 조회와 판정 API만 실행할 수 있습니다.")
+            raise ValueError("조회 · 판정 API가 아니어서 실행하지 못했습니다. 조회 또는 판정 API를 골라 주세요.")
         body = {k: v for k, v in (body or {}).items() if k != "library"}  # this page is on one library already
         code, out = Rest(StudioTools(self.studio, actor_id="page")).answer("POST", path, body)
         return {"status": code, "body": out}
@@ -1011,7 +1012,8 @@ class SpaceMixin:
 def decision_fields(o, d) -> dict:
     """What a decision takes and gives, as a form asks for it: each input with its label and type, the target property it
     reads (a date, for an elapsed-days input) or the parameter, and the values an enumerated property allows."""
-    from ontlas.decide.words import input_label
+    from ontlas.check import _find_prop
+    from ontlas.decide.words import input_label, reads
 
     inputs = []
     for name, i in d.inputs.items():
@@ -1019,9 +1021,11 @@ def decision_fields(o, d) -> dict:
         prop = src.get("property") or src.get("days_since") or ""
         own = bool(d.target and prop and not src.get("path"))
         p = o.objects[d.target].properties.get(prop) if own and d.target in o.objects else None
+        here, end = reads(o, d, name)  # an input read through a relation offers the codes of the property it ends on
+        q = p if p is not None else (_find_prop(o, here, end) if here and end else None)
         inputs.append({"name": name, "label": input_label(o, d, name), "type": i.type, "property": prop if own else "",
                        "property_label": (p.label or prop) if p is not None else "", "days_since": bool(own and src.get("days_since")),
-                       "param": src.get("param", ""), "values": list(p.values) if p is not None and p.values else []})
+                       "param": src.get("param", ""), "values": list(q.values) if q is not None and q.values else []})
     return {"inputs": inputs, "outputs": [{"name": k, "type": v} for k, v in d.outputs.items()]}
 
 

@@ -21,6 +21,10 @@ class DecisionError(ValueError):
     """The decision cannot be evaluated as defined."""
 
 
+class RecordNotFound(DecisionError):
+    """The record a decision was asked about is not in the source."""
+
+
 class MissingValues(DecisionError):
     """Decided on given values, an input the outcome turns on was not given, or one was given a value the property it
     reads does not allow. Not given is not known: a value it was given as null (no delivery date yet) decides, one it

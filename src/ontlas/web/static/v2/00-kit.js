@@ -116,7 +116,7 @@
     const upload = canEdit() ? `<a class="k-tbtn${S.tab === 'catalog' ? ' on' : ''}" href="#catalog">${ki('upload', 17, 1.75)}<span class="w">자료 업로드</span></a>` : '';
     const inbox = `<a class="k-tbtn${S.tab === 'inbox' ? ' on' : ''}" href="#inbox" aria-label="할 일 ${waits}건">${ki('inbox', 17, 1.75)}<span class="w">할 일</span>${waits ? `<span class="n">${waits}</span>` : ''}</a>`;
     const me = `<a class="k-me${S.tab === 'me' ? ' on' : ''}" href="#me" aria-label="내 계정">${ki('user', 18, 1.75)}</a>`;
-    const repo = area === 'work' && REPO_TABS.has(S.tab) ? `<button class="k-tbtn" data-act="repopick" aria-label="레포지토리 선택">${ki('box', 17)}<span class="k-cut" style="max-width:160px">${esc(st.repository.label)}</span>${ki('chevD', 16, 1.75)}</button>` : '';
+    const repo = area === 'work' && REPO_TABS.has(S.tab) ? `<button class="k-tbtn" data-act="repopick" aria-label="저장소 선택">${ki('box', 17)}<span class="w k-cut" style="max-width:160px">${esc(st.repository.label)}</span>${ki('chevD', 16, 1.75)}</button>` : '';
     if (area === 'bare') {
       $('#top').innerHTML = `${brand()}${switcher('bare')}${crumb}${inbox}${me}`;
       return;
@@ -142,7 +142,7 @@
     const onto = isOntoAdmin() && firstAdmin('onto'), sys = isSysAdmin() && firstAdmin('sys');
     const inOnto = area === 'admin' && ADMIN[0][2].some((x) => x[0] === S.tab), inSys = area === 'admin' && !inOnto;
     const admin = onto || sys ? `<p class="k-optg sep">관리</p>${onto ? `<a class="k-opt${inOnto ? ' on' : ''}" href="#${onto}">${ki('sliders')}<span>이 온톨로지 관리</span></a>` : ''}${sys ? `<a class="k-opt${inSys ? ' on' : ''}" href="#${V2['sys-users'] ? 'sys-users' : sys}">${ki('shield')}<span>시스템 관리</span></a>` : ''}` : '';
-    return `<details class="k-switch"${area === 'bare' ? ' style="flex:0 1 288px;min-width:240px"' : ''}><summary aria-label="온톨로지 전환">${ki(area === 'admin' ? 'sliders' : 'layers', 18)}<span><b>${esc(name)}</b><small>${esc(sub)}</small></span>${ki('chevD', 16, 1.75)}</summary>
+    return `<details class="k-switch${area === 'bare' ? ' bare' : ''}"><summary aria-label="온톨로지 전환">${ki(area === 'admin' ? 'sliders' : 'layers', 18)}<span><b>${esc(name)}</b><small>${esc(sub)}</small></span>${ki('chevD', 16, 1.75)}</summary>
       <div class="k-pop"><p class="k-optg">참여 온톨로지</p>${rows}${all}${make}${admin}</div></details>`;
   }
 

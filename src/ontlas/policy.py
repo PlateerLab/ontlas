@@ -88,7 +88,8 @@ class PolicyDrafter:
             try:
                 raw = self.llm(SYSTEM, prompt)
             except Exception as e:  # a model that does not answer in time is a failed attempt, not a crash
-                out.attempts.append(Attempt(prompt, "", [f"the model did not answer: {type(e).__name__}"]))
+                code = f" {e.code}" if isinstance(getattr(e, "code", None), int) else ""  # an HTTP status the server gave
+                out.attempts.append(Attempt(prompt, "", [f"the model did not answer: {type(e).__name__}{code}"]))
                 continue
             data = extract_json(raw)
             issues, module = self.check(data, text)

@@ -27,7 +27,7 @@
     bndRowDel: (t) => { const d = S.it.d; if (!d) return; d[t.dataset.l].splice(Number(t.dataset.i), 1); render(); },
   });
   // a changed field in the words these screens use for it (the shared history says some of them as the definition spells them)
-  const BND_FIELD = { transform: '변환식', source_type: '원천 자료형', columns: '키 컬럼', column: '컬럼', source: '소스', table: '테이블', values: '허용값', labels: '코드 변환표', parameters: 'Parameter', criteria: '전제조건',
+  const BND_FIELD = { transform: '변환식', source_type: '소스 자료형', columns: '키 컬럼', column: '컬럼', source: '소스', table: '테이블', values: '허용값', labels: '코드 변환표', parameters: 'Parameter', criteria: '전제조건',
     transition_to: '처리 후 상태', approval: '승인 기준', call: '호출 API', undo: '되돌리기 호출', set: '변경 값', auto_within: '자동 승인 기준', auto_agents: 'Agent 자동 실행', query: '질의 정의', params: '입력값', match: '대상',
     edges: 'Relation', where: '조건', return: '반환', order: '정렬', limit: '건수', label: '이름', 라벨: '이름', type: '타입', description: '설명', key: '키', status: '상태', cite: '근거', target: '대상 Entity', expect: '기대 결과', decision: '규칙' };
   const bndFieldWord = (label) => String(label).split(/ · |\./).map((w) => BND_FIELD[w] || w).join(' · ');
@@ -78,14 +78,14 @@
       const { m, p, o, t } = bndMapOf(d);
       const props = m.properties.filter((q) => !q.expr).map((q) => [bndMapId(q), `${(bndObj(m, q.object) || {}).label || q.object}.${q.label || q.name}`]);
       const many = p && p.columns && p.columns.length > 1;
-      const col = many ? `<input class="k-in mono" type="text" value="${esc(p.columns.join(' + '))}" disabled>` : t ? `<select class="k-in" data-in="itf" data-k="column"><option value="">컬럼 선택</option>${t.columns.map((c) => bndOpt(c.name, `${t.table}.${c.name} · ${c.type || ''}`, d.column)).join('')}${d.column && !bndHas(t, d.column) ? bndOpt(d.column, `${d.column} · 원천에 없음`, d.column) : ''}</select>`
+      const col = many ? `<input class="k-in mono" type="text" value="${esc(p.columns.join(' + '))}" disabled>` : t ? `<select class="k-in" data-in="itf" data-k="column"><option value="">컬럼 선택</option>${t.columns.map((c) => bndOpt(c.name, `${t.table}.${c.name} · ${c.type || ''}`, d.column)).join('')}${d.column && !bndHas(t, d.column) ? bndOpt(d.column, `${d.column} · 소스에 없음`, d.column) : ''}</select>`
         : bndIn('column', d.column, ` class="k-in mono" placeholder="컬럼 이름"${o && o.table ? '' : ' disabled'}`);
       return bndBase(`${bndFld('Property', `<select class="k-in" data-in="bndMapProp"${x ? ' disabled' : ''}><option value="">Property 선택</option>${props.map(([v, w]) => bndOpt(v, w, d.prop)).join('')}</select>`)}
         ${bndFld('데이터 소스', `<select class="k-in" disabled><option>${esc(bndSrcWord())}</option></select>`)}
         ${bndFld('테이블 · 컬럼', col, many ? '복합 키 컬럼' : o && o.table ? `${esc(o.table)} 테이블` : 'Entity 테이블 미지정')}
         ${bndFld('Mapping 방식', `<select class="k-in" data-in="itf" data-k="how" data-re>${[['same', '컬럼 그대로'], ['code', '코드 변환'], ['expr', '변환식']].map(([v, w]) => bndOpt(v, w, d.how)).join('')}</select>`)}
         ${d.how === 'code' ? `<div class="k-full">${bndFld('코드 변환표', `<textarea class="k-in" rows="4" data-in="itf" data-k="codes" placeholder="예: R = 반품">${esc(d.codes)}</textarea>`, '한 줄에 하나 · 소스 값 = 표시 이름')}</div>` : ''}
-        ${d.how === 'expr' ? `${bndFld('변환식', bndIn('transform', d.transform, ' class="k-in mono" placeholder="예: value / 100"'), '원천 값: value')}${bndFld('원천 자료형', `<select class="k-in" data-in="itf" data-k="source_type"><option value="">Property와 같음</option>${TYPES.filter((y) => y !== 'enum').map((y) => bndOpt(y, TYPE_WORD[y], d.source_type)).join('')}</select>`)}` : ''}
+        ${d.how === 'expr' ? `${bndFld('변환식', bndIn('transform', d.transform, ' class="k-in mono" placeholder="예: value / 100"'), '소스 값: value')}${bndFld('소스 자료형', `<select class="k-in" data-in="itf" data-k="source_type"><option value="">Property와 같음</option>${TYPES.filter((y) => y !== 'enum').map((y) => bndOpt(y, TYPE_WORD[y], d.source_type)).join('')}</select>`)}` : ''}
         ${bndFld('상태', `<select class="k-in" data-in="itf" data-k="status">${Object.entries(STATUS_WORD).map(([k, [, w]]) => bndOpt(k, w, d.status)).join('')}</select>`)}`);
     },
     checks: (d) => {
@@ -94,7 +94,7 @@
       if (!o || !o.table) out.push({ say: 'Entity 테이블 미지정', tone: 'bad' });
       else if (!d.column && !(p.columns && p.columns.length > 1)) out.push({ say: '컬럼 미선택', tone: 'bad' });
       else if (t) { const c = t.columns.find((y) => y.name.toLowerCase() === String(d.column).toLowerCase());
-        out.push(p.columns && p.columns.length > 1 ? { say: '키 컬럼 결합', sub: p.columns.join(' + '), tone: 'ok' } : c ? { say: '컬럼 확인됨', sub: `${t.table}.${c.name} ${c.type || ''}`, tone: 'ok' } : { say: '원천 테이블에 컬럼 없음', sub: `${t.table}.${d.column}`, tone: 'warn', word: '확인 필요' });
+        out.push(p.columns && p.columns.length > 1 ? { say: '키 컬럼 결합', sub: p.columns.join(' + '), tone: 'ok' } : c ? { say: '컬럼 확인됨', sub: `${t.table}.${c.name} ${c.type || ''}`, tone: 'ok' } : { say: '소스 테이블에 컬럼 없음', sub: `${t.table}.${d.column}`, tone: 'warn', word: '확인 필요' });
         if (c && d.how !== 'expr' && !bndSame(p.type, sqlType(c.type))) out.push({ say: `타입이 다름 · ${TYPE_WORD[p.type] || p.type} ↔ ${c.type}`, tone: 'warn', word: '확인 필요' });
       } else out.push({ say: '컬럼 명세', sub: `${o.table}.${d.column}`, tone: 'ok' });
       if (d.how === 'code') { const n = bndCodeRows(d.codes).length; out.push(n ? { say: `코드값 ${n}종`, tone: 'ok' } : { say: '코드 변환표가 비어 있음', tone: 'warn', word: '확인 필요' }); }
@@ -142,13 +142,13 @@
     form: (d, x) => {
       const m = bndM(), o = bndObj(m, d.entity), tables = m.sources.source.tables, t = bndTable(m, d.table);
       const ents = m.objects.filter((e) => x || !e.table).map((e) => [e.name, bndEnt(e)]);
-      const table = tables.length ? `<select class="k-in" data-in="itf" data-k="table" data-re><option value="">테이블 선택</option>${tables.map((y) => bndOpt(y.table, `${y.table}${y.objects.filter((n) => n !== d.entity).length ? ` · ${y.objects.filter((n) => n !== d.entity).map((n) => (bndObj(m, n) || {}).label || n).join(', ')}` : ''}`, d.table)).join('')}${d.table && !t ? bndOpt(d.table, `${d.table} · 원천에 없음`, d.table) : ''}</select>`
+      const table = tables.length ? `<select class="k-in" data-in="itf" data-k="table" data-re><option value="">테이블 선택</option>${tables.map((y) => bndOpt(y.table, `${y.table}${y.objects.filter((n) => n !== d.entity).length ? ` · ${y.objects.filter((n) => n !== d.entity).map((n) => (bndObj(m, n) || {}).label || n).join(', ')}` : ''}`, d.table)).join('')}${d.table && !t ? bndOpt(d.table, `${d.table} · 소스에 없음`, d.table) : ''}</select>`
         : bndIn('table', d.table, ' class="k-in mono" placeholder="테이블 이름"');
       const keyRow = d.rows.find((r) => r.prop === d.key);
       const mine = o && o.module === 'workspace';
       const keys = o ? bndStored(m, o.name).map((p) => [p.name, `${p.name} · ${p.label || p.name}`]) : [];
       const rows = d.rows.map((r, i) => { const p = m.properties.find((q) => q.object === d.entity && q.name === r.prop) || {};
-        const col = r.fixed ? `<input class="k-in sm mono" type="text" value="${esc(r.column)}" disabled>` : t ? `<select class="k-in sm" data-in="bndRow" data-l="rows" data-i="${i}" data-k="column">${t.columns.map((c) => bndOpt(c.name, `${c.name} · ${c.type || ''}`, r.column)).join('')}${bndHas(t, r.column) ? '' : bndOpt(r.column, `${r.column} · 원천에 없음`, r.column)}</select>` : bndRowIn('rows', i, 'column', r.column, ' style="font-family:var(--mono)"');
+        const col = r.fixed ? `<input class="k-in sm mono" type="text" value="${esc(r.column)}" disabled>` : t ? `<select class="k-in sm" data-in="bndRow" data-l="rows" data-i="${i}" data-k="column">${t.columns.map((c) => bndOpt(c.name, `${c.name} · ${c.type || ''}`, r.column)).join('')}${bndHas(t, r.column) ? '' : bndOpt(r.column, `${r.column} · 소스에 없음`, r.column)}</select>` : bndRowIn('rows', i, 'column', r.column, ' style="font-family:var(--mono)"');
         return `<tr><td>${col}</td><td><span class="k-code k-ink">${esc(r.prop)}</span><br><span class="k-s">${esc(p.label || '')} · ${esc(TYPE_WORD[p.type] || p.type || '')}</span></td><td class="nw">${r.prop === d.key ? '키' : p.transform ? '변환식' : (p.values || []).length ? '코드 → 값' : '컬럼 그대로'}</td></tr>`; }).join('');
       return `${bndBase(`${bndFld('Entity', `<select class="k-in" data-in="bndBindEnt"${x ? ' disabled' : ''}><option value="">Entity 선택</option>${ents.map(([v, w]) => bndOpt(v, w, d.entity)).join('')}</select>`, x ? '' : '테이블 미지정 Entity')}
         ${bndFld('데이터 소스', `<select class="k-in" disabled><option>${esc(bndSrcWord())}</option></select>`)}
@@ -167,13 +167,13 @@
       if (!key) out.push({ say: '키 Property가 없음', tone: 'warn', word: '확인 필요' });
       else if (t) { const cols = key.column.split(' + ').map((c) => t.columns.find((y) => y.name.toLowerCase() === c.toLowerCase()));
         out.push(cols.every(Boolean) ? (cols.every((c) => ['string', 'integer'].includes(sqlType(c.type))) ? { say: '키 컬럼이 문자열 · 정수', sub: cols.map((c) => `${c.name} ${c.type || ''}`).join(' · '), tone: 'ok' } : { say: '키 컬럼이 문자열 · 정수가 아님', sub: cols.map((c) => `${c.name} ${c.type || ''}`).join(' · '), tone: 'warn', word: '확인 필요' })
-          : { say: '키 컬럼이 원천 테이블에 없음', sub: key.column, tone: 'bad' }); }
+          : { say: '키 컬럼이 소스 테이블에 없음', sub: key.column, tone: 'bad' }); }
       if (t) {
         const lost = d.rows.filter((r) => !r.fixed && !bndHas(t, r.column));
         const off = d.rows.filter((r) => { const c = t.columns.find((y) => y.name.toLowerCase() === r.column.toLowerCase()), p = m.properties.find((q) => q.object === d.entity && q.name === r.prop); return c && p && !p.transform && !bndSame(p.type, sqlType(c.type)); });
         out.push(off.length ? { say: `타입이 다른 Property ${off.length}개`, sub: off.map((r) => r.prop).join(' · '), tone: 'warn', word: '확인 필요' } : { say: '연결 Property 타입 일치', tone: 'ok' });
-        if (lost.length) out.push({ say: `원천 테이블에 없는 컬럼 ${lost.length}개`, sub: lost.map((r) => r.column).join(' · '), tone: 'warn', word: '확인 필요' });
-      } else out.push({ say: noSource() ? '데이터 소스 미연결' : '원천 테이블 없음', sub: d.table, tone: noSource() ? 'note' : 'warn', word: noSource() ? '' : '확인 필요' });
+        if (lost.length) out.push({ say: `소스 테이블에 없는 컬럼 ${lost.length}개`, sub: lost.map((r) => r.column).join(' · '), tone: 'warn', word: '확인 필요' });
+      } else out.push({ say: noSource() ? '데이터 소스 미연결' : '소스 테이블 없음', sub: d.table, tone: noSource() ? 'note' : 'warn', word: noSource() ? '' : '확인 필요' });
       return out;
     },
     valid: (d) => (!d.entity ? 'Entity가 없어 저장하지 못했습니다. Entity를 선택해 주세요.' : !d.table.trim() ? '테이블이 없어 저장하지 못했습니다. 테이블을 선택해 주세요.' : ''),
@@ -195,7 +195,7 @@
       const r = await api('item/uses?element=' + encodeURIComponent(`object:${o.name}`));
       return [props.length ? { say: `Mapping 명세 ${props.length}개`, sub: `${o.label || o.name}의 Property ↔ 컬럼 명세 삭제`, href: 'sources' } : null,
         links.length ? { say: `Relation Binding ${links.length}개`, sub: `${links.slice(0, 2).map((l) => `${(bndObj(m, l.source) || {}).label || l.source} → ${(bndObj(m, l.target) || {}).label || l.target}`).join(', ')}${links.length > 2 ? ` 외 ${links.length - 2}` : ''} 연결 해제`, href: 'model' } : null,
-        ...r.uses.map((u) => ({ say: `${({ 결정: '규칙' })[u.kind] || u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 2).join(', ')}${u.names.length > 2 ? ` 외 ${u.names.length - 2}` : ''} 값 조회 불가`, href: u.screen }))].filter(Boolean);
+        ...r.uses.map((u) => ({ say: `${u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 2).join(', ')}${u.names.length > 2 ? ` 외 ${u.names.length - 2}` : ''} 값 조회 불가`, href: u.screen }))].filter(Boolean);
     },
     remove: async (o) => { await bndEdits([['update_object', { name: o.name, table: '' }]]); Object.assign(S.bnd.bind, { d: null, sql: null, prof: null }); },
   });
@@ -398,7 +398,7 @@
         const off = d.limits.filter((l) => l.subject && l.value !== '' && (l.subject[0] === 'p' ? !sets.includes(l.subject.slice(2)) : !names.includes(l.subject.slice(2)) || ['delta', 'percent'].includes(l.kind)));
         if (off.length) out.push({ say: '자동 승인 기준 오류 · 변경 값의 Property 또는 Parameter의 최댓값 · 최솟값', sub: off.map((l) => l.subject.slice(2)).join(', '), tone: 'bad' });
       }
-      out.push(d.url.trim() ? { say: '호출 API 있음', sub: `${d.method} ${d.url.trim()}`, tone: 'ok' } : { say: '호출 API 없음 · 원천 값 변경', tone: 'note' });
+      out.push(d.url.trim() ? { say: '호출 API 있음', sub: `${d.method} ${d.url.trim()}`, tone: 'ok' } : { say: '호출 API 없음 · 소스 값 변경', tone: 'note' });
       return out;
     },
     valid: (d) => (!d.label.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.name.trim() ? '키가 없어 저장하지 못했습니다. 키를 입력해 주세요.' : !d.target ? '대상 Entity가 없어 저장하지 못했습니다. 대상 Entity를 선택해 주세요.' : ''),

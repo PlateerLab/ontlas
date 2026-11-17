@@ -113,9 +113,9 @@
          <label class="k-f">끝<input class="k-in" type="text" value="${esc(o.labelOf(c.x.to))}@${esc(c.x.to)}" readonly></label>`
       : c.kind === 'property'
         ? `${label}<label class="k-f">타입<select class="k-in" data-in="o2cctype" data-ref="${esc(ref)}"${dis}>${TYPES.map((t) => `<option value="${t}"${(e.types[ref] || c.x.type) === t ? ' selected' : ''}>${esc(TYPE_WORD[t] || t)} · ${t}</option>`).join('')}</select></label>
-           <label class="k-f">원천 컬럼<input class="k-in mono" type="text" value="${esc(`${objRow.table || c.obj}.${c.x.column}`)}" readonly></label>`
+           <label class="k-f">소스 컬럼<input class="k-in mono" type="text" value="${esc(`${objRow.table || c.obj}.${c.x.column}`)}" readonly></label>`
         : `${label}<label class="k-f">키<select class="k-in" data-in="o2cckey" data-obj="${esc(c.obj)}"${dis}>${o.propsOf(c.obj).map((k) => `<option value="${esc(k)}"${o.keyOf(c.obj) === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
-           <label class="k-f">원천 테이블<input class="k-in mono" type="text" value="${esc(c.x.table)}" readonly></label>`;
+           <label class="k-f">소스 테이블<input class="k-in mono" type="text" value="${esc(c.x.table)}" readonly></label>`;
     const basis = c.kind === 'link' ? `${esc(objRow.table || c.x.from)}의 ${why(o, 'link', c.x)}` : c.kind === 'object' ? `${esc(c.x.table)} · 키 <span class="k-code">${esc(o.keyOf(c.obj) || '-')}</span> · ${why(o, 'object', c.x)}` : `${esc(objRow.table || c.obj)}.${esc(c.x.column)} · ${why(o, 'property', c.x)}${c.x.type === 'enum' && c.x.values.length ? ` · ${c.x.values.slice(0, 8).map(esc).join(', ')}${c.x.values.length > 8 ? ' …' : ''}` : ''}`;
     const sib = all.filter((y) => y !== c && y.obj === c.obj).slice(0, 14);
     const ST = { off: '거절', ok: '승인', wait: '대기' };

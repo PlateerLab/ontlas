@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 from ontlas.web.routes import SERVER, get, post, require
 from ontlas.web.team import ITERATIONS, LEVELS, NEEDS, Logins, User
+from ontlas.words import fix as with_particles
 
 STARTED = time.time()
 PASSWORD_MIN = 10  # what team.Users.add asks of a password
@@ -169,9 +170,9 @@ def user_save(s, a, who) -> dict:
         raise ValueError("역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.")
     roles = [lv for lv in LEVELS if lv in roles]
     if new and uid in store.users:
-        raise ValueError(f"아이디 {uid}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.")
+        raise ValueError(with_particles(f"아이디 {uid}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요."))
     if not new and uid not in store.users:
-        raise ValueError(f"사용자 {uid}을(를) 찾을 수 없어 저장하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.")
+        raise ValueError(with_particles(f"사용자 {uid}을(를) 찾지 못해 저장하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
     if (new or password) and len(password) < PASSWORD_MIN:
         raise ValueError(f"비밀번호가 {PASSWORD_MIN}자보다 짧아 저장하지 못했습니다. {PASSWORD_MIN}자 이상 입력해 주세요.")
     if not new and "admin" in store.users[uid].roles and "admin" not in roles and not _admins(store, without=uid):
@@ -200,7 +201,7 @@ def user_drop(s, a, who) -> dict:
         raise ValueError("사용자 파일이 지정되지 않아 사용자를 폐기하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
     uid = str(a.get("id") or "")
     if uid not in store.users:
-        raise ValueError(f"사용자 {uid}을(를) 찾을 수 없어 폐기하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.")
+        raise ValueError(with_particles(f"사용자 {uid}을(를) 찾지 못해 폐기하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
     if who is not None and who.id == uid:
         raise ValueError("본인 계정은 폐기할 수 없어 처리하지 못했습니다. 다른 관리자에게 요청해 주세요.")
     if "admin" in store.users[uid].roles and not _admins(store, without=uid):
@@ -332,8 +333,8 @@ def targets(s, a, who) -> dict:
         for stage, cond, word, _, was in asked:
             current = (gates.get(stage) or {}).get(cond)
             if current != was:
-                return {"ok": False, "settings": now, "error": f"다른 관리자가 {word}을(를) 먼저 {_target_word(cond, current)}(으)로 "
-                                                               "바꿔 저장하지 못했습니다. 바뀐 값을 확인한 뒤 다시 입력해 주세요."}
+                return {"ok": False, "settings": now, "error": with_particles(f"다른 관리자가 {word}을(를) 먼저 {_target_word(cond, current)}(으)로 "
+                                                                              "바꿔 저장하지 못했습니다. 바뀐 값을 확인한 뒤 다시 입력해 주세요.")}
         said = []
         for stage, cond, word, value, was in asked:
             held = gates.setdefault(stage, {})  # a stage left with no condition stays, empty: left out, its default comes back

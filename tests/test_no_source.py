@@ -82,7 +82,7 @@ def test_what_reads_only_the_definition_works(session):
     assert "MATCH" in st.translate("ordersOfCustomer", "cypher").text
     q = session.run_query("ordersOfCustomer", {"customer": "C001"})
     assert q["ok"] and q["results"] == [] and q["no_source"] and any(t["ok"] for t in q["translations"])
-    assert all("원천" in t["error"] for t in q["translations"] if not t["ok"])  # said in the page's words
+    assert all("데이터 소스" in t["error"] for t in q["translations"] if not t["ok"])  # said in the page's words
     assert session.object("Customer")["properties"] and "Customer" in session.export_owl()
     assert session.space_search("반품", 3)["hits"]
     assert session.manage_state()["objects"]
@@ -95,7 +95,7 @@ def test_what_reads_rows_gives_the_typed_empty_answer(session):
     assert session.record_find("O1")["no_source"]
     for out in (session.object_rows("Order"), session.object_profile("OrderItem"), session.value_state(),
                 session.agreement(), session.bindings(), session.function_run("refundEstimate", "I1001", {})):
-        assert out["ok"] is False and out["no_source"] is True and "원천" in out["error"]
+        assert out["ok"] is False and out["no_source"] is True and "데이터 소스" in out["error"]
     q = session.questions()
     # what a word means is answered from the definition, and a decision question that states its values is decided on
     # them (stage 1): both are measured with no source; one that only names a record waits for a source (stage 2)
@@ -103,7 +103,7 @@ def test_what_reads_rows_gives_the_typed_empty_answer(session):
     rows = [r for r in q["results"] if r not in stated]
     assert stated and all(r["passed"] is True for r in stated)
     assert q["accuracy"] == 1 and q["measured"] == len(stated) and q["unmeasured"] == len(rows) > 0 and q["no_source"]
-    assert all(r["passed"] is None and r["note"] == "측정 대상 아님 (원천 미연결)" for r in rows)
+    assert all(r["passed"] is None and r["note"] == "미측정 · 데이터 소스 미연결" for r in rows)
     st = q["stages"]
     assert st["values"]["measured"] == st["values"]["passed"] == len(stated)
     assert st["record"]["measured"] == 0 and st["record"]["questions"] > 0  # every record question waits
@@ -123,7 +123,7 @@ def test_the_flow_does_not_fail_on_stages_that_need_rows(session):
     assert flow["passed"] is True and flow["gates"]["unmeasured"] > 0
     steps = {s["id"]: s for s in flow["steps"]}
     for stage in ("bind", "project", "query", "decide"):
-        assert steps[stage]["note"] == "측정 대상 아님 (원천 미연결)"
+        assert steps[stage]["note"] == "미측정 · 데이터 소스 미연결"
     assert "note" not in steps["check"]  # a question on what a word means needs no rows
     gates = [g for s in flow["steps"] for g in s["gates"]]
     assert all(g["passed"] for g in gates) and {g["stage"] for g in gates if g["unmeasured"]} == {"bind", "query", "decide",
@@ -175,7 +175,7 @@ def test_the_page_routes_answer_without_a_source(cfg):
                            ("/api/sync", {}), ("/api/transitions/advance", {}),
                            ("/api/request", {"action": "requestReturn", "key": "I1001", "kind": "human"})):
             code, out = call(path, body)
-            assert code == 409 and out["no_source"] is True and out["error"].startswith("원천 데이터가 연결되어 있지 않아"), path
+            assert code == 409 and out["no_source"] is True and out["error"].startswith("연결된 데이터 소스가 없어"), path
         code, out = call("/api/decide/simulate", {"name": "returnEligibility", "inputs": IN_WINDOW})
         assert code == 200 and out["outputs"]["eligible"] is True
         code, out = call("/api/questions", {})

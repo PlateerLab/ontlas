@@ -270,5 +270,5 @@ def test_a_question_is_added_on_values_alone_and_refused_with_neither():
                                    "expect": {"eligible": True}})
     q = next(x for x in s.manage_state()["questions"] if x["id"] == "X-N1")
     assert q["values"] == VIP_IN_WINDOW and not q["key"]
-    with pytest.raises(Exception, match="key"):
+    with pytest.raises(Exception, match="레코드 키와 판정 값이 없어 검증 질문 X-N2를"):
         s.manage_edit("add_question", {"id": "X-N2", "text": "?", "decision": "returnEligibility", "expect": {"eligible": True}})

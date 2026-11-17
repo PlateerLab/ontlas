@@ -259,8 +259,9 @@ def test_what_was_done_to_users_outlives_a_restart_where_there_is_a_journal(sess
 
     session.studio.changes.keep(Journal(tmp_path / "journal.jsonl"))
     root = people.users.users["root1"]
+    before = list(admin._log)  # what tests before this one left in the process
     routes.POST["admin/user/save"](session, {"id": "new5", "name": "새로 다섯", "roles": ["viewer"], "password": "new-password-5", "new": True}, root)
-    assert admin._log == []  # the journal holds it, not the process
+    assert admin._log == before  # the journal holds it, not the process
     lines = [json.loads(x) for x in (tmp_path / "journal.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [x["kind"] for x in lines] == ["admin"] and lines[0]["what"] == "user" and "new-password-5" not in json.dumps(lines)
     d = routes.GET["admin/audit"](session, {}, root)
@@ -309,15 +310,15 @@ def test_a_user_that_cannot_be_saved_is_refused_with_the_reason(session, routes,
     for wrong in ({"id": "a b"}, {"id": ""}, {"roles": []}, {"roles": ["owner"]}, {"password": "short"}, {"id": "maker1"}):
         with pytest.raises(ValueError):
             save(session, {**ok, **wrong}, admin)
-    with pytest.raises(ValueError, match="찾을 수 없어 저장하지 못했습니다"):
+    with pytest.raises(ValueError, match="찾지 못해 저장하지 못했습니다"):
         save(session, {**ok, "new": False}, admin)
-    with pytest.raises(ValueError, match=r"아이디 maker1이\(가\) 이미 있어"):
+    with pytest.raises(ValueError, match=r"아이디 maker1이 이미 있어"):
         save(session, {**ok, "id": "maker1"}, admin)
     with pytest.raises(ValueError, match="마지막 관리자"):
         save(session, {"id": "root1", "name": "관리 하나", "roles": ["editor"], "password": "", "new": False}, admin)
     with pytest.raises(ValueError, match="본인"):
         drop(session, {"id": "root1"}, admin)
-    with pytest.raises(ValueError, match="찾을 수 없어 폐기하지 못했습니다"):
+    with pytest.raises(ValueError, match="찾지 못해 폐기하지 못했습니다"):
         drop(session, {"id": "nobody"}, admin)
     assert sorted(people.users.users) == ["maker1", "reader1", "root1"]
 

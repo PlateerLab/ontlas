@@ -14,7 +14,7 @@ KINDS = ("database", "table", "column", "folder", "file", "collection", "dataset
 MAP_GROUPS = {"database": "source", "table": "source", "folder": "source", "file": "source", "document": "document",
               "collection": "document", "object": "ontology", "query": "use", "decision": "use", "action": "use", "role": "use",
               "vector_store": "store", "graph_store": "store", "reasoner": "store", "embedder": "store"}
-MAP_WORDS = {"source": "원천 데이터", "document": "문서", "ontology": "온톨로지", "store": "저장소 어댑터", "use": "활용"}
+MAP_WORDS = {"source": "데이터 소스", "document": "문서", "ontology": "온톨로지", "store": "저장소 어댑터", "use": "활용"}
 LOGIC_WORDS = {"rules": "규칙", "owl2rl": "OWL 2 RL", "shapes": "SHACL", "external": "외부 서비스"}
 VECTOR_WORDS = {"memory": "메모리", "qdrant": "Qdrant", "pgvector": "pgvector"}
 DEPENDS =("uses", "mapsTo", "hasProperty", "canRead", "hasRole", "embeddedIn", "contains")
@@ -253,7 +253,7 @@ def from_space(studio, space, files: dict | None = None) -> Catalog:
     source = studio.source or "source"
     cat = from_ontology(studio.onto, database=source)
     db = cat.assets[f"database:{source}"]
-    db.label = "원천 DB" if studio.backends else "원천 DB (미연결)"  # the definition names a source; none is connected
+    db.label = "데이터 소스" if studio.backends else "데이터 소스 미연결"  # the definition names a source; none is connected
     db.attrs["connected"] = bool(studio.backends)
     for name, b in studio.backends.items():
         if b.capabilities.load:
@@ -311,7 +311,7 @@ def map_graph(cat: Catalog) -> dict:
             seen.add((s, t, label))
             edges.append({"source": s, "target": t, "label": label, "subtype": False})
 
-    words = {"mapsTo": "원천", "uses": "사용", "contains": "포함", "canRead": "조회", "mentions": "언급", "embeddedIn": "색인"}
+    words = {"mapsTo": "Mapping", "uses": "사용", "contains": "포함", "canRead": "조회", "mentions": "언급", "embeddedIn": "색인"}
     for r in cat.relations:
         if r.source.startswith("link:"):
             continue

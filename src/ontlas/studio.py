@@ -12,7 +12,15 @@ from ontlas.check import all_props, check, column_of, find_prop, interface_view
 from ontlas.compile.base import Compiled, CompileError, compiler_for
 from ontlas.conformance import ConformanceReport
 from ontlas.conformance import run as run_conformance
-from ontlas.decide.table import DecisionError, DecisionResult, Evidence, evaluate_table, holding, open_inputs
+from ontlas.decide.table import (
+    DecisionError,
+    DecisionResult,
+    Evidence,
+    RecordNotFound,
+    evaluate_table,
+    holding,
+    open_inputs,
+)
 from ontlas.ir import Cmp, Column, Edge, Query, Ref
 from ontlas.model import Ontology
 from ontlas.modules import Composition, Impact, Module, ModuleError, compose, removal_impact
@@ -336,6 +344,8 @@ class Studio:
                 raw, said = values[prop], prop
                 if "days_since" in src and raw is not None:
                     raw = days_since(raw, at or self.now())
+                    if at is not None and raw < 0:  # asked as of a time before the day it counts from: no such case
+                        raise DecisionError(f"{name}.{inp.name}: the time asked about is before it starts")
             elif "param" in src and (src["param"] in params or src["param"] in values):
                 raw = params.get(src["param"], values.get(src["param"]))
                 said = src["param"]
@@ -383,7 +393,7 @@ class Studio:
         if table.target and not stated:
             row = self.fetch(table.target, key)
             if row is None:
-                raise DecisionError(f"{table.target} {key} not found")
+                raise RecordNotFound(f"{table.target} {key} not found")
         for inp in ([] if stated else table.inputs.values()):
             src = inp.source
             if "param" in src:
@@ -407,6 +417,8 @@ class Studio:
             raw = obj_row.get(prop) if obj_row else None
             if "days_since" in src:
                 value = None if raw is None else days_since(raw, at or self.now())
+                if at is not None and value is not None and value < 0:
+                    raise DecisionError(f"{name}.{inp.name}: the time asked about is before it starts")
             else:
                 value = raw
             values[inp.name] = value

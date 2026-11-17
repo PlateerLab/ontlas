@@ -13,10 +13,11 @@ from typing import Any
 
 from ontlas.manage import NAME as WORKSPACE
 from ontlas.web.monitor import FINDING
+from ontlas.words import fix as with_particles
 
 KEEP_ON = {"core", "domain", "binding", "axiom"}  # what everything else stands on: taking one off is never offered as a fix
-KIND_WORD = {"property": "속성", "query": "질의", "link": "관계", "object": "Entity", "decision": "결정", "action": "액션", "rule": "규칙",
-             "function": "함수", "role": "역할", "question": "검증 질문"}
+KIND_WORD = {"property": "Property", "query": "질의", "link": "Relation", "object": "Entity", "decision": "규칙", "action": "Action",
+             "rule": "규칙", "function": "함수", "role": "접근 정책", "question": "검증 질문"}
 SQL_TYPE = (("TIMESTAMP", "datetime"), ("DATETIME", "datetime"), ("DATE", "date"), ("TIME", "datetime"), ("BOOL", "boolean"), ("BIT", "boolean"),
             ("INT", "integer"), ("REAL", "decimal"), ("NUM", "decimal"), ("DEC", "decimal"), ("DOUBLE", "decimal"), ("FLOAT", "decimal"))
 ITEMS_MAX = 12
@@ -104,8 +105,8 @@ def _bind_item(s, f: dict, src) -> dict:
     item = {"element": el, "name": name, "label": label, "say": FINDING.get(kind, kind), "evidence": "", "near": "", "row": f"bind:{el}",
             "go": {"tab": "model", "el": el}, "message": ""}
     go = item["go"]
-    item["message"] = {"column": f"{data.get('table')} 테이블에 {data.get('column')} 컬럼이 없습니다.", "table": f"원천 DB에 {data.get('table')} 테이블이 없습니다.",
-                       "type": f"{data.get('column')} 컬럼은 원천에서 {data.get('sql_type') or '알 수 없는 자료형'}입니다.",
+    item["message"] = {"column": f"{data.get('table')} 테이블에 {data.get('column')} 컬럼이 없습니다.", "table": f"데이터 소스에 {data.get('table')} 테이블이 없습니다.",
+                       "type": f"{data.get('column')} 컬럼은 데이터 소스에서 {data.get('sql_type') or '알 수 없는 자료형'}입니다.",
                        "key": f"키 값이 겹칩니다: {', '.join(data.get('keys') or [])}", "required": f"값이 없는 행이 {data.get('count', 0):,}건 있습니다.",
                        "enum": f"정의에 없는 값이 있습니다: {', '.join(data.get('extra') or [])}", "orphan": f"연결되지 않는 행이 {data.get('count', 0):,}건 있습니다."}.get(kind, "")
     if kind == "column" and el.startswith("property:"):
@@ -115,7 +116,7 @@ def _bind_item(s, f: dict, src) -> dict:
         go["field"] = "table"
     elif kind == "type":
         go["field"] = "type"
-        item["evidence"] = f"정의 {data.get('type')} · 원천 {data.get('sql_type') or '알 수 없음'}"
+        item["evidence"] = f"정의 {data.get('type')} · 소스 {data.get('sql_type') or '알 수 없음'}"
     elif kind == "key":
         go["field"] = "key"
         item["evidence"] = f"중복된 키 {', '.join(data.get('keys') or [])}"
@@ -137,7 +138,7 @@ def _steps(items: list[dict]) -> list[dict]:
 
 def _cleanup(found: list[dict], items: list[dict]) -> str:
     """The rows to hand to whoever keeps the source."""
-    lines = ["온톨로지 정의와 원천 DB를 맞추기 위해 원천 정리가 필요합니다."]
+    lines = ["온톨로지 정의와 데이터 소스를 맞추기 위한 데이터 정리 목록입니다."]
     for f, x in zip(found, items):
         data = f.get("data") or {}
         where = ".".join(filter(None, [data.get("table"), data.get("column") or ",".join(data.get("columns") or [])]))
@@ -172,7 +173,7 @@ def _missing_fixes(s, owner: str, found: list[dict], items: list[dict]) -> list[
     every_near = bool(props) and all(x["near"] for x in props)
     recent = _attached(s, owner) if owner else None
     out = []
-    rebind = _fix("원천 컬럼 다시 지정", "here", (f"비슷한 이름의 컬럼 {props[0]['near']}을 채워 둡니다." if every_near else "모듈을 유지합니다. 작업 공간에서 이 속성의 원천 컬럼 칸이 열립니다."),
+    rebind = _fix("소스 컬럼 다시 지정", "here", (with_particles(f"비슷한 이름의 컬럼 {props[0]['near']}을(를) 채워 둡니다.") if every_near else "모듈을 유지하고 Property의 소스 컬럼을 다시 지정합니다."),
                   "고치러 가기", go=items[0]["go"], steps=_steps(items), recommended=every_near)
     leave = _detach_fix(s, owner, not every_near and bool(recent), why="비슷한 컬럼이 없고 방금 적용한 모듈입니다." if recent and not every_near else "")
     out += [leave] if leave and leave["recommended"] else []
@@ -183,22 +184,22 @@ def _missing_fixes(s, owner: str, found: list[dict], items: list[dict]) -> list[
         d = f.get("data") or {}
         tables.setdefault(d.get("table", ""), []).extend([d["column"]] if d.get("column") else [])
     said = ", ".join(f"{t}에 {', '.join(c)}" if c else f"{t} 테이블" for t, c in tables.items())
-    asked = "\n".join(["온톨로지 정의와 원천 DB를 맞추기 위한 요청입니다.",
+    asked = "\n".join(["온톨로지 정의와 데이터 소스를 맞추기 위한 요청입니다.",
                        *[f"- {t} 테이블에 {', '.join(c)} 컬럼이 필요합니다." if c else f"- {t} 테이블이 필요합니다." for t, c in tables.items()]])
-    out.append(_fix("원천에 컬럼 추가 요청", "source", f"{said}가 필요하다는 내용을 복사합니다.", "요청 내용 복사", copy=asked))
+    out.append(_fix("데이터 소스에 컬럼 추가 요청", "source", with_particles(f"{said}이(가) 필요하다는 내용을 복사합니다."), "요청 내용 복사", copy=asked))
     return out
 
 
 def _other_fixes(s, kind: str, owner: str, found: list[dict], items: list[dict]) -> list[dict]:
     first = items[0]
     mine = owner == WORKSPACE
-    source = _fix("원천 정리 목록 복사", "source", "원천 담당자에게 넘길 행 목록을 복사합니다.", "목록 복사", copy=_cleanup(found, items))
+    source = _fix("데이터 정리 목록 복사", "source", "데이터 소스 담당자에게 넘길 행 목록을 복사합니다.", "목록 복사", copy=_cleanup(found, items))
     if kind == "type":
         data = found[0].get("data") or {}
         retype = _type_of(data.get("sql_type", ""))
-        out = [_fix("자료형 맞추기", "here", f"자료형을 원천 컬럼에 맞춰 {retype}으로 채워 둡니다.", "고치러 가기",
+        out = [_fix("자료형 맞추기", "here", with_particles(f"자료형을 소스 컬럼에 맞춰 {retype}(으)로 채워 둡니다."), "고치러 가기",
                     go={**first["go"], "field": "type", "prefill": retype}, recommended=True)] if mine else []
-        return [*out, _fix("변환식 넣기", "here", "원천 값을 읽는 변환식을 지정합니다.", "고치러 가기", go={**first["go"], "field": "transform"}, recommended=not mine)]
+        return [*out, _fix("변환식 넣기", "here", "소스 값을 읽는 변환식을 지정합니다.", "고치러 가기", go={**first["go"], "field": "transform"}, recommended=not mine)]
     if kind == "key":
         return [*([_fix("키 컬럼 다시 지정", "here", "키 컬럼 칸이 열립니다.", "고치러 가기", go=first["go"], steps=_steps(items))] if mine else []), source]
     if kind == "required":
@@ -272,14 +273,14 @@ def _query(s, conf: dict, gate: dict) -> dict:
         q = onto.queries.get(r["name"])
         failed = any(o.get("error") for o in r["outcomes"].values())
         items.append({"element": f"query:{r['name']}", "name": r["name"], "label": (q.label if q else "") or r["name"], "row": f"conf:{r['name']}",
-                      "say": "원천 DB 실행 실패" if failed and (r["outcomes"].get(s.studio.source) or {}).get("error") else "실행 실패" if failed else "저장소 결과 불일치",
+                      "say": "데이터 소스 실행 실패" if failed and (r["outcomes"].get(s.studio.source) or {}).get("error") else "실행 실패" if failed else "저장소 결과 불일치",
                       "evidence": " · ".join(f"{b} {outcome(o)}" for b, o in r["outcomes"].items()), "near": "", "go": {"tab": "flow", "row": f"conf:{r['name']}"}})
     errors = any("실행 실패" in x["say"] for x in items)
     fixes = []
     if items:
         fixes.append(_fix("질의 열기", "here", "질의 화면에서 이 질의를 선택해 실행합니다.", "질의 열기", go={"tab": "query", "query": items[0]["name"]},
                           steps=[{"label": x["label"], "go": {"tab": "query", "query": x["name"]}} for x in items], recommended=errors))
-    fixes.append(_fix("원천 다시 읽기", "now", "원천을 그래프 저장소에 다시 반영한 뒤 다시 측정합니다.", "다시 읽기", run={"route": "sync", "body": {}}, recommended=not errors))
+    fixes.append(_fix("데이터 소스 다시 읽기", "now", "데이터 소스를 그래프 저장소에 다시 반영한 뒤 다시 측정합니다.", "다시 읽기", run={"route": "sync", "body": {}}, recommended=not errors))
     detail = " · ".join([items[0]["label"], items[0]["say"]]) if items else (conf.get("error") or f"기준 {_pct(gate['limit'])} · 현재 {_pct(gate['value'])}")
     title = f"Backend 결과 일치 {conf.get('agree')} / {conf.get('queries')}" if "queries" in conf else "Backend 결과 비교 실패"
     return _issue("gate:query.min_agree", "query", "bad", "use", title, detail, key="gate:query.min_agree", items=items, note=conf.get("error", ""), fixes=fixes)
@@ -337,7 +338,7 @@ def _values(s, check: dict, gate: dict) -> dict:
     err = check.get("value_error")
     if err:
         m = re.search(r"no such column: (\S+)", err)
-        said = f"원천 DB에 {m.group(1).split('.')[-1]} 컬럼이 없습니다." if m else err
+        said = f"데이터 소스에 {m.group(1).split('.')[-1]} 컬럼이 없습니다." if m else err
         items = [{"element": "", "name": "values", "label": "거래 값 대조", "say": "실행 실패", "evidence": said, "near": "", "row": "values", "go": {"tab": "flow", "row": "values"}}]
         title, detail = "거래 값 대조 실행 실패", said
     else:
@@ -346,7 +347,7 @@ def _values(s, check: dict, gate: dict) -> dict:
                  for v in check.get("values") or [] for w in v.get("mismatches") or []]
         title, detail = f"거래 값 오류 {check.get('value_errors')}건", f"기준 {gate['limit']}건 · 대조 {check.get('value_cases', 0):,}건"
     fixes = [_fix("대조 결과 열기", "here", "검증 화면의 거래 값 정확도로 이동합니다.", "결과 열기", go={"tab": "flow", "row": "values"}, recommended=not err),
-             _fix("대조 항목 설정 열기", "here", "흐름 설정의 거래 값 대조로 이동합니다.", "설정 열기", go={"tab": "flow", "row": "values"})]
+             _fix("대조 항목 설정 열기", "here", "통과 조건의 거래 값 대조로 이동합니다.", "설정 열기", go={"tab": "flow", "row": "values"})]
     return _issue("gate:check.max_value_errors", "check.values", "bad", "verify", title, detail, key="gate:check.max_value_errors", items=items, fixes=fixes)
 
 
