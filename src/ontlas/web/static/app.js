@@ -587,14 +587,15 @@
       sources: viewSources, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions, actions: viewMgActions, roles: viewRoles,
       objmgr: viewObjMgr, ruleagent: viewRuleAgent, versions: viewVersions, lexicon: viewLexicon, semrules: viewSemRules };
     const main = $('#main');
-    main.classList.toggle('wsmode', S.tab === 'model');
+    const v2 = V2[S.tab];
+    const bleed = v2 ? !!v2.bleed : S.tab === 'model';  // a screen that fills the window to its edges (the diagram's workspace)
+    main.classList.toggle('wsmode', bleed);
     main.classList.remove('pgo');
     main.dataset.sec = ['home', 'inbox', 'records', 'record', 'graph', 'decide', 'search'].includes(S.tab) ? 'use' : groupOf(S.tab)[0];  // code names are left out of the screens people use the ontology on
     const kept = [...main.querySelectorAll('.wscolb')].map((x) => x.scrollTop);
-    const v2 = V2[S.tab];
     if (v2 && v2.may && !v2.may()) { main.innerHTML = `<div class="k-main">${noAccess()}</div>`; paintLayer(); return; }
-    const body = v2 ? v2.view() : (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
-    main.innerHTML = S.tab === 'model' || (v2 && v2.area === 'auth') ? body : `<div class="k-main">${body}</div>`;
+    const body = v2 ? (v2.area === 'auth' || bleed ? '' : fixBar()) + v2.view() : (S.tab === 'model' ? '' : subTabs()) + fixBar() + (views[S.tab] || viewHome)();
+    main.innerHTML = bleed || (v2 && v2.area === 'auth') ? body : `<div class="k-main">${body}</div>`;
     main.querySelectorAll('.wscolb').forEach((x, i) => { x.scrollTop = kept[i] || 0; });
     declutter();
     paintLayer();
@@ -7623,7 +7624,7 @@ ${controls}${body}`;
   // a link can say what to open on the screen it leads to: #model?el=property:Sku.expires_on&field=column
   function readHash() {
     const [tab, query] = location.hash.slice(1).split('?');
-    if (TABLE_TABS.includes(tab)) { S.tab = 'model'; S.md.view = 'table'; S.md.arrive = tab; } else S.tab = tab || 'home';
+    if (TABLE_TABS.includes(tab) && !V2[tab]) { S.tab = 'model'; S.md.view = 'table'; S.md.arrive = tab; } else S.tab = tab || 'home';
     if (tab === 'model') S.md.view = 'diagram';  // 그래프 탐색 is the diagram; the table is the Entity screen (#objects)
     S.land = query ? Object.fromEntries(new URLSearchParams(query)) : null;
     S.hit = ''; S.hitDone = '';
