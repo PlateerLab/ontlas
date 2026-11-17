@@ -776,6 +776,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    """The page's server. Python holds 5 connections waiting to be accepted by default: a page asks for several things at
+    once, so a few visitors arriving together while a request is being worked on had their connections reset."""
+
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: int = 7710, limit: int = 24,
           idle: float = 3600, ask_per_minute: int = 20, quiet: bool = False, data: DataOptions | None = None,
           video: Path | None = None, users: Path | None = None, sync: float = 0,
@@ -798,10 +806,9 @@ def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: 
                                               actor_id=c.get("name") or "api", read_only=not c.get("write"), audit=True))
                      for c in clients], source=(lambda: shared.studio) if shared else None,
                     lock=shared.lock if shared else None, libraries=libraries)
-    httpd = ThreadingHTTPServer((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
-                                                           quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
-                                                           video=video, logins=logins, rest=rest))
-    httpd.daemon_threads = True
+    httpd = Server((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
+                                              quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
+                                              video=video, logins=logins, rest=rest))
     if sync:
         Syncer(sessions, sync).start()
     print(f"ontlas on http://{host}:{port}" + (" (team)" if logins else ""), flush=True)

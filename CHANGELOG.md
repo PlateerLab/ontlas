@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.3
+
+- **Visitors who arrive together are all answered.** The page's server kept Python's default of five connections
+  waiting to be accepted. A page asks for several things at once, so with the server busy on a heavy request a burst
+  of new connections had some reset: under 24 visitors each uploading draft files, 135 of 288 uploads and 24 of 72
+  library creations got no answer, and a plain burst of 96 requests lost 132 of 480. The server now holds 128. The same
+  load, run again, lost none.
+
 ## 0.24.2
 
 - **The ways in from outside stand where a person looks first, each with something to take away.** 외부 연동 said how a
