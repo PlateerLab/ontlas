@@ -106,318 +106,6 @@
   const HIT_WORD = { first: '위 규칙부터 첫 적중 적용', collect: '적중한 규칙 모두 적용', priority: '우선순위가 높은 규칙 적용', unique: '하나만 적중해야 함' };
   const CARD = { many_to_one: 'N:1', one_to_many: '1:N', one_to_one: '1:1', many_to_many: 'N:M' };
   const TYPE_WORD = { integer: '정수', decimal: '소수', date: '날짜', datetime: '일시', boolean: '참 · 거짓', string: '문자열', enum: '문자열' };
-  // the manual: one section per screen, in the order a first visit goes through them
-  const GUIDE = [
-    ['home', '스페이스 현황, 처리할 일, 운영 상태를 한 화면에서 확인합니다.', [
-      '맨 위 검색 상자에 레코드 번호, 정의, 문서 내용, 질문을 입력합니다. 예: 주문상품 I1001 반품 되나요?',
-      '스페이스 현황은 적용 버전, Entity 성숙도(L0~L3), 일정, Semantic Layer · Ontology · Data Binding · Quality 의 상태를 표시합니다. 각 항목을 누르면 해당 화면이 열립니다. 원천 연결은 선택이며, 연결하지 않아도 정의와 규칙, 판정은 동작합니다.',
-      '정의가 없으면 시작 방법을 선택합니다. 직접 정의는 데이터 없이 Object와 Entity부터 만들고, 표준에서 시작은 표준 모듈을 적용하고, 문서 · 데이터에서 초안은 정의서, 정책서, 테이블로 초안을 생성합니다.',
-      'Object 카드는 Object별 차수, Entity 수, 성숙도를 표시합니다. 누르면 Object 화면에서 상세가 열립니다.',
-      '[보는 역할]에서 운영 담당, 도메인 전문가, 모델러를 선택하면 홈의 카드 구성이 역할에 맞게 바뀝니다.',
-      '할 일 카드는 액션 승인, 변경 요청, 출처 충돌, DB 대조 경고, 아직 요청하지 않은 정의 변경을 한 목록으로 보여 줍니다.',
-      '운영 상태 카드는 통과 조건, 저장소 간 결과 일치, 과거 판정 일치율, 검증 질문 정답을 한 번에 보여 주고 [관제]로 이어집니다.',
-      '자주 보는 레코드(이 브라우저에서 연 횟수 순)와 저장된 질의에서 바로 돌아갑니다. 등록 질의에는 검증됨, 지표에는 지표 표시가 붙습니다.']],
-    ['inbox', '승인할 액션, 검토할 변경 요청, 고를 출처 충돌, 점검 경고를 한 목록에서 처리합니다.', [
-      '나에게 할당, 내가 요청, 전체 탭으로 나눠 봅니다. 팀 스페이스에서는 다른 사람이 요청한 것이 나에게 할당에 옵니다.',
-      '액션 승인 행은 누가 요청했고 무엇이 얼마나 바뀌는지(예: 변화율 +16.9% · 자동 승인 한도 10% 초과)를 한 줄로 보여 주고, [승인] · [반려]로 바로 처리합니다.',
-      '변경 요청 행은 사본 시험 결과와 전보다 나빠진 통과 조건을 보여 주고, [검토]로 항목별 검토 화면을 엽니다.',
-      '출처 충돌은 [고르기]로 출처를 고릅니다. 고른 것은 대기 중인 변경이 되어 변경 요청과 승인을 거칩니다.',
-      '점검 경고는 [조치 보기]로 원인 · 영향 · 조치 패널을 엽니다.']],
-    ['records', 'Entity의 레코드를 번호나 이름으로 찾고, 한 건을 열어 속성, 연결, 판정, 문서, 이력을 한 페이지에서 봅니다.', [
-      '타입을 고르고 번호나 이름의 일부를 넣어 찾습니다. 이름이 없는 레코드는 그것이 속한 레코드의 이름으로 읽습니다.',
-      '레코드 페이지의 머리글은 핵심 값, 상태 전이의 지금 단계와 다음 단계, 할 수 있는 액션과 함수를 보여 줍니다. 역할을 고르면 그 역할이 요청할 수 있는 액션만 남습니다.',
-      '연결 탭은 따라간 레코드를 들여쓰기로 보여 주고 누르면 그 레코드로 이동합니다. 가림 속성은 가린 채로 보입니다.',
-      '판정 탭은 이 레코드에 적용되는 결정표와 함수를 열 때 계산해 보여 줍니다. 기록은 남기지 않습니다.',
-      '문서 탭은 이 레코드나 타입을 언급한 문서의 항목을 모읍니다. 이력 탭은 원천의 날짜, 사람과 Agent의 요청, 승인을 한 시간순으로 보여 줍니다.']],
-    ['graph', '레코드 하나에서 출발해 관계 종류별 개수를 보고 펼치는 지식그래프 탐색입니다.', [
-      '검색 상자에 레코드를 적고 Enter로 시작합니다. 관계마다 연결된 레코드 수가 보이고, 고른 관계만 펼칩니다. 한 번에 25개까지 펼치고 넘으면 묶음으로 둡니다.',
-      '레코드에는 타입, 번호, 이름이, 관계선에는 관계 이름이 항상 보입니다. 타입마다 색과 모양이 다릅니다.',
-      '경로 찾기에서 시작과 도착 레코드를 적으면 둘을 잇는 가장 짧은 관계 사슬을 찾아 주황색으로 강조합니다. 경로는 온톨로지 질의로 실행되므로 SQL 원천에서도 됩니다.',
-      '관점에서 보여 줄 타입, 타입별 색, 레코드를 부를 속성을 정해 이름을 붙여 저장합니다. 저장한 관점은 이 스페이스를 여는 모두가 고를 수 있고, 관점에 역할을 정해 두면 홈에서 그 역할을 고를 때 그 관점으로 바뀝니다.',
-      '탐색 기록에서 지나온 단계로 돌아가고, [링크 복사]로 지금 시작 레코드를 다른 사람에게 보냅니다.']],
-    ['objmgr', 'Object별 정의, 차수, 소유자, 성숙도를 확인하고 관리합니다.', [
-      '차수와 이름으로 Object를 검색합니다. 행을 선택하면 성숙도, Entity, 관계, 결정표, 검증 질문, 근거, 소유자 · 버전이 표시됩니다.',
-      '성숙도는 L0 개념, L1 논리, L2 원천 연결, L3 DB 대조 통과 순서이며 하위 Entity 중 가장 낮은 단계를 기준으로 합니다.',
-      '[새 Object]와 [편집]은 관리 변경에 기록되고 변경 요청으로 승인합니다.']],
-    ['model', 'Object > Entity > 속성 세 단계의 정의를 캔버스, 표, 폼, YAML 어느 쪽에서 고쳐도 같은 요소에 반영되는 작업 공간입니다.', [
-      'Object는 최상위 분류(주문, 상품, 결제 같은 업무 영역)이고, Entity는 그 아래 개념(주문, 주문상품)이며, 속성은 Entity의 값입니다. 왼쪽 트리는 Object별로 Entity를 묶고, [모듈별]로 바꾸면 정의한 모듈별로 묶습니다.',
-      '[+ Object]로 Object를 만들고, Object를 누르면 이름, 정의, 출처, 상태를 고치고 그 아래 Entity를 추가합니다. Entity의 폼에서 속할 Object를 고릅니다. 데이터 없이도 만들 수 있습니다.',
-      'Entity마다 성숙도가 보입니다. L0 개념은 정의만, L1 논리는 속성이나 관계가 있음, L2 연결은 원천 테이블과 컬럼에 연결됨, L3 검증은 DB 대조에서 문제가 없음입니다.',
-      '왼쪽은 트리(정의 · 원천 · 문제 · 변경), 가운데는 캔버스, 오른쪽은 고른 요소의 폼 · 데이터 · 사용처 · YAML · 댓글입니다. [표]로 바꾸면 Entity · 속성 · 관계가 3열로 섭니다.',
-      '캔버스의 카드에는 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 카드는 가장 긴 줄에 맞춰 넓어지고, 줄인 글은 마우스를 올리면 전부 보입니다. 카드 테두리의 +를 다른 카드에 끌어 놓으면 연결 기준을 제안받아 관계를 만들고, 원천의 컬럼을 카드에 끌어 놓으면 속성이 됩니다.',
-      '휠로 확대 · 축소하고 빈 곳을 끌어 이동합니다. 캔버스보다 작은 그림은 가운데에 놓이고, [%]를 누르면 캔버스 너비에 맞춰 카드 열 수와 배율을 다시 잡습니다.',
-      '요소마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인데 읽는 곳이 남아 있으면 사용처에 표시됩니다.',
-      '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장한 변경은 대기 중인 변경에 쌓이고 하나씩 되돌리거나 다시 실행할 수 있습니다.',
-      '[사본에서 시험]은 대기 중인 변경을 사본 스페이스에 적용해 통과 조건을 전후로 비교합니다. [변경 요청 만들기]로 검토와 승인으로 보냅니다.',
-      '카드 위치는 스페이스에 저장되어 같은 파이프라인을 여는 모두가 같은 배치를 봅니다.']],
-    ['changes', '변경 요청을 항목별로 검토하고 전후 시험 결과를 보며 승인합니다.', [
-      '머리글에 상태, 작성자, 검토자, 진행률이 보입니다. 작성자는 자기 변경을 승인할 수 없습니다.',
-      '바뀐 항목마다 [확인] 또는 [수정 요청]을 남깁니다. 규칙, 속성, 관계는 칸별 의미 비교와 YAML 비교로 봅니다.',
-      '사본에서 시험한 결과는 통과 조건마다 전 → 후 숫자로 보여 주고, 실패한 검증 질문은 바로 열어 기대값 제안을 받을 수 있습니다.',
-      '댓글은 항목에 붙어 승인 뒤에도 남습니다. 모든 항목을 확인하고 통과 조건을 지켜야 승인 버튼이 켜집니다.',
-      '라이브러리 탭에서 모듈을 적용 · 해제하고 모듈 파일을 편집합니다.']],
-    ['versions', '승인된 변경 요청마다 생성된 버전과 회귀 평가 결과를 확인합니다.', [
-      '현재 버전과 적용 모듈 버전, 승인 대기 요청, 처리된 요청을 표시합니다.',
-      '회귀 평가는 변경 전후의 신규 오답, 신규 정답, 정답률 · 근거 제시율 · 판정 일치율, 통과 조건 변화를 비교합니다.',
-      '모듈 버전 목록은 라이브러리의 모든 버전과 적용 버전을 표시합니다.']],
-    ['monitor', '원천 데이터부터 검증까지 파이프라인 상태를 단계별로 확인합니다.', [
-      '원천 데이터, 변환, 온톨로지 구축, 저장소 어댑터, 활용, 검증 순서로 데이터를 처리합니다.',
-      '단계별 수치는 2초마다 갱신합니다. 정의나 파일이 바뀌면 즉시, 그 밖에는 20초마다 파이프라인을 점검합니다.',
-      '수치를 선택하면 해당 화면으로 이동합니다. 상단 탭에서 단계를 선택하면 해당 단계를 강조합니다.',
-      '통과 조건을 충족하지 못한 단계가 있으면 해당 단계에서 흐름이 중단됩니다. 알림을 누르면 원인 · 영향 · 조치 패널이 열리고, 고칠 칸으로 바로 이동한 뒤 다시 측정해 닫힙니다.',
-      '화면 상단의 파이프라인 목록에서 적용한 파이프라인을 선택해 전환합니다. 초안을 적용하면 새 파이프라인이 추가됩니다.',
-      '사이드바 아래 [연결]은 저장소, 쿼리 언어, 연동 항목이 지금 응답하는지 30초마다 확인해 표시합니다. 초록은 응답, 빨강은 응답 없음, 회색은 사용하지 않거나 아직 호출하지 않은 항목입니다.',
-      '[장애 테스트]를 선택하면 설정한 장애 시나리오를 적용해 알림과 원인 경로를 확인합니다. [복구]를 선택하면 원래 상태로 복원됩니다.']],
-    ['flow', '원천 데이터부터 검증까지 단계별 처리 현황과 통과 조건을 확인합니다.', [
-      '단계별 카드에서 [열기]를 선택하면 해당 화면으로 이동합니다.',
-      '흐름 설정에서 단계를 켜고 끄고, DB 대조 오류 수, 문서 검색 적중률, Backend 결과 일치율, 판정 일치율, 검증 질문 정답률 기준을 지정합니다.',
-      '상단 정보에서 현재 데이터 출처를 확인합니다.',
-      '모듈 적용 상태를 바꾸거나 데이터를 업로드하면 단계별 수치가 갱신됩니다.']],
-    ['explorer', '레포지토리의 파일과 폴더, DB 테이블과 컬럼, 문서, 온톨로지, 저장소, 질의와 결정을 한곳에서 찾고 관리합니다.', [
-      '왼쪽 탐색기에서 항목을 선택하면 그 안의 항목과 처리 상태를 표시합니다. 폴더는 문서 색인과 초안 포함 수를, 파일은 변환 결과, 문서 색인 청크, 초안 포함 여부를 표시합니다.',
-      '검색은 이름과 경로, 온톨로지 정의, 문서 내용을 함께 찾고, 결과마다 찾은 곳(이름, 경로, 정의, 단어 일치, 의미 유사)을 표시합니다.',
-      '레포지토리의 파일과 폴더는 새 폴더, 업로드, 이름 변경, 이동, 삭제를 할 수 있습니다. 삭제한 항목은 휴지통으로 이동하고 [휴지통]에서 복원하거나 영구 삭제합니다.',
-      '[작업 기록]에서 업로드, 이동, 삭제, 복원, 초안 포함 변경, 임베딩 변경을 시각 순으로 확인합니다.']],
-    ['map', '파일, 테이블, 문서, 저장소, Entity, 질의의 연결 관계를 그래프로 확인합니다.', [
-      'Node를 선택하면 영향 범위와 참조 자산이 표시됩니다.',
-      '범례를 선택하면 해당 그룹을 숨기거나 다시 표시합니다.',
-      '미사용 자산은 Entity, 질의, 문서와 연결되지 않은 파일과 테이블입니다.', '온톨로지는 업무 개념을 정의하고, 데이터 지도는 정의를 포함한 전체 자산의 연결 관계를 표시합니다.']],
-    ['catalog', 'CSV, Excel, 정의서, 문서 파일을 레포지토리 단위로 관리하고 파일별 유형, 규모, 처리 경로를 확인합니다.', [
-      '문서 파일을 올리면 벡터 저장소에 임베딩되고 문서 온톨로지에 추가됩니다. 임베딩 열의 선택을 해제하면 검색에서 제외되고 문서 온톨로지에는 남습니다.',
-      '임베딩 열은 파일별 상태를 임베딩됨, 임베딩 대기, 임베딩 실패, 꺼짐으로 표시합니다. 폴더에서 선택을 바꾸면 하위 파일 전체에 적용됩니다.',
-      '파일이나 폴더를 드래그하거나 [파일 선택], [폴더 선택]으로 업로드합니다. 현재 폴더에 업로드되며 폴더는 하위 구조를 유지합니다.',
-      '읽기에 실패한 파일도 보관합니다. 유형에 읽기 실패로 표시되고, 파일을 선택하면 사유를 확인할 수 있습니다. 이미지, 영상, 압축 파일은 원본으로 보관합니다.',
-      '초안 열의 선택을 해제하면 파일 또는 폴더를 초안, 변환 결과, 검색, 문서 온톨로지에서 모두 제외합니다.',
-      '파일마다 무엇이 될지(테이블 데이터, 정의서, 문서, 원본 보관)와 처리 경로가 업로드 직후 표시됩니다. 내용과 다르게 읽혔으면 작업 메뉴의 용도에서 바꿉니다. 바꾸면 그 용도로 다시 읽고 초안과 검색이 따라옵니다.',
-      '업로드가 끝나면 올린 파일이 무엇이 되었는지와 다음 단계(초안 검토)를 바로 안내합니다.',
-      '파일명을 선택하면 미리보기와 JSON을 확인합니다. 작업 메뉴에서 내려받기, 이름 변경, 용도, 삭제를 합니다.',
-      '[다른 레포지토리 선택]에서 레포지토리를 바꾸거나 새로 만듭니다. 레포지토리를 바꾸면 초안에 사용하는 파일도 함께 변경됩니다.']],
-    ['db', '데이터베이스를 연결해 온톨로지 초안을 생성합니다.', [
-      'PostgreSQL, MySQL, Oracle, SQL Server 주소 또는 SQLite 파일 경로를 입력하고 [연결]을 선택합니다. 서버가 DB 주소 연결을 허용한 경우에 입력 칸이 표시됩니다.',
-      '플랫폼이 관리하는 DB 연결을 쓰려면 플랫폼 연결에 쿼리 서비스 주소, 연결 번호, 접속 토큰을 입력합니다. DB 비밀번호는 필요하지 않습니다.',
-      '데이터는 원본 DB에 그대로 유지됩니다.']],
-    ['convert', '초안에 포함한 파일의 통합 JSON을 확인합니다.', [
-      '파일별 변환 결과와 테이블, 코드, 용어, 메시지, 문서 수를 확인합니다.',
-      '파일 형식과 관계없이 같은 구조의 JSON으로 변환합니다.',
-      '[JSON 내려받기]로 전체 내용을 저장합니다.']],
-    ['sources', '연결된 원천 테이블의 행 수, 컬럼, 키, 참조 컬럼과 테이블별 연결 Entity를 확인합니다.', [
-      '테이블을 선택하면 컬럼별 타입, 키, 참조 대상과 연결 속성이 표시됩니다.',
-      '연결 Entity가 없는 테이블은 [Entity로 추가]를 선택해 작업 공간에서 Entity로 추가합니다.',
-      '파일 업로드는 [데이터 카탈로그], DB 연결은 [DB 연결]에서 합니다.']],
-    ['data', '데이터 카탈로그의 파일로 온톨로지 초안을 만들고, 제안을 단계별로 검토해 스페이스에 적용합니다.', [
-      '데이터 카탈로그에서 초안에 포함한 파일이 표시됩니다. 테이블별로 선택을 해제할 수 있습니다.',
-      '[생성 설정]에서 허용값 기준, 관계 추론, 이름 규칙, 생성할 질의, 비교할 표준 모듈을 지정합니다.',
-      '[초안 생성]을 선택하면 파일 선택, Entity · 키, 속성 · 타입, 관계, 질의, 상태 · 규칙, 검토 · 적용 순서의 단계가 생기고, 단계마다 사람이 확인할 개수가 붙습니다.',
-      'Entity · 키 단계에서 테이블마다 표준 Entity와 얼마나 맞는지 점수가 보이고, [표준에 연결]과 [새 Entity로 유지] 중에 고릅니다. 영문 이름은 표준과 용어 사전의 말로 제안하고, 모르는 말만 로마자로 남깁니다.',
-      '행을 고르면 오른쪽에 샘플 값, 키 근거, 일치 근거, 가림 권장 속성이 보입니다. [남은 제안 모두 채택]으로 남은 것을 한 번에 채택합니다.',
-      '마지막 단계에서 적용합니다. 팀 스페이스에서는 편집자가 [적용 요청]으로 검토한 그대로 승인자에게 보내고, 승인자가 할 일이나 이 화면에서 [요청대로 적용] 또는 [반려]합니다.',
-      'SQL 스크립트, ERD 파일, 정의서, 용어집, 메시지 목록, DOC, DOCX, PPT, PPTX, HWP, HWPX, PDF 문서와 XLS, XLSX 파일을 함께 사용할 수 있습니다.',
-      '데이터 파일 없이 정의서만 있으면 행 없이 키, 참조, 코드값으로 초안을 만듭니다. 복합 키는 키 속성 하나로 통합합니다.',
-      '단계마다 키 컬럼, 속성 타입과 허용값, 이름, Cardinality, 생성 질의를 수정하고 관계를 추가합니다. 수정할 때마다 정의 검사가 다시 실행됩니다.',
-      '상태 · 규칙 단계에서 상태 전이와 검증 질문을 확인하고, 지난 처리 결과 컬럼을 선택해 판정 표를 생성합니다.',
-      '검토 · 적용 단계는 적용하면 만들어질 모듈 파일과 정의 검사 결과를 보여 줍니다. [스페이스에 적용]을 선택하면 표준에 연결한 테이블은 Binding으로, 새 Entity는 표준 옆의 모듈로 들어가 새 파이프라인이 됩니다. 기존 파이프라인은 화면 상단 목록에서 다시 선택할 수 있습니다.',
-      '팀 스페이스에서는 적용이 공유 공간을 바꾸므로 승인자가 적용합니다. 편집자가 검토한 내용은 그대로 남습니다.']],
-    ['objects', '작업 공간의 표 보기입니다. Entity · 속성 · 관계가 3열로 서고, Entity를 고르면 나머지 두 열이 따라옵니다.', [
-      '행을 누르면 그 아래에 수정 폼이 열립니다. [+ Entity]에서 원천 테이블을 고르면 키와 속성이 테이블 컬럼 기준으로 채워집니다.',
-      '표준 모듈의 Entity를 바꾸면 \'관리 변경\' 모듈에 확장으로 기록되고 표준 모듈은 그대로입니다. 키는 정의한 모듈에서만 바꿉니다.',
-      'Entity마다 상태(초안 · 사용 중 · 폐기 예정)를 둡니다. 폐기 예정인 Entity를 아직 읽는 질의 · 판정이 있으면 사용처에 표시됩니다.',
-      '[Entity 제외]를 누르면 그 Entity를 쓰는 관계, 질의, 결정, 검증 질문이 함께 제외되고, 제외된 항목은 대기 중인 변경에 표시됩니다. 하위 Entity가 있는 Entity는 하위의 상위를 먼저 바꿔야 제외됩니다.',
-      '관계가 없는 Entity는 왼쪽 트리와 카드에 표시됩니다. 캔버스나 [+ 관계]에서 관계를 추가하세요.',
-      '저장한 변경은 작업 공간 위쪽의 [변경] 패널에 쌓입니다. [사본에서 시험] 뒤 [변경 요청 만들기]로 검토와 승인에 보냅니다.']],
-    ['props', '작업 공간 표 보기의 속성 열입니다. 라벨, 자료형, 원천 컬럼, 변환식, 허용값, 단위, 필수, 가림, 상태를 고칩니다.', [
-      'Entity를 고르거나 열 위의 검색 칸에 적어 속성을 거릅니다. 상위 Entity의 속성은 상속으로 표시됩니다.',
-      '표준 모듈에서 정한 자료형은 바꿀 수 없습니다. 다른 자료형이 필요하면 새 속성을 추가합니다.',
-      '폼의 칸 아래에 정의 검사가 거절할 내용과 고치는 버튼이 나옵니다. 저장할 때가 아니라 적을 때 보입니다.',
-      '키 속성과 상속 속성은 제외할 수 없습니다. 상속 속성은 상위 Entity에서 제외합니다.']],
-    ['links', '작업 공간 표 보기의 관계 열입니다. 연결 기준 컬럼, Cardinality, 역관계, 필수 여부, 상태를 고칩니다.', [
-      '원천 테이블의 참조 컬럼(외래 키)으로 찾은 관계 중 아직 없는 관계가 제안으로 표시됩니다. 캔버스에서는 카드 테두리의 +를 다른 카드에 끌어 놓아 만듭니다.',
-      '[+ 관계]에서 출발 Entity와 속성, 도착 Entity와 속성을 고르면 두 속성 값이 같은 행끼리 연결됩니다. 연결 기준 제안과 실제로 연결되는 행의 비율이 보입니다.',
-      '표준 모듈의 관계는 라벨, Cardinality, 역관계, 필수 여부, 상태만 바꿀 수 있습니다.',
-      '관계 전체 그림은 [온톨로지]에서, 레코드 사이의 실제 연결은 [그래프 탐색]에서 봅니다.']],
-    ['library', '공통 개념, 도메인, 업종 확장, 고객사 차이, Binding, 검증 기준, 구축 규칙 모듈의 적용 여부를 관리합니다.', [
-      '적용 스위치를 끄면 함께 해제되는 모듈과 제거되는 항목을 먼저 표시합니다.',
-      '검증 기준 모듈을 적용하면 검증 질문이 추가되고 흐름 통과 조건이 모듈의 기준으로 변경됩니다. 해제하면 스페이스 설정으로 복원됩니다.',
-      '구축 규칙 모듈을 적용하면 초안 생성의 생성 설정 기본값이 모듈의 규칙으로 바뀝니다.',
-      '고객사 차이 모듈을 해제하면 판정 · 처리에 표준 모듈의 규칙이 적용됩니다.',
-      '해제된 모듈을 다시 적용하면 필요한 모듈도 함께 적용됩니다.',
-      '표의 종류 칸과 적용 구성의 종류를 누르면 그 종류만 보이고, 적용 구성 · 의존 모듈의 모듈과 다른 화면의 모듈 칩(정의 모듈, 확장 모듈, 규칙의 모듈)을 누르면 표의 그 모듈 행으로 옵니다.',
-      '[편집]을 선택하면 모듈 정의 파일에서 Entity, 관계, 계산 속성, 결정표, 검증 질문, 역할을 수정합니다.',
-      '[변경 요청]을 선택하면 사본 스페이스에서 DB 대조, Backend 결과 일치, 검증 질문, 판정 일치율을 검토합니다. 흐름 통과 조건을 충족한 변경만 승인할 수 있습니다.',
-      '[새 모듈]로 모듈을 만들고, [내려받기]로 정의 파일을 저장합니다.']],
-    ['onto', 'Entity와 관계 전체를 카드로 펼쳐 보고, 카드를 누르면 연결된 카드만 모아 봅니다.', [
-      '모듈마다 영역으로 묶인 카드에 키, 대표 속성, 계산 속성, 관계 이름과 Cardinality가 보입니다. 휠이나 − + 버튼으로 확대 · 축소하고, 빈 곳을 끌어 이동하고, 100% 버튼으로 화면에 맞춥니다.',
-      '카드를 누르면 그 카드가 가리키는 것은 오른쪽, 그것을 가리키는 것은 왼쪽, 상위는 위, 하위는 아래에 모이고 나머지는 흐려집니다. 다른 카드를 누르면 초점이 옮겨 가고, 빈 곳이나 Esc, [전체 보기]로 돌아옵니다.',
-      '오른쪽 정의에는 속성, 원천 컬럼, 계산 속성의 식, 가림 여부, 상태 전이, 시계열, 표준 개념 Mapping, 이 Entity를 언급한 문서가 표시됩니다. [작업 공간에서 열기]로 바로 고칩니다.',
-      '관계를 선택하면 연결된 Entity로 이동합니다. [OWL 내보내기]로 정의를 Turtle 형식으로 내려받습니다.',
-      '레코드 단위의 지식그래프는 [그래프 탐색]에서, 파일 · 테이블 · 문서까지 아우르는 연결은 [자산 그래프]에서 봅니다.',
-      '식별 통합 Entity를 선택하면 통합된 기록과 근거를 확인하고, [재통합 후 교차표 저장]으로 다시 통합합니다.']],
-    ['docs', '문서를 문서, 항목, 개념으로 자동 구성합니다. 개념은 도메인 온톨로지의 Entity, 속성, 허용값, 용어와 연결됩니다.', [
-      '문서는 데이터 카탈로그에서 업로드합니다. 업로드 시 자동으로 구성합니다.',
-      '함께 언급은 같은 항목에 포함된 개념을 연결합니다. 언어 모델이 연결된 경우 [관계 추출]로 개념 사이의 관계를 추가합니다. 개념이 둘 이상 나오는 문장만 모델에 보내고, 그 문장이 직접 말하는 관계만 근거 문장과 함께 추가합니다.',
-      '문서 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서만 그래프에 표시하고 [관계 추출]도 그 범위만 읽습니다. 추출은 서버에서 진행되며 [중지]로 멈춘 뒤 다시 선택하면 이어서 읽습니다.',
-      '[다시 추출]은 선택한 범위의 추출 결과를 지우고 처음부터 다시 읽습니다. 추출한 관계는 문서 온톨로지 질의와 통합 검색의 연결 관계에 사용합니다.',
-      '그래프에서 항목을 선택하면 본문과 그 항목의 개념이 표시됩니다. Entity 개념을 선택하면 온톨로지 화면으로 이동합니다.',
-      '문서 온톨로지 질의는 도메인 온톨로지와 같은 엔진으로 실행합니다. SQL과 그래프의 결과 일치 여부를 함께 표시합니다.']],
-    ['vectors', '임베딩 모델과 벡터 저장소의 구성을 확인합니다.', [
-      '글자 비교는 모델 없이 동작하는 기본 방식입니다. 의미 비교는 구성 파일의 space.embedder 항목에서 모델을 지정합니다.',
-      '모델 변경에서 모델을 선택하고 [영향 확인]을 선택하면 다시 임베딩할 문서, 청크 수, 예상 시간을 표시합니다. [변경하고 다시 임베딩]을 선택해야 변경됩니다. 공개 데모에서는 서버에 준비된 모델만 선택할 수 있습니다.',
-      '문서별 임베딩에서 문서마다 색인한 청크 수와 상태를 확인합니다. 임베딩은 데이터 카탈로그에서 파일 또는 폴더 단위로 켜고 끕니다.',
-      '설치형에서는 Qdrant, pgvector 주소를 입력해 저장소를 추가합니다. 추가한 저장소에 문서를 색인합니다.',
-      '문서 검색 검증은 질문별 정답 문서가 상위 결과에 포함되는지 확인합니다. 질문은 구성 파일의 space.checks 항목에서 지정합니다.']],
-    ['adapters', '교체 가능한 구성 요소를 확인합니다.', [
-      '저장소, 쿼리 언어, 적용한 모듈, 임베딩 모델 · 검색 엔진, 추론기를 표시합니다.',
-      '쿼리 언어는 등록 질의를 언어별로 변환한 결과를 표시합니다. 변환하지 못한 질의는 사유를 함께 표시합니다.',
-      '저장소, 임베딩 모델, 검색 엔진, 추론기는 구성 파일의 backends, space, reasoners 항목에서 변경합니다. 모듈은 [라이브러리]에서 적용 · 해제합니다.',
-      '[적합성 시험 실행]을 선택하면 같은 질의와 검색을 저장소별로 실행해 결과를 비교합니다.',
-      '추론기의 [실행]을 선택하면 현재 데이터에서 유도한 사실 수와 발견 항목을 표시합니다.']],
-    ['search', '판정, 데이터, 문서를 한 번에 찾고 근거를 확인합니다.', [
-      '질문에 주문상품 번호나 주문 번호가 있으면 결정표로 판정하고 적용 규칙, 원천 값, 관련 조항을 표시합니다. 판정에는 언어 모델을 사용하지 않습니다.',
-      '번호만 있으면 해당 값을 표시하고, 등록 질의 이름이면 질의를 실행합니다.',
-      '그 밖의 질문은 규칙과 문서에서 찾은 근거로 답합니다. 언어 모델이 연결된 경우 찾은 근거로만 답변을 작성합니다.',
-      '검색 범위에서 폴더를 선택하면 그 폴더와 하위 폴더의 문서에서만 근거를 찾습니다. 규칙과 정의는 범위와 관계없이 찾습니다.',
-      '관련 정의에서 Entity를 선택하면 온톨로지로 이동합니다.']],
-    ['query', '온톨로지 질의를 Backend별 쿼리로 변환해 실행하고 결과를 비교합니다.', [
-      '등록 질의를 선택하면 바로 실행됩니다.',
-      '언어 탭에서 PostgreSQL, MySQL, Oracle, SQL Server, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin 쿼리를 확인합니다. 역할을 지정하면 가린 속성은 가린 값으로 표시됩니다.',
-      '[쿼리 입력]에서 SPARQL, Cypher 쿼리를 입력해 실행할 수 있습니다.',
-      '실행 역할을 지정하면 해당 역할의 조회 범위만 표시됩니다.']],
-    ['decide', '결정표 판정 결과와 근거를 확인하고 처리 요청을 승인합니다.', [
-      '검증 질문을 선택하면 해당 대상을 판정합니다.',
-      '처리를 요청하면 권한, Parameter 값 범위, 상태 전이, 판정 조건을 검사합니다.',
-      '다른 사용자나 Agent가 요청한 건은 승인 대기 요청에서 승인하거나 반려합니다.',
-      '[승인]을 선택하면 원천 DB에 반영되고 판정을 다시 계산합니다. 실행한 요청은 [되돌리기]로 이전 값으로 복원합니다.',
-      '판정 일치율에서 지난 처리 기록과 결정표 판정이 다른 건을 확인합니다.']],
-    ['semrules', '규칙 카드와 적용 계층(AXIOM, Custom, Standard)을 확인합니다.', [
-      'AXIOM은 법령 · 정합성 규칙으로 가장 먼저 적용하며 Custom · Standard 모듈과 관리 변경으로 변경할 수 없습니다.',
-      'Custom은 고객사 모듈과 관리 변경의 규칙, Standard는 공통 기본 규칙입니다.',
-      '규칙 카드는 내용, 유형, 조건, 결과, 예외, 근거, 소유자, 상태, 실행 위치를 기록합니다.',
-      'AXIOM 값 검사는 기준값이 AXIOM 카드의 범위를 벗어나는 변경을 거절합니다.',
-      '판정 결과에는 계층별 판정 경로와 근거 모듈 · 버전이 표시됩니다.']],
-    ['lexicon', '업무 용어와 정의의 연결, 동의어, 약어, 화면별 표기, 혼동 금지 용어를 관리합니다.', [
-      '용어는 Object, Entity, 속성, 값, 결정표 같은 정의 하나에 연결합니다.',
-      '혼동 금지 용어가 질문에 쓰이면 답변에 함께 표시됩니다.',
-      '[용어집 불러오기]는 용어 목록 또는 용어 짝 표 CSV를 변경 하나로 기록합니다.',
-      '표기 중복, 정의 없음 같은 충돌은 저장을 막지 않고 목록에 표시합니다.']],
-    ['ruleagent', '정책서 조항으로 결정표 초안을 생성하고 변경 요청으로 등록합니다.', [
-      '정책서 내용을 붙여 넣거나 예시 정책서를 불러온 뒤 대상 Entity를 선택합니다.',
-      '초안의 규칙마다 근거 조항이 표시되며, 결정표 검사 결과와 함께 변경 요청으로 등록합니다.',
-      '언어 모델 연결이 필요합니다.']],
-    ['mgrules', '결정표를 편집하면서 바로 검사하고 시뮬레이션하고 시험합니다.', [
-      '머리글의 칩에 적용 방식(위에서 첫 규칙, 우선순위 등)과 규칙을 가져온 모듈이 보입니다. 적용 방식은 칩에서 바꿉니다.',
-      '표의 칸을 누르면 그 자리에서 고칩니다. 조건은 값 칸에 "14일 이하", "NORMAL 아님", "A, B 중", "값 없음"처럼 사람 말로 적어도 되고 비교 방식이 따라 바뀝니다. 표에도 사람 말로 보입니다. 행은 끌어서 순서를 바꾸고, 규칙마다 출처 조항이 칩으로 붙습니다.',
-      '표 위의 검사는 겹침, 도달 불가, 빈 구간을 세고 해당 행을 같은 색으로 표시합니다.',
-      '시뮬레이션에서 레코드를 불러오거나 입력값을 바꿔 보면 어느 규칙이 답하는지와, 어떤 입력 하나를 바꾸면 다른 결과가 나오는지 알려 줍니다. 편집 중인 표 기준입니다.',
-      '테스트는 과거 판정 다시 계산(편집 중인 표로), 경계값 자동 생성, 이 결정표를 쓰는 검증 질문을 편집 중에 바로 돌립니다.',
-      '기준값을 바꾸면 그 값을 참조하는 규칙과 사유 문장({@이름})이 함께 바뀝니다. [규칙 추가]로 새 규칙을, [새 결정표]로 새 판정을 만들고, [내보내기]로 GoRules ZEN 형식으로 내려받습니다.',
-      '변경 내용은 대기 중인 변경에 쌓이고, [변경 요청]을 누르면 사본에서 검토한 뒤 승인되면 판정에 반영됩니다. 표준 모듈은 변경되지 않습니다.']],
-    ['mgfuncs', '계산, 판정, 외부 모델을 입출력 · 버전 · 담당이 있는 함수로 등록합니다.', [
-      '[새 함수]에서 실행 방식을 선택합니다. 계산식은 저장소 언어로 변환되고, 결정표와 등록 질의는 이름으로 연결합니다.',
-      'Python과 외부 호출은 설치 환경에서 허용한 항목만 실행합니다.',
-      '함수를 선택해 [실행]으로 대상 번호를 지정해 결과를 확인합니다. 초안 상태의 함수는 이 화면에서만 실행됩니다.',
-      '역할에 함수를 허용하면 Agent와 외부 플랫폼이 /v1/function과 MCP run_function으로 실행합니다.']],
-    ['states', 'Entity의 상태 값과 허용되는 전이를 관리합니다.', [
-      'Entity를 선택하면 상태 속성, 상태 값, 초기 상태, 전이를 수정합니다.',
-      '상태 값에 새 값을 추가하면 해당 속성의 허용값에도 추가됩니다.']],
-    ['actions', '처리 요청의 입력값, 판정 조건, 상태 전이, 승인 여부를 관리합니다.', [
-      '판정 조건을 지정하면 조건을 충족한 요청만 접수됩니다.',
-      '승인이 필요한 액션은 판정 · 처리의 승인 대기 요청에서 승인합니다.',
-      '자동 승인 기준을 지정하면 변경 폭이 기준 안인 요청은 실행 권한이 있을 때 바로 실행하고, 기준을 넘으면 승인 대기로 접수합니다.',
-      '외부 호출은 원천 반영 후 실행합니다. 호출이 실패하면 원천을 복원합니다.']],
-    ['roles', '역할별 조회, 실행, 요청 범위와 가림 속성을 관리합니다.', [
-      '역할을 선택하면 조회 Entity, 실행 질의와 결정, 요청 액션을 선택합니다.',
-      '가림 속성은 일부 가림 또는 전체 가림으로 지정합니다.',
-      '행 범위는 Entity별로 볼 수 있는 행을 지정합니다. 사용자 속성과 비교하거나 고정 값과 비교합니다.',
-      '조직 범위는 로그인한 조직의 행으로 조회와 요청을 함께 제한합니다.',
-      '열람 문서에서 폴더 또는 문서를 선택하면 이 역할로 검색하고 답할 때 그 문서만 근거로 사용합니다.',
-      'Agent와 외부 플랫폼은 지정한 역할의 범위 안에서만 조회하고 요청합니다.']],
-    ['rules', '기준값, 지표 산식, 출처 충돌, 기한 전이, 결정표 점검 결과를 확인합니다.', [
-      '[규칙 수정]을 선택하면 규칙 › 결정표로 이동합니다. 규칙과 기준값을 입력 폼에서 수정하고, 변경 요청이 승인되면 판정에 반영됩니다.',
-      '기준값은 결정표와 계산 속성이 @이름으로 참조합니다. 고객사 모듈은 기준값만 변경합니다.',
-      '지표의 [계산]을 선택하면 값, 분자와 분모, 기준을 표시합니다.',
-      '출처 충돌에서 [이 출처 선택]을 선택하면 대기 중인 변경에 추가됩니다. 변경 요청과 승인 후 반영됩니다.',
-      '결정표 점검은 중복 조건, 미적용 규칙, 누락 구간을 표시합니다.']],
-    ['connect', '외부 플랫폼과 Agent의 연동 방법을 확인합니다.', [
-      '화면 위쪽 연동 방법에서 방법마다 주소, 명령, 설정을 복사합니다. [API 실행]은 같은 호출을 화면에서 실행합니다.',
-      'MCP를 지원하는 Agent는 ontlas mcp로 연결합니다. [클라이언트 설정 복사]로 Agent 설정에 넣을 내용을 복사합니다.',
-      '그 밖의 플랫폼은 토큰으로 REST API를 호출합니다. OpenAPI 문서 주소로 도구를 등록합니다.',
-      '플랫폼이 관리하는 DB 연결을 원천으로 사용합니다. 비밀번호는 공간에 저장하지 않습니다.',
-      '역할을 지정하면 그 역할의 조회 범위와 가림이 외부 호출에도 적용됩니다.']],
-    ['check', '검증 질문 정답률, 근거 제시율, Backend 간 결과 일치 여부를 확인합니다.', [
-      '[다시 실행]으로 현재 상태를 다시 검증합니다.',
-      '근거 제시율은 답에 적용 규칙 또는 질의, 출처(규정 조항, 원천 컬럼), 모듈 버전이 모두 있는 질문의 비율입니다. 누락 항목은 근거 열에 표시됩니다.',
-      '검증 질문 관리에서 정답이 정해진 질문을 추가하거나 제외하고, [목록 불러오기]로 YAML · JSON 목록을 한 번에 추가합니다. 변경 요청이 승인되면 정답률 계산에 포함됩니다.',
-      '승인 처리로 데이터가 바뀐 경우 [초기화]로 되돌립니다.']],
-    ['bind', '온톨로지 정의와 원천 DB의 테이블, 컬럼, 타입, 키, 값을 대조합니다.', [
-      '모듈 적용 상태를 바꾼 뒤 [다시 대조]를 선택합니다.',
-      '원천 DB에 없는 테이블이나 컬럼을 참조하는 모듈을 적용하면 해당 항목이 오류로 표시됩니다.']],
-  ];
-  // why a screen works the way it does, next to what it does: the help drawer and the manual show it
-  const WHY = {
-    monitor: '앞 단계가 통과 조건을 충족하지 못하면 뒤 단계의 결과도 신뢰할 수 없습니다. 중단된 단계와 원인 경로를 먼저 확인합니다.',
-    home: '온톨로지를 쓰는 사람은 파이프라인이 아니라 할 일에서 시작합니다. 승인 · 검토 · 충돌 선택을 한곳에 모아 두어야 메뉴를 뒤지지 않습니다.',
-    inbox: '무엇이 왜 얼마나 바뀌는지를 한 줄로 보여야 승인하는 사람이 열어 보지 않고도 판단합니다.',
-    records: '레코드 한 건의 값 · 연결 · 판정 · 문서 · 이력을 한 페이지에 모아야 상담원과 승인자가 여러 화면을 오가지 않습니다.',
-    graph: '전체 그림 대신 레코드 하나에서 개수를 보고 펼쳐야 큰 데이터에서도 읽을 수 있습니다. 경로는 온톨로지 질의로 실행되어 저장소에 매이지 않습니다.',
-    model: '보는 곳과 고치는 곳이 같아야 바꾼 결과를 바로 확인합니다. 어느 쪽에서 고쳐도 같은 요소이고, 적용 전에 사본에서 시험합니다.',
-    changes: '변경을 항목별로 검토하고 전후 숫자를 봐야 어디가 나빠졌는지 알 수 있습니다. 댓글은 항목에 남아 승인 뒤에도 이유가 남습니다.',
-    flow: '여기서 지정한 통과 조건은 변경 요청을 검토할 때도 같은 기준으로 적용됩니다.',
-    explorer: '파일만이 아니라 스페이스가 담은 모든 데이터를 같은 탐색기와 같은 검색으로 다뤄, 무엇이 어디에 있고 어떤 처리를 거쳤는지 한 화면에서 확인합니다.',
-    map: '파일이나 컬럼 하나가 바뀌면 그 값을 쓰는 Entity, 질의, 판정, Agent가 함께 영향을 받습니다. 바꾸기 전에 영향 범위를 확인합니다.',
-    catalog: '초안과 검색은 레포지토리의 파일을 기준으로 만듭니다. 임베딩을 끈 파일은 검색에서 빠지고 문서 온톨로지의 개념과 관계에는 남습니다.',
-    db: '데이터를 복사하지 않고 원본 DB를 읽으므로, 정의와 판정이 운영 데이터와 같은 값을 기준으로 합니다.',
-    convert: '파일 형식이 달라도 같은 구조로 변환해, 이후 단계가 형식마다 다르게 처리하지 않습니다.',
-    sources: 'Entity에 연결되지 않은 테이블은 질의와 판정에서 사용할 수 없습니다.',
-    data: '초안은 데이터에서 찾은 구조이며 업무 정의를 대신하지 않습니다. 키, 타입, 관계를 단계마다 확인하고 수정한 뒤 적용합니다.',
-    objects: '정의를 바꾸면 질의, 판정, 권한이 함께 바뀝니다. 변경은 사본 스페이스에서 통과 조건을 확인하고 다른 사람이 승인해야 반영됩니다.',
-    props: '변환식과 가림은 읽을 때 적용하므로 원천 시스템을 고치지 않고 단위, 형식, 노출 범위를 맞춥니다.',
-    links: '관계가 없는 Entity는 다른 Entity를 거치는 질의와 판정에서 사용할 수 없습니다.',
-    states: '허용한 전이만 처리 요청으로 접수되므로, 업무 순서에 없는 상태 변경은 원천에 기록되지 않습니다.',
-    mgrules: '여러 규칙이 같은 기준값을 참조하므로, 기준값 한 곳을 바꾸면 그 값을 쓰는 규칙이 같은 기준으로 바뀝니다.',
-    mgfuncs: '계산과 판정을 함수로 등록하면 화면, Agent, 외부 플랫폼이 같은 입력과 버전으로 같은 결과를 받고, 어떤 버전으로 실행했는지 감사 기록에 남습니다.',
-    actions: 'Agent는 원천을 직접 바꾸지 않고 처리를 요청합니다. 검사를 통과하고 사람이 승인한 요청만 원천에 반영되며, 자동 승인 기준은 기준 안의 작은 변경에만 승인 단계를 생략합니다.',
-    roles: '역할에 필요한 범위만 열어 두어야 다른 고객의 행이나 내부 문서가 Agent의 답변에 포함되지 않습니다.',
-    library: '표준 모듈은 직접 수정하지 않고 달라지는 내용만 별도 모듈로 추가합니다. 표준 버전이 바뀌어도 차이 모듈만 다시 적용합니다.',
-    onto: '그래프 저장소에는 원천 데이터를 정의 기준으로 반영하므로, 화면의 연결은 원천의 값과 일치합니다.',
-    docs: '문서의 항목과 개념을 온톨로지와 연결해 두어야 답변이 규칙과 그 근거 조항을 함께 제시합니다. 관계는 근거 문장이 있는 것만 추가해 연결마다 원문을 확인할 수 있습니다.',
-    vectors: '임베딩 모델이 다르면 벡터를 서로 비교할 수 없어 모델을 바꾸면 모든 청크를 다시 임베딩합니다. 바꾼 뒤에는 문서 검색 검증으로 같은 질문에 같은 문서가 상위에 오는지 확인합니다.',
-    adapters: '저장소와 쿼리 언어는 교체할 수 있지만, 같은 질의가 같은 결과를 내는지 적합성 시험을 통과한 구성만 사용합니다.',
-    search: '판정은 결정표로만 내리고 언어 모델은 찾은 근거를 문장으로 옮기는 데만 사용합니다. 같은 질문에는 같은 판정이 나옵니다.',
-    query: '같은 질의를 저장소마다 실행해 결과를 비교하므로, 저장소를 교체해도 결과가 같은지 확인합니다.',
-    decide: '요청한 사람은 자기 요청을 승인하거나 반려할 수 없습니다. 실행된 요청은 반려하지 않고 되돌리기로 처리해 원천과 기록을 일치시킵니다.',
-    rules: '기준값과 지표의 산식을 한 곳에서 관리해, 같은 이름의 수치가 화면과 보고서마다 다르게 계산되지 않게 합니다.',
-    connect: 'Agent와 외부 플랫폼도 화면과 같은 역할, 행 범위, 가림, 승인 절차를 따릅니다. Agent마다 토큰을 따로 두면 감사 기록에서 요청한 Agent를 구분합니다.',
-    check: '검증 질문은 정답이 정해진 질문입니다. 정의나 규칙을 바꾼 뒤에도 같은 답을 내는지 확인하는 기준이 됩니다.',
-    bind: '정의와 원천이 어긋나면 질의가 빈 결과나 잘못된 값을 반환합니다. 모듈을 바꾼 뒤에는 원천과 대조합니다.',
-  };
-  // the order a space is built in, as the guide shows it: the parts of the sidebar, then the changes that version it
-  const START = [['objmgr', 'Ontology', 'Object · Entity · 속성 · 관계를 정의합니다. 직접 만들거나 표준 모듈, 문서, 데이터에서 시작합니다'],
-    ['semrules', 'Semantic Layer', '규칙 카드와 결정표, 용어 사전, 권한을 정의합니다'],
-    ['catalog', 'Data Binding', '파일이나 DB를 정의에 연결합니다. 연결하지 않아도 정의와 규칙, 판정은 동작합니다'],
-    ['check', 'Quality', '검증 질문 · DB 대조 · 통과 조건으로 확인합니다'],
-    ['changes', '변경 · 버전', '변경 내용을 전후 결과와 함께 검토 · 승인하고 버전으로 관리합니다']];
-  const GUIDE_USE = [
-    ['통합 관리', '파일, DB, 문서, 임베딩, 그래프, 온톨로지를 한 공간에서 관리합니다.'],
-    ['저장소 교체', '그래프 DB, 벡터 DB, 추론기, 쿼리 언어를 어댑터로 교체합니다. 교체 결과는 적합성 시험으로 확인합니다.'],
-    ['도메인 교체', '도메인 지식을 모듈로 적용 · 해제합니다. 이커머스는 첫 도메인입니다.'],
-    ['외부 연동', 'MCP와 REST로 외부 플랫폼과 연동합니다. 플랫폼의 DB 연결은 읽기 전용으로 사용합니다.'],
-    ['업무 정의 공유', 'Entity, 속성, 관계, 상태, 규칙, 역할을 원천 테이블 위에 한 번 정의하고 버전이 있는 모듈 파일로 관리합니다.'],
-    ['저장소 간 같은 질의', '하나의 질의를 SQL, Cypher, GQL, SPARQL, SQL/PGQ, Gremlin으로 변환해 실행하고 저장소별 결과를 비교합니다.'],
-    ['규칙 판정과 근거', '결정표로 판정하고 적용 규칙, 출처 조항, 원천 컬럼, 모듈 버전을 함께 표시합니다.'],
-    ['처리 통제', '역할별 조회 범위와 가림을 적용합니다. Agent는 처리를 요청만 하고, 승인한 처리만 원천 DB에 반영합니다.'],
-    ['변경 검토', '모듈 변경을 사본 스페이스에서 검토하고, 흐름 통과 조건을 충족한 변경만 승인합니다.'],
-    ['시스템 · 고객사별 적용', '표준 모듈은 그대로 두고 시스템 연결과 고객사 차이만 모듈로 추가합니다.']];
-  const GUIDE_ADAPT = [
-    ['표준 모듈과 원천 테이블', '초안 생성 > 표준에 연결', 'Binding 모듈'],
-    ['SQL 스크립트, ERD 파일, 테이블 정의서', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
-    ['코드 정의서', '데이터 카탈로그 > 초안 생성', '코드값 이름, 결정표'],
-    ['용어집, 메시지 목록', '데이터 카탈로그 > 초안 생성', '용어 사전 모듈'],
-    ['CSV, Excel 파일, DB', '데이터 카탈로그 > 초안 생성', '도메인 · Binding 모듈'],
-    ['지난 처리 기록', '초안 생성 > 규칙 · 역할 · 검증', '결정표'],
-    ['정책서, 화면설계서', '라이브러리 > 정책서로 규칙 초안', '결정표 모듈', 'ask'],
-    ['Entity, 속성, 관계 수정', '온톨로지 > 작업 공간', '관리 변경 모듈'],
-    ['모듈 정의 파일', '라이브러리 > 새 모듈', '종류별 모듈']];
-  const ASK_STEP = '[자연어 질문]에서 질문을 입력하면 언어 모델이 온톨로지 질의를 만들어 실행합니다. 결과가 0행이면 비교한 속성의 값을 확인해 한 번 더 만듭니다.';
-  const POLICY_STEP = '[정책서로 규칙 초안]에서 정책서 조항을 입력하면 언어 모델이 결정표 초안을 만들고 엔진이 입력 속성, 규칙 형식, 출처 조항을 검사합니다. 초안은 편집기에서 확인한 뒤 변경 요청으로 검토 · 승인합니다.';
   const FLOW = [
     ['source', '원천 데이터', '테이블과 행 수', 'catalog'],
     ['define', '온톨로지 정의', '적용 모듈과 Entity, 관계, 속성', 'library'],
@@ -584,7 +272,7 @@
     if (S.me && S.me.team && !S.me.user) return;  // signed out: the sign-in form stays, whatever finishes loading behind it
     renderTop();
     renderSide();
-    const views = { graph: viewGraph, records: viewRecords, record: viewRecord, rules: viewRules, guide: viewGuide, convert: viewConvert, data: viewData, onto: viewOnto, decide: viewDecide, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions };
+    const views = { graph: viewGraph, records: viewRecords, record: viewRecord, rules: viewRules, convert: viewConvert, data: viewData, onto: viewOnto, decide: viewDecide, states: viewStates, mgrules: viewMgRules, mgfuncs: viewMgFunctions };
     const main = $('#main');
     const v2 = V2[S.tab];
     const bleed = v2 ? !!v2.bleed : S.tab === 'model';  // a screen that fills the window to its edges (the diagram's workspace)
@@ -3778,14 +3466,6 @@
 
   // ---- help where the work is: the steps of the screen on screen ---------------------------------------------------------------
 
-  function helpPanel() {
-    const g = GUIDE.find((x) => x[0] === S.tab);
-    if (!g) return '';
-    return `<div class="drawer help" role="dialog" aria-label="도움말"><div class="dhead"><b>${esc(navLabel(S.tab))}</b><button class="btn sm ghost" data-act="helpclose">닫기</button></div>
-      <div class="dbody"><div class="gwhat">${esc(g[1])}</div>${WHY[S.tab] ? `<div class="gwhy">${esc(WHY[S.tab])}</div>` : ''}<ol class="gsteps" style="margin-top:12px">${g[2].map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
-      <div class="chips" style="margin-top:14px"><a class="btn sm" href="#guide" data-act="helpclose">전체 사용 안내</a><button class="btn sm ghost" data-act="explain" aria-pressed="${S.explain}" title="카드의 설명을 접지 않고 항상 표시합니다">${S.explain ? '화면 설명 접기' : '화면 설명 항상 표시'}</button></div></div></div>`;
-  }
-
   // ---- queries -------------------------------------------------------------------------------------------------
 
   // ---- a query put together without code: an object, a relation to follow, the values to show, conditions as chips --
@@ -4130,36 +3810,6 @@ ${controls}${body}`;
   const bytes = (n) => (n >= 1 << 20 && n % (1 << 20) === 0 ? `${n >> 20}MB` : `${(n >> 10).toLocaleString('ko-KR')}KB`);
   const clock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
   const navLabel = (tab) => (NAV.find((x) => x[0] === tab) || [tab, tab])[1];
-
-  function viewGuide() {
-    const g = S.guide || { video: '', chapters: [] };
-    const head = `<div class="head"><div><h1>사용 안내</h1><div class="sub">${g.video ? '화면별 사용 방법과 소개 영상입니다' : '화면별 사용 방법입니다'}</div></div></div>`;
-    const sections = GUIDE.map(([tab, what, steps], i) => {
-      if (S.st && S.st.ask && tab === 'query') steps = steps.concat(ASK_STEP);  // only where a language model is connected
-      if (S.st && S.st.ask && tab === 'library') steps = steps.concat(POLICY_STEP);
-      const ch = g.chapters.find((c) => c.tab === tab);
-      return `<div class="card gsec" data-gtab="${tab}"><div class="cb">
-        <div class="fhead"><span class="fno">${i + 1}</span><svg class="gic" viewBox="0 0 24 24">${ICON[tab]}</svg><b>${navLabel(tab)}</b></div>
-        <div class="gwhat">${esc(what)}</div>${WHY[tab] ? `<div class="gwhy">${esc(WHY[tab])}</div>` : ''}
-        <ol class="gsteps">${steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
-        <div class="chips"><a class="btn sm" href="#${tab}">${navLabel(tab)} 열기</a>${ch && g.video ? `<button class="btn sm ghost" data-act="seek" data-t="${ch.t}">영상 ${clock(ch.t)}</button>` : ''}</div></div></div>`;
-    }).join('');
-    const ways = GUIDE_ADAPT.filter((x) => !x[3] || (S.st && S.st.ask));
-    const intro = `<div class="card gsec"><div class="cb"><div class="fhead"><b>처음 사용하는 순서</b></div>
-        <div class="first-steps">${START.map(([tab, title, what], i) => `<a href="#${tab}" class="fs"><span class="fno">${i + 1}</span><b>${esc(title)}</b><span class="muted">${esc(what)}</span></a>`).join('')}</div></div></div>
-      <div class="card gsec"><div class="cb"><div class="fhead"><b>스페이스 용도</b></div>
-        <table class="tight">${GUIDE_USE.map(([k, v]) => `<tr><td style="white-space:nowrap"><b>${esc(k)}</b></td><td style="font-size:12.5px">${esc(v)}</td></tr>`).join('')}</table></div></div>
-      <div class="card gsec"><div class="cb"><div class="fhead"><b>Domain Adapter</b></div>
-        <div class="gwhat">표준 모듈은 그대로 두고 달라지는 내용만 모듈로 추가합니다. 모든 경로의 결과는 같은 모듈 파일이며, 같은 방식으로 검토 · 승인 · 적용 · 해제합니다.</div>
-        <table class="tight"><tr><th>보유 자료</th><th>경로</th><th>결과</th></tr>${ways.map(([a, b, c]) => `<tr><td>${esc(a)}</td><td style="font-size:12.5px">${esc(b)}</td><td style="font-size:12.5px">${esc(c)}</td></tr>`).join('')}</table>
-        <div class="chips">${[...new Map((S.st.library || []).map((r) => [r.kind, r.kind_label]))].map(([k, w]) => `<button class="chip sm" data-act="kind" data-kind="${esc(k)}" title="라이브러리에서 이 종류 보기">${esc(w)}</button>`).join('')}</div></div></div>`;
-    if (!g.video) return `${head}<div class="guide-only">${intro}${sections}</div>`;
-    const chapters = g.chapters.map((c, i) => `<button class="gch" data-act="seek" data-t="${c.t}" data-i="${i}"><span class="mono">${clock(c.t)}</span><span><b>${esc(c.chapter)} · ${esc(c.title)}</b><span class="muted">${esc((c.captions || [])[0] || '')}</span></span></button>`).join('');
-    return `${head}<div class="guide">
-      <div class="gside"><div class="card"><div class="cb" style="padding:0"><video id="gvideo" controls preload="metadata" playsinline src="${esc(g.video)}"></video></div>
-        <div class="cb scroll gchs">${chapters}</div></div></div>
-      <div class="gmain">${intro}${sections}</div></div>`;
-  }
 
   function mountGuide() {
     const v = $('#gvideo');
@@ -4899,7 +4549,7 @@ ${controls}${body}`;
   function paintLayer() {
     const layer = $('#layer');
     const c = S.cat;
-    let html = S.help ? helpPanel() : '';
+    let html = '';
     if (S.pick) {
       const rows = S.st.repositories.map((r) => `<button class="pitem${r.id === S.st.repository.id ? ' on' : ''}" data-act="repouse" data-id="${esc(r.id)}"><b>${esc(r.label)}</b><span class="muted">${count(r.files)}개 파일 · ${fileSize(r.bytes)}</span></button>`).join('');
       html += `<div class="pop" style="top:${S.pick.top}px;right:${S.pick.right}px" role="dialog" aria-label="레포지토리 선택"><div class="ptitle">레포지토리</div>${rows}
@@ -5773,6 +5423,7 @@ ${controls}${body}`;
   const hopsOf = (t) => [['', '직접'], ...S.mg.st.links.filter((l) => l.source === t || l.target === t).map((l) => [l.source === t ? l.name : (l.inverse || l.name), `${l.label || l.name} · ${mgLabel(l.source === t ? l.target : l.source)}`])];
   const hopEnd = (t, step) => { const l = S.mg.st.links.find((x) => x.name === step || x.inverse === step); return !l ? t : (l.name === step ? l.target : l.source); };
   const hopProps = (r) => [['', '속성 선택'], ...mgProps(r.via ? hopEnd(r.type, r.via) : r.type).map((p) => [p.name, p.label || p.name])];
+  const roleObjects = () => S.mg.st.objects.filter((o) => !o.concept).map((o) => [o.name, o.label]);
 
   function mgOpenMore(kind, key) {
     const m = S.mg.st;
@@ -5824,6 +5475,123 @@ ${controls}${body}`;
       S.mg.form = { kind, mode: 'edit', v: { name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })), rows, scope_attr: (r.scope || {}).attribute || '', scopes, docs: r.documents === null || r.documents === undefined ? ['*'] : [...r.documents] } };
     }
     render();
+  }
+
+  const NEW_ROW = { params: { name: '', label: '', type: 'string' }, criteria: { decision: '', field: '', value: '' }, transitions: { from: '', to: '', action: '' }, mask: { prop: '', style: 'partial' }, inputs: { property: '' },
+    set: { prop: '', value: '' }, limits: { subject: '', kind: 'percent', value: '' }, rows: { type: '', via: '', property: '', mode: 'principal', value: '' }, scopes: { type: '', via: '', property: '' },
+    where: { property: '', op: 'eq', value: '' }, den: { property: '', op: 'eq', value: '' }, imembers: { type: '', field: '', prop: '' }, irules: { id: '', match: '', normalize: 'none' }, fin: { name: '', label: '', type: 'string' }, fout: { name: '', type: 'decimal' } };
+
+  function mgSaveMore(f) {
+    const v = f.v;
+    if (f.kind === 'area') {
+      if (f.mode === 'new') {
+        (async () => {
+          if (!String(v.label || '').trim()) { formStop('label', '이름이 비어 있어 Object를 추가하지 못했습니다. 이름을 입력해 주세요.'); return; }
+          if (!v.name) await nameNow(f);
+          if (S.mg.form !== f) return;
+          if (!v.name || !IDENT.test(v.name) || nameIssue(f)) { formStop('name', '영문 이름을 쓸 수 없어 Object를 추가하지 못했습니다. 영문 이름 칸 아래 안내대로 고쳐 주세요.'); return; }
+          S.md.areaPick = v.name;
+          await mgEdit('add_area', { name: v.name, label: v.label || '', description: v.description || '', cite: v.cite || '', ...(v.owner ? { owner: v.owner } : {}), ...(v.tier ? { tier: Number(v.tier) } : {}) }, `Object ${v.label || v.name}을 추가했습니다.`);
+          if (mgArea(v.name)) { mgOpen('area', v.name, true); render(); }  // what was just made is what is shown next
+        })();
+        return true;
+      }
+      const o = f.orig, args = { name: v.name };
+      for (const k of ['label', 'description', 'cite', 'owner']) if ((v[k] || '') !== (o[k] || '')) args[k] = v[k] || '';
+      if (String(v.tier || '') !== String(o.tier || '')) args.tier = v.tier ? Number(v.tier) : null;
+      if ((v.status || 'active') !== (o.status || 'active')) args.status = v.status || 'active';
+      if (Object.keys(args).length === 1) { toast('바뀐 내용이 없습니다.'); return true; }
+      mgEdit('update_area', args, `Object ${v.label || v.name}을 바꿨습니다.`);
+      S.md.areaPick = v.name;
+      return true;
+    }
+    const typed = (x) => (x === 'true' ? true : x === 'false' ? false : (x !== '' && !Number.isNaN(Number(x)) ? Number(x) : x));
+    if (f.kind === 'rule') {
+      const args = { decision: S.mg.dec, id: v.id, when: v.when, then: v.then, cite: v.cite || '' };
+      if (f.mode === 'new') { S.mg.sel = v.id; mgEdit('add_rule', { ...args, first: !!v.first }, '규칙을 추가했습니다.'); } else mgEdit('update_rule', args, '규칙을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'param') {
+      const meta = { label: v.label || '', unit: v.unit || '', cite: v.cite || '', min: v.min === '' || v.min === null ? null : Number(v.min), max: v.max === '' || v.max === null ? null : Number(v.max) };
+      S.mg.sel = `param:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_parameter', { name: v.name, type: v.type, value: v.value, ...meta }, '기준값을 추가했습니다.'); else mgEdit('update_parameter', { name: v.name, value: v.value, ...meta }, '기준값을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'metric') {
+      const args = { name: v.name, label: v.label, owner: v.owner, unit: v.unit || '', scale: Number(v.scale) || 1, description: v.description || '', cite: v.cite || '' };
+      if (f.raw) args.time = { ...(f.orig.time || {}), basis: v.basis };
+      else {
+        const al = 'x', ref = v.prop ? `${al}.${v.prop}` : al, where = condSpec(v.where, al), den = condSpec(v.den, al);
+        args.formula = { match: { [al]: v.object }, ...(where ? { where } : {}), value: { [v.fn]: ref } };
+        args.denominator = v.ratio ? { ...(den ? { where: den } : {}), value: { count: al }, ...(v.den_label ? { label: v.den_label } : {}) } : {};
+        args.time = { basis: v.basis, ...(v.time_prop ? { property: `${al}.${v.time_prop}` } : {}) };
+      }
+      S.mg.sel = `metric:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_metric', args, '지표를 추가했습니다.'); else mgEdit('update_metric', args, '지표를 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'identity') {
+      const members = {};
+      for (const r of v.imembers.filter((x) => x.type && x.field && x.prop)) (members[r.type] = members[r.type] || {})[r.field] = r.prop;
+      const rules = v.irules.filter((r) => r.id && r.match).map((r) => { const match = String(r.match).split(',').map((x) => x.trim()).filter(Boolean); return { id: r.id, match, ...(r.normalize && r.normalize !== 'none' ? { normalize: Object.fromEntries(match.map((x) => [x, r.normalize])) } : {}) }; });
+      const args = { name: v.name, label: v.label, members, rules };
+      S.mg.sel = `identity:${v.name}`;
+      if (f.mode === 'new') mgEdit('add_identity', args, '식별 통합을 추가했습니다.'); else mgEdit('update_identity', args, '식별 통합을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'function') {
+      const inputs = Object.fromEntries(v.fin.filter((p) => p.name).map((p) => [p.name, { type: p.type || 'string', label: p.label || p.name }]));
+      const outputs = Object.fromEntries(v.fout.filter((p) => p.name).map((p) => [p.name, p.type || 'string']));
+      const by = { expr: { expr: v.expr }, decision: { decision: v.decision }, query: { query: v.query }, python: { entry: v.entry }, http: { call: { ...(f.call || {}), url: v.url, method: v.method, ...(v.path ? { path: v.path } : {}) } } }[v.runtime] || {};
+      const args = { name: v.name, label: v.label, runtime: v.runtime, target: v.target || '', inputs, outputs, version: v.version, owner: v.owner || '', status: v.status, description: v.description || '', cite: v.cite || '', depends: String(v.depends || '').split(',').map((x) => x.trim()).filter(Boolean), expr: '', decision: '', query: '', entry: '', call: {}, ...by };
+      S.mg.sel = v.name;
+      if (f.mode === 'new') mgEdit('add_function', args, '함수를 추가했습니다.'); else mgEdit('update_function', args, '함수를 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'decision') {
+      const inputs = {};
+      for (const r of v.inputs.filter((x) => x.property)) {
+        const parts = r.property.split('.');
+        const name = parts[parts.length - 1];
+        const link = parts.length > 1 ? S.mg.st.links.find((l) => l.name === parts[0]) : null;
+        const p = S.mg.st.properties.find((x) => x.object === (link ? link.target : v.target) && x.name === name);
+        inputs[name] = { type: (p || {}).type === 'enum' ? 'string' : ((p || {}).type || 'string'), property: name, ...(link ? { path: [link.name] } : {}) };
+      }
+      S.mg.dec = v.name;
+      mgEdit('add_decision', { name: v.name, label: v.label, target: v.target, inputs, otherwise: v.otherwise }, '결정표를 추가했습니다.');
+      return true;
+    }
+    if (f.kind === 'states') {
+      S.mg.sel = v.object;
+      mgEdit('update_states', { object: v.object, property: v.property, initial: v.initial, states: String(v.states || '').split(','), transitions: v.transitions }, '상태 전이를 저장했습니다.');
+      return true;
+    }
+    if (f.kind === 'action') {
+      const parameters = Object.fromEntries(v.params.filter((p) => p.name).map((p) => [p.name, { type: p.type || 'string', label: p.label || p.name }]));
+      const by = {};
+      for (const c of v.criteria.filter((x) => x.decision && x.field)) (by[c.decision] = by[c.decision] || {})[c.field] = typed(c.value);
+      const parts = {};
+      for (const l of v.limits.filter((x) => x.subject && x.value !== '')) (parts[l.subject] = parts[l.subject] || { [l.subject[0] === 'p' ? 'property' : 'parameter']: l.subject.slice(2) })[l.kind] = String(l.value).startsWith('@') ? l.value : Number(l.value);
+      const limits = Object.values(parts);
+      const asBody = (x) => { try { return JSON.parse(x); } catch (e) { return x; } };
+      const call = v.url ? { ...(f.call || {}), url: v.url, method: v.method, ...(v.body ? { body: asBody(v.body) } : {}) } : {};
+      const undo = v.undo_url ? { ...(f.undo || {}), url: v.undo_url, method: (f.undo || {}).method || 'POST' } : {};
+      const set = Object.fromEntries(v.set.filter((x) => x.prop).map((x) => [x.prop, String(x.value).startsWith('$') ? x.value : typed(x.value)]));
+      const args = { name: v.name, label: v.label, parameters, set, call, undo, criteria: [...Object.entries(by).map(([decision, expect]) => ({ decision, expect })), ...(f.keep || [])], transition_to: v.transition_to || '', approval: limits.length ? { auto_within: limits, agents: !!v.agents } : !!v.approval, cite: v.cite || '' };
+      S.mg.sel = v.name;
+      if (f.mode === 'new') mgEdit('add_action', { ...args, target: v.target }, '액션을 추가했습니다.'); else mgEdit('update_action', args, '액션을 변경했습니다.');
+      return true;
+    }
+    if (f.kind === 'role') {
+      const mask = Object.fromEntries(v.mask.filter((r) => r.prop).map((r) => [r.prop, r.style]));
+      const rows = v.rows.filter((r) => r.raw || (r.type && r.property)).map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: typed(r.value) } : { principal: r.value }) }));
+      const scope = v.scope_attr ? { attribute: v.scope_attr, types: v.scopes.filter((r) => r.type && r.property).map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
+      const args = { name: v.name, label: v.label, read: v.read, run: v.run, request: v.request, mask, rows, scope, documents: v.docs.includes('*') ? null : v.docs };
+      S.mg.sel = v.name;
+      if (f.mode === 'new') mgEdit('add_role', args, '역할을 추가했습니다.'); else mgEdit('update_role', args, '역할을 변경했습니다.');
+      return true;
+    }
+    return false;
   }
 
   function mgDeleteMore(f) {
@@ -6600,7 +6368,6 @@ ${controls}${body}`;
         S.mg.st = null; S.sr.fb = 'saved'; render();
       } catch (e) { fail(e); }
     },
-    helpclose: () => { S.help = false; paintLayer(); },
     rmetric: async (t) => {
       try { S.met[t.dataset.name] = await api('metric?name=' + encodeURIComponent(t.dataset.name)); render(); } catch (e) { fail(e); }
     },
@@ -6822,7 +6589,6 @@ ${controls}${body}`;
       if (box) box.classList.toggle('xpo', on); else $('#main').classList.toggle('pgo', on);
       t.setAttribute('aria-expanded', on);
     },
-    explain: () => { S.explain = !S.explain; keep('ontlas-explain', S.explain ? '1' : ''); document.body.classList.toggle('explain', S.explain); render(); },
     extab: (t) => { S.ex.tab = t.dataset.k; loadExplorer(); },
     exgo: (t) => {
       if (t.dataset.switch) return exSwitch(t.dataset.id.slice(5));
@@ -7568,7 +7334,7 @@ ${controls}${body}`;
     });
     document.addEventListener('keydown', (ev) => {
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); ACT.palette(); }
-      if (ev.key === 'Escape') { if (S.iss.open || S.iss.done) ACT.issclose(); else if (S.md.draft) ACT.draftclose(); else if (S.rp) ACT.rpclose(); else if (S.tab === 'onto' && S.ov.focus) focusOff('onto'); else if (S.tab === 'model' && S.md.focus) focusOff('model'); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); else if (S.help) ACT.helpclose(); }
+      if (ev.key === 'Escape') { if (S.iss.open || S.iss.done) ACT.issclose(); else if (S.md.draft) ACT.draftclose(); else if (S.rp) ACT.rpclose(); else if (S.tab === 'onto' && S.ov.focus) focusOff('onto'); else if (S.tab === 'model' && S.md.focus) focusOff('model'); else if (S.pick || S.menu || S.pal) closeFloats(); else if (S.cat.file) ACT.cdclose(); }
     });
     layer.addEventListener('input', (ev) => {
       if (ev.target.id === 'repolabel') S.pick.label = ev.target.value;
