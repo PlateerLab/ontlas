@@ -1,0 +1,10 @@
+/* 관리 영역: what the kit has no part for */
+.adm-g3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.adm-own { padding:12px 20px; border-bottom:1px solid var(--row); display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.adm-own:last-of-type { border-bottom:0; }
+.adm-ro .k-f > input[readonly], .adm-ro .k-f > textarea[readonly] { background:var(--panel); color:var(--ink3); }
+.adm-wide { min-width:720px; }
+.adm-mid { min-width:480px; }
+.adm-use { display:flex; flex-direction:column; gap:6px; padding:12px 20px; border-top:1px solid var(--row); }
+.adm-terms { max-height:420px; overflow-y:auto; }
+@media (max-width:640px) { .adm-g3 { grid-template-columns:minmax(0, 1fr); } }
