@@ -161,6 +161,8 @@
         <p class="k-p" style="padding:0 16px">온톨로지 전체의 버전 이력은 <a href="#changes">변경 요청 · 버전</a>에서${known('sys-audit') && isSysAdmin() ? ', 누가 화면을 열고 내보냈는지는 <a href="#sys-audit">감사 로그</a>에서' : ''} 봅니다.</p></div></div>`;
   }
 
+  // leaving an item's screen forgets what was typed there: the next visit starts from the item as it is
+  window.addEventListener('hashchange', () => { if (S.it.key && !S.it.key.startsWith(`${location.hash.slice(1).split('?')[0].replace(/-(form|delete|history)$/, '')}:`)) S.it = { key: '' }; });
   let itemTimer = 0;
   Object.assign(INPUT, {
     itf: (t) => {
@@ -192,7 +194,7 @@
       try {
         const out = (await def.save(it.d, it.x)) || {};
         const el = !def.direct && String(it.d.reason || '').trim() && def.element ? (out.element || (it.x ? def.element(it.x) : '')) : '';
-        if (el) await api('element/comment', { element: el, text: it.d.reason }).catch(() => {});  // why, kept beside the item
+        if (el) await api('element/comment', { id: el, text: it.d.reason }).catch(() => {});  // why, kept beside the item
         S.it = { key: '' };
         toast(def.direct ? '저장했습니다.' : '저장했습니다. 작성 중인 변경 요청에 담겼습니다.');
         location.hash = '#' + (out.go || def.list);
@@ -205,7 +207,7 @@
       try {
         const el = def.element ? def.element(it.x) : '';
         const out = (await def.remove(it.x, { mode: it.mode, reason: it.reason.trim() })) || {};
-        if (el) await api('element/comment', { element: el, text: `${it.mode === 'disable' ? '사용 중지' : '삭제 요청'} · ${it.reason.trim()}` }).catch(() => {});
+        if (el) await api('element/comment', { id: el, text: `${it.mode === 'disable' ? '사용 중지' : '삭제 요청'} · ${it.reason.trim()}` }).catch(() => {});
         S.it = { key: '' };
         toast(it.mode === 'disable' ? '사용을 중지했습니다.' : '삭제를 요청했습니다. 작성 중인 변경 요청에 담겼습니다.');
         location.hash = '#' + (out.go || def.list);

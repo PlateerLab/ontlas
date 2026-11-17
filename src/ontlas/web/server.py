@@ -818,6 +818,11 @@ def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: 
                                               actor_id=c.get("name") or "api", read_only=not c.get("write"), audit=True))
                      for c in clients], source=(lambda: shared.studio) if shared else None,
                     lock=shared.lock if shared else None, libraries=libraries)
+    # what the server was started with, for the areas that show it (who may call /v1, who signs in, the limits)
+    routes.load()
+    routes.started(rest=rest, logins=logins, sessions=sessions, limits={"sessions": limit, "idle": idle, "ask_per_minute": ask_per_minute,
+                                                                          "upload_bytes": (data or DataOptions()).file_bytes},
+                   users=users, video=video, host=host, port=port)
     httpd = Server((host, port), make_handler(sessions, ask_limit=RateLimit(ask_per_minute),
                                               quiet=quiet, upload_max=(data or DataOptions()).file_bytes,
                                               video=video, logins=logins, rest=rest))

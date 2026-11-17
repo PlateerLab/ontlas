@@ -91,3 +91,36 @@ def test_an_items_history_starts_with_the_edit_not_yet_sent_and_keeps_why(sessio
     assert filed["status"] == "approved" and filed["deployed"] and filed["change"] == res["change"]["id"]
     assert out["now"]["label"] == "주문 진행 상태"
     assert history(session, {"element": "object:Customer"}, None)["entries"] == []
+
+
+def test_no_two_files_of_the_page_declare_the_same_name():
+    """The areas' files share app.js's scope: a name declared twice stops the whole page before it draws."""
+    import re
+
+    seen: dict[str, str] = {}
+    twice = []
+    for part in [STATIC / "app.js", *sorted((STATIC / "v2").glob("*.js"))]:
+        for line in part.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"  (?:const|let|class|async function|function)\s+([A-Za-z_$][\w$]*)", line)
+            if m is None:
+                continue
+            if m.group(1) in seen:
+                twice.append(f"{m.group(1)}: {seen[m.group(1)]} and {part.name}")
+            seen[m.group(1)] = part.name
+    assert not twice, twice
+
+
+def test_the_script_of_the_page_parses(tmp_path):
+    """Every file of the page put together as the server does it is one script a browser can read."""
+    import re
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    script = re.search(r"<script>(.*)</script>", page().decode("utf-8"), re.S).group(1)
+    path = tmp_path / "page.js"
+    path.write_text(script, encoding="utf-8")
+    out = subprocess.run([node, "--check", str(path)], capture_output=True, text=True, encoding="utf-8")
+    assert out.returncode == 0, out.stderr[-800:]

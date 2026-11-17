@@ -71,10 +71,15 @@ def history(s, a, who) -> dict:
             if sides is not None:
                 entries.insert(0, _entry(s, el, sides, change="", version="", module="", module_label="", status="draft",
                                          status_label="작성 중", at="", by=s.who, decided_by="", reason="", deployed=False))
-    # why a change was made is a note left on the item when it was saved: each entry carries the notes written up to it
-    notes = sorted(s._notes().get(el, []), key=lambda n: str(n.get("at") or ""))
-    for i, e in enumerate(entries):
-        older = entries[i + 1]["at"] if i + 1 < len(entries) else ""
-        e["notes"] = [n for n in notes if str(n.get("at") or "") > str(older or "")
-                      and (not e["at"] or str(n.get("at") or "") <= str(e["at"]))]
+    # why a change was made is a note left on the item when it was saved. A note belongs to the first change filed at
+    # or after it (a note is kept to the minute, a change to the second), and to the edit not yet sent when none was.
+    for e in entries:
+        e["notes"] = []
+    filed = sorted((e for e in entries if e["at"]), key=lambda e: str(e["at"]))
+    draft = entries[0] if entries and entries[0]["status"] == "draft" else None
+    for n in sorted(s._notes().get(el, []), key=lambda n: str(n.get("at") or "")):
+        at = str(n.get("at") or "")[:16]
+        home = next((e for e in filed if str(e["at"])[:16] >= at), draft)
+        if home is not None:
+            home["notes"].append(n)
     return {"element": el, "label": s._element_label(el), "now": _now_of(s, el), "entries": entries}

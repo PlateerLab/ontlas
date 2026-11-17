@@ -59,9 +59,21 @@ def require(who, level: str) -> None:
         raise PermissionError(f"{who.name} 님의 권한으로는 이 내용을 볼 수 없습니다. 권한이 있는 사람에게 요청해 주세요.")
 
 
-def load() -> None:
+SERVER: dict = {}  # what the server was started with (rest, logins, sessions, limits, ...), for a handler that shows it
+
+
+def load() -> list:
     """Import every area module once, so its routes are registered before the first request."""
     from ontlas.web import areas
 
-    for m in pkgutil.iter_modules(areas.__path__):
-        importlib.import_module(f"{areas.__name__}.{m.name}")
+    return [importlib.import_module(f"{areas.__name__}.{m.name}") for m in pkgutil.iter_modules(areas.__path__)]
+
+
+def started(**server) -> None:
+    """The server tells the areas what it was started with. An area that needs it defines on_serve(**server)."""
+    SERVER.clear()
+    SERVER.update(server)
+    for module in load():
+        hook = getattr(module, "on_serve", None)
+        if hook is not None:
+            hook(**server)
