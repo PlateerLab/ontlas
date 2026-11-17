@@ -778,12 +778,14 @@ window.SpaceGraph = (function () {
       const d = st.drag;
       st.drag = null;
       if (!d || d.moved) return;
-      st.opened = st.bundles.has(d.node);  // the click that follows lands where the bundle no longer is: that is not the empty stage
+      st.opened = true;  // the stage reports the click that follows this press too (an opened bundle is no longer under it): that is not a press on the empty stage
+      st.tapped = performance.now();
       tap(st, d.node);
     };
     renderer.getMouseCaptor().on('mouseup', drop);
     renderer.on('clickStage', ({ event }) => {
-      if (st.opened) { st.opened = false; return; }
+      if (st.opened && performance.now() - (st.tapped || 0) < 600) { st.opened = false; return; }
+      st.opened = false;
       const t = titleAt(st, event);
       if (t) {
         if (st.center && st.groupOf[st.center] === t.g && st.opt.clear) st.opt.clear();

@@ -2,7 +2,7 @@
   //      machine and a Relation. Object is an area of the definition, Entity an object type, Relation a link. =========
   S.ont = { oq: '', otier: 'all', osel: '',  // 오브젝트 관리: what is searched, the tier shown, the Object picked
     esel: '', ewant: '', eq: '', eopen: {}, etab: 'def', einfo: {}, euses: null, eyaml: null, enotes: null, enote: '', edef: null, ssel: '',  // 엔티티 관리
-    g: { focus: '', want: '', open: [], pos: {}, rel: '', show: { object: true, entity: true, member: true, rule: false }, all: false, rd: null },  // 그래프 탐색
+    g: { want: '', node: '', rel: '', pos: {}, show: { object: true, entity: true, member: true, rule: false }, all: false, rd: null },  // 그래프 탐색
     semBusy: false };
   const ONT_TABS = ['objmgr', 'objects', 'model'];
   const ontName = (x) => `${x.label || x.name}@${x.name}`;
@@ -309,163 +309,98 @@
   });
 
   // ---- ONT-03 그래프 탐색 --------------------------------------------------------------------------------------
-  // The graph stands on one Object: its Entities, the Relations that touch them and the Entities at their other ends,
-  // each with its own Object. A node pressed twice brings in its neighbours. Where a link asks for the diagram's
-  // workspace (#model?ws=1, a link to an element, the Property and Relation tables) the older workspace is shown whole.
+  // The whole definition on the product's graph engine: Objects and Entities as nodes coloured by Object, membership as
+  // light lines, Relations as named arrows. Wheel and buttons zoom, a node is picked and its side opens beside the
+  // graph. Where a link asks for the diagram's workspace (#model?ws=1, a link to an element, the Property and Relation
+  // tables) the older workspace is shown whole.
   const ontWs = () => S.tab === 'model' && (location.hash.slice(1).split('?')[0] !== 'model' || /[?&](ws|el|left|field)=/.test(location.hash) || !!S.md.wantNew);
   const ONT_R = { a: 38, e: 32 };
 
-  function ontGraphWant() {  // what the address asks for, taken once: an Object to stand on, an Entity or a Relation to show
+  function ontGraphWant() {  // what the address asks for, taken once: an Object, an Entity or a Relation to show
     const g = S.ont.g, m = S.mg.st;
     const want = `${itemParam('focus')}|${itemParam('entity')}|${itemParam('rel')}`;
-    if (want !== '||' && want !== g.want) {
-      g.want = want;
-      const rel = m.links.find((l) => l.name === itemParam('rel'));
-      const ent = ontObj(itemParam('entity')) || (rel && ontObj(rel.source)) || null;
-      const area = mgArea(itemParam('focus')) || (ent && mgArea(ent.area)) || null;
-      Object.assign(g, { focus: area ? area.name : '', open: ent && (!area || ent.area !== area.name) ? [ent.name] : [], pos: {}, lay: null });
-      if (rel) g.rel = rel.name;
-    }
-    if (!mgArea(g.focus) && !g.open.some((n) => ontObj(n))) {
-      const touched = new Set(m.links.flatMap((l) => [l.source, l.target]));
-      const first = (m.areas || []).find((a) => areaEntities(a).some((o) => touched.has(o.name))) || (m.areas || []).find((a) => areaEntities(a).length);
-      g.focus = first ? first.name : '';
-      g.open = first ? [] : m.objects.slice(0, 1).map((o) => o.name);
-    }
+    if (want === '||' || want === g.want) return;
+    g.want = want;
+    const rel = m.links.find((l) => l.name === itemParam('rel'));
+    if (rel) { g.rel = rel.name; g.node = `e:${rel.source}`; g.rd = null; return; }
+    if (ontObj(itemParam('entity'))) { g.node = `e:${itemParam('entity')}`; g.rel = ''; return; }
+    if (mgArea(itemParam('focus'))) { g.node = `a:${itemParam('focus')}`; g.rel = ''; }
   }
-  function ontGraphData() {
-    const m = S.mg.st, g = S.ont.g, focus = mgArea(g.focus), show = g.show;
-    const base = new Set([...(focus ? areaEntities(focus).map((o) => o.name) : []), ...g.open.filter((n) => ontObj(n))]);
-    const rels = m.links.filter((l) => (base.has(l.source) || base.has(l.target)) && ontObj(l.source) && ontObj(l.target));
-    const ents = new Set(base);
-    rels.forEach((l) => { ents.add(l.source); ents.add(l.target); });
-    const areaOf = (n) => { const a = (ontObj(n) || {}).area; return a && mgArea(a) ? a : ''; };
-    const areas = new Set([...ents].map(areaOf).filter(Boolean));
-    if (focus) areas.add(focus.name);
-    const nodes = [], edges = [];
-    const order = [...(focus ? [focus.name] : []), ...[...areas].filter((a) => !focus || a !== focus.name)];
-    if (show.object) order.forEach((a) => nodes.push({ id: `a:${a}`, kind: 'a', name: a, label: mgArea(a).label || a, r: ONT_R.a }));
-    if (show.entity) {
-      [...ents].forEach((n) => nodes.push({ id: `e:${n}`, kind: 'e', name: n, label: ontObj(n).label || n, r: ONT_R.e }));
-      if (show.object) [...ents].forEach((n) => { if (areaOf(n)) edges.push({ id: `m:${n}`, kind: 'mem', s: `a:${areaOf(n)}`, t: `e:${n}`, hide: !show.member }); });
-      rels.forEach((l) => edges.push({ id: `r:${l.name}`, kind: 'rel', s: `e:${l.source}`, t: `e:${l.target}`, name: l.name, card: CARD[l.cardinality] || '' }));
-    } else {  // Objects alone: the Relations between two Objects as one line with their number
-      const sum = {};
-      rels.forEach((l) => { const a = areaOf(l.source), b = areaOf(l.target); if (a && b && a !== b) { const k = `${a}|${b}`; sum[k] = (sum[k] || 0) + 1; } });
-      Object.entries(sum).forEach(([k, n]) => { const [a, b] = k.split('|'); edges.push({ id: `s:${k}`, kind: 'sum', s: `a:${a}`, t: `a:${b}`, name: `Relation ${n}`, card: '' }); });
+  // the data the engine draws: an Object's colour is its Entities' colour, a membership is a light line
+  function ontKgData() {
+    const m = S.mg.st, areas = m.areas || [];
+    const home = (o) => (o.area && mgArea(o.area) ? o.area : '-');
+    const nodes = [...areas.map((a) => ({ id: `a:${a.name}`, label: a.label || a.name, module: a.name, kind: 'a', name: a.name })),
+      ...m.objects.map((o) => ({ id: `e:${o.name}`, label: o.label || o.name, module: home(o), kind: 'e', name: o.name }))];
+    const edges = [...m.objects.filter((o) => home(o) !== '-').map((o) => ({ source: `a:${o.area}`, target: `e:${o.name}`, label: '소속', subtype: true, member: true })),
+      ...m.links.filter((l) => ontObj(l.source) && ontObj(l.target)).map((l) => ({ source: `e:${l.source}`, target: `e:${l.target}`, label: `${l.name}${CARD[l.cardinality] ? ` · ${CARD[l.cardinality]}` : ''}`, rel: l.name }))];
+    const clusters = [...areas.map((a) => ({ id: a.name, label: a.label || a.name })), ...(m.objects.some((o) => home(o) === '-') ? [{ id: '-', label: 'Object 미지정' }] : [])];
+    return { nodes, edges, clusters };
+  }
+  const ontMarks = (name) => {  // the restrictions that hold an Entity: obligation, prohibition and limit cards, and value checks
+    const cards = (S.sem.st && S.sem.st.cards) || [];
+    return cards.filter((c) => (['limit', 'duty', 'ban'].includes(c.type) || c.check) && (c.applies_to || []).some((r) => r === `object:${name}` || r.startsWith(`property:${name}.`))).length;
+  };
+  function ontKgMount() {
+    const el = $('#ontkg'), g = S.ont.g;
+    if (!el) return;
+    mountGraph(el, ontKgData(), {
+      key: 'ontgraph', pos: g.pos, sel: () => g.node || null,
+      shown: (kind, raw) => (kind === 'node' ? (raw.kind === 'a' ? g.show.object : g.show.entity) : raw.member ? g.show.member && g.show.object && g.show.entity : g.show.entity),
+      label: (n) => { const k = n.kind === 'e' && g.show.rule ? ontMarks(n.name) : 0; return k ? `${n.label} · Restriction ${k}` : n.label; },
+      clear: () => { g.node = ''; g.rel = ''; g.rd = null; ontSidePaint(); },
+      pick: (id) => { g.node = g.node === id ? '' : id; g.rel = ''; g.rd = null; ontSidePaint(); window.SpaceGraph.refresh(); },
+    });
+  }
+  // the side of what is picked: a Relation's form, or an Entity or an Object with its Relations and its own screens
+  function ontNodeSide(id) {
+    const m = S.mg.st, [kind, name] = [id.slice(0, 1), id.slice(2)];
+    const relRow = (l) => `<button class="k-row tight" data-act="ontGrel" data-name="${esc(l.name)}"><span class="k-h sb"><span class="k-code k-ink">${esc(l.name)}</span><span class="k-code k-mut">${esc(CARD[l.cardinality] || '')}</span></span><span class="k-s">${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</span></button>`;
+    if (kind === 'a') {
+      const a = mgArea(name);
+      if (!a) return '';
+      const ents = areaEntities(a);
+      return `<aside class="k-card ont-side" id="ontside" style="flex:1 1 320px"><div class="ont-sec" style="display:flex;flex-direction:column;gap:6px"><p class="k-p s">Object</p><h2 class="ont-h20">${esc(a.label || a.name)}</h2><span class="k-code k-mut">${esc(a.name)}</span></div>
+        <div class="k-ch" style="padding-top:4px"><h2>Entity</h2><span class="k-chip">${ents.length}</span></div>
+        ${ents.map((o) => `<button class="k-row tight" data-act="ontGnode" data-id="e:${esc(o.name)}"><span class="k-14">${esc(o.label || o.name)}</span><span class="k-code k-mut">${esc(o.name)}</span></button>`).join('') || '<p class="k-cf line">등록된 Entity가 없습니다.</p>'}
+        <div class="k-h" style="padding:12px 20px;border-top:1px solid var(--row);margin-top:auto">${itemActs('object', a.name)}</div></aside>`;
     }
-    return { focus, base, rels, nodes, edges };
+    const o = ontObj(name);
+    if (!o) return '';
+    const rels = m.links.filter((l) => l.source === name || l.target === name);
+    const area = mgArea(o.area);
+    return `<aside class="k-card ont-side" id="ontside" style="flex:1 1 320px"><div class="ont-sec" style="display:flex;flex-direction:column;gap:6px"><p class="k-p s">Entity</p><h2 class="ont-h20">${esc(o.label || o.name)}</h2><span class="k-code k-mut">${esc(o.name)}</span></div>
+      <div class="k-v g4" style="padding:4px 20px 8px">${ontKv('Object', area ? esc(area.label || area.name) : 'Object 미지정')}${ontKv('Property', String(m.properties.filter((p) => p.object === name).length))}</div>
+      <div class="k-ch" style="padding-top:4px"><h2>Relation</h2><span class="k-chip">${rels.length}</span>${canEdit() ? `<div class="k-push"><a class="k-lnk" href="${itemHref('relation', 'form')}">${ki('plus', 16, 1.75)}Relation</a></div>` : ''}</div>
+      ${rels.map(relRow).join('') || '<p class="k-cf line">등록된 Relation이 없습니다.</p>'}
+      <div class="k-h" style="padding:12px 20px;border-top:1px solid var(--row);margin-top:auto"><button class="k-btn" data-act="ontGent" data-name="${esc(name)}">Entity 상세</button>${itemActs('entity', name)}</div></aside>`;
   }
-  // where each node stands: pushed apart and pulled along its lines until it settles, once for a given set of nodes;
-  // a node a person moved stays where it was put
-  function ontGraphLayout(nodes, edges) {
-    const g = S.ont.g, sig = `${nodes.map((n) => n.id).join(',')}|${edges.length}`;
-    if (!g.lay || g.lay.sig !== sig) {
-      const ids = nodes.map((n) => n.id), n = ids.length, P = {}, R = Object.fromEntries(nodes.map((v) => [v.id, v.r]));
-      ids.forEach((id, i) => { const a = (i / Math.max(n, 1)) * Math.PI * 2, r = i ? 50 + 30 * Math.sqrt(n) : 0; P[id] = [r * Math.cos(a), r * Math.sin(a)]; });
-      const K = 118, steps = 320;
-      for (let it = 0; it < steps; it++) {
-        const t = 32 * (1 - it / steps) + 0.6, D = Object.fromEntries(ids.map((id) => [id, [0, 0]]));
-        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-          const a = ids[i], b = ids[j];
-          let dx = P[a][0] - P[b][0], dy = P[a][1] - P[b][1];
-          const d = Math.max(Math.hypot(dx, dy), 1), f = (K * K) / d;
-          dx /= d; dy /= d;
-          D[a][0] += dx * f; D[a][1] += dy * f; D[b][0] -= dx * f; D[b][1] -= dy * f;
-        }
-        edges.forEach((e) => {
-          if (!P[e.s] || !P[e.t]) return;
-          let dx = P[e.s][0] - P[e.t][0], dy = P[e.s][1] - P[e.t][1];
-          const d = Math.max(Math.hypot(dx, dy), 1), f = (d * d) / (e.kind === 'mem' ? K : K * 1.7);
-          dx /= d; dy /= d;
-          D[e.s][0] -= dx * f; D[e.s][1] -= dy * f; D[e.t][0] += dx * f; D[e.t][1] += dy * f;
-        });
-        ids.forEach((id) => { D[id][0] -= P[id][0] * 0.22; D[id][1] -= P[id][1] * 0.22; });  // toward the middle, so a chain does not run off
-        ids.forEach((id) => { const d = Math.max(Math.hypot(D[id][0], D[id][1]), 1), s = Math.min(d, t) / d; P[id][0] += D[id][0] * s; P[id][1] += D[id][1] * s; });
-      }
-      ids.forEach((id) => { P[id][1] *= 0.8; });  // wider than tall, as the card that holds it
-      const room = {};  // two Entities a Relation joins stand far enough apart for its name
-      edges.forEach((e) => { if (e.kind !== 'mem') { const k = [e.s, e.t].sort().join('|'); room[k] = Math.max(room[k] || 0, e.name.length * 7.3 + 52); } });
-      for (let it = 0; it < 60; it++) {  // no two circles closer than their names need
-        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-          const a = ids[i], b = ids[j], need = R[a] + R[b] + Math.max(44, room[[a, b].sort().join('|')] || 0);
-          let dx = P[a][0] - P[b][0], dy = P[a][1] - P[b][1];
-          const d = Math.max(Math.hypot(dx, dy), 0.01);
-          if (d >= need) continue;
-          dx /= d; dy /= d;
-          const push = (need - d) / 2;
-          P[a][0] += dx * push; P[a][1] += dy * push; P[b][0] -= dx * push; P[b][1] -= dy * push;
-        }
-      }
-      g.lay = { sig, pos: Object.fromEntries(ids.map((id) => [id, { x: Math.round(P[id][0]), y: Math.round(P[id][1]) }])) };
-    }
-    const pos = Object.fromEntries(nodes.map((v) => [v.id, g.pos[v.id] || g.lay.pos[v.id]]));
-    const xs = nodes.map((v) => pos[v.id]);
-    const box = g.box || { x: Math.min(...xs.map((p) => p.x)) - 110, y: Math.min(...xs.map((p) => p.y)) - 64, x2: Math.max(...xs.map((p) => p.x)) + 110, y2: Math.max(...xs.map((p) => p.y)) + 70 };
-    return { pos, box };
+  function ontSide() {
+    const g = S.ont.g, m = S.mg.st, rel = g.rel && m.links.find((l) => l.name === g.rel);
+    if (rel) return ontRelSide(rel);
+    if (g.node) { const side = ontNodeSide(g.node); if (side) return side; }
+    return '<aside class="k-card pad ont-side" id="ontside" style="flex:1 1 320px"><p class="k-p s">선택된 항목이 없습니다.</p></aside>';
   }
-  function ontLines(label, max) {  // a name inside a circle: broken at spaces, then by length, three lines at most
-    const out = [];
-    let cur = '';
-    String(label).split(' ').forEach((w) => { if (!cur) cur = w; else if (`${cur} ${w}`.length <= max) cur += ` ${w}`; else { out.push(cur); cur = w; } });
-    if (cur) out.push(cur);
-    const lines = out.flatMap((l) => { const xs = []; for (let i = 0; i < l.length; i += max) xs.push(l.slice(i, i + max)); return xs; });
-    return lines.length > 3 ? [...lines.slice(0, 2), `${lines[2].slice(0, max - 1)}…`] : lines;
+  function ontSidePaint() {
+    const box = $('#ontside'); if (box) box.outerHTML = ontSide();
+    const bar = $('#ontgbar'); if (bar) bar.innerHTML = ontGraphBar();
+    const dict = $('#ontrels'); if (dict) dict.outerHTML = ontDict();
   }
-  function ontGraphSvg() {
-    const g = S.ont.g, { nodes, edges } = ontGraphData();
-    if (!nodes.length) return '<p class="k-p s" style="padding:24px 8px">표시할 Object · Entity가 없습니다.</p>';
-    const { pos, box } = ontGraphLayout(nodes, edges);
-    const at = (id) => [pos[id].x, pos[id].y], R = Object.fromEntries(nodes.map((v) => [v.id, v.r]));
-    const sel = edges.find((e) => e.kind === 'rel' && e.name === g.rel);
-    const hot = new Set(sel ? [sel.s, sel.t] : []);
-    const cards = g.show.rule ? S.sem.st && S.sem.st.cards : null;
-    const place = pairs(edges.filter((e) => e.kind !== 'mem'), (e) => [e.s, e.t]);
-    const dirs = {};  // the ways lines leave each node, so its name is written on the side they leave freest
-    edges.forEach((e) => { if (e.hide || !pos[e.s] || !pos[e.t]) return; const a = Math.atan2(pos[e.t].y - pos[e.s].y, pos[e.t].x - pos[e.s].x); (dirs[e.s] = dirs[e.s] || []).push(a); (dirs[e.t] = dirs[e.t] || []).push(a + Math.PI); });
-    const side = (id) => {
-      const gap = (c) => Math.min(Math.PI, ...(dirs[id] || []).map((a) => { const d = Math.abs(a - c) % (Math.PI * 2); return d > Math.PI ? Math.PI * 2 - d : d; }));
-      return [['b', Math.PI / 2], ['t', -Math.PI / 2], ['r', 0], ['l', Math.PI]].map(([k, c]) => [k, gap(c)]).sort((x, y) => y[1] - x[1])[0][0];
-    };
-    const line = (e) => {
-      if (!pos[e.s] || !pos[e.t] || e.hide) return '';
-      const a = at(e.s), b = at(e.t), d = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1]), 1), u = [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
-      const p = [a[0] + u[0] * R[e.s], a[1] + u[1] * R[e.s]], q = [b[0] - u[0] * (R[e.t] + (e.kind === 'mem' ? 0 : 4)), b[1] - u[1] * (R[e.t] + (e.kind === 'mem' ? 0 : 4))];
-      if (e.kind === 'mem') return `<g class="ont-e mem"><line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}"/></g>`;
-      const on = sel === e, [k, n] = place(e), c = bend(p, q, k, n), w = e.name.length * 7.3 + 16;
-      if (n > 1) {  // lines between the same two nodes carry their names at different places along them
-        const t = (k + 1) / (n + 1), off = (k - (n - 1) / 2) * 26, len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
-        const cx = (p[0] + q[0]) / 2 - ((q[1] - p[1]) / len) * off * 2, cy = (p[1] + q[1]) / 2 + ((q[0] - p[0]) / len) * off * 2;
-        c.x = (1 - t) * (1 - t) * p[0] + 2 * (1 - t) * t * cx + t * t * q[0];
-        c.y = (1 - t) * (1 - t) * p[1] + 2 * (1 - t) * t * cy + t * t * q[1];
-      }
-      return `<g class="ont-e rel${on ? ' on' : ''}"${e.kind === 'rel' ? ` data-rel="${esc(e.name)}"` : ''}><path d="${c.d}" marker-end="url(#${on ? 'ontarron' : 'ontarr'})"/>
-        <rect class="lb" x="${c.x - w / 2}" y="${c.y - 11}" width="${w}" height="20" rx="6"/><text class="nm" x="${c.x}" y="${c.y + 3}" text-anchor="middle">${esc(e.name)}</text>
-        ${e.card ? `<rect class="cdbg" x="${c.x - 16}" y="${c.y + 10}" width="32" height="15"/><text class="cd" x="${c.x}" y="${c.y + 22}" text-anchor="middle">${esc(e.card)}</text>` : ''}</g>`;
-    };
-    const node = (v) => {
-      const [x, y] = at(v.id), lines = ontLines(v.label, v.kind === 'a' ? 4 : 4);
-      const marks = cards && v.kind === 'e' ? cards.filter((c) => (['limit', 'duty', 'ban'].includes(c.type) || c.check) && (c.applies_to || []).some((r) => r === `object:${v.name}` || r.startsWith(`property:${v.name}.`))).length : 0;
-      const top = v.kind === 'a' ? y + 6 - (lines.length - 1) * 8 : y + 4.5 - (lines.length - 1) * 7.5;
-      const words = lines.map((l, i) => `<text class="w" x="${x}" y="${top + i * (v.kind === 'a' ? 17 : 15)}" text-anchor="middle"${lines.length > 2 ? ' style="font-size:12px"' : ''}>${esc(l)}</text>`).join('');
-      return `<g class="ont-n ${v.kind === 'a' ? 'obj' : 'ent'}${hot.has(v.id) ? ' on' : ''}" data-n="${esc(v.id)}"><title>${v.kind === 'a' ? 'Object' : 'Entity'} · ${esc(v.label)}@${esc(v.name)}${marks ? ` · Restriction ${marks}` : ''}</title><circle cx="${x}" cy="${y}" r="${v.r}"/>
-        ${v.kind === 'a' ? `<text class="k" x="${x}" y="${top - 16}" text-anchor="middle">Object</text>` : ''}${words}
-        ${{ b: `<text class="mono" x="${x}" y="${y + v.r + 15}" text-anchor="middle">`, t: `<text class="mono" x="${x}" y="${y - v.r - 8}" text-anchor="middle">`, r: `<text class="mono" x="${x + v.r + 8}" y="${y + 4}" text-anchor="start">`, l: `<text class="mono" x="${x - v.r - 8}" y="${y + 4}" text-anchor="end">` }[side(v.id)]}${esc(v.name)}</text>${marks ? `<circle class="dot" cx="${x + v.r * 0.7}" cy="${y - v.r * 0.7}" r="6"/>` : ''}</g>`;
-    };
-    const W = Math.round(box.x2 - box.x), H = Math.round(box.y2 - box.y);
-    return `<svg class="ont-svg" width="${W}" height="${H}" viewBox="${box.x} ${box.y} ${W} ${H}" role="img" aria-label="Relation 그래프">
-      <defs><marker id="ontarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5C5C63"/></marker>
-      <marker id="ontarron" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2563EB"/></marker></defs>
-      ${edges.filter((e) => e.kind === 'mem').map(line).join('')}${edges.filter((e) => e.kind !== 'mem' && e !== sel).map(line).join('')}${nodes.map(node).join('')}${sel ? line(sel) : ''}</svg>`;
+  function ontGraphBar() {
+    const g = S.ont.g, m = S.mg.st, rel = g.rel && m.links.find((l) => l.name === g.rel);
+    if (rel) return itemBar('relation', rel.name, rel.name, `${mgLabel(rel.source)} → ${mgLabel(rel.target)}`);
+    const [kind, name] = [g.node.slice(0, 1), g.node.slice(2)];
+    if (kind === 'e' && ontObj(name)) return itemBar('entity', name, name, ontObj(name).label || name);
+    if (kind === 'a' && mgArea(name)) return itemBar('object', name, name, mgArea(name).label || name);
+    return '';
   }
   function ontRelSide(l) {
-    if (!l) return '<aside class="k-card pad" style="flex:1 1 320px"><p class="k-p s">선택된 Relation이 없습니다.</p></aside>';
     const g = S.ont.g, m = S.mg.st;
     if (!g.rd || g.rd.name !== l.name) g.rd = { name: l.name, source: l.source, target: l.target, cardinality: l.cardinality };
     const d = g.rd, dirty = d.source !== l.source || d.target !== l.target || d.cardinality !== l.cardinality;
-    const ents = (cur) => m.objects.map((o) => { const a = mgArea(o.area); return opt(o.name, `${ontName(o)}${a ? ` · ${a.label || a.name} 소속` : ''}`, cur); }).join('');
+    const ents = (cur) => m.objects.map((o) => { const a = mgArea(o.area); return opt(o.name, `${ontName(o)}${a ? ` · ${a.label || a.name}` : ''}`, cur); }).join('');
     const ro = canEdit() ? '' : ' disabled';
-    return `<aside class="k-card ont-side" aria-labelledby="ont-rel-h" style="flex:1 1 320px">
+    return `<aside class="k-card ont-side" id="ontside" aria-labelledby="ont-rel-h" style="flex:1 1 320px">
       <div class="ont-sec" style="display:flex;flex-direction:column;gap:6px"><p class="k-p s">Relation</p><h2 id="ont-rel-h" class="ont-h20" style="font-family:var(--mono)">${esc(l.name)}</h2><p class="k-14" style="margin:0">${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}${l.label ? ` · ${esc(l.label)}` : ''}</p></div>
       <div class="k-v g12" style="padding:12px 20px">
         <label class="k-f">시작 Entity<select class="k-in" data-in="ontRd" data-k="source"${ro}>${ents(d.source)}</select></label>
@@ -474,81 +409,31 @@
         ${ontKv('상태', `<span class="k-chip${l.status === 'draft' ? '' : l.status === 'deprecated' ? ' bad' : ' ok'}">${esc((STATUS_WORD[l.status] || STATUS_WORD.active)[1])}</span>${l.new ? ' <span class="k-chip ok">새 Relation</span>' : l.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}`)}
         ${l.inverse ? ontKv('역방향 이름', `<span class="k-code">${esc(l.inverse)}</span>`) : ''}
         ${ontKv('버전 · 모듈', `${esc(ontVer(l) || '-')} · ${esc(l.module_label || '-')}`)}</div>
-      ${canEdit() ? `<div style="margin-top:auto;padding:12px 20px;border-top:1px solid var(--row);display:flex;gap:8px;flex-wrap:wrap"><a class="k-btn" href="${itemHref('relation', 'delete', l.name)}">삭제</a><button class="k-btn pri" id="ontrdsave" data-act="ontRdSave"${dirty ? '' : ' disabled'}>변경 요청에 추가</button></div>` : ''}</aside>`;
+      ${canEdit() ? `<div style="margin-top:auto;padding:12px 20px;border-top:1px solid var(--row);display:flex;gap:8px;flex-wrap:wrap"><a class="k-btn dan" href="${itemHref('relation', 'delete', l.name)}">삭제</a><button class="k-btn pri" id="ontrdsave" data-act="ontRdSave"${dirty ? '' : ' disabled'}>변경 요청에 저장</button></div>` : ''}</aside>`;
+  }
+  function ontDict() {
+    const m = S.mg.st, g = S.ont.g;
+    const near = g.node && g.node.startsWith('e:') ? m.links.filter((l) => l.source === g.node.slice(2) || l.target === g.node.slice(2))
+      : g.node && g.node.startsWith('a:') ? m.links.filter((l) => [l.source, l.target].some((n) => (ontObj(n) || {}).area === g.node.slice(2))) : m.links;
+    const list = g.all || !g.node ? m.links : near;
+    const rows = list.map((l) => `<tr class="${l.name === g.rel ? 'on' : ''}" data-act="ontGrel" data-name="${esc(l.name)}"><td class="k-code">${esc(l.name)}</td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="nw">${esc(CARD_WORD[l.cardinality] || l.cardinality)}</td><td>${esc(l.label || '-')}${l.required ? ' · 필수' : ''}${l.new ? ' <span class="k-chip ok">새</span>' : l.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td></tr>`).join('');
+    return `<section class="k-card" aria-labelledby="ont-dict-h" id="ontrels"><div class="k-ch"><h2 id="ont-dict-h">관계 유형</h2><span class="k-chip">${list.length === m.links.length ? m.links.length : `${list.length} / ${m.links.length}`}</span>
+      <div class="k-push"><div class="k-seg"><button class="${g.all || !g.node ? '' : 'on'}" data-act="ontGlist" data-v=""${g.node ? '' : ' disabled'}>선택 항목</button><button class="${g.all || !g.node ? 'on' : ''}" data-act="ontGlist" data-v="1">전체 ${m.links.length}</button></div></div></div>
+      ${list.length ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">관계 유형</th><th scope="col">시작 Entity → 끝 Entity</th><th scope="col">카디널리티</th><th scope="col">설명</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="k-cf line">등록된 Relation이 없습니다.</p>'}</section>`;
   }
   function ontGraph() {
-    const lead = 'Object와 Entity 사이의 Relation을 그래프로 보고 편집합니다.';
+    const lead = 'Object · Entity · Relation을 그래프로 조회하고 편집합니다.';
     const wait = ontWait('그래프 탐색', lead);
     if (wait) return wait;
     const m = S.mg.st, g = S.ont.g;
     ontGraphWant();
-    const data = ontGraphData();
-    if (!data.rels.some((l) => l.name === g.rel)) g.rel = (data.rels[0] || {}).name || '';
-    const sel = m.links.find((l) => l.name === g.rel);
+    if (g.rel && !m.links.some((l) => l.name === g.rel)) g.rel = '';
+    if (g.node && !(g.node.startsWith('a:') ? mgArea(g.node.slice(2)) : ontObj(g.node.slice(2)))) g.node = '';
     const head = kHead('그래프 탐색', lead, `<a class="k-btn" href="#objects">Entity</a><button class="k-btn" data-act="ontGall">관계 유형 목록</button><a class="k-btn" href="#model?ws=1">다이어그램 작업 공간</a>${canEdit() ? `<a class="k-btn" href="${itemHref('relation', 'form')}">${ki('plus', 16, 1.75)}Relation</a>` : ''}`);
-    const bar = sel ? itemBar('relation', sel.name, sel.name, `${mgLabel(sel.source)} → ${mgLabel(sel.target)}`) : '';
     const chip = (k, w) => `<button class="k-chip${g.show[k] ? ' b' : ''}" data-act="ontGshow" data-k="${k}" aria-pressed="${g.show[k]}">${w}</button>`;
-    const legend = `<div class="ont-legend"><span><i style="width:16px;height:16px;border-radius:50%;background:#262626"></i>Object</span><span><i style="width:12px;height:12px;border-radius:50%;background:#fff;border:1.5px solid #5C5C63"></i>Entity</span>
-      <span><i style="width:24px;height:0;border-top:1.5px solid #5C5C63"></i>Relation · 시작 → 끝</span><span><i style="width:24px;height:0;border-top:2px dotted #C4C4CA"></i>소속 · Object › Entity</span>
-      <span><i style="width:12px;height:12px;border-radius:50%;background:#EEF3FD;border:1.5px solid #2563EB"></i>선택한 Relation</span>${g.show.rule ? '<span><i style="width:10px;height:10px;border-radius:50%;background:#B56A00"></i>Restriction 적용 Entity</span>' : ''}</div>`;
-    const moved = g.open.length || Object.keys(g.pos).length;
-    const graph = `<section class="k-card" aria-label="Relation 그래프" style="flex:1 1 640px;display:flex;flex-direction:column;min-width:0"><div class="ont-gbox">${legend}<div class="ont-canvas" id="ontcanvas"><div id="ontsvg">${ontGraphSvg()}</div></div></div>
-      <p class="k-cf line" style="padding:8px 16px">간선 선택: 편집 · 노드 더블클릭: 이웃 펼치기 · 노드 드래그: 이동${moved ? ' · <button class="k-lnk flat" data-act="ontGreset" style="min-height:0">배치 초기화</button>' : ''}</p></section>`;
-    const list = g.all ? m.links : data.rels;
-    const rows = list.map((l) => `<tr class="${l.name === g.rel ? 'on' : ''}" data-act="ontGrel" data-name="${esc(l.name)}"><td class="k-code">${esc(l.name)}</td><td>${esc(mgLabel(l.source))} → ${esc(mgLabel(l.target))}</td><td class="nw">${esc(CARD_WORD[l.cardinality] || l.cardinality)}</td><td>${esc(l.label || '-')}${l.required ? ' · 필수' : ''}${l.new ? ' <span class="k-chip ok">새</span>' : l.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td></tr>`).join('');
-    const dict = `<section class="k-card" aria-labelledby="ont-dict-h" id="ontrels"><div class="k-ch"><h2 id="ont-dict-h">관계 유형</h2><span class="k-chip">${g.all ? m.links.length : `${data.rels.length} / ${m.links.length}`}</span>
-      <div class="k-push"><div class="k-seg"><button class="${g.all ? '' : 'on'}" data-act="ontGlist" data-v="">이 그래프</button><button class="${g.all ? 'on' : ''}" data-act="ontGlist" data-v="1">전체 ${m.links.length}</button></div></div></div>
-      ${list.length ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">관계 유형</th><th scope="col">시작 Entity → 끝 Entity</th><th scope="col">카디널리티</th><th scope="col">설명</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="k-cf line">등록된 Relation이 없습니다.</p>'}</section>`;
-    return `${head}${bar}<div class="k-pha"><div class="k-h g6">${chip('object', 'Object')}${chip('entity', 'Entity')}${chip('member', '소속 표시')}${chip('rule', 'Restriction 표시')}</div></div>
-      <div class="k-wrap g16" style="align-items:stretch">${graph}${ontRelSide(sel)}</div>${dict}${kNext([['query', '질의'], ['concepts', '개념 초안']])}`;
-  }
-  function ontGraphPaint() { const box = $('#ontsvg'); if (box) box.innerHTML = ontGraphSvg(); }
-  function ontGraphMount() {  // pressing, dragging and pressing twice on the drawing; the drawing is replaced, the box that holds it stays
-    const box = $('#ontcanvas'), g = S.ont.g;
-    if (!box || box.dataset.on) return;
-    box.dataset.on = '1';
-    if (g.scroll) { box.scrollLeft = g.scroll[0]; box.scrollTop = g.scroll[1]; } else {  // a drawing larger than its card opens on the Object it stands on
-      const d = ontGraphData(), svg = box.querySelector('svg'), mid = d.nodes[0];
-      if (svg && mid) {
-        const { pos, box: frame } = ontGraphLayout(d.nodes, d.edges), sr = svg.getBoundingClientRect(), br = box.getBoundingClientRect();
-        box.scrollLeft = sr.left - br.left + box.scrollLeft + pos[mid.id].x - frame.x - box.clientWidth / 2;
-        box.scrollTop = sr.top - br.top + box.scrollTop + pos[mid.id].y - frame.y - box.clientHeight / 2;
-      }
-    }
-    let drag = null, last = { id: '', at: 0 };
-    box.addEventListener('scroll', () => { g.scroll = [box.scrollLeft, box.scrollTop]; });
-    box.addEventListener('pointerdown', (ev) => {
-      const n = ev.target.closest('[data-n]');
-      if (!n) return;
-      const { pos, box: frame } = ontGraphLayout(ontGraphData().nodes, ontGraphData().edges);
-      g.box = frame;  // the frame holds still while a node is dragged
-      drag = { id: n.dataset.n, x0: ev.clientX, y0: ev.clientY, px: pos[n.dataset.n].x, py: pos[n.dataset.n].y, moved: false };
-      box.setPointerCapture(ev.pointerId);
-    });
-    box.addEventListener('pointermove', (ev) => {
-      if (!drag) return;
-      const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
-      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
-      drag.moved = true;
-      g.pos[drag.id] = { x: Math.round(drag.px + dx), y: Math.round(drag.py + dy) };
-      ontGraphPaint();
-    });
-    const end = () => {
-      if (!drag) return;
-      const d = drag;
-      drag = null; g.box = null;
-      if (d.moved) { render(); return; }
-      const twice = last.id === d.id && Date.now() - last.at < 450;
-      last = { id: d.id, at: twice ? 0 : Date.now() };
-      if (!twice) return;
-      const [kind, name] = [d.id.slice(0, 1), d.id.slice(2)];
-      const add = kind === 'a' ? areaEntities(mgArea(name)).map((o) => o.name) : [name];
-      const fresh = add.filter((x) => !g.open.includes(x));
-      if (fresh.length) { g.open = [...g.open, ...fresh]; render(); }
-    };
-    box.addEventListener('pointerup', end);
-    box.addEventListener('pointercancel', end);
-    box.addEventListener('click', (ev) => { const e = ev.target.closest('[data-rel]'); if (e) { g.rel = e.dataset.rel; g.rd = null; render(); } });
+    const graph = `<section class="k-card" aria-label="Relation 그래프" style="flex:1 1 640px;display:flex;flex-direction:column;min-width:0;overflow:hidden"><div class="kg" id="ontkg"></div></section>`;
+    return `${head}<div id="ontgbar">${ontGraphBar()}</div><div class="k-pha"><div class="k-h g6">${chip('object', 'Object')}${chip('entity', 'Entity')}${chip('member', '소속 표시')}${chip('rule', 'Restriction 표시')}</div></div>
+      <div class="k-wrap g16" style="align-items:stretch">${graph}${ontSide()}</div>${ontDict()}${kNext([['query', '질의'], ['concepts', '개념 초안']])}`;
   }
   function ontWorkspace() {  // the diagram's workspace as it was: the tree, the diagram and the tables, the forms, the trial and the request
     return `${fixBar()}<div class="ont-wsbar"><a class="k-lnk" href="#model">${ki('chevR', 14, 1.75).replace('<svg', '<svg style="transform:rotate(180deg)"')}그래프 탐색</a><span class="k-14 k-b">다이어그램 작업 공간</span><a class="k-lnk k-push" href="#onto">전체 보기${ki('chevR', 14, 1.75)}</a></div>${viewModel()}`;
@@ -562,31 +447,33 @@
   }
   screen('model', { area: 'work', word: '그래프 탐색', get bleed() { return ontWs(); }, view: () => (ontWs() ? ontWorkspace() : ontGraph()),
     crumb: () => ['Ontology', '그래프 탐색', ...(ontWs() ? [S.md.view === 'table' ? 'Property · Relation 표' : '다이어그램 작업 공간'] : [])],
-    after: () => { if (ontWs()) ontWorkspaceAfter(); else { ontSem(); ontGraphMount(); } } });
+    after: () => { if (ontWs()) ontWorkspaceAfter(); else { ontSem(); ontKgMount(); } } });
 
   Object.assign(ACT, {
     ontGshow: (t) => {
       const g = S.ont.g, k = t.dataset.k;
       g.show[k] = !g.show[k];
       if (!g.show.object && !g.show.entity) g.show[k === 'object' ? 'entity' : 'object'] = true;  // one kind of node stays
-      render();
+      document.querySelectorAll('[data-act=ontGshow]').forEach((b) => { const on = g.show[b.dataset.k]; b.classList.toggle('b', on); b.setAttribute('aria-pressed', on); });
+      window.SpaceGraph.refresh();
     },
+    ontGnode: (t) => { const g = S.ont.g; g.node = t.dataset.id; g.rel = ''; g.rd = null; ontSidePaint(); window.SpaceGraph.focus(g.node); },
+    ontGent: (t) => { S.ont.esel = t.dataset.name; location.hash = '#objects'; },
     ontGrel: (t) => {
       const g = S.ont.g, l = S.mg.st.links.find((x) => x.name === t.dataset.name);
       if (!l) return;
-      if (!ontGraphData().rels.includes(l)) { const o = ontObj(l.source); Object.assign(g, { focus: o && mgArea(o.area) ? o.area : '', open: o && mgArea(o.area) ? [] : [l.source], pos: {}, lay: null }); }
-      g.rel = l.name; g.rd = null;
-      render();
+      g.rel = l.name; g.rd = null; g.node = `e:${l.source}`;
+      ontSidePaint();
+      window.SpaceGraph.focus(g.node);
     },
-    ontGlist: (t) => { S.ont.g.all = !!t.dataset.v; render(); },
+    ontGlist: (t) => { S.ont.g.all = !!t.dataset.v; const dict = $('#ontrels'); if (dict) dict.outerHTML = ontDict(); },
     ontGall: () => { S.ont.g.all = true; render(); const box = $('#ontrels'); if (box) box.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
-    ontGreset: () => { Object.assign(S.ont.g, { open: [], pos: {}, lay: null, scroll: null }); render(); },
     ontRdSave: async () => {
       const g = S.ont.g, d = g.rd, l = d && S.mg.st.links.find((x) => x.name === d.name);
       if (!l) return;
       const args = { name: l.name };
       ['source', 'target', 'cardinality'].forEach((k) => { if (d[k] !== l[k]) args[k] = d[k]; });
-      try { await ontEdit('update_link', args); g.rd = null; g.lay = null; toast('작성 중인 변경 요청에 Relation을 저장했습니다.'); } catch (e) { fail(e); }
+      try { await ontEdit('update_link', args); g.rd = null; toast('작성 중인 변경 요청에 Relation을 저장했습니다.'); } catch (e) { fail(e); }
       render();
     },
   });
