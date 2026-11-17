@@ -72,7 +72,7 @@ def test_names_are_counted_by_the_way_they_are_written():
 
     assert _naming(["OrderItem", "Order", "Sku"]) == {"style": "PascalCase", "follow": 3, "total": 3}
     assert _naming(["unit_price", "status", "ordered_at", "orderId"]) == {"style": "snake_case", "follow": 3, "total": 4}
-    assert _naming(["x2b:Claim", "x2b:Refund"])["style"] == "PascalCase"  # a prefixed name is read after its prefix
+    assert _naming(["shop:Claim", "shop:Refund"])["style"] == "PascalCase"  # a prefixed name is read after its prefix
     assert _naming([]) == {"style": "", "follow": 0, "total": 0}
 
 

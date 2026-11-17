@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.25.0
+
+- **The page is rebuilt on the second screen plan.** Every screen has a new frame and a new look: a menu of 홈, AI 초안
+  생성 and five parts (시멘틱 매니저, 온톨로지 매니저, 데이터 바인더, 품질 관리, 운영), a list at the top left that switches
+  between ontologies and leads to the admin screens, and a bar on top with where the person is, the search, 자료 업로드,
+  할 일 and the account. A server with more than one ontology opens on 온톨로지 선택 and remembers the one used last.
+  The screens share one kit of values and parts (`kit.css`: one ink, one blue, IBM Plex Sans KR and Mono, cards, tables,
+  forms, marks), and hold at 1440, 1024 and 390 wide.
+- **Every item has its own screens: 추가 · 편집, 삭제, 히스토리.** Object, Entity (with its Properties), state machine,
+  Relation, rule (card or decision table rule), parameter, metric and function, term and relation between
+  expressions, mapping, binding, query, action, validation question, access policy, and user. A form checks while it
+  is typed and says what saving does; a delete lists what uses the item before anything is asked and takes a reason
+  and the item's name; a history shows each change with its fields before and after, who, when and why, the edit not
+  yet sent first. Saving joins the change request being written: nothing moves in the ontology in use until it is
+  filed, tested and approved.
+- **What a library already holds can be changed, not only what was added on the page.** A Standard rule card is edited
+  and removed as the workspace's own change to it, where only Custom cards could be. A query a module defines is
+  changed by extending it (`extend: queries`), where it could only be taken out. An AXIOM card is changed or removed as
+  a change request to the module that defines it, filed from the same form; an AXIOM rule of a decision table is still
+  changed in its module's file. The workspace learns the edits `review_rule_card`, `new_query`, `update_query`,
+  `delete_query` and `delete_states`.
+- **변경 요청 · 버전 is one screen for the whole path.** The edits that wait (what changes, in the order saved, each
+  undone on its own, tried on a copy, discarded or filed), a filed request with each element before and after, its
+  readers, comments, the regression test and the pass conditions, approval into a new version, and the versions with
+  compare, export and rollback.
+- **Admin screens show what the server really holds.** 온톨로지 설정, 멤버 · 권한, 관리 현황, 사용자 · 그룹 (add, edit and
+  retire a user of the team file), 인증 · 보안, 도메인 팩, 기준 어휘, AI 운영 (the model's state and a real test call), 감사
+  로그 and 시스템. They are closed to those without the role, on the page and on the server. A signed-in person changes
+  their own password. What the plan draws and the server has not (LDAP and SSO, a licence, backup, keys issued on the
+  page, webhooks, members by ontology) is left out rather than drawn empty.
+- **An address that is no screen says so**, a screen someone may not open says which role opens it, and a load that
+  finishes after sign-out no longer draws over the sign-in form.
+- Under the page: the areas' screens live in `web/static/v2/` and their routes in `web/areas/`, registered through
+  `web/routes.py`; `ONTLAS_STATIC_LIVE=1` makes the server read the static files on every request. The older frame and
+  the views it drew are removed (about 1,900 lines of `app.js`, 174 style rules). 사용 안내 is a map of the screens
+  beside the video.
+
 ## 0.24.3
 
 - **Visitors who arrive together are all answered.** The page's server kept Python's default of five connections
