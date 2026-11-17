@@ -9323,8 +9323,8 @@ ${controls}${body}`;
     });
   }
 
-  readHash();
   /*PARTS*/
+  readHash();
   if (!known(S.tab)) S.tab = 'home';
   setInterval(() => { const c = $('#mclock'); if (c) c.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
   wire();
