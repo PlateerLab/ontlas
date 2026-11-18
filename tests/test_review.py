@@ -42,13 +42,14 @@ def test_agreement_with_past_decisions_names_each_case_that_differs(st):
 def test_the_flow_passes_its_conditions_and_reports_each(st):
     g = st.gates()
     assert g["passed"] and {(x["stage"], x["condition"]) for x in g["gates"]} == {
-        ("bind", "max_errors"), ("query", "min_agree"), ("decide", "min_agreement"), ("check", "min_accuracy")}
+        ("bind", "max_errors"), ("query", "min_agree"), ("decide", "min_agreement"), ("check", "min_accuracy"),
+        ("define", "max_gaps"), ("define", "max_unreachable"), ("define", "max_axiom_conflicts"), ("check", "max_new_wrong")}
     with pytest.raises(ValueError, match="cannot be switched off"):
         FlowSettings.from_dict({"off": ["source"]})
     with pytest.raises(ValueError, match="share between 0 and 1"):
         FlowSettings.from_dict({"gates": {"check": {"min_accuracy": 90}}})
     st.settings["flow"] = {**st.settings["flow"], "off": ["decide", "check"]}
-    assert {x["stage"] for x in st.gates()["gates"]} == {"bind", "query"}
+    assert {x["stage"] for x in st.gates()["gates"]} == {"define", "bind", "query"}  # the definition's own checks stay
 
 
 def test_a_change_is_reviewed_on_a_copy_and_approved_by_someone_else(st):
@@ -89,3 +90,51 @@ def test_a_change_that_does_not_compose_is_shown_as_such(st):
     m.extend["objects"]["Nowhere"] = {"properties": {"x": {"type": "string"}}}
     cr = st.changes.propose(m, by="kim")
     assert not cr.review["passed"] and "Nowhere" in cr.review["issues"][0]
+
+
+
+def _turned(st, rule: str, then: dict, when: dict | None = None):
+    """The example's acme overlay with one more Custom rule written ahead of the others in the return table."""
+    m = st.library.get("acme-overlay")
+    d = copy.deepcopy(m.to_dict())
+    d["version"] = "1.1.0"
+    d["extend"]["decisions"]["returnEligibility"]["rules_prepend"].insert(0, {"id": rule, "when": when or {}, "then": then})
+    return Module.from_dict(d)
+
+
+@pytest.fixture
+def shop():
+    """The example library as people get it: its return table opens with an AXIOM rule."""
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")
+    from ontlas.config import load_studio
+    from ontlas.library import OverlayLibrary
+
+    from .conftest import EXAMPLE
+
+    s = load_studio(EXAMPLE.parent / "library" / "studio.yaml")
+    s.library = OverlayLibrary(s.library, [])
+    return s
+
+
+def test_a_change_may_not_leave_a_gap_a_rule_against_an_axiom_or_a_new_wrong_answer(shop):
+    st = shop
+    """On unless turned off: what the definition checks find (a gap, a rule that can never answer, a Custom rule giving
+    the other verdict where an AXIOM rule holds) and a question the change makes fail stop it."""
+    assert FlowSettings.from_dict({"gates": {"check": {"min_accuracy": 0.5}}}).gates["check"]["max_new_wrong"] == 0
+    assert FlowSettings.from_dict({"gates": {"define": {"max_gaps": None}}}).gates["define"] == {
+        "max_gaps": None, "max_unreachable": 0, "max_axiom_conflicts": 0}  # one turned off stays off
+    against = _turned(st, "early", {"eligible": True, "reason": "배송 전에도 가능"}, {"days_since_delivery": "null"})
+    rv = st.changes.propose(against, by="kim").review
+    failed = {(g["stage"], g["condition"]): g["value"] for g in rv["gates"] if not g["passed"]}
+    assert not rv["passed"] and failed[("define", "max_axiom_conflicts")] == 1
+    assert {"not-delivered", "early"} <= set(rv["measured"]["define"]["findings"][0]["rules"])
+    wrong = _turned(st, "nothing-returns", {"eligible": False, "reason": "반품 불가"})
+    rv = st.changes.propose(wrong, by="kim").review
+    failed = {(g["stage"], g["condition"]): g["value"] for g in rv["gates"] if not g["passed"]}
+    assert failed[("check", "max_new_wrong")] >= 1 and failed[("define", "max_unreachable")] >= 1
+    assert rv["regression"]["newly_failing"]
+    st.settings["flow"] = {**st.settings["flow"], "gates": {**st.settings["flow"].get("gates", {}),
+                                                            "define": {"max_axiom_conflicts": None}}}
+    rv = st.changes.propose(_turned(st, "early2", {"eligible": True, "reason": "x"}, {"days_since_delivery": "null"}), by="kim").review
+    assert ("define", "max_axiom_conflicts") not in {(g["stage"], g["condition"]) for g in rv["gates"]}

@@ -203,6 +203,7 @@ def test_validate_holds_format_to_a_date_property():
     assert "action bad: 'closed_at' is read from several columns and cannot be set" in issues
 
 
+@pytest.mark.usefixtures("action_write")
 def test_an_action_writes_the_date_back_in_its_layout(studio, source):
     op = Actor("op", "human", ["clerk"])
     p = studio.actions.request("reschedule", "O1", {"on": "2026-04-01"}, actor=op)

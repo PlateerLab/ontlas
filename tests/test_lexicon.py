@@ -278,6 +278,58 @@ def test_a_pair_table_becomes_synonyms_related_confusable_terms_and_says_what_co
     assert [(c["kind"], c["label"]) for c in rep["conflicts"]] == [("label", "출고완료"), ("synonym_confusable", "배송완료")]
 
 
+SEED = ("구분,용어 A,용어 B,관계,설명,근거,확인 필요\n"
+        "분류,지불/환급 수단,지불 수단,상위·하위,지불/환급 수단이 상위 개념,용어집,N\n"
+        "분류,사진첨부 기능,파일첨부 기능,상위·하위,파일첨부가 상위,용어집,N\n"
+        "분류,공개 여부,노출 설정·목록 공개·알림 공개,상위 · 하위,목록 공개·알림 공개는 하위,,\n"
+        "분류,소포,배송물,하위 · 상위,,,\n"
+        "채널 표기 (BO→FO),PK01 10 접수 완료,접수됨,채널 표기,,코드표,N\n"
+        "채널 표기 (BO→FO),PK01 21 포장 지시,준비 중,채널 표기,,코드표,\n"
+        "채널 표기 (BO→FO),PK01 22 포장 확정,준비 중,채널 표기,,코드표,\n"
+        "채널 표기 (BO→FO),PK01 36 회수 완료,되돌림 진행 (안내서는 회수 완료),채널 표기,,코드표,Y\n"
+        "채널 표기 (BO→FO),PK01 21 포장 지시,곧 출발,채널 표기,,,\n"
+        "고객 표기,되돌림 접수,되돌림 신청,채널 표기,,,\n"
+        "분류,B2B 거래,기업 거래,동의어,,,\n"
+        "점검,PK01 10 접수 완료,Received,재작성 필요,,,Y\n"
+        "보존어,안·못,,보존,,,\n")
+
+
+def test_a_pair_table_reads_which_word_is_above_the_words_a_channel_shows_and_the_memos_beside_them():
+    g = read_glossary(SEED.encode("utf-8"), "seed.csv")
+    current = [{"term": "알림 공개"}, {"term": "파일첨부 기능"}]
+    entries, rep = merge(g, current, None, source="seed.csv")
+    by = {e["term"]: e for e in entries}
+    # 상위 · 하위: A above B, unless the note names the words above or below; the words it leaves out are on the other side
+    assert by["지불/환급 수단"]["narrower"] == ["지불 수단"]
+    assert by["사진첨부 기능"]["broader"] == ["파일첨부 기능"] and by["파일첨부 기능"]["narrower"] == ["사진첨부 기능"]
+    assert by["공개 여부"]["narrower"] == ["목록 공개", "알림 공개"] and "broader" not in by["공개 여부"]
+    assert by["알림 공개"]["broader"] == ["공개 여부", "노출 설정"]  # 노출 설정 is not among the words below
+    assert by["소포"]["broader"] == ["배송물"]
+    assert [(x["term"], x["with"]) for x in rep["narrower"]] == [
+        ("지불/환급 수단", "지불 수단"), ("파일첨부 기능", "사진첨부 기능"), ("공개 여부", "목록 공개"), ("공개 여부", "알림 공개"),
+        ("노출 설정", "목록 공개"), ("노출 설정", "알림 공개"), ("배송물", "소포")]
+    # 채널 표기: what the channel the 구분 points to (BO→FO) calls the term, else 고객; the code group and code are hidden labels
+    assert (by["접수 완료"]["channels"], by["접수 완료"]["hidden"]) == ({"FO": "접수됨"}, ["PK01 10"])
+    assert by["포장 지시"]["channels"] == {"FO": "준비 중"} and by["포장 지시"]["synonyms"] == ["곧 출발"]
+    assert by["포장 확정"]["channels"] == {"FO": "준비 중"}
+    assert by["되돌림 접수"]["channels"] == {"고객": "되돌림 신청"}
+    # a memo written in brackets after a word is no part of it: it goes with the term
+    back = by["회수 완료"]
+    assert back["channels"] == {"FO": "되돌림 진행"} and back["note"] == "FO 되돌림 진행 · 안내서는 회수 완료"
+    assert back["status"] == "review" and entry(back)["note"] == back["note"]
+    assert by["B2B 거래"]["synonyms"] == ["기업 거래"]  # a word that only starts like a code keeps it
+    assert [(x["term"], x["with"], x["channel"]) for x in rep["channel"]][:3] == [
+        ("접수 완료", "접수됨", "FO"), ("포장 지시", "준비 중", "FO"), ("포장 확정", "준비 중", "FO")]
+    assert [s["row"] for s in rep["skipped"]] == [13, 14]
+    # one word a channel shows for several values stands for each of them: no conflict, and a sentence keeps it
+    assert not [c for c in rep["conflicts"] if c["label"] == "준비 중"]
+    said = read("준비 중인 소포", entries)
+    assert said["text"] == "준비 중인 소포"
+    assert {m["term"] for m in said["matched"] if m["as"] == "channel"} == {"포장 지시", "포장 확정"}
+    clash = [*entries, {"term": "준비 완료", "synonyms": ["준비 중"]}]  # a term that calls itself so still clashes
+    assert [c["label"] for c in conflicts(clash) if c["kind"] == "label"] == ["준비 중"]
+
+
 def test_a_term_list_and_a_seed_file_are_read_too():
     g = read_glossary("용어,영문,정의,유의어\n적립금,Reward Point,돌려주는 포인트,마일리지; 포인트\n,빈 줄,,\n".encode("utf-8"),
                       "terms.csv")
@@ -357,7 +409,7 @@ def test_the_shop_lexicon_is_shown_with_its_labels_owners_and_confusable_pairs(s
     assert {c["concept"] for c in st["concepts"]} >= {"area:Order", "object:Order", "property:Order.total",
                                                       "value:Order.status=SHIPPED", "decision:returnEligibility"}
     assert st["workspace"] == {"dirty": False, "module": "workspace", "label": "관리 변경", "issues": [], "edits": [],
-                               "redo": 0}
+                               "redo": 0, "conflicts": []}  # edits held aside after an approval moved the definition: none
 
 
 def test_terms_are_edited_and_imported_from_the_page_and_filed_as_one_change(session):

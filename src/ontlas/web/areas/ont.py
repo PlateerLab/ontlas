@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+from collections import Counter
 from typing import Any
+from urllib.parse import urlparse
 
 from ontlas.web.areas.items import STATUS_WORD
 from ontlas.web.routes import get, post
@@ -40,8 +43,36 @@ def _card_rows(s, sides: dict[str, list]) -> list[dict]:
     return rows
 
 
+def _said(v: Any) -> str:
+    return "가능" if v is True else "불가" if v is False else str(v)  # a true or false result, as an Action's 전제조건 says it
+
+
+def _guard_words(onto, name: str, guard: dict | None) -> str:
+    """What must hold to take a move, as the screens say it: the rule table with each result it must give (its first
+    true or false result is 결과, the reason 사유), or the true or false Property of the Entity that must be true."""
+    from ontlas.check import _find_prop
+
+    g = guard or {}
+    if g.get("property"):
+        p = _find_prop(onto, name, g["property"]) if name in onto.objects else None
+        return f"{(p.label if p is not None else '') or g['property']} 예"
+    if not g.get("decision"):
+        return ""
+    d = onto.decisions.get(g["decision"])
+    first = next(iter(d.outputs), "") if d is not None else ""
+
+    def out(k: str) -> str:
+        if k == "reason":
+            return "사유"
+        return ("결과" if d.outputs[k] == "boolean" else d.label or d.name) if d is not None and k == first else k
+
+    return " · ".join([(d.label or d.name) if d is not None else g["decision"],
+                       *(f"{out(k)} {_said(v)}" for k, v in (g.get("expect") or {}).items())])
+
+
 def _state_words(s, name: str, sm: dict | None) -> dict[str, str]:
-    """A state machine as its form says it: the property, the states, the first state and the moves, values by label."""
+    """A state machine as its form says it: the property, the states, the first state, the moves and what each move
+    needs to be taken, values by label."""
     if not sm:
         return {}
     labels: dict[str, str] = {}
@@ -54,9 +85,11 @@ def _state_words(s, name: str, sm: dict | None) -> dict[str, str]:
     acts = {a.name: a.label or a.name for a in onto.actions.values()}
     moves = [f"{word(m.get('from'))} → {word(m.get('to'))}" + (f" · {acts.get(m['action'], m['action'])}" if m.get("action") else "")
              for m in sm.get("transitions") or []]
+    guards = [f"{word(m.get('from'))} → {word(m.get('to'))} · {_guard_words(onto, name, m['guard'])}"
+              for m in sm.get("transitions") or [] if m.get("guard")]
     return {"상태 Property": (p.label if p is not None else "") or sm.get("property") or "",
             "상태 값": ", ".join(word(x) for x in sm.get("states") or []),
-            "초기 상태": word(sm.get("initial") or ""), "허용 전이": ", ".join(moves)}
+            "초기 상태": word(sm.get("initial") or ""), "허용 전이": ", ".join(moves), **({"전이 조건": ", ".join(guards)} if guards else {})}
 
 
 def _rows(s, name: str, sides: dict[str, list], states_only: bool) -> tuple[str, list[dict]]:
@@ -71,7 +104,7 @@ def _rows(s, name: str, sides: dict[str, list], states_only: bool) -> tuple[str,
         if states_only:
             was, now = _state_words(s, name, (before or {}).get("states")), _state_words(s, name, (after or {}).get("states"))
             return kind, [{"label": k, "before": was.get(k) or None, "after": now.get(k) or None}
-                          for k in ("상태 Property", "상태 값", "초기 상태", "허용 전이") if was.get(k) != now.get(k)]
+                          for k in ("상태 Property", "상태 값", "초기 상태", "허용 전이", "전이 조건") if was.get(k) != now.get(k)]
         for f in s._field_diff(f"object:{name}", before, after):
             rows.append({"field": f["field"], "label": f["label"], "before": f["before"], "after": f["after"]})
     if states_only:
@@ -182,6 +215,55 @@ def links(s, a, who) -> dict:
     it is described."""
     onto = s._ws().composed().ontology if s.studio.composition is not None else s.studio.onto
     return {"links": {lk.name: {"cite": lk.cite, "description": lk.description} for lk in onto.links.values()}}
+
+
+@get("ont/states")
+def states(s, a, who) -> dict:
+    """What the state machine list does not carry, as the edits being written leave it: what each move needs to be
+    taken (its guard, as the definition holds it and in words)."""
+    onto = s._ws().composed().ontology if s.studio.composition is not None else s.studio.onto
+    return {"states": {t.name: [{"from": m.source, "to": m.target, "action": m.action, "guard": dict(m.guard),
+                                 "said": _guard_words(onto, t.name, m.guard)} for m in t.states.transitions]
+                       for t in onto.objects.values() if t.states}}
+
+
+_COMPACT = re.compile(r"^([A-Za-z][A-Za-z0-9_-]{0,15}):([A-Za-z_][\w.-]*)$")  # shop:listPrice
+
+
+def _vocab_of(iri: str) -> tuple[str, str]:
+    """The vocabulary a name is aligned in and the name there: (schema.org, price), or (shop, listPrice)."""
+    u = urlparse(iri)
+    if u.scheme in ("http", "https") and u.netloc:
+        return u.netloc.removeprefix("www."), u.fragment or u.path.rstrip("/").rsplit("/", 1)[-1]
+    m = _COMPACT.match(iri)
+    return (m.group(1), m.group(2)) if m else ("", iri)
+
+
+@get("ont/vocab")
+def vocab(s, a, who) -> dict:
+    """How each Property stands beside the standard vocabularies, as the edits being written leave it: the vocabulary
+    and the name it is aligned to (schema.org · price), and the prefix the definition writes its own names with, the
+    one its terms' English names use most that is no standard's (shop:listPrice). A Property aligned to none is the
+    definition's own."""
+    from ontlas.check import all_props, find_prop
+
+    if s.studio.composition is not None:
+        _, comp, _ = s._lexicon_now()
+        onto, terms = comp.ontology, list(comp.terms or [])
+    else:
+        onto, terms = s.studio.onto, []
+    props: dict[str, dict] = {}
+    for t in onto.objects.values():
+        for name in all_props(onto, t.name):
+            p = find_prop(onto, t.name, name)
+            if p is not None and p.aligned:
+                said, local = _vocab_of(str(p.aligned[0]))
+                props[f"{t.name}.{name}"] = {"vocab": said, "name": local, "iri": str(p.aligned[0])}
+    aligned = [str(u) for x in [*onto.areas.values(), *onto.objects.values(), *onto.links.values()] for u in x.aligned]
+    standard = {k for v in [*(x["vocab"] for x in props.values()), *(_vocab_of(u)[0] for u in aligned)] for k in (v, v.split(".")[0])}
+    prefixes = Counter(m.group(1) for x in terms if isinstance(x, dict)
+                       if (m := _COMPACT.match(str(x.get("english") or "").strip())) and m.group(1) not in standard)
+    return {"prefix": prefixes.most_common(1)[0][0] if prefixes else "", "properties": props}
 
 
 # ---- 이 시점으로 되돌리기 -------------------------------------------------------------------------------------------

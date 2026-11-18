@@ -70,7 +70,8 @@ def test_a_change_that_breaks_a_question_lists_it_as_newly_failing(st):
     assert reg["accuracy"]["change"] == pytest.approx(-0.0769) and reg["grounded"]["change"] == 0
     assert reg["agreement"] == {"before": 0.9, "after": 0.9, "change": 0.0}  # past decisions are decided as before
     assert reg["newly_passing"] == [] and reg["unmeasured"] == [] and reg["worse"] and not reg["better"]
-    assert reg["gates_failing"] == [] and cr.review["passed"]  # 11 of 12 still meets the 0.9 the studio asks
+    # 11 of 12 still meets the 0.9 the studio asks; the question it breaks is a new wrong answer, and that stops it
+    assert [(g["stage"], g["condition"]) for g in reg["gates_failing"]] == [("check", "max_new_wrong")] and not cr.review["passed"]
     assert cr.review["from_version"] == "1.0.0"
 
 
@@ -78,13 +79,15 @@ def test_a_condition_the_change_stops_meeting_is_named_with_both_values(st):
     st.settings["flow"]["gates"]["check"]["min_accuracy"] = 0.95
     cr = st.changes.propose(_overlay(st.library, "1.1.0", "VIP 고객 반품 기간 연장"), by="kim")
     reg = cr.review["regression"]
-    assert [(g["stage"], g["condition"], g["was"]) for g in reg["gates_failing"]] == [("check", "min_accuracy", "passed")]
+    assert [(g["stage"], g["condition"], g["was"]) for g in reg["gates_failing"]] == [("check", "min_accuracy", "passed"),
+                                                                                    ("check", "max_new_wrong", "passed")]
     g = reg["gates_failing"][0]
     assert g["limit"] == 0.95 and g["before"] == 1.0 and g["after"] == pytest.approx(12 / 13)
     assert not cr.review["passed"]
 
 
 def test_a_change_that_fixes_a_question_lists_it_as_newly_passing(st):
+    st.settings["flow"]["gates"]["check"]["max_new_wrong"] = None  # turned off: the break goes in, to be fixed after
     broke = st.changes.propose(_overlay(st.library, "1.1.0", "VIP 고객 반품 기간 연장"), by="kim")
     st.changes.approve(broke.id, by="lee")
     assert broke.decided_at and broke.decided_by == "lee"

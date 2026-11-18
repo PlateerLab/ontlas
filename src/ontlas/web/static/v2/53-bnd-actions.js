@@ -7,6 +7,20 @@
     const said = Object.entries(c.expect || {}).map(([k, v]) => (v === true ? '가능' : v === false ? '불가' : `${k} ${v}`)).join(' · ');
     return `${d ? d.label : c.decision}${said ? ` 판정 = ${said}` : ''}`; };
   const bndCan = (r, verb, name) => (r[verb] || []).includes('*') || (r[verb] || []).includes(name);
+  // whether a run writes to the data source here (ontlas serve --action-write): off, an action that changes values ends
+  // recorded with what it would change and the source stays as it was. The request screens name that status too.
+  const BND_WRITE_OFF = '쓰기 꺼짐 · 실행 결과만 기록';
+  Object.assign(STATUS, { recorded: ['warn', BND_WRITE_OFF] });
+  const bndWrites = (a) => Object.keys(a.set || {}).length > 0 || !!a.transition_to;
+  const bndWr = () => (S.bnd.wr && S.bnd.wr.lib === S.st.library_id ? S.bnd.wr : null);
+  function bndWriteLoad() {  // asked once an ontology
+    const lib = S.st.library_id;
+    if (S.bnd.wr && S.bnd.wr.lib === lib) return S.bnd.wr.wait;
+    const wr = { lib, write: null, writable: false };
+    wr.wait = api('bnd/action/write').then((r) => { Object.assign(wr, r); }, () => {}).then(() => wr);
+    S.bnd.wr = wr;
+    return wr.wait;
+  }
   // how an action is let through: every time by a person, by itself, or by itself inside the limits it names
   function bndApproval(m, a) {
     if (a.auto_within && a.auto_within.length) {
@@ -41,7 +55,7 @@
       <div class="k-wrap g8">${r.checks.map((c) => `<span class="k-chip ${c.passed ? 'ok' : 'bad'}">${esc(c.title)} ${c.passed ? '통과' : '불가'}</span>`).join('')}</div>
       <ul class="bnd-checks" style="padding:0">${r.checks.map((c) => `<li>${c.passed ? `<span class="k-ok">${ki('check', 16, 1.75)}</span>` : `<span class="k-bad">${ki('alert', 16, 1.75)}</span>`}<span class="k-g0"><span class="k-14">${esc(c.title)}</span><br><span class="k-s">${esc(c.detail || '')}</span></span></li>`).join('')}</ul>
       <p class="bnd-out">${r.call ? `${esc(r.call.method)} ${esc(r.call.url)}` : `${esc(a.target_label)} 값 변경`}${r.state && r.state.to ? ` · ${esc(r.state.property)} ${r.state.from ? `${esc(r.state.from)} → ` : '→ '}${esc(r.state.to)}` : ''}
-        <br>→ ${r.ok ? (r.approval ? '승인 대기 접수' : '즉시 실행') : '반려'} · ${r.call ? '호출 없음' : '변경 없음'} · 테스트 실행</p>`;
+        <br>→ ${r.ok ? (r.approval ? '승인 대기 접수' : '즉시 실행') : '반려'}${r.ok && r.writes && r.write === false ? ` · ${BND_WRITE_OFF}` : ''} · ${r.call ? '호출 없음' : '변경 없음'} · 테스트 실행</p>`;
     return `<section class="k-card pad k-v" id="bnd-try" aria-labelledby="bnd-dry-h"><div class="k-h sb"><h2 class="k-h2" id="bnd-dry-h">${r ? '테스트 실행 결과' : '테스트 실행'}</h2><span class="k-chip ok">${byRecord ? '레코드 값' : '입력 값'}</span></div>
       <div class="k-wrap" style="align-items:flex-end">${roles.length ? `<label class="k-f" style="flex:1 1 180px">접근 정책<select class="k-in" data-in="bndActRole">${roles.map((x) => `<option value="${esc(x.name)}"${x.name === A.role ? ' selected' : ''}>${esc(x.name)} · ${esc(x.label)}</option>`).join('')}</select></label>` : ''}${record}${params}${vals}
         <button class="k-btn pri" data-act="bndActGo"${A.busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}${A.busy ? '실행 중' : '테스트 실행'}</button></div>${out}</section>`;
@@ -63,6 +77,8 @@
       return `<button class="bnd-arow${x.name === a.name ? ' on' : ''}" data-act="bndActSel" data-name="${esc(x.name)}"${x.name === a.name ? ' aria-current="true"' : ''}><span class="k-h sb nw"><b>${esc(x.label)}</b><span class="k-chip ${mk[0]}">${mk[1]}</span></span><span class="k-s">${esc(x.target_label)} · Parameter ${x.parameters.length} · 전제조건 ${n}</span></button>`; };
     const list = `<nav class="k-card" aria-label="Action 목록" style="flex:1 1 300px">${m.actions.map(row).join('')}</nav>`;
     const mk = bndActMark(a);
+    const wr = bndWr(), off = on && bndWrites(a) && !!wr && wr.write === false;
+    const run = !on ? '실행 · 미연결' : off ? BND_WRITE_OFF : bndWrites(a) && (!wr || wr.write === null) ? '실행' : '실행 · 승인 후 반영';
     const pre = a.criteria.map((c) => (c.decision ? `<a class="k-chip" href="#mgrules?decision=${encodeURIComponent(c.decision)}">${esc(bndExpect(m, c))}</a>` : (c.states || []).length ? `<span class="k-chip">허용 상태 ${esc(c.states.join(', '))}</span>` : c.function ? `<span class="k-chip">함수 ${esc(c.function)}</span>` : '')).join('');
     const machine = m.states.find((s) => s.object === a.target);
     // a policy that keeps to some rows of the target (a row filter, or a scope that reaches the type) asks of those rows only
@@ -72,7 +88,7 @@
     const sets = Object.entries(a.set || {}).map(([k, v]) => `${(props.find((p) => p.name === k) || {}).label || k} = ${v}`).join(' · ');
     const half = (title, body) => `<div style="flex:1 1 220px;display:flex;flex-direction:column;gap:6px;min-width:0"><p class="k-b k-14" style="margin:0">${title}</p>${body}</div>`;
     const detail = `<section class="k-card" aria-labelledby="bnd-ac-h"><div class="k-pha bnd-sec" style="padding:16px 20px"><h2 id="bnd-ac-h" style="margin:0;font-size:20px;font-weight:600">${esc(a.label)}</h2><span class="k-code k-mut">${esc(a.name)}</span>
-        <span class="k-push" style="display:flex;gap:6px"><span class="k-chip ${mk[0]}">${mk[1]}</span><span class="k-chip">${on ? '실행 · 승인 후 반영' : '실행 · 미연결'}</span></span></div>
+        <span class="k-push" style="display:flex;gap:6px"><span class="k-chip ${mk[0]}">${mk[1]}</span><span class="k-chip${off ? ' warn' : ''}">${run}</span></span></div>
       <div class="bnd-sec"><p class="k-b k-14" style="margin:0 0 8px">Parameter</p>${a.parameters.length ? `<div class="k-x"><table class="k-t s"><thead><tr><th scope="col">이름</th><th scope="col">타입</th><th scope="col">설명</th></tr></thead><tbody>${a.parameters.map((p) => `<tr><td class="k-code">${esc(p.name)}</td><td class="k-code">${esc(p.type)}</td><td>${esc(p.label || '-')}</td></tr>`).join('')}</tbody></table></div>` : '<span class="k-s">Parameter 없음</span>'}</div>
       <div class="k-v bnd-sec"><p class="k-b k-14" style="margin:0">전제조건 규칙</p><div class="k-wrap g8">${pre || '<span class="k-s">전제조건 없음</span>'}</div></div>
       <div class="k-wrap g16 bnd-sec">${half('처리 후 상태', `<span class="k-13">${a.transition_to ? `${esc(a.target_label)} 상태 → ${esc(a.transition_to)}` : '상태 변경 없음'}${machine ? ` · <a href="#objects?entity=${encodeURIComponent(a.target)}">상태 전이</a>` : ''}</span>${sets ? `<span class="k-13">${esc(sets)}</span>` : ''}`)}
@@ -89,6 +105,7 @@
     bndNeed();
     const m = bndM(), A = S.bnd.act;
     if (!m) return;
+    if (!bndWr()) bndWriteLoad().then(() => { if (S.tab === 'actions') render(); });
     if (!noSource() && !S.pa) api('actions/pending').then((r) => { S.pa = r; if (S.tab === 'actions') renderActHead(); }).catch(() => { S.pa = { pending: [] }; });
     const a = m.actions.find((x) => x.name === A.sel);
     if (a && !noSource() && (!A.keys || A.keys.type !== a.target)) {

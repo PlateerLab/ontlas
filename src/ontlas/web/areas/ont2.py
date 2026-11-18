@@ -13,7 +13,7 @@ from ontlas.web.routes import get, post
 TERM_FIELD_WORD = {"term": "용어", "english": "영문 표기", "kind": "구분", "concept": "연결 개념", "definition": "정의",
                    "synonyms": "동의어", "abbreviations": "약어", "channels": "채널 표기", "hidden": "숨은 표기",
                    "related": "관련어", "broader": "상위어", "narrower": "하위어", "confusable": "혼동주의",
-                   "avoid": "쓰지 않는 표현", "source": "출처", "cite": "근거", "owner": "담당자", "status": "상태"}
+                   "avoid": "쓰지 않는 표현", "source": "출처", "cite": "근거", "note": "메모", "owner": "담당자", "status": "상태"}
 STATUS_WORD = {"pending": "검토 중", "approved": "배포됨", "rejected": "반려됨"}
 TERM_STATUS_WORD = {"active": "사용 중", "draft": "초안", "review": "확인 필요", "deprecated": "폐기 예정"}
 TITLE_MAX, DESCRIPTION_MAX, NOTE_MAX = 60, 500, 500
@@ -109,6 +109,8 @@ def draft_save(s, a, who) -> dict:
         raise ValueError("포함 항목이 없어 저장하지 못했습니다. 정의나 용어를 먼저 편집해 주세요.")
     if not _titled(ws) and ws.current is not None and title == ws.current.label:
         raise ValueError("직전 배포 변경 요청과 제목이 같아 저장하지 못했습니다. 다른 제목을 입력해 주세요.")
+    if _titled(ws) and (title, description or title) == (ws.module.label, ws.module.description):  # as kept below
+        raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
     # a module file without a description is given the workspace's long default when it is read again, which would read
     # as an edit nobody made: a request without a description of its own is described by its title
     ws.module.label, ws.module.description = title, description or title
@@ -368,7 +370,6 @@ def rollback(s, a, who) -> dict:
     import yaml
 
     from ontlas.modules import Module
-    from ontlas.web.api import WORKSPACE
 
     cid = str(a.get("change") or "")
     cur = s._space_version()
@@ -394,6 +395,4 @@ def rollback(s, a, who) -> dict:
     if not out["ok"]:
         s.studio.changes.reject(change["id"], by=s.who, reason="롤백 정의의 통과 조건 미충족")
         raise ValueError(out["error"])
-    if cr.module == WORKSPACE:
-        s.workspace = None
     return {"ok": True, "pending": False, "change": out["change"]}

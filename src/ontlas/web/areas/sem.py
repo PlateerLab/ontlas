@@ -14,10 +14,12 @@ from ontlas.web.routes import get, post
 from ontlas.words import fix as with_particles
 
 WAITING = ("draft", "review")
+COUNTED = ("category", "source_kind", "policy_check")  # what the waiting rules are also counted by, as the draft file's tally is
 CARD_WORD = {"id": "규칙 ID", "type": "유형", "statement": "규칙 이름", "applies_to": "적용 대상", "conditions": "조건",
              "result": "결과", "exceptions": "예외", "params": "기준값", "source": "근거", "owner": "담당자", "status": "상태",
              "legal_review": "법무 검토", "layer": "계층", "implements": "실행 위치", "check": "검사", "risk": "위반 시",
-             "verification": "근거 확인"}
+             "verification": "근거 확인", "category": "분류", "law": "대표 법령", "source_kind": "근거 종류",
+             "policy_check": "정책서 대조", "related": "관련 대상"}
 VALUE_WORD = {"label": "이름", "value": "값", "type": "자료형", "unit": "단위", "description": "설명", "cite": "근거", "min": "최솟값",
               "max": "최댓값", "owner": "담당자", "scale": "배율", "formula": "산식", "denominator": "분모", "time": "기준 시각",
               "params": "입력값"}
@@ -66,6 +68,7 @@ def _views(s) -> tuple[dict, dict, Any]:
 def _draft(c: dict, onto, state: str, editable: bool) -> dict:
     keep = ("ref", "id", "kind", "layer", "layer_label", "statement", "conditions", "result", "exceptions", "source", "owner",
             "status", "status_label", "legal_review", "legal_review_label", "verification", "risk", "type", "type_label",
+            "category", "law", "source_kind", "policy_check", "related",
             "module", "module_label", "version", "decision", "decision_label", "rule")
     return {**{k: c.get(k) for k in keep}, "areas": _areas_of(onto, c), "state": state,
             "decidable": editable and state == "waiting" and c["layer"] != "axiom"}
@@ -85,10 +88,11 @@ def drafts_view(s) -> dict:
     rows += [_draft(c, s.studio.onto, "rejected", editable) for ref, c in was.items()
              if ref not in now and c["status"] in WAITING]
     waiting = [r for r in rows if r["state"] == "waiting"]
-    tally: dict[str, dict[str, int]] = {"verification": {}, "area": {}, "module": {}}
+    tally: dict[str, dict[str, int]] = {"verification": {}, "area": {}, "module": {}, **{k: {} for k in COUNTED}}
     for r in waiting:
-        if r["verification"]:
-            tally["verification"][r["verification"]] = tally["verification"].get(r["verification"], 0) + 1
+        for k in ("verification", *COUNTED):
+            if r[k]:
+                tally[k][r[k]] = tally[k].get(r[k], 0) + 1
         for a in r["areas"] or ["기타"]:
             tally["area"][a] = tally["area"].get(a, 0) + 1
         if r["module_label"]:
@@ -104,6 +108,7 @@ def drafts_view(s) -> dict:
             "decidable": sum(r["decidable"] for r in waiting),
             "by_verification": [{"word": k, "count": n} for k, n in ranked["verification"]],
             "by_area": [{"word": k, "count": n} for k, n in ranked["area"]],
+            **{f"by_{k}": [{"word": w, "count": n} for w, n in ranked[k]] for k in COUNTED},
             "modules": [k for k, _ in ranked["module"]],
             "parameters": len(onto.parameters),
             "overlaps": [{"decision": f.decision, "label": onto.decisions[f.decision].label or f.decision, "rules": list(f.rules)}
@@ -115,6 +120,25 @@ def drafts_view(s) -> dict:
 @get("sem/drafts")
 def drafts(s, a, who) -> dict:
     return drafts_view(s)
+
+
+@get("sem/rule/without")
+def rule_without(s, a, who) -> dict:
+    """What taking a row out of its decision table changes, on the definition the pending edits leave: the rows on the
+    other side of its conditions, the rows that would answer where it does, and where no row would."""
+    from ontlas.decide.checks import without
+    from ontlas.decide.words import input_label, where_words
+
+    _, _, onto = _views(s)
+    table = onto.decisions.get(str(a.get("decision") or ""))
+    rid = str(a.get("rule") or "")
+    if table is None or not any(r.id == rid for r in table.rules):
+        raise ValueError("규칙을 찾을 수 없어 삭제 영향을 확인하지 못했습니다. 화면을 새로고침해 주세요.")
+    out = without(table, rid, onto)
+    label = lambda n: input_label(onto, table, n) if n in table.inputs else n  # noqa: E731
+    return {**out, "opposite": [{"rule": x["rule"], "inputs": [label(n) for n in x["inputs"]]} for x in out["opposite"]],
+            "takers": [{**x, "where": [where_words(onto, table, w) for w in x["where"]]} for x in out["takers"]],
+            "gaps": [where_words(onto, table, w) for w in out["gaps"]]}
 
 
 def _refused(e: Exception) -> str:
@@ -372,7 +396,8 @@ def history(s, a, who) -> dict:
     return {"kind": kind, "name": name, "now": held, "entries": entries}
 
 
-AXIOM_CARD_FIELDS = ("type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner", "status")
+AXIOM_CARD_FIELDS = ("type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner", "status",
+                     "category", "law", "source_kind", "policy_check", "related")
 
 
 def _propose(s, body: dict) -> dict:

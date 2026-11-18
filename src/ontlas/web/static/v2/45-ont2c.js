@@ -2,8 +2,12 @@
   // An expression relation is not kept on its own: it is read from a term (its synonyms, the pairs not to be swapped,
   // the words not to use, the wider or narrower word), and editing one edits that term.
 
-  const O2_REL = { confusable: ['혼동주의', 'b', '↔'], broader: ['상위 · 하위', '', '›'], avoid: ['쓰지 않는 표현', 'warn', '→'], synonym: ['동의어', '', '='] };
-  const O2_REL_FIELD = { confusable: 'confusable', broader: 'broader', avoid: 'avoid', synonym: 'synonyms' };
+  // each kind: its name in the lists, its chip tone, the mark between the words, its name where a term's field is chosen.
+  // 상위 · 하위 is said from either side: a term's broader words (above it), or its narrower words (below it)
+  const O2_REL = { confusable: ['혼동주의', 'b', '↔', '혼동주의'], broader: ['상위 · 하위', '', '›', '상위어'], narrower: ['상위 · 하위', '', '›', '하위어'],
+    avoid: ['쓰지 않는 표현', 'warn', '→', '쓰지 않는 표현'], synonym: ['동의어', '', '=', '동의어'] };
+  const O2_REL_FIELD = { confusable: 'confusable', broader: 'broader', narrower: 'narrower', avoid: 'avoid', synonym: 'synonyms' };
+  const o2RelKind = (k) => (k === 'narrower' ? 'broader' : k);  // the kinds the lists count and filter by
   const O2_LX_STEP = 10;
   const o2TermName = (r) => (r.english ? `${r.term}@${r.english}` : r.term);
   const o2Norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
@@ -22,13 +26,20 @@
       r.confusable.forEach((c) => { const g = groups.find((x) => x.note === (c.note || '')); if (g) g.others.push(c.term); else groups.push({ note: c.note || '', others: [c.term] }); });
       groups.forEach((g, i) => out.push({ id: `confusable|${r.id}|${i}`, kind: 'confusable', row: r, others: g.others, note: g.note }));
       if (r.broader.length) out.push({ id: `broader|${r.id}`, kind: 'broader', row: r, others: r.broader, note: '' });
+      // a narrower word is said from this side unless that word's own term already names this one as its broader
+      const below = r.narrower.filter((w) => !st.rows.some((x) => o2Norm(x.term) === o2Norm(w) && x.broader.some((y) => o2Norm(y) === o2Norm(r.term))));
+      if (below.length) out.push({ id: `narrower|${r.id}`, kind: 'narrower', row: r, others: below, note: '' });
       if (r.avoid.length) out.push({ id: `avoid|${r.id}`, kind: 'avoid', row: r, others: r.avoid, note: '' });
       if (r.synonyms.length) out.push({ id: `synonym|${r.id}`, kind: 'synonym', row: r, others: r.synonyms, note: '' });
     });
     const order = Object.keys(O2_REL);
     return out.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   }
-  const o2RelName = (x) => `${x.row.term} ${O2_REL[x.kind][2]} ${x.others.join(', ')}`;
+  // the wider word first, as › reads elsewhere (반품 › 제한 사유): a term's broader words are above it
+  const o2RelName = (x) => (x.kind === 'broader' ? `${x.others.join(', ')} ${O2_REL[x.kind][2]} ${x.row.term}` : `${x.row.term} ${O2_REL[x.kind][2]} ${x.others.join(', ')}`);
+  // where a term is said, once each: its source and its ground often name the same document
+  const o2Sources = (r) => [r.source, r.cite].flatMap((x) => String(x || '').split(' · ')).map((x) => x.trim())
+    .filter((x, i, all) => o2Norm(x) && all.findIndex((y) => o2Norm(y) === o2Norm(x)) === i).join(' · ');
   // where a term's definition lives, as a link to that screen
   const O2_CONCEPT_SCREEN = { area: 'objmgr', object: 'objects', property: 'objects', value: 'objects', decision: 'semrules', parameter: 'semrules', metric: 'semrules', function: 'semrules', query: 'query', action: 'actions', link: 'model' };
   function o2ConceptLink(r) {
@@ -52,13 +63,13 @@
     const pool = (X.kind === 'defs' ? st.rows.filter(o2IsDef) : X.kind === 'all' ? terms : terms.filter((r) => o2Bucket(r) === X.kind)).filter(hit);
     if (!S.lx.sel || !st.rows.some((r) => r.id === S.lx.sel)) S.lx.sel = (pool[0] || (q ? null : terms[0] || st.rows[0]) || {}).id || '';  // a search that finds nothing picks nothing
     const sel = st.rows.find((r) => r.id === S.lx.sel);
-    const rq = o2Norm(X.rq), rpool = rels.filter((x) => (X.rel === 'all' || x.kind === X.rel) && (!rq || o2Norm([x.row.term, x.row.english, ...x.others, x.note].join(' ')).includes(rq)));
+    const rq = o2Norm(X.rq), rpool = rels.filter((x) => (X.rel === 'all' || o2RelKind(x.kind) === X.rel) && (!rq || o2Norm([x.row.term, x.row.english, ...x.others, x.note].join(' ')).includes(rq)));
     if (X.rsel && !rels.some((x) => x.id === X.rsel)) X.rsel = '';
     if (!X.rsel && rpool.length) X.rsel = rpool[0].id;
     const rsel = rels.find((x) => x.id === X.rsel);
     const chan = st.rows.flatMap((r) => Object.entries(r.channels || {}).map(([c, w]) => ({ row: r, channel: c, word: w })));
     const review = st.rows.filter((r) => r.status === 'review').length;
-    const nrel = (k) => rels.filter((x) => x.kind === k).length;
+    const nrel = (k) => rels.filter((x) => o2RelKind(x.kind) === k).length;
     const ws = S.mg.st && !S.mg.st.error ? S.mg.st.workspace : null;
     const pend = ws && ws.dirty ? `<div class="k-bar"><span class="k-chip warn">변경 대기</span><span class="k-14">작성 중인 변경 요청 · 변경 ${ws.edits.length}건 · 배포 전</span><span class="k-push"><a class="k-btn" href="#changes">변경 요청 · 버전</a></span></div>` : '';
     const stat = (word, n, sub, warn) => `<div class="k-card${warn ? ' o2-warn' : ''}" style="flex:1 1 150px;padding:16px"><p class="k-s" style="margin:0">${word}</p><p class="k-big${warn ? ' warn' : ''}">${count(n)}</p><p class="${warn ? 'k-warn k-13' : 'k-s'}" style="margin:4px 0 0">${esc(sub)}</p></div>`;
@@ -103,17 +114,17 @@
         <p class="k-i3 k-14" style="margin:0">${esc(r.definition || '정의 없음')}</p><div class="k-h g6">${r.module_label ? kChip(r.module_label) : ''}${o2TermChips(r)}</div></div>
       ${values}${warn}
       <div class="k-v k-14" style="padding:12px 20px">${kv('동의어', list(r.synonyms))}${kv('약어', list(r.abbreviations))}${kv('혼동주의', r.confusable.map((c) => `${esc(r.term)} ↔ ${esc(c.term)}`).join('<br>'))}${kv('쓰지 않는 표현', list(r.avoid))}
-        ${kv('상위 · 하위', list([...r.broader, ...r.narrower]))}${kv('관련어', list(r.related))}${kv('채널 표기', Object.entries(r.channels || {}).map(([c, w]) => `${esc(c)} · ${esc(w)}`).join('<br>'))}${kv('숨은 표기', list(r.hidden))}
-        ${kv('연결 개념', r.concept ? o2ConceptLink(r) : '미연결')}${kv('관련 규칙', named && known('semrules') ? `<a href="#semrules">${esc(named)}</a>` : esc(named))}${kv('사용처', list((r.used_by || []).filter((u) => !rules.includes(u))))}${kv('출처', esc([r.source, r.cite].filter(Boolean).join(' · ')))}${kv('담당자', esc(r.owner))}</div>
+        ${kv('상위어', list(r.broader))}${kv('하위어', list(r.narrower))}${kv('관련어', list(r.related))}${kv('채널 표기', Object.entries(r.channels || {}).map(([c, w]) => `${esc(c)} · ${esc(w)}`).join('<br>'))}${kv('숨은 표기', list(r.hidden))}
+        ${kv('연결 개념', r.concept ? o2ConceptLink(r) : '미연결')}${kv('관련 규칙', named && known('semrules') ? `<a href="#semrules">${esc(named)}</a>` : esc(named))}${kv('사용처', list((r.used_by || []).filter((u) => !rules.includes(u))))}${kv('출처', esc(o2Sources(r)))}${kv('메모', esc(r.note))}${kv('담당자', esc(r.owner))}</div>
       <div style="margin-top:auto;padding:12px 20px;border-top:1px solid var(--row);display:flex;justify-content:flex-end;gap:8px"><a class="k-btn" href="#changes">변경 요청</a>${publish ? `<button class="k-btn pri" data-act="o2lxpublish" data-id="${esc(r.id)}">게시</button>` : ''}</div></aside>`;
   }
 
   function o2RelTable(rels, pool, st) {
-    const X = S.o2.lx, n = (k) => rels.filter((x) => x.kind === k).length;
+    const X = S.o2.lx, n = (k) => rels.filter((x) => o2RelKind(x.kind) === k).length;
     const shown = pool.slice(0, X.rn || O2_LX_STEP), on = pool.find((x) => x.id === X.rsel);
     if (on && !shown.includes(on)) shown.push(on);  // the relation chosen stays in sight
     const where = (r) => (o2IsDef(r) || r.concept ? o2ConceptLink(r) : `용어 ${esc(r.term)}`);
-    const tr = (x) => `<tr class="${x.id === X.rsel ? 'on' : ''}" data-act="o2rlsel" data-id="${esc(x.id)}" tabindex="0"${x.id === X.rsel ? ' aria-current="true"' : ''}><td><span class="k-chip${O2_REL[x.kind][1] ? ` ${O2_REL[x.kind][1]}` : ''}">${O2_REL[x.kind][0]}</span></td><td class="b">${esc(o2TermName(x.row))}</td><td>${esc(x.others.join(', '))}</td>
+    const tr = (x) => `<tr class="${x.id === X.rsel ? 'on' : ''}" data-act="o2rlsel" data-id="${esc(x.id)}" tabindex="0"${x.id === X.rsel ? ' aria-current="true"' : ''}><td><span class="k-chip${O2_REL[x.kind][1] ? ` ${O2_REL[x.kind][1]}` : ''}">${O2_REL[x.kind][o2RelKind(x.kind) === 'broader' ? 3 : 0]}</span></td><td class="b">${esc(o2TermName(x.row))}</td><td>${esc(x.others.join(', '))}</td>
       <td class="i3">${x.note ? esc(x.note) : '<span class="k-mut">-</span>'}</td><td>${where(x.row)}</td><td>${x.row.status === 'review' ? '<span class="k-chip warn">확인 필요</span>' : ''}</td></tr>`;
     return `<section class="k-card" aria-labelledby="o2rel"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="o2rel">표현 관계</h2>
         ${o2Seg('관계', [['all', `전체 ${rels.length}`], ['confusable', `혼동주의 ${n('confusable')}`], ['broader', `상위 · 하위 ${n('broader')}`], ['avoid', `쓰지 않는 표현 ${n('avoid')}`], ['synonym', `동의어 ${n('synonym')}`]], X.rel, 'o2rlkind', 'o2-wrap')}
@@ -127,9 +138,10 @@
     if (!chan.length) return '';
     const X = S.o2.lx, shown = chan.slice(0, X.cn || O2_LX_STEP);
     const code = (r) => (r.concept.startsWith('value:') ? r.concept.split('=').pop() : r.english);
+    const many = (w) => chan.filter((c) => o2Norm(c.word) === o2Norm(w)).length;  // one word a channel shows for several values
     return `<section class="k-card" aria-labelledby="o2cu"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="o2cu">고객 표기</h2><span class="k-chip">${chan.length}</span><span class="k-s">채널별 표준 용어 표기</span></div>
       <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">영역</th><th scope="col">표준 용어</th><th scope="col">채널</th><th scope="col">표기</th><th scope="col">표준 값</th><th scope="col">확인</th></tr></thead>
-        <tbody>${shown.map((c) => `<tr data-act="o2lxsel" data-id="${esc(c.row.id)}" data-all="1" tabindex="0"><td>${esc(c.row.concept_of || c.row.concept_kind || '-')}</td><td>${esc(c.row.term)}</td><td>${esc(c.channel)}</td><td class="b">${esc(c.word)}</td><td class="k-code">${code(c.row) ? esc(code(c.row)) : '<span class="k-mut">-</span>'}</td><td>${c.row.status === 'review' ? '<span class="k-chip warn">확인 필요</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+        <tbody>${shown.map((c) => `<tr data-act="o2lxsel" data-id="${esc(c.row.id)}" data-all="1" tabindex="0"><td>${esc(c.row.concept_of || c.row.concept_kind || '-')}</td><td>${esc(c.row.term)}</td><td>${esc(c.channel)}</td><td class="b">${esc(c.word)}${many(c.word) > 1 ? ` <span class="k-chip">여러 값 ${many(c.word)}</span>` : ''}</td><td class="k-code">${code(c.row) ? esc(code(c.row)) : '<span class="k-mut">-</span>'}</td><td>${c.row.status === 'review' ? '<span class="k-chip warn">확인 필요</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
       <p class="k-cf line">${shown.length} / ${chan.length}건 표시${chan.length > shown.length ? ' · <button class="k-lnk flat" data-act="o2cnmore">더 보기</button>' : ''}</p></section>`;
   }
 
@@ -146,7 +158,7 @@
   // a glossary brought in: a term list or a table of term pairs
   function o2LexImport() {
     const m = S.o2.lx.imp, r = m.report;
-    const WORD = { added: '새 용어', updated: '수정 용어', synonym: '동의어', abbreviation: '약어', confusable: '혼동주의', linked: '정의 연결', unlinked: '정의 미연결', review: '확인 필요', skipped: '건너뜀', conflicts: '새 충돌' };
+    const WORD = { added: '새 용어', updated: '수정 용어', synonym: '동의어', abbreviation: '약어', confusable: '혼동주의', related: '관련어', broader: '상위어', narrower: '하위어', channel: '채널 표기', linked: '정의 연결', unlinked: '정의 미연결', review: '확인 필요', skipped: '건너뜀', conflicts: '새 충돌' };
     const said = r ? Object.keys(WORD).filter((k) => (r[k] || []).length).map((k) => kChip(`${WORD[k]} ${r[k].length}`, ['unlinked', 'review', 'conflicts', 'skipped'].includes(k) ? 'warn' : 'ok')).join('') : '';
     return `<section class="k-card" id="o2imp"><div class="k-ch"><h2>가져오기</h2><span class="k-s">용어 목록 · 용어 짝 표</span><span class="k-push"><button class="k-lnk" data-act="o2lximpx">닫기</button></span></div>
       <div class="k-cb"><div class="k-g2"><label class="k-f">파일 · CSV · YAML · JSON<input class="k-in" type="file" id="o2lxfile" accept=".csv,.tsv,.yaml,.yml,.json,.txt" style="padding:6px 12px"></label>
@@ -243,8 +255,8 @@
   // (a term is no element of the definition, so the items' own note beside an element would not say which change it was)
   const o2Why = (id, fields, text) => (String(text || '').trim() ? api('ont2/term/note', { id, fields, text: String(text).trim() }).catch(() => {}) : null);
   const o2TermDraft = (x) => (x ? { term: x.term, kind: x.kind, english: x.english, concept: x.concept, definition: x.definition, synonyms: x.synonyms.join(', '), abbreviations: x.abbreviations.join(', '),
-    channels: Object.entries(x.channels || {}).map(([c, w]) => `${c}=${w}`).join('\n'), hidden: x.hidden.join(', '), owner: x.owner, status: x.status, source: x.source, cite: x.cite }
-    : { term: '', kind: '', english: '', concept: '', definition: '', synonyms: '', abbreviations: '', channels: '', hidden: '', owner: '', status: 'draft', source: '', cite: '' });
+    channels: Object.entries(x.channels || {}).map(([c, w]) => `${c}=${w}`).join('\n'), hidden: x.hidden.join(', '), owner: x.owner, status: x.status, source: x.source, cite: x.cite, note: x.note || '' }
+    : { term: '', kind: '', english: '', concept: '', definition: '', synonyms: '', abbreviations: '', channels: '', hidden: '', owner: '', status: 'draft', source: '', cite: '', note: '' });
 
   item('term', {
     word: '용어', under: 'lexicon', list: 'lexicon',
@@ -275,6 +287,7 @@
           ${inp('owner', '담당자')}
           <label class="k-f">상태<select class="k-in" data-in="itf" data-k="status" data-re>${Object.entries(TERM_STATUS).map(([k, [, w]]) => `<option value="${k}"${(d.status || 'active') === k ? ' selected' : ''}>${w}</option>`).join('')}</select></label>
           ${inp('cite', '근거')}
+          <div class="k-full">${inp('note', '메모')}</div>
         </div></div></section>`;
     },
     checks: (d, x) => {
@@ -291,7 +304,7 @@
     save: async (d, x) => {
       const channels = Object.fromEntries(String(d.channels || '').split('\n').map((l) => l.split('=')).filter((p) => p.length >= 2 && p[0].trim() && p.slice(1).join('=').trim()).map((p) => [p[0].trim(), p.slice(1).join('=').trim()]));
       const args = { term: d.term.trim(), kind: d.kind.trim(), english: d.english.trim(), concept: d.concept, definition: d.definition.trim(), synonyms: csv(d.synonyms), abbreviations: csv(d.abbreviations),
-        hidden: csv(d.hidden), channels, owner: d.owner.trim(), status: d.status || 'active', source: d.source.trim(), cite: d.cite.trim() };
+        hidden: csv(d.hidden), channels, owner: d.owner.trim(), status: d.status || 'active', source: d.source.trim(), cite: d.cite.trim(), note: d.note.trim() };
       const r = await o2LexEdit(x ? 'update_term' : 'add_term', x ? { id: x.id, ...args } : args);
       S.lx.sel = r.edit.target.replace(/^term:/, '');
       const was = o2TermDraft(x);
@@ -306,7 +319,7 @@
       Object.entries(by).forEach(([k, names]) => out.push({ say: `${k} ${names.length}개`, sub: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}` : ''}`, href: to[k] && known(to[k]) ? to[k] : '' }));
       // its own expression relations go with it; another term's that names it stays, naming a term no longer there
       const own = o2Rels(S.lx.st).filter((y) => y.row.id === x.id);
-      const parts = Object.entries(O2_REL).map(([k, [w]]) => [w, own.filter((y) => y.kind === k).reduce((n, y) => n + y.others.length, 0)]).filter(([, n]) => n);
+      const parts = Object.entries(O2_REL).map(([k, [, , , w]]) => [w, own.filter((y) => y.kind === k).reduce((n, y) => n + y.others.length, 0)]).filter(([, n]) => n);
       if (own.length) out.push({ say: `표현 관계 ${own.length}건`, sub: `${parts.map(([w, n]) => `${w} ${n}개`).join(' · ')} 함께 삭제`, href: 'lexicon' });
       const others = S.lx.st.rows.filter((r) => r.id !== x.id && [...r.confusable.map((c) => c.term), ...r.related, ...r.broader, ...r.narrower].some((w) => o2Norm(w) === o2Norm(x.term)));
       if (others.length) out.push({ say: `다른 용어 ${others.length}개`, sub: `${others.slice(0, 3).map((r) => r.term).join(', ')} · 표현 관계`, href: 'lexicon' });
@@ -340,9 +353,9 @@
     form: (d, x) => {
       const st = S.lx.st, row = st.rows.find((r) => r.id === d.term);
       return `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
-        <label class="k-f">관계<select class="k-in" data-in="itf" data-k="kind" data-re${x ? ' disabled' : ''}>${Object.entries(O2_REL).map(([k, [w]]) => `<option value="${k}"${d.kind === k ? ' selected' : ''}>${w}</option>`).join('')}</select></label>
+        <label class="k-f">관계<select class="k-in" data-in="itf" data-k="kind" data-re${x ? ' disabled' : ''}>${Object.entries(O2_REL).map(([k, [, , , w]]) => `<option value="${k}"${d.kind === k ? ' selected' : ''}>${w}</option>`).join('')}</select></label>
         <label class="k-f">표준 용어<select class="k-in" data-in="itf" data-k="term" data-re${x ? ' disabled' : ''}><option value="">선택</option>${st.rows.map((r) => `<option value="${esc(r.id)}"${r.id === d.term ? ' selected' : ''}>${esc(o2TermName(r))}${o2IsDef(r) ? ` · ${esc(r.concept_kind)}` : ''}</option>`).join('')}</select><span class="k-hint">용어 · Object · Entity · Property</span></label>
-        <label class="k-f k-full">다른 표현<input class="k-in" type="text" data-in="itf" data-k="others" value="${esc(d.others)}"><span class="k-hint">쉼표로 구분${d.kind === 'broader' ? ' · 상위 표현' : ''}</span></label>
+        <label class="k-f k-full">다른 표현<input class="k-in" type="text" data-in="itf" data-k="others" value="${esc(d.others)}"><span class="k-hint">쉼표로 구분${d.kind === 'broader' ? ' · 상위 표현' : d.kind === 'narrower' ? ' · 하위 표현' : ''}</span></label>
         ${d.kind === 'confusable' ? `<div class="k-full"><label class="k-f">설명<textarea class="k-in" rows="3" data-in="itf" data-k="note">${esc(d.note)}</textarea></label></div>` : ''}
         <label class="k-f">정의 위치<input class="k-in" type="text" value="${esc(row ? (row.concept ? `${row.concept_kind} ${row.concept_of ? `${row.concept_of} › ` : ''}${row.concept_label || ''}` : `용어 ${row.term}`) : '')}" readonly></label>
         <label class="k-f">확인 필요<select class="k-in" data-in="itf" data-k="review" data-re><option value="1"${d.review ? ' selected' : ''}>예</option><option value=""${d.review ? '' : ' selected'}>아니오</option></select></label>

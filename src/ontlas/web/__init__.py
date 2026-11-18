@@ -66,6 +66,8 @@ def serve_config(config: str | Path, *, llm: Callable[[str, str], str] | None = 
         if store is not None:
             s.store = store
             s._adopt(s.studio)
+        if journal is not None:
+            s.restore_pending()  # the edits being written when it stopped
         return s
 
     # /v1 answers from the first library unless a caller names another; each of the others is built when first asked

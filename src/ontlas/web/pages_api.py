@@ -91,6 +91,202 @@ def _lineage(onto, name: str) -> list[str]:
     return out
 
 
+# ---- what reads what: the elements each reader of the definition stands on -------------------------------------------
+
+def _path(onto, start: str, steps) -> tuple[list[str], list[str], bool]:
+    """The Relations a path follows from `start` and the Entities it passes, each step a Relation's name or its inverse
+    name as the definition check reads them; False where a step is no Relation (the path stops there)."""
+    links, types, here = [], [], start
+    for step in steps or []:
+        lk = onto.links.get(step) or onto.link_by_inverse(step)
+        if lk is None:
+            return links, types, False
+        here = lk.target if lk.name == step else lk.source
+        links.append(lk.name)
+        types.append(here)
+    return links, types, True
+
+
+def prop_reads(onto, type_name: str, prop: str, seen: set) -> set[str]:
+    """A Property as read on an Entity: the Property (as that Entity has it and as the Entity that defines it names it)
+    and, for a computed one, the Relations its expression follows, the Entities they reach and the Properties it reads."""
+    from ontlas.check import _find_prop
+    from ontlas.expr import parse_expr
+
+    if (type_name, prop) in seen or type_name not in onto.objects:
+        return set()
+    seen.add((type_name, prop))
+    out = {f"property:{t}.{prop}" for t in _lineage(onto, type_name) if t == type_name or prop in onto.objects[t].properties}
+    p = _find_prop(onto, type_name, prop)
+    if p is not None and p.expr:
+        try:
+            out |= _expr_reads(onto, type_name, parse_expr(p.expr), seen)
+        except ValueError:  # an expression the definition check turns down names nothing to read
+            pass
+    return out
+
+
+def _expr_reads(onto, type_name: str, tree, seen: set) -> set[str]:
+    from ontlas.expr import Agg, Prop, resolve_agg, walk
+
+    out: set[str] = set()
+    for node in walk(tree):
+        if isinstance(node, Prop):
+            out |= prop_reads(onto, type_name, node.name, seen)
+        elif isinstance(node, Agg):
+            try:
+                steps, prop = resolve_agg(onto, type_name, node)
+            except ValueError:
+                continue
+            out |= {f"link:{s.link}" for s in steps} | {f"object:{s.type}" for s in steps}
+            last = steps[-1].type if steps else type_name
+            if prop:
+                out |= prop_reads(onto, last, prop, seen)
+            series = onto.objects[last].series if last in onto.objects else {}
+            if node.fn in ("latest", "earliest") and series.get("time"):  # the row is chosen by its time
+                out |= prop_reads(onto, last, series["time"], seen)
+            if node.where is not None:
+                out |= _expr_reads(onto, last, node.where, seen)
+    return out
+
+
+def table_reads(onto, table) -> set[str]:
+    """What a decision table reads when it decides on a record: its Entity, the Relations each input follows (by name or
+    inverse name, as the definition check reads them, and the ones a count follows), the Entities they pass and the
+    Property each input reads there."""
+    out = {f"decision:{table.name}"}
+    if table.target not in onto.objects:
+        return out
+    out.add(f"object:{table.target}")
+    seen: set = set()
+    for i in table.inputs.values():
+        src = i.source
+        if "param" in src:
+            continue
+        counted = "count" in src
+        links, types, whole = _path(onto, table.target, src["count"] if counted else src.get("path"))
+        out |= {f"link:{x}" for x in links} | {f"object:{x}" for x in types}
+        prop = src.get("property") or src.get("days_since")
+        if whole and prop and not counted:
+            out |= prop_reads(onto, types[-1] if types else table.target, str(prop), seen)
+    return out
+
+
+def _texts(v: Any):
+    if isinstance(v, str):
+        yield v
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _texts(x)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            yield from _texts(x)
+
+
+def query_reads(onto, rq) -> set[str]:
+    """What a registered query reads: the Entities it matches, the Relations its edges follow and the Properties it names,
+    a computed one with what its expression reads."""
+    ir = rq.query if isinstance(rq.query, dict) else {}
+    nodes = {a: t for a, t in (ir.get("match") or {}).items() if isinstance(t, str)}
+    out = {f"query:{rq.name}"} | {f"object:{t}" for t in nodes.values()}
+    for e in ir.get("edges") or []:
+        if isinstance(e, (list, tuple)) and len(e) == 3:
+            lk = onto.links.get(str(e[1])) or onto.link_by_inverse(str(e[1]))
+            if lk is not None:
+                out.add(f"link:{lk.name}")
+    seen: set = set()
+    for text in _texts(ir):
+        alias, dot, prop = text.lstrip("-").partition(".")
+        if dot and alias in nodes and re.fullmatch(r"[A-Za-z_]\w*", prop):
+            out |= prop_reads(onto, nodes[alias], prop, seen)
+    return out
+
+
+def fetch_rows(onto, type_name: str) -> set[str]:
+    """The Entities whose rows are read when a record is fetched: its own, and those its computed Properties reach."""
+    out, seen = {type_name}, set()
+    for t in _lineage(onto, type_name):
+        for p, prop in onto.objects[t].properties.items():
+            if prop.expr:
+                out |= {e.split(":", 1)[1] for e in prop_reads(onto, type_name, p, seen) if e.startswith("object:")}
+    return out
+
+
+def flow_parts(onto, flow) -> list[dict]:
+    """The parts of the validation flow that read the definition by name, as the flow settings write them: each value
+    held against the transaction system and the past cases decided again (a stage switched off reads nothing). Each has
+    `named` (what the settings name), `reads` (those and what they stand on) and `rows` (the Entities whose rows it
+    reads). A delete that takes out what a part names, itself or with what it leaves broken, keeps the flow from
+    passing: the settings are not part of the definition, so nothing takes them out with it."""
+    def objects(els: set) -> set[str]:
+        return {e.split(":", 1)[1] for e in els if e.startswith("object:")}
+
+    def query(name: str, named: set, reads: set, rows: set) -> None:
+        named.add(f"query:{name}")
+        rq = onto.queries.get(name)
+        if rq is not None:
+            got = query_reads(onto, rq)
+            reads |= got
+            rows |= objects(got)
+
+    def table(name: str, named: set, reads: set, rows: set, record: bool) -> None:
+        named.add(f"decision:{name}")
+        d = onto.decisions.get(name)
+        if d is not None:
+            got = table_reads(onto, d)
+            reads |= got
+            if record and d.target in onto.objects:  # decided on a record: the record's row, and the rows its inputs reach
+                rows |= objects(got) | fetch_rows(onto, d.target)
+
+    parts = []
+    if flow.on("check"):
+        from ontlas.functions import RESULT, _view
+
+        for v in flow.values:
+            named: set[str] = set()
+            reads: set[str] = set()
+            rows: set[str] = set()
+            if v.get("query"):
+                query(str(v["query"]), named, reads, rows)
+            ans = v.get("answer") or {}
+            if ans.get("decision"):
+                table(str(ans["decision"]), named, reads, rows, True)
+            if ans.get("function"):
+                named.add(f"function:{ans['function']}")
+                f = onto.functions.get(str(ans["function"]))
+                if f is not None and f.target in onto.objects:
+                    reads.add(f"object:{f.target}")
+                    rows |= fetch_rows(onto, f.target)
+                    if f.runtime == "expr" and f.expr:
+                        try:
+                            reads |= prop_reads(_view(onto, f, {}), f.target, RESULT, set()) - {f"property:{f.target}.{RESULT}"}
+                        except (KeyError, ValueError):  # a function the definition check turns down reads nothing it names
+                            pass
+                if f is not None and f.decision:
+                    table(f.decision, set(), reads, rows, True)
+                if f is not None and f.query:
+                    query(f.query, set(), reads, rows)
+            if ans.get("type"):
+                t = str(ans["type"])
+                named.add(f"object:{t}")
+                if ans.get("property"):
+                    named.add(f"property:{t}.{ans['property']}")
+                    reads |= prop_reads(onto, t, str(ans["property"]), set())
+                if t in onto.objects:
+                    rows |= fetch_rows(onto, t)
+            parts.append({"name": f"거래 값 대조 · {v.get('label') or v.get('name') or v.get('query') or ''}".rstrip(" ·"),
+                          "named": named, "reads": reads | named, "rows": rows | objects(named)})
+    a = flow.agreement
+    if flow.on("decide") and a:
+        named, reads, rows = set(), set(), set()
+        if a.get("query"):
+            query(str(a["query"]), named, reads, rows)
+        if a.get("decision"):  # a case decided on the values it had then reads no record
+            table(str(a["decision"]), named, reads, rows, bool(a.get("key")) and not a.get("inputs"))
+        parts.append({"name": "판정 일치율", "named": named, "reads": reads | named, "rows": rows})
+    return parts
+
+
 class PagesMixin:
     # ---- one record ----------------------------------------------------------------------------------------------
 
@@ -814,9 +1010,10 @@ class PagesMixin:
                    "to": "끝 Entity", "initial": "초기 상태", "transitions": "허용 전이", "property": "Property",
                    "inputs": "입력값", "outputs": "출력", "name": "이름", "english": "영문 표기", "definition": "정의",
                    "statement": "규칙 내용", "applies_to": "적용 대상", "conditions": "조건", "result": "결과", "exceptions": "예외",
-                   "legal_review": "법무 검토", "implements": "구현 항목", "check": "확인 조건", "risk": "위험",
-                   "verification": "검증 방법", "value": "값", "min": "최솟값", "max": "최댓값", "formula": "산식",
-                   "denominator": "분모", "time": "기준 시각", "scale": "척도"}
+                   "legal_review": "법무 검토", "implements": "구현 항목", "check": "확인 조건", "risk": "위반 시",
+                   "verification": "근거 확인", "value": "값", "min": "최솟값", "max": "최댓값", "formula": "산식",
+                   "denominator": "분모", "time": "기준 시각", "scale": "척도", "priority": "우선순위", "category": "분류",
+                   "law": "대표 법령", "source_kind": "근거 종류", "policy_check": "정책서 대조", "related": "관련 대상"}
     # a stored code as the screens say it; a status not written is the one in use
     VALUE_WORDS = {"status": {"active": "사용 중", "draft": "초안", "deprecated": "폐기 예정", "review": "확인 필요"},
                    "cardinality": {"many_to_one": "N : 1", "one_to_many": "1 : N", "one_to_one": "1 : 1", "many_to_many": "N : M"}}
@@ -880,46 +1077,50 @@ class PagesMixin:
                for k in keys if fa.get(k) != fb.get(k) and k not in ("id",)]
         return out[:limit] if limit else out
 
-    def _readers(self, el: str) -> list[str]:
-        """What in the definition reads an element now, so a reviewer sees what a change to it reaches."""
+    def _what_reads(self) -> dict:
+        """Each reader of the definition with the elements it reads, worked out once per definition and flow: the decision
+        tables (as the definition check follows their inputs, which is what a delete takes out with the element), the
+        computed Properties, the registered queries and the parts of the validation flow."""
+        o, flow = self.studio.onto, self.studio.flow
+        sig = json.dumps([flow.off, flow.agreement, flow.values], sort_keys=True, default=str)
+        held = self._read_index
+        if held is not None and held[0] is o and held[1] == sig:
+            return held[2]
+        computed = [(f"{t.label or tn} · {p.label or pn}", tn, prop_reads(o, tn, pn, set()) - {f"property:{tn}.{pn}"})
+                    for tn, t in o.objects.items() for pn, p in t.properties.items() if p.expr and not p.transform]
+        idx = {"decisions": [(d, table_reads(o, d)) for d in o.decisions.values()], "computed": computed,
+               "queries": [(q, query_reads(o, q)) for q in o.queries.values()], "flow": flow_parts(o, flow)}
+        self._read_index = (o, sig, idx)  # the definition is held, so a later one never takes its id
+        return idx
+
+    _read_index: tuple | None = None
+
+    def _readers(self, el: str, limit: int = 12) -> list[str]:
+        """What in the definition reads an element now, so a reviewer sees what a change to it reaches (the first `limit`,
+        all with 0). The parts of the validation flow come first: what they read is not taken out with a delete, so they
+        are what stops one."""
         o = self.studio.onto
         kind, name = el.split(":", 1)
         out: list[str] = []
-        said = lambda q: json.dumps(q, ensure_ascii=False)  # noqa: E731
+        idx = self._what_reads()
+        if kind in ("object", "property", "link", "query", "function", "decision", "rule"):
+            mark = f"decision:{name.split('.')[0]}" if kind in ("rule", "decision") else el
+            out += [f"검증 흐름 {p['name']}" for p in idx["flow"] if mark in p["reads"] or kind == "object" and name in p["rows"]]
         if kind in ("rule", "decision"):
             d = name.split(".")[0]
             out += [f"검증 질문 {q.id}" for q in o.questions if q.decision == d]
             out += [f"Action {a.label or a.name}" for a in o.actions.values() if any(c.decision == d for c in a.criteria)]
             out += [f"함수 {f.label or f.name}" for f in o.functions.values() if f.decision == d]
             out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if d in r.run]
-        elif kind == "property" and "." in name:
-            t, p = name.split(".", 1)
-            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values()
-                    if any(p in (i.source.get("property"), i.source.get("days_since")) for i in x.inputs.values())]
-            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f".{p}" in said(q.query)]
-            out += [f"계산 Property {ot.label or tn} · {prop.label or pn}" for tn, ot in o.objects.items()
-                    for pn, prop in ot.properties.items() if prop.expr and re.search(rf"\b{re.escape(p)}\b", prop.expr)]
-        elif kind == "object":
-            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
-            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values() if x.target == name]
-
-            def passes(x) -> bool:  # an input of the table reads through this Entity on its way
-                for i in x.inputs.values():
-                    here = x.target
-                    for step in i.source.get("path") or []:
-                        lk = o.links.get(step) or o.link_by_inverse(step)
-                        if lk is None:
-                            break
-                        here = lk.target if lk.name == step else lk.source
-                        if here == name:
-                            return True
-                return False
-            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values() if x.target != name and passes(x)]
-            out += [f"Action {a.label or a.name}" for a in o.actions.values() if a.target == name]
-        elif kind == "link":
-            out += [f"질의 {q.label or q.name}" for q in o.queries.values() if f'"{name}"' in said(q.query)]
-            out += [f"규칙 {x.label or x.name}" for x in o.decisions.values()
-                    if any(name in (i.source.get("path") or []) for i in x.inputs.values())]
+        elif kind in ("property", "object", "link") and (kind != "property" or "." in name):
+            # a table reads what its inputs follow and read, by the same walk the definition check makes: what a delete
+            # takes out with the element (or is refused for, where the table holds an AXIOM rule)
+            tables = [f"규칙 {x.label or x.name}" for x, els in idx["decisions"] if el in els]
+            queries = [f"질의 {q.label or q.name}" for q, els in idx["queries"] if el in els]
+            computed = [f"계산 Property {word}" for word, tn, els in idx["computed"] if el in els and (kind != "object" or tn != name)]
+            out += (tables + queries if kind == "property" else queries + tables) + computed
+            if kind == "object":
+                out += [f"Action {a.label or a.name}" for a in o.actions.values() if a.target == name]
         elif kind == "query":
             out += [f"검증 질문 {q.id}" for q in o.questions if q.query == name]
             out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if name in r.run]
@@ -940,7 +1141,8 @@ class PagesMixin:
                 out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if name in r.run]
             if kind == "parameter":
                 out += [f"검증 질문 {q.id}" for q in o.questions if q.decision in {d.name for d in tables}]
-        return list(dict.fromkeys(out))[:12]
+        out = list(dict.fromkeys(out))
+        return out[:limit] if limit else out
 
     # ---- a decision table tried before it is filed ------------------------------------------------------------------
 

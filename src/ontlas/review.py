@@ -28,9 +28,21 @@ def normalize_all(value: Any) -> Any:
 
 STAGES = ("source", "define", "bind", "project", "index", "query", "decide", "check")
 REQUIRED = ("source", "define")
-GATES = {"bind": ("max_errors", "max_warnings"), "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
-         "check": ("min_accuracy", "min_grounded", "max_value_errors")}
+GATES = {"define": ("max_gaps", "max_unreachable", "max_axiom_conflicts"), "bind": ("max_errors", "max_warnings"),
+         "index": ("min_found",), "query": ("min_agree",), "decide": ("min_agreement",),
+         "check": ("min_accuracy", "min_grounded", "max_value_errors", "max_new_wrong")}
 DEFAULT_GATES = {"bind": {"max_errors": 0}, "query": {"min_agree": 1.0}}
+# what every flow asks unless a person turns it off (sets it to null): no decision table input that no rule answers, no
+# rule that can never answer, no rule saying the opposite of an AXIOM rule where both hold, and no question a change
+# makes fail. Each is kept on by itself, whatever else its stage was given.
+ON_UNLESS_OFF = {"define": {"max_gaps": 0, "max_unreachable": 0, "max_axiom_conflicts": 0}, "check": {"max_new_wrong": 0}}
+
+
+def _with_defaults(gates: dict[str, dict]) -> dict[str, dict]:
+    for stage, conds in ON_UNLESS_OFF.items():
+        for cond, v in conds.items():
+            gates.setdefault(stage, {}).setdefault(cond, v)
+    return gates
 NO_SOURCE = "no_source"  # why a condition was not measured: it reads rows, and no backend is connected to read them from
 
 
@@ -60,7 +72,7 @@ def tighten(own: dict[str, dict], modules: dict[str, dict]) -> tuple[dict[str, d
 @dataclass
 class FlowSettings:
     off: list[str] = field(default_factory=list)
-    gates: dict[str, dict[str, float]] = field(default_factory=lambda: json.loads(json.dumps(DEFAULT_GATES)))
+    gates: dict[str, dict[str, float]] = field(default_factory=lambda: _with_defaults(json.loads(json.dumps(DEFAULT_GATES))))
     agreement: dict[str, Any] = field(default_factory=dict)
     values: list[dict[str, Any]] = field(default_factory=list)  # what is held against the transaction system (value_accuracy)
 
@@ -68,8 +80,8 @@ class FlowSettings:
     def from_dict(cls, d: dict | None) -> FlowSettings:
         d = d or {}
         out = cls(off=[str(s) for s in d.get("off") or []],
-                  gates={**json.loads(json.dumps(DEFAULT_GATES)), **{k: dict(v or {}) for k, v in
-                                                                     (d.get("gates") or {}).items()}},
+                  gates=_with_defaults({**json.loads(json.dumps(DEFAULT_GATES)), **{k: dict(v or {}) for k, v in
+                                                                                    (d.get("gates") or {}).items()}}),
                   agreement=dict(d.get("agreement") or {}), values=[dict(v) for v in d.get("values") or []])
         issues = out.issues()
         if issues:
@@ -249,7 +261,7 @@ def measure(studio, settings: FlowSettings, *, questions=None) -> dict[str, Any]
     only: what reads rows (the database check, backends compared, questions on records, values, past cases) is left
     unmeasured and named under `unmeasured` ({"stage.condition": reason}), as a stage with nothing to measure is.
     `questions` is the studio's QuestionReport where the caller has asked them already."""
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"define": definition_checks(studio)}  # read off the definition: always measured
     skipped: dict[str, str] = {}
     no_source = not studio.backends
     if settings.on("bind") and not studio.source:
@@ -282,13 +294,14 @@ def measure(studio, settings: FlowSettings, *, questions=None) -> dict[str, Any]
         q = questions if questions is not None else studio.questions()
         asked = q.measured  # without a source, only the questions a table answers from given values
         if asked:
-            out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed], "sets": q.split(),
+            # new_wrong: none against itself; a change's review counts the questions it makes fail (review())
+            out["check"] = {"accuracy": q.accuracy, "failed": [r.id for r in asked if not r.passed], "sets": q.split(), "new_wrong": 0,
                             "wrong": [{"id": r.id, "text": r.text, "expected": normalize_all(r.expected), "got": normalize_all(r.got),
                                        "error": r.error, "holdout": r.holdout} for r in asked if not r.passed][:20],
                             "grounded": q.grounded, "ungrounded": {r.id: r.gaps for r in asked if not r.grounded},
                             "unasked": [r.id for r in q.results if r.unmeasured]}
         else:
-            skipped.update({"check.min_accuracy": NO_SOURCE, "check.min_grounded": NO_SOURCE})
+            skipped.update({"check.min_accuracy": NO_SOURCE, "check.min_grounded": NO_SOURCE, "check.max_new_wrong": NO_SOURCE})
     if settings.on("check") and settings.values and no_source:
         skipped["check.max_value_errors"] = NO_SOURCE
     elif settings.on("check") and settings.values:
@@ -297,6 +310,8 @@ def measure(studio, settings: FlowSettings, *, questions=None) -> dict[str, Any]
             out.setdefault("check", {}).update({"value_errors": v["errors"], "value_cases": v["cases"], "values": v["items"]})
         except Exception as e:  # a value that cannot be read is a failed condition, not a crash of the review
             out.setdefault("check", {}).update({"value_errors": 1, "value_error": f"{type(e).__name__}: {e}"})
+    if "check" in out:  # values held without a question asked: no answer is newly wrong
+        out["check"].setdefault("new_wrong", 0)
     if settings.on("decide") and settings.agreement and no_source:
         skipped["decide.min_agreement"] = NO_SOURCE
     elif settings.on("decide") and settings.agreement:
@@ -309,8 +324,44 @@ def measure(studio, settings: FlowSettings, *, questions=None) -> dict[str, Any]
     return out
 
 
+def definition_checks(studio) -> dict[str, Any]:
+    """What the definition itself leaves open or says against itself: decision table inputs no rule answers (gaps),
+    rules that can never answer (unreachable), and AXIOM conflicts: an AXIOM card's bound a named value is outside, or
+    a Custom or Standard rule that holds where an AXIOM rule does (the two overlap, or one leaves the other nothing to
+    answer) and gives the other verdict: it says the opposite of the law. Each found one, at most 20, in `findings`."""
+    comp = studio.composition
+    onto = studio.onto
+    found = list(comp.findings) if comp is not None else onto.findings()
+    gaps = [f for f in found if f.kind == "gap"]
+    unreachable = [f for f in found if f.kind == "unreachable"]
+    against, pairs = [], set()  # a pair of rules is one conflict, whichever findings name it
+    for f in found:
+        t = onto.decisions.get(f.decision)
+        if f.kind not in ("overlap", "tie", "unreachable") or t is None or len(f.rules) < 2:
+            continue
+        by = {r.id: r for r in t.rules}
+        first = next(iter(t.outputs), "")
+        rs = [by[i] for i in f.rules if i in by]
+        law = [r for r in rs if r.layer == "axiom"]
+        other = [r for r in rs if r.layer != "axiom"]
+        apart = {(f.decision, a.id, o.id) for a in law for o in other if o.then.get(first) != a.then.get(first)}
+        if apart - pairs:
+            against.append(f)
+        pairs |= apart
+    bounds = [c for c in (comp.checks if comp is not None else []) if c.get("blocking") and c.get("passed") is False]
+    shown = [{"kind": f.kind, "decision": f.decision, "rules": list(f.rules), "detail": f.detail}
+             for f in [*gaps, *unreachable, *against]][:20]
+    shown += [{"kind": "axiom_bound", "decision": "", "rules": [c["card"]], "detail": c.get("said") or c["parameter"]}
+              for c in bounds][:max(0, 20 - len(shown))]
+    return {"gaps": len(gaps), "unreachable": len(unreachable), "axiom_conflicts": len(pairs) + len(bounds), "findings": shown}
+
+
 def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
-    values = {("bind", "max_errors"): (measured.get("bind") or {}).get("errors"),
+    values = {("define", "max_gaps"): (measured.get("define") or {}).get("gaps"),
+              ("define", "max_unreachable"): (measured.get("define") or {}).get("unreachable"),
+              ("define", "max_axiom_conflicts"): (measured.get("define") or {}).get("axiom_conflicts"),
+              ("check", "max_new_wrong"): (measured.get("check") or {}).get("new_wrong"),
+("bind", "max_errors"): (measured.get("bind") or {}).get("errors"),
               ("bind", "max_warnings"): (measured.get("bind") or {}).get("warnings"),
               ("index", "min_found"): (measured.get("index") or {}).get("share"),
               ("query", "min_agree"): (measured.get("query") or {}).get("share"),
@@ -512,19 +563,22 @@ def review(studio, module: Module, settings: FlowSettings | None = None, *, atta
     settings = given or copy.flow  # the bar the studio would have after the change (a quality module may move it)
     report = copy.questions() if settings.on("check") and copy.onto.questions else None
     measured = measure(copy, settings, questions=report)
-    results = gates(measured, settings)
-    cards = (_cards(studio.composition), _cards(copy.composition))
-    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto, cards),
-                "elements": element_sides(studio.onto, copy.onto, cards), "measured": measured,
-                "gates": [asdict(g) for g in results], "passed": all(g.passed for g in results)})
     now = given or studio.flow
     if before is None:
         try:
             before = measure(studio, now)
         except Exception:  # the studio as it stands cannot be measured: every question counts as not measured before
             before = {}
-    out["regression"] = regression(before, measured, report, questions=[q.id for q in studio.onto.questions],
-                                   gates_before=gates(before, now), gates_after=results)
+    asked = [q.id for q in studio.onto.questions]
+    if "check" in measured:  # a question this change makes fail, the one it adds that fails too: 신규 오답
+        measured["check"]["new_wrong"] = len(regression(before, measured, report, questions=asked)["newly_failing"])
+    results = gates(measured, settings)
+    cards = (_cards(studio.composition), _cards(copy.composition))
+    out.update({"issues": [], "diff": element_diff(studio.onto, copy.onto, cards),
+                "elements": element_sides(studio.onto, copy.onto, cards), "measured": measured,
+                "gates": [asdict(g) for g in results], "passed": all(g.passed for g in results)})
+    out["regression"] = regression(before, measured, report, questions=asked, gates_before=gates(before, now),
+                                   gates_after=results)
     return out
 
 
@@ -544,6 +598,9 @@ class ChangeRequest:
     marks: dict[str, str] = field(default_factory=dict)  # element -> ok | fix: a reviewer's word on each changed element
     comments: list[dict[str, Any]] = field(default_factory=list)  # {at, by, element, text}, kept with the change
     decided_at: str = ""  # when it was approved or rejected
+    # the screen edits it was filed from ({op, args, target, id, by, at}): made again on a version approved after it
+    edits: list[dict[str, Any]] = field(default_factory=list)
+    reopened: str = ""  # when a rejected one's edits were taken back to writing (once)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -589,7 +646,7 @@ class ChangeService:
             raise ChangeError("this studio has no library to save a module to")
         return lib
 
-    def propose(self, module: Module, *, by: str, attach: bool = False) -> ChangeRequest:
+    def propose(self, module: Module, *, by: str, attach: bool = False, edits: list[dict] | None = None) -> ChangeRequest:
         lib = self._library()
         if module.version in lib.versions(module.name):
             same = lib.get(module.name, module.version).to_dict() == module.to_dict()
@@ -599,7 +656,8 @@ class ChangeService:
 
         cr = ChangeRequest(f"C{next(self._ids)}", module.name, module.version,
                            yaml.safe_dump(module.to_dict(), allow_unicode=True, sort_keys=False), by, "pending",
-                           review(self.studio, module, attach=attach, before=self._standing()), self._now(), attach)
+                           review(self.studio, module, attach=attach, before=self._standing()), self._now(), attach,
+                           edits=list(edits or []))
         self.requests[cr.id] = cr
         self._log(by, "proposed", cr)
         return cr
@@ -639,6 +697,15 @@ class ChangeService:
             raise ChangeError(f"change {cr.id} is {cr.status}")
         cr.status, cr.decided_by, cr.reason, cr.decided_at = "rejected", by, reason, self._now()
         self._log(by, "rejected", cr, reason=reason)
+        return cr
+
+    def reopen(self, change_id: str, *, by: str) -> ChangeRequest:
+        """A rejected change whose edits were taken back to writing: said once, in its record and the audit trail."""
+        cr = self._get(change_id)
+        if cr.status != "rejected" or cr.reopened:
+            raise ChangeError(f"change {cr.id} is {cr.status}" + (", taken back already" if cr.reopened else ""))
+        cr.reopened = self._now()
+        self._log(by, "reopened", cr)
         return cr
 
     def mark(self, change_id: str, element: str, verdict: str, *, by: str) -> ChangeRequest:

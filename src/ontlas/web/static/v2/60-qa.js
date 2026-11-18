@@ -294,7 +294,8 @@
       return [{ say: '검증 결과', sub: '다음 실행부터 제외', href: 'flow' },
         { say: '통과 조건', sub: `질문 수 ${n} → ${n - 1}${goal ? ` · 정답률 목표 ${goal}` : ''}`, href: 'flow' }];
     },
-    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_question', args: { id: x.id } }); S.qa2.sel = ''; S.qa2.pdOf = ''; },
+    drops: (x) => [['delete_question', { id: x.id }]],
+    remove: async (x) => { const [[op, args]] = ITEM.question.drops(x); S.mg.st = await api('manage/edit', { op, args }); S.qa2.sel = ''; S.qa2.pdOf = ''; },
     history: qaHistory,
     revert: async (x, e) => {
       if (!e.raw) throw new Error('선택한 시점에 질문이 없어 되돌리지 못했습니다. 다른 시점을 선택해 주세요.');

@@ -90,7 +90,7 @@
     enum: '허용값 추가 · 값 정리', orphan: '연결 기준 컬럼 확인 · 끊긴 행 정리' };
   const findingText = (f) => `${FIX[f.kind] ? `<div style="font-size:12.5px">${esc(FIX[f.kind])}</div>` : ''}<div class="mono muted" style="font-size:12px">${esc(f.detail)}</div>`;
   const STATUS = { pending: ['warn', '승인 대기'], stale: ['warn', '실행 전 재검사 실패'], rejected: ['bad', '반려'], executed: ['ok', '데이터 소스 반영'],
-    failed: ['bad', '외부 호출 실패 · 데이터 소스 복원'], rolled_back: ['b', '되돌림'] };
+    recorded: ['b', '기록됨'], failed: ['bad', '외부 호출 실패 · 데이터 소스 복원'], rolled_back: ['b', '되돌림'] };
   const BACKEND_KIND = { sqlite: 'SQLite', postgres: 'PostgreSQL', mysql: 'MySQL', oracle: 'Oracle', mssql: 'SQL Server', dbapi: 'DB-API', rdflib: 'RDF', sparql: 'SPARQL 엔드포인트', neo4j: 'Neo4j', gremlin: 'Gremlin Server', gateway: '플랫폼 연결' };  // the kinds config.open_backend opens
   const CHANGE_STATUS = { pending: 'warn', approved: 'ok', rejected: 'bad' };
   const TEXT_LANG = [['sparql', 'SPARQL 1.1'], ['cypher', 'Cypher'], ['ir', '온톨로지 질의 IR (JSON)']];
@@ -752,7 +752,7 @@
     if (empty.length) { toast(`${empty.map((p) => p.label || p.name).join(', ')} 값이 없어 요청하지 못했습니다. 값을 입력해 주세요.`, true); return; }
     try {
       const out = await api('request', { action: name, key: r.key, params, role: r.role, kind: 'human' });
-      const said = { pending: '검사를 통과했습니다. 할 일에서 승인을 기다립니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.' }[out.proposal.status];
+      const said = { pending: '검사를 통과했습니다. 할 일에서 승인을 기다립니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족해 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' }[out.proposal.status];
       toast(said || `검사를 통과하지 못해 요청이 반려되었습니다. ${out.proposal.checks.filter((c) => !c.passed).map((c) => c.title).join(', ')}`, !said);
       S.home.box = null; S.pa = null; S.d.res = null; S.q.res = null; S.d.keys = {};
       r.act = ''; r.params = {}; r.res = null;
@@ -766,7 +766,7 @@
       if (!out.ok) throw new Error(out.error);
       S.home.box = null; S.pa = null; S.rec.res = null; S.d.res = null; S.d.proposal = null; S.q.res = null; S.qa = null; S.fl = null; S.d.keys = {};
       await load();
-      toast(yes ? 'Action 요청을 승인했습니다.' : 'Action 요청을 반려했습니다.');
+      toast(!yes ? 'Action 요청을 반려했습니다.' : out.proposal && out.proposal.status === 'recorded' ? 'Action 요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' : 'Action 요청을 승인했습니다.');
     } catch (e) { fail(e); }
   }
 
@@ -3686,6 +3686,7 @@ ${controls}${body}`;
       const limits = (p.limits || []).length ? `<div class="hint" style="margin-top:8px">${p.approved_by === 'auto' ? '자동 승인 기준을 충족해 바로 실행했습니다.' : waitWord(p)} ${p.limits.map((l) => `${esc(p.labels[l.subject] || l.subject)} ${esc(({ percent: '변화율', delta: '변화폭', max: '값', min: '값' })[l.kind])} ${l.value === null ? '-' : show(Math.round(l.value * 100) / 100)}${l.kind === 'percent' ? '%' : ''} / 기준 ${show(l.limit)}${l.kind === 'percent' ? '%' : ''}`).join(' · ')}</div>` : '';
       const call = p.call && (p.call.status || p.call.error) ? `<div class="hint" style="margin-top:8px">외부 호출 ${p.call.error ? esc(p.call.error) : `${esc(p.call.method)} ${esc(p.call.url)} · ${esc(p.call.status)}`}</div>` : '';
       const done = (p.status === 'executed' ? '<div class="hint" style="margin-top:10px">데이터 소스와 그래프 저장소에 반영했습니다.</div>'
+        : p.status === 'recorded' ? '<div class="hint" style="margin-top:10px">실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).</div>'
         : (p.status === 'rolled_back' ? `<div class="hint" style="margin-top:10px">${esc(p.rolled_back_by)} 님이 실행 전 값으로 되돌렸습니다.</div>` : '')) + call;
       state = `<div class="sec" style="display:flex;align-items:center;gap:8px">요청 ${esc(p.id)} · ${esc(p.requested_by)}<span class="chip ${cls}" style="margin-left:auto">${label}</span></div>${checks}${diff ? `<div class="sec">변경 값</div>${diff}` : ''}${buttons}${done}`;
     }
@@ -3763,7 +3764,7 @@ ${controls}${body}`;
       d.proposal = r.proposal; S.pa = null;
       d.audit = (await api('audit')).audit;
       render();
-      const said = { pending: '검사를 통과했습니다. 승인 대기 중입니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.' }[r.proposal.status];
+      const said = { pending: '검사를 통과했습니다. 승인 대기 중입니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족해 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' }[r.proposal.status];
       toast(said || '검사를 통과하지 못해 요청이 반려되었습니다. 검사 결과를 확인해 주세요.', !said);
     } catch (e) { fail(e); }
   }
@@ -3776,7 +3777,7 @@ ${controls}${body}`;
       S.q.res = null; S.qa = null; S.bind = null; S.fl = null; S.d.keys = {};
       await load();
       await startDecide();
-      toast(yes ? 'Action 요청을 승인했습니다.' : 'Action 요청을 반려했습니다.');
+      toast(!yes ? 'Action 요청을 반려했습니다.' : r.proposal && r.proposal.status === 'recorded' ? 'Action 요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' : 'Action 요청을 승인했습니다.');
     } catch (e) { fail(e); }
   }
 
@@ -4327,6 +4328,7 @@ ${controls}${body}`;
     const next = REVIEW[i + 1];
     const st = p.steps.find((s) => s.id === cur);
     const left = st ? stepChecks(p, st) : 0;
+    const team = !!(S.me && S.me.team);  // a team's studio: the draft goes into the request being written, the space stays
     let say;
     if (cur === 'objects') {
       const rows = st.items.map((x) => objProposal(p, x)).filter((r) => r.status !== 'off');
@@ -4338,8 +4340,8 @@ ${controls}${body}`;
       // the same counts the step chips show: what nobody looked at is applied as proposed, and the footer says so
       const rest = REVIEW.map(([id, word]) => { const s = p.steps.find((y) => y.id === id); return [word, s && id !== 'objects' ? stepChecks(p, s) : 0]; }).filter((x) => x[1]);
       say = n ? `<b class="rvwarn">Entity · 키 단계에 확인할 테이블 ${n}개가 남았습니다</b>`
-        : rest.length ? `<b>확인하지 않은 제안 ${rest.reduce((a, x) => a + x[1], 0)}개는 제안대로 적용됩니다</b><span class="muted">${esc(rest.map(([w, k]) => `${w} ${k}`).join(' · '))} · 적용하면 새 파이프라인으로 추가됩니다</span>`
-          : '<b>모든 제안을 검토했습니다</b><span class="muted">적용하면 지금 데이터는 그대로 두고 새 데이터로 추가됩니다. 위쪽 [데이터] 목록에서 오갑니다</span>';
+        : rest.length ? `<b>확인하지 않은 제안 ${rest.reduce((a, x) => a + x[1], 0)}개는 제안대로 적용됩니다</b><span class="muted">${esc(rest.map(([w, k]) => `${w} ${k}`).join(' · '))} · ${team ? '작성 중인 변경 요청에 추가됩니다' : '적용하면 새 파이프라인으로 추가됩니다'}</span>`
+          : `<b>모든 제안을 검토했습니다</b><span class="muted">${team ? '작성 중인 변경 요청에 추가됩니다' : '적용하면 지금 데이터는 그대로 두고 새 데이터로 추가됩니다. 위쪽 [데이터] 목록에서 오갑니다'}</span>`;
     } else say = left ? `<b>확인 필요 ${left}</b><span class="muted">${esc(STEP[cur][1])}</span>` : `<b>${esc(STEP[cur][0])} · 확인할 제안 없음</b><span class="muted">${esc(STEP[cur][1])}</span>`;
     const nst = next && p.steps.find((s) => s.id === next[0]);
     const hint = nst ? `<span class="muted">다음 단계 · ${esc(REVIEW[i + 1][1])} ${esc(stepTotal(nst))}</span>` : '';
@@ -4352,7 +4354,7 @@ ${controls}${body}`;
       note = `<span class="chip sm warn">적용 요청 대기 · ${esc(req.by)} · ${esc(dayOf(req.at))}</span>`;
       go = canApplyDraft() ? `<button class="btn" data-act="drequestdrop"${S.dr.busy ? ' disabled' : ''}>반려</button><button class="btn primary" data-act="drequestapply"${S.dr.busy ? ' disabled' : ''}>${S.dr.busy ? busy : '요청대로 적용'}</button>`
         : (S.me && S.me.user && S.me.user.name === req.by ? '<button class="btn" data-act="drequestdrop">요청 거두기</button>' : '');
-    } else if (canApplyDraft()) go = `<button class="btn primary" data-act="dapply"${blocked ? ' disabled' : ''}>${S.dr.busy ? busy : '온톨로지에 적용'}</button>`;
+    } else if (team ? canEdit() : canApplyDraft()) go = `<button class="btn primary" data-act="dapply"${blocked ? ' disabled' : ''}>${S.dr.busy ? busy : team ? '변경 요청에 추가' : '온톨로지에 적용'}</button>`;
     else {  // an editor in a team: the last step files the request
       note = '<span class="muted" style="font-size:12px">적용은 승인자가 합니다</span>';
       go = `<button class="btn primary" data-act="drequest"${blocked ? ' disabled' : ''} title="검토한 그대로 승인자에게 보냅니다">${S.dr.busy ? '<span class="spin"></span>보내는 중' : '적용 요청'}</button>`;
@@ -4787,7 +4789,7 @@ ${controls}${body}`;
     add_question: '검증 질문 추가', delete_question: '검증 질문 제외', add_rule: '규칙 추가', update_rule: '규칙 변경', delete_rule: '규칙 제외',
     add_decision: '결정표 추가', update_parameter: '기준값 변경', add_action: 'Action 추가', update_action: 'Action 변경', delete_action: 'Action 제외',
     add_role: '역할 추가', update_role: '역할 변경', delete_role: '역할 제외', update_states: '상태 전이 변경',
-    update_question: '검증 질문 정답 변경', pick_conflict: '출처 선택' };
+    update_question: '검증 질문 정답 변경', pick_conflict: '출처 선택', restore_element: '되살리기' };
   const MASK_WORD = { '': '가리지 않음', partial: '일부 가림', full: '전체 가림' };
   const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
   const sqlType = (t) => {
@@ -5259,7 +5261,7 @@ ${controls}${body}`;
     const extra = d.rules.filter((r) => r.module && r.module !== d.module);
     const by = {};
     extra.forEach((r) => { by[r.module] = (by[r.module] || 0) + 1; });
-    const policy = `<label class="chip n chipsel">적용 방식 · <select data-in="mgpolicy" aria-label="적용 방식"${canEdit() ? '' : ' disabled'}>${Object.entries(POLICY_WORD).filter(([k]) => k !== 'priority' || d.hit_policy === 'priority').map(([k, w]) => opt(k, w, d.hit_policy)).join('')}</select></label>`;
+    const policy = `<label class="chip n chipsel">적용 방식 · <select data-in="mgpolicy" aria-label="적용 방식"${canEdit() ? '' : ' disabled'}>${Object.entries(POLICY_WORD).map(([k, w]) => opt(k, w, d.hit_policy)).join('')}</select></label>`;
     return `<div class="rhead2"><div><div class="rtitle2"><h2>${esc(d.label)}</h2><span class="mono muted cn">${esc(d.name)}</span></div>
       <div class="chips" style="margin-top:7px">${policy}${d.target ? `<button class="chip" data-act="select" data-obj="${esc(d.target)}" title="이 Entity의 정의로">대상 · ${esc(d.target_label || d.target)}</button>` : ''}<button class="chip b" data-act="libshow" data-mod="${esc(d.module)}" title="라이브러리에서 이 모듈로">${esc(shortMod(modWord(d.module)))}</button>
         ${Object.entries(by).map(([mname, k]) => `<button class="chip warn" data-act="libshow" data-mod="${esc(mname)}" title="라이브러리에서 이 모듈로">+ ${esc(shortMod(modWord(mname)))} 규칙 ${k}</button>`).join('')}${stateChips(d)}</div></div>
@@ -7051,9 +7053,10 @@ ${controls}${body}`;
       try { S.md.trial = await api('manage/trial', {}); } catch (e) { S.md.trial = { error: e.message }; }
       render();
     },
-    mgdiscard: async () => {
-      if (!window.confirm('대기 중인 변경을 모두 취소합니다. 표준 모듈과 승인된 변경은 유지됩니다.')) return;
-      try { S.mg.st = await api('manage/discard', {}); S.mg.form = null; S.mg.sel = ''; S.mg.review = null; S.md.trial = null; toast('대기 중인 변경을 취소했습니다.'); } catch (e) { fail(e); }
+    mgdiscard: async () => {  // in a team the request being written is everyone's: a person takes back their own edits
+      const team = !!(S.me && S.me.team);
+      if (!window.confirm(team ? '내가 작성한 편집을 모두 취소합니다. 다른 사람의 편집은 유지됩니다.' : '대기 중인 변경을 모두 취소합니다. 표준 모듈과 승인된 변경은 유지됩니다.')) return;
+      try { S.mg.st = await api('manage/discard', {}); S.mg.form = null; S.mg.sel = ''; S.mg.review = null; S.md.trial = null; toast(team ? '내 편집을 취소했습니다.' : '대기 중인 변경을 취소했습니다.'); } catch (e) { fail(e); }
       render();
     },
     mgpropose: async () => {
@@ -7086,8 +7089,8 @@ ${controls}${body}`;
       S.dr.busy = true;
       render();
       try {
-        await api('draft/review/apply', { standard: S.map.picked, edits: toEdits(), choices: got });
-        await draftApplied();
+        const r = await api('draft/review/apply', { standard: S.map.picked, edits: toEdits(), choices: got });
+        await (r.request ? draftFiled(r) : draftApplied());
       } catch (e) { S.dr.busy = false; render(); fail(e); }
     },
     drequest: async () => {  // in a team, an editor's last step: the reviewed draft goes to an approver as it stands
@@ -7113,8 +7116,8 @@ ${controls}${body}`;
       S.dr.busy = true;
       render();
       try {
-        await api('draft/request/apply', {});
-        await draftApplied();
+        const r = await api('draft/request/apply', {});
+        await (r.request ? draftFiled(r) : draftApplied());
       } catch (e) { S.dr.busy = false; render(); fail(e); }
     },
   };
@@ -7138,6 +7141,20 @@ ${controls}${body}`;
     location.hash = '#flow';
     const now = S.st.pipelines.find((p) => p.id === S.st.pipeline);  // applying adds a pipeline and moves to it
     toast('초안을 적용했습니다.');
+  }
+
+  async function draftFiled(r) {  // a team's studio: the draft is edits in the request being written, on the same space
+    Object.assign(S, { files: null, dpos: {} });
+    S.map = { standards: null, picked: [], sug: null, edits: { objects: {}, columns: {} }, busy: false, auto: '' };
+    S.changes = null;
+    stale();
+    S.dr.busy = false;
+    await load();
+    const a = r.added, n = r.left || {};
+    const put = [a.objects ? `새 Entity ${a.objects}개` : '', a.bound ? `표준 연결 ${a.bound}개` : '', a.links ? `Relation ${a.links}개` : ''].filter(Boolean).join(' · ');
+    const left = [n.tables ? `데이터 소스에 없는 표준 연결 ${n.tables}개` : '', n.links ? `Relation ${n.links}개` : '', n.rules ? `질의 · 상태 · 검증 질문 후보 ${n.rules}개` : ''].filter(Boolean).join(' · ');
+    toast(`작성 중인 변경 요청에 ${put}${josa(put, '을', '를')} 추가했습니다.${left ? ` 제외 ${left}` : ''}`);
+    location.hash = '#changes';
   }
 
   const INPUT = {
@@ -7227,7 +7244,7 @@ ${controls}${body}`;
       const g = S.flset.settings.gates;
       const stage = t.dataset.s, k = t.dataset.k;
       g[stage] = g[stage] || {};
-      if (t.value === '') delete g[stage][k];
+      if (t.value === '') g[stage][k] = null;  // 조건 없음: kept as off, so a condition on by default stays off
       else g[stage][k] = k.startsWith('min_') ? Number(t.value) / 100 : Number(t.value);
     },
   };

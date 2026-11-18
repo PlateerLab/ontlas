@@ -796,6 +796,7 @@ r.matched    # ['in-window']
 r.evidence   # days_since_delivery = 4 <- order_items.delivered_at, category_returnable = True <- categories.returnable
 
 from ontlas.actions import Actor
+studio.actions.write = True  # off by default: an approved action is recorded and the source left as it is
 p = studio.actions.request("requestReturn", "I1001", {"reason": "size"}, actor=Actor("bot", "agent", ["customer_agent"]))
 p.status     # 'pending': role, parameters, state transition and decision all checked
 studio.actions.approve(p.id, approver=Actor("kim", "human", ["operator"]))   # only a person approves
@@ -827,6 +828,13 @@ Actions check what is given (`{type, required, min, max, values, pattern, max_le
 an external request after the change is written, only to hosts the studio file allows (`actions: {call_hosts:
 [...]}`); a failed request puts the row back. An executed action can be rolled back, if nothing has changed the row
 since, and an action with a request rolls back only when it declares the request that undoes it.
+
+Nothing is written to the source unless that is turned on: `studio.actions.write = True`, or `--action-write` for
+`ontlas serve` and `ontlas mcp` (every studio the server makes). Off, an action that would change the source still
+runs every check and waits for its approval, then ends `recorded`: the values before and after and the request it
+would send are kept in the audit trail, nothing is sent, and the source stays as it was. An action that only calls out
+changes nothing in the source and runs as usual. With writing off, an executed action is not rolled back either, since
+that writes too. `ontlas transitions --apply` writes, as it says.
 
 ```python
 studio.actions.rollback(p.id, actor=Actor("kim", "human", ["operator"]))      # the values before, back in place
@@ -1147,8 +1155,10 @@ curl localhost:7710/v1/search -H "Authorization: Bearer $ONTLAS_API_TOKEN" \
 `/v1/openapi.json` describes the API for whatever imports OpenAPI, with the address it was reached at, and `/v1/tools` lists it as
 function definitions; `ontlas openapi --server URL` writes the same file. `/v1/context` gives what a question is about as text for an
 agent's prompt, and `/v1/function` runs a function. Search, queries in any language, translation and decisions run under the role of the token, with
-its row filters and masks. It is read-only unless started with `--api-write`, and then an action is only a request a person
-approves. `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
+its row filters and masks. A token with no role (no `--api-role`, an agent with no `role`) is refused with `403` and
+`no_policy`, since it would read every row unmasked; `--api-open` lets such a token read everything. It is read-only
+unless started with `--api-write`, and then an action is only a request a person approves; it writes to the source
+only on a server started with `--action-write` (`/v1/space` says which as `action_write`). `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
 person approves holds for it at once, and an action it requests waits on the decision page for a person to approve.
 
 Give each agent a token of its own, so the audit trail says which agent asked and one agent cannot read another's requests.
@@ -1267,7 +1277,8 @@ Tools: `answer_question`, `agent_context`, `find_definitions`, `list_functions`,
 `decide`, `find_rules`, `read_terms`, `validate_values`, `run_questions`, `request_action`, `list_proposals`, `get_record`.
 `decide` takes `values` as `/v1/decide` does, and answers `needs_values` with what the outcome still turns on instead of guessing.
 Every call runs inside the role's row filters; `request_action`
-only files a request, and nothing is written until a person approves it. `list_proposals` gives an agent with a role its own
+only files a request, and nothing is written until a person approves it, and then only with `--action-write`
+(without it the request ends recorded). `list_proposals` gives an agent with a role its own
 requests. `--agent NAME` is what the audit trail calls it, `--journal FILE` keeps its requests across restarts, and
 `--transport` is `stdio` (the default), `sse` or `streamable-http`. Works with the MCP Python SDK 1.x and 2.x.
 
@@ -1379,7 +1390,8 @@ ontlas bindings examples/library/studio.yaml                      # the definiti
 | Visitors | `--sessions` (studios kept at once; the least recent goes first), `--idle` (seconds before an unused one is dropped). With `--users FILE` there is one studio a team shares behind a sign-in, and `--journal FILE` keeps its requests, approvals and audit trail across restarts |
 | What a visitor may bring | `--samples DIR`, `--policies DIR`, `--file-kb`, `--max-files`, `--total-mb`, `--rows`, `--repositories DIR` (files kept across restarts), `--allow-connect` (a database by address, inside your own network only) |
 | Libraries | `--library STUDIO` (another studio file to switch to, repeated for more), `--library-write` (approved module versions saved to the folder of the library they were made in) |
-| `/v1` | `--api-token-env VAR` turns it on; `--api-role`, `--api-principal key=value` and `--api-name` say who the token is, `--api-write` lets it request actions, `--api-agents FILE` gives each agent a token of its own |
+| `/v1` | `--api-token-env VAR` turns it on; `--api-role`, `--api-principal key=value` and `--api-name` say who the token is, `--api-write` lets it request actions, `--api-agents FILE` gives each agent a token of its own. A token with no role is refused unless `--api-open` |
+| Actions | `--action-write` lets an approved action write to the source; without it the action is recorded and the source left as it is |
 | A language model | `--llm-url`, `--llm-model`, `--llm-key-env VAR`, `--llm-extra JSON` (merged into each chat request) |
 | Embeddings | `--embedder hash`, `fastembed`, or `openai` with `--embedder-url` and `--embedder-model` |
 | The rest | `--sync N` (re-read the source every N seconds), `--video FILE` (a demo beside the guide) |

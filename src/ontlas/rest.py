@@ -81,7 +81,8 @@ ROUTES: list[tuple[str, str, str, str, dict, list, Handler]] = [
      {}, [], lambda t, b: t.list_functions()),
     ("/v1/function", "POST", "run_function", "Run a registered function on one object, or on its inputs alone.",
      {"name": STRING, "key": STRING, "params": OBJECT}, ["name"], lambda t, b: t.run_function(b["name"], b.get("key", ""), b.get("params"))),
-    ("/v1/actions", "POST", "request_action", "Request a declared action. Checks run now; a person approves it before anything is written, unless the change is inside the action's limits.",
+    ("/v1/actions", "POST", "request_action", "Request a declared action. Checks run now; a person approves it before anything is written, unless the change is inside the action's limits. "
+     "Where the server does not write actions (action_write in /v1/space), it ends recorded and the source stays as it is.",
      {"action": STRING, "key": STRING, "params": OBJECT}, ["action", "key"], lambda t, b: t.request_action(b["action"], b["key"], b.get("params"))),
     ("/v1/proposals", "GET", "list_proposals", "The action requests this token made and how each stands: pending, executed, rejected, rolled back.",
      {}, [], lambda t, b: {"proposals": t.list_proposals()}),
@@ -110,7 +111,8 @@ def openapi(version: str, server: str = "") -> dict:
                               "responses": {"200": {"description": "The answer", "content": {"application/json": {"schema": {"type": "object"}}}},
                                             "400": {"description": "The request cannot be answered; `error` says why"},
                                             "409": {"description": "It reads rows and no source is connected (`no_source`)"},
-                                            "401": {"description": "No valid token"}, "403": {"description": "Outside this token's role"}}}
+                                            "401": {"description": "No valid token"},
+                                            "403": {"description": "Outside this token's role, or the token has none (`no_policy`)"}}}
         if method == "POST":
             op["requestBody"] = {"required": True, "content": {"application/json": {"schema": {
                 "type": "object", "properties": {**props, "library": LIBRARY}, "required": required}}}}
@@ -147,10 +149,16 @@ class Rest:
     is what a platform sees, and what a platform requests is what a person finds there.
 
     Each token is one caller with its own name, role and rows: the audit trail says which agent asked, and one agent's
-    requests are not another's to read."""
+    requests are not another's to read. A caller with no role is refused, since it would read every row unmasked,
+    unless the server lets such a caller read everything (`unscoped`)."""
+
+    unscoped = False  # ontlas serve --api-open, for every Rest the server makes; one Rest may be told otherwise
 
     def __init__(self, clients: list[tuple[str, StudioTools]] | StudioTools, token: str = "", *,
-                 source: Callable[[], Any] | None = None, lock: Any = None, libraries: list[dict] | None = None):
+                 source: Callable[[], Any] | None = None, lock: Any = None, libraries: list[dict] | None = None,
+                 unscoped: bool | None = None):
+        if unscoped is not None:
+            self.unscoped = unscoped
         self.clients = [(token, clients)] if isinstance(clients, StudioTools) else list(clients)
         self.source = source
         self.lock = lock or threading.Lock()
@@ -206,6 +214,10 @@ class Rest:
 
     def answer(self, method: str, path: str, body: dict, tools: StudioTools | None = None) -> tuple[int, Any]:
         tools = tools or self.tools
+        if not tools.role and not self.unscoped:
+            return 403, {"error": f"caller '{tools.actor.id}' has no access policy, so /v1 answers it nothing; give it one "
+                                  "(--api-role, or role in --api-agents) or start the server with --api-open",
+                         "no_policy": True}
         if self.source is not None:
             tools.studio = self.source()
         if path == LIBRARIES[0]:

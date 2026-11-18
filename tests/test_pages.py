@@ -35,6 +35,7 @@ def test_a_record_page_gathers_what_a_person_needs_about_one_record(session):
     json.dumps(r)
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_record_page_tells_its_history_and_what_can_happen_next(session):
     session.request("requestReturn", "I1001", {"reason": "size"}, "customer_agent", {"customer_id": "C001"})
     r = session.record_page("OrderItem", "I1001")

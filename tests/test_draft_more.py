@@ -25,6 +25,7 @@ def test_a_history_table_gives_the_state_machine_its_transitions():
     assert set(d.actions()) == {"setDaechulBannap", "setDaechulYeonche"}
 
 
+@pytest.mark.usefixtures("action_write")
 def test_roles_and_questions_come_with_the_draft_and_hold():
     pytest.importorskip("rdflib")
     d, b = _library_draft()

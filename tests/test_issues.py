@@ -57,7 +57,7 @@ def test_taking_the_module_off_is_tried_first_and_closes_the_issue(session):
     session.attach("food")
     session.issues()
     p = session.module_preview("food")
-    assert p["gates"] == {"met": 6, "all": 6, "failed": []} and "단품 · 유통기한" in p["removed"]
+    assert p["gates"] == {"met": 10, "all": 10, "failed": []} and "단품 · 유통기한" in p["removed"]  # with the definition's own checks
     assert session.studio.composition.owner("property:Sku.expires_on") == "food"  # the try touched nothing
     session.detach("food")
     assert not [x for x in session.issues()["issues"] if x["alert"]]

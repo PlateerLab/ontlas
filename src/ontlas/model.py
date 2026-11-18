@@ -194,6 +194,7 @@ class Parameter:
     cite: str = ""
     min: float | None = None
     max: float | None = None
+    owner: str = ""  # the person or team that answers for the value
 
 
 @dataclass
@@ -661,7 +662,7 @@ def _parameter(name: str, d: Any) -> Parameter:
     value = d.get("value")
     found = {bool: "boolean", int: "integer", float: "decimal", str: "string"}.get(type(value), "integer")
     return Parameter(name, value, d.get("type", found), d.get("label", ""), d.get("unit", ""), d.get("description", ""),
-                     d.get("cite", ""), d.get("min"), d.get("max"))
+                     d.get("cite", ""), d.get("min"), d.get("max"), str(d.get("owner") or ""))
 
 
 def _area(name: str, d: dict | None) -> Area:
@@ -950,7 +951,7 @@ def _to_dict(o: Ontology) -> dict:
                                   "rules": [_clean({"id": r.id, "match": r.match, "normalize": r.normalize})
                                             for r in i.rules]}) for i in o.identities.values()}
     parameters = {p.name: _clean({"type": p.type, "label": p.label, "unit": p.unit, "description": p.description,
-                                  "cite": p.cite}) | {"value": p.value}
+                                  "cite": p.cite, "owner": p.owner}) | {"value": p.value}
                   | {k: v for k, v in (("min", p.min), ("max", p.max)) if v is not None}
                   for p in o.parameters.values()}
     conflicts = {c.id: _clean({"label": c.label, "decision": c.decision, "input": c.input, "rules": c.rules,

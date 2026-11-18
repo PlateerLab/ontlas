@@ -138,7 +138,7 @@ def tools():
 
 
 def test_rest_answers_with_a_token_and_only_then(tools):
-    r = Rest(tools, "secret")
+    r = Rest(tools, "secret", unscoped=True)
     assert r.allowed("Bearer secret") and not r.allowed("Bearer wrong") and not r.allowed("")
     assert not Rest(tools, "").allowed("Bearer ")
     code, out = r.answer("POST", "/v1/search", {"text": "주문상품 반품 기간", "k": 2})
@@ -157,13 +157,14 @@ def test_rest_answers_with_a_token_and_only_then(tools):
 def test_a_read_only_token_cannot_request_and_a_role_holds(tools):
     from ontlas.tools import StudioTools
 
-    assert Rest(tools, "s").answer("POST", "/v1/actions", {"action": "requestReturn", "key": "I1001"})[0] == 403
+    assert Rest(tools, "s", unscoped=True).answer("POST", "/v1/actions", {"action": "requestReturn", "key": "I1001"})[0] == 403
     agent = StudioTools(tools.studio, role="customer_agent", principal={"customer_id": "C001"})
     r = Rest(agent, "s")
     rows = r.answer("POST", "/v1/query", {"query": "myOrders"})[1]["rows"]
     assert rows and {x["order_id"] for x in rows} <= {"O1", "O2"}
 
 
+@pytest.mark.usefixtures("api_open")
 def test_the_server_serves_the_api_beside_the_page():
     pytest.importorskip("yaml")
     pytest.importorskip("rdflib")

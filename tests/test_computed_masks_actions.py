@@ -136,6 +136,7 @@ def test_reason_too_long_is_rejected(studio):
     assert p.status == "rejected" and "longer than 200" in next(c.detail for c in p.checks if c.name == "parameters")
 
 
+@pytest.mark.usefixtures("action_write")
 def test_rollback_puts_back_what_the_action_replaced(studio):
     p = studio.actions.request("requestReturn", "I1001", {"reason": "사이즈"}, actor=AGENT)
     studio.actions.approve(p.id, approver=OPERATOR)
@@ -187,6 +188,7 @@ def _with_call(studio, url: str, undo: bool):
     studio.onto = Ontology.from_dict(d).check()
 
 
+@pytest.mark.usefixtures("action_write")
 def test_an_external_call_is_sent_after_the_change_and_undone_with_it(studio, hook, monkeypatch):
     monkeypatch.setenv("ONTLAS_TEST_TOKEN", "t0ken")
     _with_call(studio, hook, undo=True)
@@ -202,6 +204,7 @@ def test_an_external_call_is_sent_after_the_change_and_undone_with_it(studio, ho
     assert _Hook.seen[-1][0] == "/returns/I1001/cancel" and p.status == "rolled_back"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_failed_call_reverts_the_change(studio, hook, monkeypatch):
     monkeypatch.setenv("ONTLAS_TEST_TOKEN", "t0ken")
     _with_call(studio, hook, undo=False)

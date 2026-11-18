@@ -49,6 +49,7 @@ KIM, LEE = Actor("kim", "human", ["clerk"]), Actor("lee", "human", ["clerk"])
 
 # ---- a restart forgets nothing
 
+@pytest.mark.usefixtures("action_write")
 def test_a_waiting_request_and_its_audit_trail_survive_a_restart(tmp_path):
     db, kept = tmp_path / "shop.db", tmp_path / "journal.jsonl"
     first = studio(db)
@@ -109,6 +110,7 @@ def test_a_change_request_survives_a_restart(tmp_path):
 
 # ---- who settles a request
 
+@pytest.mark.usefixtures("action_write")
 def test_the_one_who_asked_does_not_approve_or_reject_it(tmp_path):
     st = studio(tmp_path / "shop.db")
     p = st.actions.request("setPrice", "G1", {"to": 1100}, actor=KIM)
@@ -120,6 +122,7 @@ def test_the_one_who_asked_does_not_approve_or_reject_it(tmp_path):
     assert st.actions.approve(p.id, approver=KIM).status == "executed"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_request_that_ran_is_rolled_back_not_rejected(tmp_path):
     st = studio(tmp_path / "shop.db")
     p = st.actions.request("setPrice", "G1", {"to": 1100}, actor=KIM)
@@ -222,6 +225,7 @@ def test_a_document_list_survives_a_module_round_trip():
 
 # ---- a request from the page
 
+@pytest.mark.usefixtures("action_write")
 def test_a_person_on_the_page_runs_a_change_inside_its_limit_and_an_agent_waits():
     pytest.importorskip("rdflib")
     from ontlas.config import load_studio

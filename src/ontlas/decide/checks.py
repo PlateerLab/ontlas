@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ontlas.decide.cells import Any_, CellError, Compare, IsNull, OneOf, Range, evaluate, parse_test
+from ontlas.decide.table import precedence
 from ontlas.model import DecisionTable, Ontology
 
 MAX_STEPS = 50_000  # cells of a table's input space walked before saying so instead of going on
@@ -214,11 +215,11 @@ def _say(where: dict[str, str]) -> str:
 
 
 def _ahead(table: DecisionTable, i: int) -> list[int]:
-    """The rules that decide before rule i does; one set aside for it by a pick does not."""
+    """The rules that decide before rule i does, as the table picks (an AXIOM rule first under priority too); one set
+    aside for it by a pick does not."""
     me = table.rules[i]
     if table.hit_policy == "priority":
-        return [j for j, r in enumerate(table.rules) if me.priority is not None and r.priority is not None
-                and r.priority < me.priority and me.id not in r.overruled_by]
+        return [j for j, r in enumerate(table.rules) if precedence(r) < precedence(me) and me.id not in r.overruled_by]
     return [j for j in range(i) if me.id not in table.rules[j].overruled_by]
 
 
@@ -255,15 +256,65 @@ def _overlaps(table: DecisionTable, space: _Space) -> list[Finding]:
             elif policy == "first":
                 out.append(Finding("overlap", "info", table.name, ids,
                                    f"rules {a.id} and {b.id} both match {at}; {a.id} is listed first", where))
-            elif a.priority == b.priority:
+            elif precedence(a) == precedence(b):
                 out.append(Finding("tie", "warning", table.name, ids,
                                    f"rules {a.id} and {b.id} both match {at} at priority {a.priority} and answer "
                                    "differently", where))
             else:
-                top, low = (a, b) if (a.priority or 0) < (b.priority or 0) else (b, a)
+                top, low = sorted((a, b), key=precedence)
                 out.append(Finding("overlap", "info", table.name, ids,
                                    f"rule {top.id} (priority {top.priority}) overrides {low.id} "
                                    f"(priority {low.priority}) at {at}", where))
+    return out
+
+
+def without(table: DecisionTable, rule_id: str, onto: Ontology | None = None) -> dict:
+    """What taking one rule out of a table changes, for the screen that asks before it goes. `opposite`: the rules that
+    never hold with it because an input it reads takes the other values there ({rule, inputs}). `decides`: whether it
+    answers anywhere now. `takers`: the rules that would answer where it does, in the order the table picks, each with
+    whether it gives the same answer, the same first output (the verdict), and where ({rule, same, same_first, where}).
+    `gaps`: where no rule would answer then. `checked` is False where the table collects every rule that applies (taking
+    one out drops only its own answer) or is too wide to walk."""
+    out: dict[str, Any] = {"rule": rule_id, "checked": False, "opposite": [], "decides": False, "takers": [], "gaps": []}
+    i = next((k for k, r in enumerate(table.rules) if r.id == rule_id), None)
+    if i is None or table.hit_policy not in ("first", "unique", "priority"):
+        return out
+    try:
+        space = _space(onto, table)
+    except CellError:
+        return out
+    me, mine = table.rules[i], space.boxes[i]
+    if all(mine):
+        for j, b in enumerate(space.boxes):
+            if j != i and all(b) and _meet(mine, b) is None:
+                apart = [space.columns[c] for c in range(len(mine)) if not mine[c] & b[c]]
+                out["opposite"].append({"rule": table.rules[j].id, "inputs": apart})
+    ahead = [] if table.hit_policy == "unique" else _ahead(table, i)
+    rest = [j for j in range(len(table.rules)) if j != i and j not in ahead and all(space.boxes[j])]
+    if table.hit_policy == "priority":
+        rest.sort(key=lambda j: precedence(table.rules[j]))
+    budget = [MAX_STEPS]
+    takers: dict[str, dict] = {}
+    try:
+        decides = _uncovered(mine, [space.boxes[j] for j in ahead], budget) if all(mine) else []
+        for part in decides:
+            before: list[list[set[int]]] = []
+            for j in rest:
+                both = _meet(part, space.boxes[j])
+                if both is None:
+                    continue
+                won = _uncovered(both, before, budget)
+                before.append(space.boxes[j])
+                if won:
+                    r = table.rules[j]
+                    first = next(iter(table.outputs), "")
+                    t = takers.setdefault(r.id, {"rule": r.id, "same": r.then == me.then,
+                                                 "same_first": r.then.get(first) == me.then.get(first), "where": []})
+                    t["where"] += [space.where(b) for b in won]
+            out["gaps"] += [space.where(b) for b in _uncovered(part, before, budget)]
+    except _TooWide:
+        return out
+    out.update(checked=True, decides=bool(decides), takers=list(takers.values()), gaps=out["gaps"][:MAX_SHOWN])
     return out
 
 

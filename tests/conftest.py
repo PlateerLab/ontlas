@@ -50,6 +50,22 @@ def studio(onto, source) -> Studio:
 
 
 @pytest.fixture
+def action_write(monkeypatch):
+    """A server started with --action-write: an approved action writes to the source (off, it is only recorded)."""
+    from ontlas.actions import ActionService
+
+    monkeypatch.setattr(ActionService, "write", True)
+
+
+@pytest.fixture
+def api_open(monkeypatch):
+    """A server started with --api-open: a /v1 caller with no role reads everything (without it, it is refused)."""
+    from ontlas.rest import Rest
+
+    monkeypatch.setattr(Rest, "unscoped", True)
+
+
+@pytest.fixture
 def graph_studio(studio) -> Studio:
     pytest.importorskip("rdflib")
     from ontlas.backends.rdf import RdflibBackend

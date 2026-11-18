@@ -195,7 +195,7 @@ def test_the_api_for_platforms_says_no_source():
     from ontlas.tools import StudioTools
 
     st = Studio(Ontology.load(EXAMPLE / "ontology.yaml").check(), now=lambda: NOW)
-    rest = Rest(StudioTools(st))
+    rest = Rest(StudioTools(st), unscoped=True)
     code, out = rest.answer("POST", "/v1/query", {"query": "ordersOfCustomer", "params": {"customer": "C001"}})
     assert code == 409 and out["no_source"] is True
     code, out = rest.answer("POST", "/v1/translate", {"query": "ordersOfCustomer", "to": "sparql"})

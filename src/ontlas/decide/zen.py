@@ -5,13 +5,14 @@ import json
 from typing import Any
 
 from ontlas.decide.cells import parse_test, to_zen
-from ontlas.decide.table import DecisionError, answer
+from ontlas.decide.table import DecisionError, answer, precedence
 from ontlas.model import DecisionTable
 
 
 def _in_order(table: DecisionTable) -> list:
-    """The rules as ZEN should try them: by priority, and a rule set aside by a pick after the rule it yields to."""
-    rules = sorted(table.rules, key=lambda r: r.priority) if table.hit_policy == "priority" else list(table.rules)
+    """The rules as ZEN should try them: by priority (AXIOM first), and a rule set aside by a pick after the rule it
+    yields to."""
+    rules = sorted(table.rules, key=precedence) if table.hit_policy == "priority" else list(table.rules)
     for r in [x for x in rules if x.overruled_by]:
         after = max((i for i, x in enumerate(rules) if x.id in r.overruled_by), default=-1)
         if rules.index(r) < after:

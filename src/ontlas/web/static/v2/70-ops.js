@@ -219,13 +219,14 @@
       ${i.libraries > 1 ? tile('온톨로지', count(i.libraries), '요청의 library 값으로 지정') : ''}</section>`;
     // who may call: named by the server, each with the policy it runs as
     const roles = new Set((S.st.roles || []).map((r) => r.name));
-    const policy = (t) => (!t.policy ? '<span class="k-chip warn">정책 없음 · 전체 조회</span>' : roles.has(t.policy) ? `<a class="k-code" href="#roles?policy=${encodeURIComponent(t.policy)}">${esc(t.policy)}</a>` : `<span class="k-code k-ink">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>`);
+    // a caller with no policy is refused unless the server opens /v1 to it (ontlas serve --api-open)
+    const policy = (t) => (!t.policy ? (tg.unscoped ? '<span class="k-chip warn">정책 없음 · 전체 조회</span>' : '<span class="k-chip bad">정책 없음 · 거부</span>') : roles.has(t.policy) ? `<a class="k-code" href="#roles?policy=${encodeURIComponent(t.policy)}">${esc(t.policy)}</a>` : `<span class="k-code k-ink">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>`);
     const rows = list.map((t) => `<tr><td><b class="k-b">${esc(t.name)}</b></td><td>REST</td><td>${policy(t)}</td><td>조회 · 판정 · 검색${t.write ? ' · Action 요청' : ''}</td><td class="r">${count(t.calls)}</td><td>${t.last ? esc(String(t.last).slice(0, 16).replace('T', ' ')) : '<span class="k-mut">-</span>'}</td></tr>`).join('');
     // the examples name a policy of this ontology (its first), with the caller attributes its row rules compare with
     const pol = (S.st.roles || [])[0], keys = pol ? pol.principal || [] : [];
-    const serveRest = `export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN${pol ? ` --api-role ${pol.name}${keys.map((k) => ` --api-principal ${k}=...`).join('')}` : ''}`;
+    const serveRest = `export ONTLAS_API_TOKEN=...\nontlas serve studio.yaml --api-token-env ONTLAS_API_TOKEN${pol ? ` --api-role ${pol.name}${keys.map((k) => ` --api-principal ${k}=...`).join('')}` : ' --api-open'}`;
     const agents = `# agents.yaml\nagents:\n  - {name: ${JSON.stringify(pol ? pol.label : 'Agent')}, token_env: ONTLAS_AGENT_TOKEN${pol ? `, role: ${pol.name}` : ''}${keys.length ? `, principal: {${keys.map((k) => `${k}: ...`).join(', ')}}` : ''}, write: true}\n\nontlas serve studio.yaml --api-agents agents.yaml`;
-    const targets = `<section class="k-card" aria-labelledby="ops-tg-h"><div class="k-ch"><h2 id="ops-tg-h">연동 대상</h2><div class="k-push"><span class="k-chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? 'REST API 켜짐' : 'REST API 꺼짐'}</span></div></div>
+    const targets = `<section class="k-card" aria-labelledby="ops-tg-h"><div class="k-ch"><h2 id="ops-tg-h">연동 대상</h2><div class="k-push k-h g6">${tg ? `<span class="k-chip${tg.action_write ? ' warn' : ''}">${tg.action_write ? 'Action 쓰기 켜짐' : 'Action 쓰기 꺼짐'}</span>` : ''}<span class="k-chip ${i.rest ? 'ok' : 'warn'}">${i.rest ? 'REST API 켜짐' : 'REST API 꺼짐'}</span></div></div>
       ${rows ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">연결</th><th scope="col">접근 정책</th><th scope="col">허용 도구</th><th scope="col" class="r">호출 수</th><th scope="col">마지막 사용</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p class="k-cf line">등록된 연동 대상이 없습니다.</p>'}
       <div class="k-cb" style="padding-top:12px;gap:4px">${opsMore('serve', 'REST API 활성화 명령', serveRest)}${opsMore('agents', 'Agent별 토큰 · 역할 설정', agents)}</div></section>`;
@@ -329,7 +330,7 @@
     return `<section class="k-card" id="trypanel" aria-labelledby="ops-try-h"><div class="k-ch"><h2 id="ops-try-h">실행 패널</h2><div class="k-push"><span class="k-s">POST ${esc(api[2])}${i.library ? ` · ${esc(i.library.label)}` : ''}</span></div></div>
       <div class="k-cb ops-try">
         <div class="k-g2"><label class="k-f">엔드포인트<select class="k-in" data-in="opsTryApi">${TRY_API.map(([k, w, path]) => opt(k, `POST ${path} · ${w}`, c.api)).join('')}</select></label>
-          <label class="k-f">접근 정책<select class="k-in" data-in="opsTryPol">${opt('', '정책 없음 · 전체', S.ops.tryPol)}${listed.map((r) => opt(r.name, polWord(r), S.ops.tryPol)).join('')}</select></label></div>
+          <label class="k-f">접근 정책<select class="k-in" data-in="opsTryPol">${opt('', '정책 없음', S.ops.tryPol)}${listed.map((r) => opt(r.name, polWord(r), S.ops.tryPol)).join('')}</select></label></div>
         ${who}${fields}
         ${ready ? `${opsTryCode(c, i)}<div class="k-h"><button class="k-btn pri" data-act="ctryrun"${c.busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}${c.busy ? '실행 중' : '실행'}</button>${fill}${c.api === 'object' ? '' : '<button class="k-btn" data-act="ctryclear">값 초기화</button>'}</div>` : ''}
         <div class="ops-res" id="opstryres">${opsTryResult(c)}</div></div></section>`;
@@ -411,6 +412,7 @@
   function opsTrySaid(r) {
     const e = String((r.body || {}).error || ''), m = e.match(/needs principal attributes \[(.*)\]/);
     if (/[가-힣]/.test(e)) return e;  // the page's own refusal, already in its words
+    if ((r.body || {}).no_policy) return '접근 정책이 없는 호출이라 실행하지 못했습니다. 접근 정책을 선택해 주세요.';
     if (m) return `호출자 속성 ${m[1].replace(/'/g, '')} 값이 없어 실행하지 못했습니다. 호출자 속성을 입력해 주세요.`;
     if (/outside (this role's rows|the scope of role)/.test(e)) return '접근 정책의 행 범위 밖 레코드라 판정하지 못했습니다. 레코드 키와 호출자 속성을 확인해 주세요.';
     if (/may not read/.test(e) || (r.policy && /unknown object/.test(e))) return '접근 정책의 조회 범위 밖 Entity라 실행하지 못했습니다. 조회 범위 안의 Entity를 선택해 주세요.';
@@ -514,7 +516,8 @@
     const row = (r, t) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="opsPolPick" data-name="${esc(r.name)}" tabindex="0"${sel && r.name === sel.name ? ' aria-current="true"' : ''}><td class="b">${t ? `${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span>` : '<span class="k-mut" style="font-weight:400">연동 대상 없음</span>'}</td>
       <td>${polCell(r)}</td><td>${scope(r)}</td><td>${r.rows.length ? esc(r.rows.map((x) => mgLabel(x.type)).join(' · ')) : '전체'}</td><td class="r">${count(Object.keys(r.mask).length)}</td><td>${acts(r)}</td></tr>`;
     const rows = roles.flatMap((r) => (linked(r).length ? linked(r).map((t) => row(r, t)) : [row(r, null)])).join('')
-      + loose.map((t) => `<tr><td class="b">${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span></td><td>${t.policy ? `<span class="k-code">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>` : '<span class="k-chip warn">정책 없음</span>'}</td><td>전체</td><td>전체</td><td class="r">0</td><td>${t.write ? '요청 전체' : '<span class="k-mut">-</span>'}</td></tr>`).join('');
+      + loose.map((t) => { const shut = !t.policy && !(tg && tg.unscoped), none = '<span class="k-mut">-</span>';  // refused: it reads nothing
+        return `<tr><td class="b">${esc(t.name)}<br><span class="k-s" style="font-weight:400">REST${t.write ? ' · Action 요청' : ''}</span></td><td>${t.policy ? `<span class="k-code">${esc(t.policy)}</span> <span class="k-chip warn">이 온톨로지에 없음</span>` : shut ? '<span class="k-chip bad">정책 없음 · 거부</span>' : '<span class="k-chip warn">정책 없음 · 전체 조회</span>'}</td><td>${shut ? none : '전체'}</td><td>${shut ? none : '전체'}</td><td class="r">0</td><td>${t.write && !shut ? '요청 전체' : none}</td></tr>`; }).join('');
     const table = `<section class="k-card" aria-labelledby="ops-tgp-h" style="flex:3 1 600px"><div class="k-ch"><h2 id="ops-tgp-h">연동 대상별 정책</h2><span class="k-chip">${count(roles.length)}</span></div>
       <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">연동 대상</th><th scope="col">정책</th><th scope="col">정의 범위</th><th scope="col">데이터 행 범위</th><th scope="col" class="r">마스킹</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
     return `${head}${bar}${tiles}<div class="k-cols">${table}${opsPolicyAside(m, sel, src)}</div>${opsPolicyScope(m, sel, src)}
@@ -760,7 +763,8 @@
       return [...opsCallers(x.name).map((t) => ({ say: `연동 대상 ${t.name}`, sub: `호출 ${count(t.calls)}건`, href: 'connect' })),
         ...(acts.length ? [{ say: `Action ${count(acts.length)}개`, sub: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}` : ''}`, href: known('actions') ? 'actions' : '' }] : [])];
     },
-    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; },
+    drops: (x) => [['delete_role', { name: x.name }]],
+    remove: async (x) => { const [[op, args]] = ITEM.policy.drops(x); S.mg.st = await api('manage/edit', { op, args }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; },
     history: async (x) => (await itemHistoryOf({ word: '접근 정책', element: (y) => `role:${y.name}` }, x)).map((e) => ({ ...e,
       rows: e.rows.map((r) => ({ ...r, label: opsRoleWord(r.label), before: opsRoleSaid(r.label, r.before), after: opsRoleSaid(r.label, r.after) })),
       all: e.all.map((r) => ({ ...r, label: opsRoleWord(r.label), value: opsRoleSaid(r.label, r.value) })) })),

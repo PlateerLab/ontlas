@@ -33,8 +33,8 @@ class LexiconMixin:
                    module_label=lambda m: mine.label if m == WORKSPACE else self._label(m), readers=self._readers)
         return plain({**out, "concepts": concepts(comp.ontology),
                       "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label, "issues": issues,
-                                    "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits],
-                                    "redo": len(ws._undone)}})
+                                    "edits": self._edits_view(ws), "redo": len(ws._undone),
+                                    "conflicts": [self._held_view(e) for e in ws.held]}})
 
     def lexicon_edit(self, op: str, args: dict) -> dict:
         """One term added, changed or taken out, into the workspace module."""

@@ -19,7 +19,7 @@ SHOP = Path(__file__).resolve().parent.parent / "examples" / "library" / "studio
 
 @pytest.fixture(scope="module")
 def rest():
-    return Rest([("t", StudioTools(load_studio(SHOP), actor_id="flow", audit=True))])
+    return Rest([("t", StudioTools(load_studio(SHOP), actor_id="flow", audit=True))], unscoped=True)
 
 
 def _call(rest, path, body, method="POST"):

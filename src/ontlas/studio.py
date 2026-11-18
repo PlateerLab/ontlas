@@ -699,6 +699,9 @@ class Studio:
         journal = Journal(path)
         self.actions.keep(journal)
         self.changes.keep(journal)
+        for r in journal.read():  # the pass conditions as last saved on the screens, over what the studio file says
+            if r.get("kind") == "flow" and isinstance(r.get("settings"), dict):
+                self.settings["flow"] = r["settings"]
         return journal
 
     def value_accuracy(self, specs: list[dict] | None = None) -> dict[str, Any]:

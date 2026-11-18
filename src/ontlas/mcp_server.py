@@ -259,7 +259,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--agent", default="", help="the name the audit trail gives this agent")
     ap.add_argument("--journal", default="", help="a file of this process's own that keeps its requests and audit trail")
     ap.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
+    ap.add_argument("--action-write", action="store_true",
+                    help="let an approved action write to the data source; without it the action is recorded")
     a = ap.parse_args(argv)
+    if a.action_write:  # every studio this process reads, the one a changed library brings too
+        from ontlas.actions import ActionService
+
+        ActionService.write = True
     principal = dict(x.split("=", 1) for x in a.principal)
     studio = load_studio(a.config)
     if a.journal:

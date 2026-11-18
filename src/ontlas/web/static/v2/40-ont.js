@@ -3,7 +3,7 @@
   S.ont = { oq: '', otier: 'all', osel: '', owant: '',  // 오브젝트 관리: what is searched, the tier shown, the Object picked
     esel: '', ewant: '', eq: '', eopen: {}, qopen: {}, etab: 'def', einfo: {}, euses: null, eyaml: null, enotes: null, enote: '', edef: null, ssel: '',  // 엔티티 관리
     g: { want: '', node: '', rel: '', pos: {}, show: { object: true, entity: true, member: true, rule: false }, all: false, rd: null },  // 그래프 탐색
-    links: null, linksBusy: null, lex: null, semBusy: false };
+    links: null, linksBusy: null, lex: null, semBusy: false, vocab: null, vocabFor: null, vocabBusy: null, moves: null, movesFor: null, movesBusy: null, movesFailed: null };
   const ONT_TABS = ['objmgr', 'objects', 'model'];
   // an address that names an Object, an Entity or a Relation is taken once a visit: the picks made after it stay, and
   // coming back by the same address picks it again (this runs before the page draws the screen it goes to)
@@ -48,6 +48,23 @@
     if (!S.ont.linksBusy) S.ont.linksBusy = api('ont/links').then((x) => { S.ont.links = x.links; return x.links; }).finally(() => { S.ont.linksBusy = null; });
     return S.ont.linksBusy;
   }
+  // how each Property stands beside the standard vocabularies (the name it is aligned to, the definition's own prefix),
+  // read again whenever the definition moved; one that could not be read says nothing of any Property
+  const ontStale = (k) => !S.ont[k] || S.ont[`${k}For`] !== S.mg.st;
+  function ontVocab() {
+    const at = S.mg.st;
+    if (!ontStale('vocab')) return Promise.resolve(S.ont.vocab);
+    if (!S.ont.vocabBusy) S.ont.vocabBusy = api('ont/vocab').catch(() => ({ failed: true, prefix: '', properties: {} })).then((x) => { Object.assign(S.ont, { vocab: x, vocabFor: at }); return x; }).finally(() => { S.ont.vocabBusy = null; });
+    return S.ont.vocabBusy;
+  }
+  // what each move of the state machines needs to be taken (its guard), read again whenever the definition moved
+  function ontMoves() {
+    const at = S.mg.st;
+    if (!ontStale('moves')) return Promise.resolve(S.ont.moves);
+    if (!S.ont.movesBusy) S.ont.movesBusy = api('ont/states').then((x) => { Object.assign(S.ont, { moves: x.states, movesFor: at, movesFailed: false }); return x.states; }).finally(() => { S.ont.movesBusy = null; });
+    return S.ont.movesBusy;
+  }
+  const ontMove = (obj, t) => ((S.ont.moves || {})[obj] || []).find((x) => x.from === t.from && x.to === t.to && (x.action || '') === (t.action || '')) || null;
   function ontWait(title, lead) {
     const m = S.mg.st;
     if (m && !m.error) return '';
@@ -222,6 +239,16 @@
       <div class="k-h" id="ontdefsave"${cur !== (o.description || '') ? '' : ' hidden'}><button class="k-btn sm" data-act="ontEdefSave">변경 요청에 추가</button></div>
       <div class="k-wrap g16 k-i3 k-13">${meta.map((x) => `<span>${x}</span>`).join('')}</div>`;
   }
+  // a Property beside the standard vocabularies: the vocabulary of the name it is aligned to, else the definition's own
+  // (확장), written with the prefix the definition's own names have where it has one
+  const ontVoc = (obj, name) => ((S.ont.vocab || {}).properties || {})[`${obj}.${name}`] || null;
+  const ontPropName = (p) => { const v = S.ont.vocab; return v && !v.failed && v.prefix && !ontVoc(p.object, p.name) ? `${v.prefix}:${p.name}` : p.name; };
+  function ontVocChip(obj, name, prefixed) {  // prefixed: the chip says the prefix, where the name beside it does not
+    const v = S.ont.vocab;
+    if (!v || v.failed) return '<span class="k-mut">-</span>';
+    const al = name ? ontVoc(obj, name) : null;
+    return al ? `<span class="k-chip b" title="${esc(al.iri)}">${esc(al.vocab || al.iri)}</span>` : `<span class="k-chip">확장${prefixed && v.prefix ? ` ${esc(v.prefix)}:` : ''}</span>`;
+  }
   function ontPropSaid(p) {
     const vals = (p.values || []).map((v) => (p.labels || {})[v] || v);
     return [p.key ? '식별 키' : '', p.required && !p.key ? '필수' : '', vals.length ? `${vals.slice(0, 4).join(', ')}${vals.length > 4 ? ` 외 ${vals.length - 4}` : ''}` : '', p.unit ? `단위 ${p.unit}` : '', p.expr || '', p.mask ? '가림' : ''].filter(Boolean).join(' · ') || '-';
@@ -239,14 +266,17 @@
       <div class="k-seg self" role="tablist" aria-label="Entity 상세">${tabs}</div>${ontEntTab(o)}</section>`;
     const bound = (p) => (p.expr ? '<span class="k-chip">계산</span>' : !noSource() && o.table && p.column ? `<span class="k-chip ok"><span class="k-code" style="font-size:12px">${esc(p.column)}</span></span>` : '<span class="k-chip">미연결</span>');
     const table = `<section class="k-card" aria-labelledby="ont-pr-h"><div class="k-ch"><h2 id="ont-pr-h">Property</h2><span class="k-chip">${props.length}</span></div>
-      <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col">소스 컬럼</th></tr></thead>
-      <tbody>${props.map((p) => `<tr><td class="k-code">${esc(p.name)}</td><td>${esc(p.label || '-')}${p.new ? ' <span class="k-chip ok">새</span>' : p.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td><td class="k-code">${esc(p.type)}${p.expr ? ' · 계산값' : ''}</td><td>${esc(ontPropSaid(p))}</td><td>${bound(p)}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div>
+      <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">어휘</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col">소스 컬럼</th></tr></thead>
+      <tbody>${props.map((p) => `<tr><td class="k-code">${esc(ontPropName(p))}</td><td>${ontVocChip(p.object, p.name)}</td><td>${esc(p.label || '-')}${p.new ? ' <span class="k-chip ok">새</span>' : p.pending ? ' <span class="k-chip warn">변경</span>' : ''}</td><td class="k-code">${esc(p.type)}${p.expr ? ' · 계산값' : ''}</td><td>${esc(ontPropSaid(p))}</td><td>${bound(p)}</td></tr>`).join('') || '<tr><td colspan="6" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div>
       <p class="k-cf line"><a href="#props">Property 표</a></p></section>`;
     const cards = ontCards([o.name]);
     const rest = cards ? cards.filter((c) => ['limit', 'duty', 'ban'].includes(c.type) || c.check) : null;
     const shown = rest ? rest.slice(0, 3) : [];
+    // the functions the restrictions are carried out by, as their rule cards name them
+    const fns = [...new Map((rest || []).flatMap((c) => (c.implements || []).filter((r) => r && r.kind === 'function')).map((r) => [r.ref, r])).values()];
+    const fnLink = (f) => (f.found && canEdit() ? `<a href="${itemHref('param', 'form', f.ref)}">${esc(f.label)}</a>` : esc(f.label));
     const restBox = `<section class="ont-rest" aria-labelledby="ont-rs-h"><div class="k-h sb"><h2 id="ont-rs-h">Restriction</h2><a class="k-lnk" href="#semrules">편집</a></div>
-      ${rest === null ? '<p class="k-p s">불러오는 중입니다.</p>' : rest.length ? `${shown.map((c) => `<p class="k-14" style="margin:0;line-height:1.55">${esc(c.statement || c.result || c.id)}</p>`).join('')}<p class="k-warn k-13" style="margin:0">규칙 ${esc(shown.map((c) => c.id).join(', '))}${rest.length > 3 ? ` 외 ${rest.length - 3}` : ''}</p>`
+      ${rest === null ? '<p class="k-p s">불러오는 중입니다.</p>' : rest.length ? `${shown.map((c) => `<p class="k-14" style="margin:0;line-height:1.55">${esc(c.statement || c.result || c.id)}</p>`).join('')}<p class="k-warn k-13" style="margin:0">규칙 ${esc(shown.map((c) => c.id).join(', '))}${rest.length > 3 ? ` 외 ${rest.length - 3}` : ''}</p>${fns.length ? `<p class="k-13" style="margin:0">연결 함수 · ${fns.map(fnLink).join(', ')}</p>` : ''}`
         : `<p class="k-14" style="margin:0;line-height:1.55">적용된 Restriction이 없습니다.</p>${cards.length ? `<p class="k-s" style="margin:0">적용 규칙 ${cards.length}개</p>` : ''}`}</section>`;
     const prep = `<section class="ont-prep" aria-labelledby="ont-cp-h"><h2 id="ont-cp-h">연결 준비 정보</h2>
       ${ontKv('식별 키 후보', o.key ? `<span class="k-code">${esc(o.key)}</span>` : '-')}${ontKv('소스 후보', o.table ? `<span class="k-code">${esc(o.table)}</span>${o.rows !== null && o.rows !== undefined ? ` · ${show(o.rows)}행` : ''}` : '-')}${ontKv('계산 Property', o.computed ? `${o.computed}개` : '없음')}</section>`;
@@ -263,14 +293,22 @@
       html: `<span class="ont-flow">${path.map((x) => `<span class="k-chip">${esc(word(x))}</span>`).join('→')}${off.length ? `·${off.map((x) => `<span class="k-chip">${esc(word(x))}</span>`).join('')}` : ''}</span>`,
       prop: p.label || s.property };
   }
+  // the moves of a state machine that need something to hold, each as its ends and what must hold
+  function ontGuarded(s) {
+    if (!S.ont.moves) return null;
+    const p = S.mg.st.properties.find((x) => x.object === s.object && x.name === s.property) || {};
+    const word = (v) => (p.labels || {})[v] || v;
+    return s.transitions.map((t) => [t, ontMove(s.object, t)]).filter(([, x]) => x && x.said).map(([t, x]) => `${word(t.from)} → ${word(t.to)} · ${x.said}`);
+  }
   function ontStates() {
     const m = S.mg.st, st = S.ont, list = m.states || [];
     if (!list.some((s) => s.object === st.ssel)) st.ssel = (list.find((s) => s.object === st.esel) || list[0] || {}).object || '';
     const sel = list.find((s) => s.object === st.ssel);
     const acts = (s) => [...new Set(s.transitions.map((t) => t.action).filter(Boolean))].map((a) => { const x = m.actions.find((y) => y.name === a); return `<a href="#actions">${esc(x ? x.label : a)}</a>`; }).join(', ') || '-';
+    const guards = (s) => { const g = ontGuarded(s); return g === null ? (st.movesFailed === m ? '-' : '<span class="k-mut">불러오는 중</span>') : g.length ? g.map(esc).join('<br>') : '-'; };
     const bar = sel ? `<div class="k-bar" role="toolbar" aria-label="선택한 상태 전이"><span class="k-s">선택한 상태 전이</span><span class="k-code k-ink">${esc(sel.label)} · ${esc(ontFlow(sel).prop)}</span><span class="k-14">${esc(ontClip(ontFlow(sel).text, 80))}</span><span class="k-push">${itemActs('state', sel.object)}</span></div>` : '';
     return `${bar}<section class="k-card" aria-labelledby="ont-sm-h"><div class="k-ch"><h2 id="ont-sm-h">상태 전이</h2><span class="k-chip">${list.length}</span>${canEdit() ? `<a class="k-btn k-push" href="${itemHref('state', 'form')}">${ki('plus', 16, 1.75)}상태 전이</a>` : ''}</div>
-      ${list.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Entity · Property</th><th scope="col">상태 흐름</th><th scope="col">전이 Action</th></tr></thead><tbody>${list.map((s) => `<tr class="${s.object === st.ssel ? 'on' : ''}" data-act="ontSpick" data-name="${esc(s.object)}" tabindex="0"${s.object === st.ssel ? ' aria-current="true"' : ''}><td class="b">${esc(s.label)} · ${esc(ontFlow(s).prop)}${s.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td>${ontFlow(s).html}</td><td>${acts(s)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">등록된 상태 전이가 없습니다.</p>'}</section>`;
+      ${list.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Entity · Property</th><th scope="col">상태 흐름</th><th scope="col">전이 Action</th><th scope="col">전이 조건</th></tr></thead><tbody>${list.map((s) => `<tr class="${s.object === st.ssel ? 'on' : ''}" data-act="ontSpick" data-name="${esc(s.object)}" tabindex="0"${s.object === st.ssel ? ' aria-current="true"' : ''}><td class="b">${esc(s.label)} · ${esc(ontFlow(s).prop)}${s.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td>${ontFlow(s).html}</td><td>${acts(s)}</td><td>${guards(s)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">등록된 상태 전이가 없습니다.</p>'}</section>`;
   }
   function ontEntities() {
     const lead = 'Object 하위의 Entity와 Property, 상태 전이를 관리합니다.';
@@ -292,6 +330,9 @@
     ontSem();
     const st = S.ont, o = S.mg.st && !S.mg.st.error ? ontObj(st.esel) : null;
     if (!o) return;
+    const back = () => { if (S.tab === 'objects') render(); };
+    if (ontStale('vocab') && !st.vocabBusy) ontVocab().then(back);
+    if (ontStale('moves') && !st.movesBusy && st.movesFailed !== S.mg.st && (S.mg.st.states || []).length) ontMoves().catch(() => { st.movesFailed = S.mg.st; }).then(back);
     const id = `object:${o.name}`, again = () => { if (S.tab === 'objects' && st.esel === o.name) render(); };
     ontEntInfo(o.name);
     if ((!st.euses || st.euses.id !== id) && st.eusesFor !== id) {
@@ -634,29 +675,28 @@
         cards.length ? { say: `규칙 ${cards.length}개`, sub: `${a.label || a.name} 영역 규칙`, href: 'semrules' } : null,
         qs.length ? { say: `검증 질문 ${qs.length}개`, sub: '', href: 'check' } : null].filter(Boolean);
     },
-    remove: async (a) => {
-      const ents = areaEntities(a);
-      if (ents.length) throw new Error(`소속 Entity가 ${ents.length}개 있어 삭제를 요청하지 못했습니다. Entity를 다른 Object로 옮기거나 먼저 삭제해 주세요.`);
-      await ontEdit('delete_area', { name: a.name });
-      S.ont.osel = '';
-      return {};
-    },
+    drops: (a) => [['delete_area', { name: a.name }]],
+    remove: async (a) => { await ontEdit(...ITEM.object.drops(a)[0]); S.ont.osel = ''; return {}; },  // one with Entities is refused by the try
     history: (a) => ontItemHistory(`area:${a.name}`, 'Object'),
     revert: (a, e) => ontRevert('object', a.name, e),
   });
 
   // -- Entity, with its Properties
-  const ontPropRow = (p) => ({ was: p.name, name: p.name, label: p.label || '', type: p.type || 'string', values: (p.values || []).join(', '), required: !!p.required, key: !!p.key, inherited: p.inherited || '', calc: !!p.expr, del: false });
+  // a Property as a row of the Entity form; its vocabulary: schema.org, another standard's name it is aligned to (kept), or 확장
+  const ontPropRow = (p, obj) => { const al = ontVoc(obj, p.name), vocab = al ? (/schema\.org/.test(al.iri) ? 'schema' : 'other') : 'ext';
+    return { was: p.name, name: p.name, label: p.label || '', type: p.type || 'string', values: (p.values || []).join(', '), required: !!p.required, key: !!p.key, inherited: p.inherited || '', calc: !!p.expr, del: false, vocab, vocab0: vocab, iri: al ? al.iri : '', vword: al ? (al.vocab || al.iri) : '' }; };
+  const ONT_NEW_PROP = () => ({ was: '', name: '', label: '', type: 'string', values: '', required: false, del: false, vocab: 'ext', vocab0: 'ext', iri: '', vword: '' });
+  const ontAlignedOf = (p) => (p.vocab === 'schema' ? [`https://schema.org/${p.name.trim()}`] : p.vocab === 'other' && p.iri ? [p.iri] : []);
   const ontValues = (text) => String(text || '').split(',').map((x) => x.trim()).filter(Boolean);
   item('entity', {
-    word: 'Entity', under: 'objects', list: 'objects', load: ontLoad,
+    word: 'Entity', under: 'objects', list: 'objects', load: async () => { await ontLoad(); await ontVocab(); },  // with how its Properties stand beside the standard vocabularies
     find: (id) => ontObj(id), code: (o) => ontName(o), name: (o) => ontClip(o.description, 70) || o.label || o.name, element: (o) => `object:${o.name}`,
     draft: (o) => {
       const d = o ? { area: o.area || '', label: o.label || '', name: o.name, owner: o.owner || '', description: o.description || '', key: o.key || '', table: o.table || '', parent: o.parent || '', status: o.status || 'active' }
         : { area: mgArea(itemParam('area')) ? itemParam('area') : '', label: '', name: '', owner: '', description: '', key: '', table: itemParam('table'), parent: '', status: 'active' };
       if (!o && d.table && !ontObj(typeName(d.table))) d.name = typeName(d.table);  // + Entity from a table of 데이터 소스
-      const props = o ? mgProps(o.name).map(ontPropRow) : [];
-      if (itemParam('add') === 'prop') props.push({ was: '', name: '', label: '', type: 'string', values: '', required: false, del: false });
+      const props = o ? mgProps(o.name).map((p) => ontPropRow(p, o.name)) : [];
+      if (itemParam('add') === 'prop') props.push(ONT_NEW_PROP());
       return { ...d, was: { ...d }, props, reason: '' };
     },
     form: (d, o) => {
@@ -664,7 +704,10 @@
       const row = (p, i) => {
         const fixed = p.inherited || p.calc, off = p.del || fixed ? ' disabled' : '';
         const cell = (k, more = '') => `<input class="k-in sm${k === 'name' ? ' mono' : ''}" type="text" data-in="ontPf" data-i="${i}" data-k="${k}" value="${esc(p[k])}" aria-label="${{ name: '이름', label: '한글', values: '허용값' }[k]}"${more}>`;
-        return `<tr${p.del ? ' style="opacity:.5"' : ''}><td class="tight">${cell('name', p.was ? ' disabled' : ' placeholder="예: return_reason"')}</td><td class="tight">${cell('label', `${off} placeholder="예: 반품 사유"`)}</td>
+        const v = S.ont.vocab, words = [['ext', `확장${v && v.prefix ? ` ${v.prefix}:` : ''}`], ['schema', 'schema.org'], ...(p.vocab0 === 'other' ? [['other', p.vword]] : [])];
+        const voc = fixed || !v || v.failed ? ontVocChip(o ? o.name : '', p.was, true)
+          : `<select class="k-in sm" data-in="ontPf" data-i="${i}" data-k="vocab" aria-label="어휘"${off}>${words.map(([k, w]) => opt(k, w, p.vocab)).join('')}</select>`;
+        return `<tr${p.del ? ' style="opacity:.5"' : ''}><td class="tight">${cell('name', p.was ? ' disabled' : ' placeholder="예: return_reason"')}</td><td class="tight">${voc}</td><td class="tight">${cell('label', `${off} placeholder="예: 반품 사유"`)}</td>
           <td class="tight"><select class="k-in sm" style="min-width:124px" data-in="ontPf" data-i="${i}" data-k="type" aria-label="타입"${off}>${TYPES.map((t) => opt(t, t, p.type)).join('')}</select></td>
           <td class="tight">${p.calc ? '<span class="k-s">계산값</span>' : p.inherited ? `<span class="k-s">상속 · ${esc(mgLabel(p.inherited))}</span>` : `<span class="k-h nw">${cell('values', `${off} placeholder="쉼표로 구분"`)}<label class="k-ck mid k-13" style="white-space:nowrap"><input type="checkbox" data-in="ontPf" data-i="${i}" data-k="required"${p.required ? ' checked' : ''}${off || (p.key ? ' disabled' : '')}>필수</label></span>`}</td>
           <td class="tight r">${p.key ? '<span class="k-chip">식별 키</span>' : fixed ? '' : `<button class="k-lnk" type="button" data-act="ontPdel" data-i="${i}">${p.del ? '삭제 취소' : '삭제'}</button>`}</td></tr>`;
@@ -679,7 +722,7 @@
         <label class="k-f">상위 Entity<select class="k-in" data-in="itf" data-k="parent"><option value="">없음</option>${m.objects.filter((x) => x.name !== d.name).map((x) => opt(x.name, ontName(x), d.parent)).join('')}</select></label>
         ${o ? `<label class="k-f">상태${ontStatus(d.status)}</label>` : ''}`)}
         <section class="k-card"><div class="k-ch"><h2>Property</h2><span class="k-chip">${d.props.filter((p) => !p.del).length}</span><span class="k-pha k-push"><button class="k-lnk" type="button" data-act="ontPadd">${ki('plus', 16, 1.75)}Property</button></span></div>
-        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col"></th></tr></thead><tbody>${d.props.map(row).join('') || '<tr><td colspan="5" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">어휘</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col"></th></tr></thead><tbody>${d.props.map(row).join('') || '<tr><td colspan="6" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div></section>`;
     },
     checks: (d, o) => {
       const m = S.mg.st, name = d.name.trim(), bad = ontNamed(name), live = d.props.filter((p) => !p.del);
@@ -694,7 +737,7 @@
     valid: (d) => (!d.label.trim() ? '한글 이름이 없어 저장하지 못했습니다. 한글 이름을 입력해 주세요.' : !d.name.trim() ? '영문 이름이 없어 저장하지 못했습니다. 영문 이름을 입력해 주세요.' : !d.key.trim() ? '식별 키 후보가 없어 저장하지 못했습니다. 식별 키 후보를 입력해 주세요.' : d.props.some((p) => !p.del && !p.name.trim()) ? '이름이 없는 Property가 있어 저장하지 못했습니다. 이름을 입력하거나 Property를 삭제해 주세요.' : ''),
     save: async (d, o) => {
       const name = d.name.trim(), key = d.key.trim();
-      const spec = (p) => ({ label: p.label.trim(), type: p.type, values: ontValues(p.values), required: !!p.required });
+      const spec = (p) => ({ label: p.label.trim(), type: p.type, values: ontValues(p.values), required: !!p.required, ...(ontAlignedOf(p).length ? { aligned: ontAlignedOf(p) } : {}) });
       const live = d.props.filter((p) => !p.del && !p.inherited && !p.calc);
       if (!o) {
         const properties = Object.fromEntries(live.map((p) => [p.name.trim(), spec(p)]));
@@ -713,6 +756,7 @@
         if (!was || p.del) continue;
         const diff = ontChanged({ label: p.label.trim(), type: p.type, required: !!p.required }, { label: was.label || '', type: was.type, required: !!was.required }, ['label', 'type', 'required']);
         if (ontValues(p.values).join('|') !== (was.values || []).join('|')) diff.values = ontValues(p.values);
+        if (p.vocab !== p.vocab0) diff.aligned = ontAlignedOf(p);
         if (Object.keys(diff).length) { await ontEdit('update_property', { object: o.name, name: p.was, ...diff }); n++; }
       }
       const args = ontChanged({ ...d, label: d.label.trim(), description: d.description.trim(), owner: d.owner.trim(), table: d.table.trim(), key }, d.was, ['label', 'description', 'area', 'owner', 'table', 'parent', 'status', 'key']);
@@ -736,7 +780,8 @@
         o.table && !noSource() ? { say: 'Mapping 1개', sub: `${o.table} 테이블 · Property ↔ 컬럼`, href: 'sources' } : null,
         o.states ? { say: '상태 전이 1개', sub: '', href: 'objects' } : null].filter(Boolean);
     },
-    remove: async (o) => { await ontEdit('delete_object', { name: o.name }); S.ont.esel = ''; return {}; },
+    drops: (o) => [['delete_object', { name: o.name }]],
+    remove: async (o) => { await ontEdit(...ITEM.entity.drops(o)[0]); S.ont.esel = ''; return {}; },
     history: (o) => ontHistory('entity', o.name, 'Entity'),
     revert: (o, e) => ontRevert('entity', o.name, e),
   });
@@ -750,7 +795,7 @@
     },
   });
   Object.assign(ACT, {
-    ontPadd: () => { if (S.it.d) { S.it.d.props.push({ was: '', name: '', label: '', type: 'string', values: '', required: false, del: false }); render(); } },
+    ontPadd: () => { if (S.it.d) { S.it.d.props.push(ONT_NEW_PROP()); render(); } },
     ontPdel: (t) => { const d = S.it.d, i = Number(t.dataset.i), p = d && d.props[i]; if (!p) return; if (p.was) p.del = !p.del; else d.props.splice(i, 1); render(); },
   });
 
@@ -759,15 +804,55 @@
   // the terms of 용어 사전 tied to a value of the state Property: how people write those states
   const ontTerms = (obj, prop) => ((S.ont.lex || {}).rows || []).filter((r) => String(r.concept || '').startsWith(`value:${obj}.${prop}=`));
   const ontTermsSaid = (terms) => `${terms.slice(0, 3).map((r) => r.term).join(', ')}${terms.length > 3 ? ` 외 ${terms.length - 3}` : ''}`;
+  // a move's guard as a row of the form edits it: what must hold (a rule table 'd:<name>', a true or false Property
+  // 'p:<name>', or nothing), the result the table must give and its value; the table's other results are kept as they are
+  function ontGuardRow(g) {
+    if (g && g.property) return { gk: `p:${g.property}`, field: '', value: '', rest: {} };
+    if (!g || !g.decision) return { gk: '', field: '', value: '', rest: {} };
+    const [[field, value] = ['', ''], ...more] = Object.entries(g.expect || {});
+    return { gk: `d:${g.decision}`, field, value: String(value ?? ''), rest: Object.fromEntries(more) };
+  }
+  const ontGuardDec = (t) => (t.gk.startsWith('d:') ? S.mg.st.decisions.find((x) => x.name === t.gk.slice(2)) || null : null);
+  const ontGuardOuts = (t) => { const dec = ontGuardDec(t); return dec ? dec.outputs.filter((o) => o.name !== 'reason') : []; };
+  function ontGuardOf(t) {  // the guard a row says, as the definition holds it
+    if (!t.gk) return {};
+    if (t.gk.startsWith('p:')) return { property: t.gk.slice(2) };
+    const o = ontGuardOuts(t).find((x) => x.name === t.field);
+    const v = !o ? t.value : o.type === 'boolean' ? t.value === 'true' : ['integer', 'decimal'].includes(o.type) && t.value.trim() !== '' && !Number.isNaN(Number(t.value)) ? Number(t.value) : t.value;
+    return { decision: t.gk.slice(2), expect: { ...t.rest, ...(t.field ? { [t.field]: v } : {}) } };
+  }
+  const ontGuardSaid = (g) => (g.property ? `p:${g.property}` : g.decision ? `d:${g.decision}|${Object.entries(g.expect || {}).map(([k, v]) => `${k}=${JSON.stringify(v)}`).sort().join('|')}` : '');
+  // the cells of a move's guard, chosen as an Action's 전제조건 is: what must hold (a rule table about the Entity, or one
+  // of its true or false Properties), then the table's result and the value it must give
+  function ontGuardCells(d, t, i) {
+    const decs = S.mg.st.decisions.filter((x) => x.target === d.object), flags = mgProps(d.object).filter((p) => p.type === 'boolean');
+    const known = !t.gk || decs.some((x) => `d:${x.name}` === t.gk) || flags.some((p) => `p:${p.name}` === t.gk);  // one the lists lack stays as it is
+    const group = (label, rows) => (rows.length ? `<optgroup label="${label}">${rows.map(([v, w]) => opt(v, w, t.gk)).join('')}</optgroup>` : '');
+    const sel = (k, rows, cur, word) => `<select class="k-in sm" data-in="ontTg" data-i="${i}" data-k="${k}" aria-label="${word}">${rows.map(([v, w]) => opt(v, w, cur)).join('')}</select>`;
+    const what = `<select class="k-in sm" style="min-width:144px" data-in="ontTg" data-i="${i}" data-k="gk" aria-label="전이 조건">${opt('', '없음', t.gk)}${known ? '' : opt(t.gk, t.gk.slice(2), t.gk)}${group('규칙', decs.map((x) => [`d:${x.name}`, x.label]))}${group('Property', flags.map((p) => [`p:${p.name}`, p.label || p.name]))}</select>`;
+    if (!t.gk.startsWith('d:')) return `<td class="tight"><div class="k-v g4">${what}${t.gk ? '<span class="k-s">기대값 예</span>' : ''}</div></td>`;
+    const dec = ontGuardDec(t), outs = ontGuardOuts(t), o = outs.find((x) => x.name === t.field);
+    const field = sel('field', [['', '결과 선택'], ...outs.map((x) => [x.name, outWord(dec, x.name)]), ...(t.field && !o ? [[t.field, t.field]] : [])], t.field, '결과');
+    const value = o && o.type === 'boolean' ? sel('value', [['true', '가능'], ['false', '불가']], t.value, '기대값')
+      : `<input class="k-in sm" type="text" data-in="ontTg" data-i="${i}" data-k="value" value="${esc(t.value)}" placeholder="기대값" aria-label="기대값">`;
+    const more = Object.entries(t.rest).map(([k, v]) => `${k} ${v}`).join(' · ');
+    // a table with one result to hold it to names that result beside the value; one with more chooses it first
+    const pick = outs.length === 1 && o ? `<div class="k-h g6 nw"><span class="k-13 k-mut">${esc(outWord(dec, t.field))}</span>${value}</div>` : `${field}${value}`;
+    return `<td class="tight"><div class="k-v g4">${what}${pick}${more ? `<span class="k-s">${esc(more)}</span>` : ''}</div></td>`;
+  }
   item('state', {
     word: '상태 전이', under: 'objects', list: 'objects',
-    load: async () => { await ontLoad(); try { S.ont.lex = await api('lexicon'); } catch (_) { S.ont.lex = null; } },  // with the terms of the states
+    load: async () => {  // with what each move needs to be taken, as it is now, and the terms of the states
+      await ontLoad();
+      await ontMoves();
+      try { S.ont.lex = await api('lexicon'); } catch (_) { S.ont.lex = null; }
+    },
     find: (id) => (S.mg.st.states || []).find((s) => s.object === id) || null,
     code: (s) => `${s.label} · ${ontFlow(s).prop}`, name: (s) => ontClip(ontFlow(s).text, 80), element: (s) => `object:${s.object}`,
     draft: (s) => {
       const m = S.mg.st, free = m.objects.filter((o) => !o.states);
       const want = free.find((o) => o.name === itemParam('entity')) || free.find((o) => o.name === S.ont.esel) || free[0];
-      return s ? { object: s.object, property: s.property, states: s.states.join(', '), initial: s.initial || s.states[0] || '', transitions: s.transitions.map((t) => ({ from: t.from, to: t.to, action: t.action || '' })), from: '', to: '', action: '', reason: '' }
+      return s ? { object: s.object, property: s.property, states: s.states.join(', '), initial: s.initial || s.states[0] || '', transitions: s.transitions.map((t) => ({ from: t.from, to: t.to, action: t.action || '', ...ontGuardRow((ontMove(s.object, t) || {}).guard) })), from: '', to: '', action: '', reason: '' }
         : { object: want ? want.name : '', property: '', states: '', initial: '', transitions: [], from: '', to: '', action: '', reason: '' };
     },
     form: (d, s) => {
@@ -785,7 +870,7 @@
         <label class="k-f">시작 상태${pick('from', d.from)}</label><label class="k-f">끝 상태${pick('to', d.to)}</label>
         <label class="k-f">전이 Action<select class="k-in" data-in="itf" data-k="action"><option value="">없음 · 시스템 변경</option>${acts.map((a) => opt(a.name, a.label, d.action)).join('')}</select></label>`)}
         <section class="k-card"><div class="k-ch"><h2>허용 전이</h2><span class="k-chip">${d.transitions.length}</span><span class="k-pha k-push"><button class="k-lnk" type="button" data-act="ontTadd">${ki('plus', 16, 1.75)}전이</button></span></div>
-        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">시작</th><th scope="col">끝</th><th scope="col">전이 Action</th><th scope="col"></th></tr></thead><tbody>${d.transitions.map((t, i) => `<tr><td>${esc(word(t.from))}</td><td>${esc(word(t.to))}</td><td>${esc(act(t.action))}</td><td class="r"><button class="k-lnk" type="button" data-act="ontTdel" data-i="${i}">삭제</button></td></tr>`).join('') || '<tr><td colspan="4" class="mut">등록된 전이가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">시작</th><th scope="col">끝</th><th scope="col">전이 Action</th><th scope="col">전이 조건</th><th scope="col"></th></tr></thead><tbody>${d.transitions.map((t, i) => `<tr><td>${esc(word(t.from))}</td><td>${esc(word(t.to))}</td><td>${esc(act(t.action))}</td>${ontGuardCells(d, t, i)}<td class="r"><button class="k-lnk" type="button" data-act="ontTdel" data-i="${i}">삭제</button></td></tr>`).join('') || '<tr><td colspan="5" class="mut">등록된 전이가 없습니다.</td></tr>'}</tbody></table></div></section>`;
     },
     checks: (d) => {
       const m = S.mg.st, states = ontStateList(d), prop = mgProps(d.object).find((p) => p.name === d.property), terms = d.property ? ontTerms(d.object, d.property) : [];
@@ -796,19 +881,30 @@
       for (let grew = true; grew;) { grew = false; d.transitions.forEach((t) => { if (seen.has(t.from) && !seen.has(t.to)) { seen.add(t.to); grew = true; } }); }
       const far = states.filter((x) => !seen.has(x));
       const off = d.transitions.map((t) => { const a = t.action && m.actions.find((x) => x.name === t.action); return a && a.transition_to && a.transition_to !== t.to ? `${a.label} → ${a.transition_to}` : ''; }).filter(Boolean);
+      // a move whose rule table gives no result to hold it to, and a move that holds an Action to the same table as its
+      // 전제조건 does, the same way or another
+      const half = d.transitions.filter((t) => t.gk.startsWith('d:') && !t.field).map((t) => `${t.from} → ${t.to}`);
+      const pair = d.transitions.map((t) => { const a = t.action && t.gk.startsWith('d:') && m.actions.find((x) => x.name === t.action), c = a && (a.criteria || []).find((x) => x.decision === t.gk.slice(2));
+        return c ? [a.label, ontGuardSaid({ decision: c.decision, expect: c.expect }) === ontGuardSaid(ontGuardOf(t))] : null; }).filter(Boolean);
+      const unlike = pair.filter(([, same]) => !same).map(([w]) => w);
       return [states.length < 2 ? { say: '상태 값 2개 이상 필요', tone: 'warn' } : lost.length ? { say: `상태 값에 없는 전이 · ${lost.map((t) => `${t.from} → ${t.to}`).join(', ')}`, tone: 'bad' } : { say: '전이 상태 확인', tone: 'ok' },
         extra.length ? { say: `허용값 추가 · ${extra.join(', ')}`, tone: 'note' } : null,
         states.length >= 2 ? (ends.length ? { say: `종료 상태 · ${ends.join(', ')}`, tone: 'ok' } : { say: '종료 상태 없음', tone: 'warn' }) : null,
         far.length ? { say: `초기 상태에서 도달 불가 · ${far.join(', ')}`, tone: 'warn' } : null,
         off.length ? { say: `Action 처리 후 상태 불일치 · ${off.join(', ')}`, tone: 'warn' } : d.transitions.some((t) => t.action) ? { say: 'Action 처리 후 상태 일치', tone: 'ok' } : null,
+        half.length ? { say: `결과 미선택 전이 조건 · ${half.join(', ')}`, tone: 'bad', error: '결과가 선택되지 않은 전이 조건이 있어 저장하지 못했습니다. 결과를 선택해 주세요.' } : null,
+        unlike.length ? { say: `Action 전제조건과 전이 조건 불일치 · ${[...new Set(unlike)].join(', ')}`, tone: 'warn' } : pair.length ? { say: 'Action 전제조건과 전이 조건 일치', tone: 'ok' } : null,
         terms.length ? { say: `상태 값 사용 용어 ${terms.length}개`, sub: ontTermsSaid(terms), tone: 'note' } : null].filter(Boolean);
     },
     valid: (d) => (!d.object ? 'Entity가 선택되지 않아 저장하지 못했습니다. Entity를 선택해 주세요.' : !d.property ? '상태 Property가 선택되지 않아 저장하지 못했습니다. 상태 Property를 선택해 주세요.' : ontStateList(d).length < 2 ? '상태 값이 부족해 저장하지 못했습니다. 상태 값을 2개 이상 입력해 주세요.' : ''),
     save: async (d, s) => {
       const states = ontStateList(d), initial = states.includes(d.initial) ? d.initial : states[0];
-      const moves = (list) => JSON.stringify(list.map((t) => [t.from, t.to, t.action || '']));
-      if (s && s.property === d.property && states.join('|') === s.states.join('|') && initial === (s.initial || s.states[0]) && moves(d.transitions) === moves(s.transitions)) ontNothing();
-      await ontEdit('update_states', { object: d.object, property: d.property, states, initial, transitions: d.transitions });
+      // each move with its guard as the form shows it (none takes it off); what else a move says is kept by the server
+      const now = d.transitions.map((t) => ({ from: t.from, to: t.to, action: t.action || '', guard: ontGuardOf(t) }));
+      const moves = (list) => JSON.stringify(list.map((t) => [t.from, t.to, t.action || '', ontGuardSaid(t.guard || {})]));
+      const was = s ? s.transitions.map((t) => ({ ...t, guard: (ontMove(s.object, t) || {}).guard })) : [];
+      if (s && s.property === d.property && states.join('|') === s.states.join('|') && initial === (s.initial || s.states[0]) && moves(now) === moves(was)) ontNothing();
+      await ontEdit('update_states', { object: d.object, property: d.property, states, initial, transitions: now });
       S.ont.ssel = d.object;
       return { element: `object:${d.object}` };
     },
@@ -820,7 +916,8 @@
         ...r.uses.map((u) => ({ say: `${u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 3).join(', ')}${u.names.length > 3 ? ` 외 ${u.names.length - 3}` : ''}`, href: u.screen })),
         terms.length ? { say: `용어 ${terms.length}개`, sub: ontTermsSaid(terms), href: known('lexicon') ? 'lexicon' : '' } : null].filter(Boolean);
     },
-    remove: async (s) => { await ontEdit('delete_states', { object: s.object }); S.ont.ssel = ''; return {}; },
+    drops: (s) => [['delete_states', { object: s.object }]],
+    remove: async (s) => { await ontEdit(...ITEM.state.drops(s)[0]); S.ont.ssel = ''; return {}; },
     history: (s) => ontHistory('state', s.object, '상태 전이'),
     revert: (s, e) => ontRevert('state', s.object, e),
   });
@@ -830,11 +927,27 @@
       if (!d) return;
       if (!d.from || !d.to) { toast('시작 · 끝 상태가 선택되지 않아 전이를 추가하지 못했습니다. 시작 상태와 끝 상태를 선택해 주세요.', true); return; }
       if (d.transitions.some((t) => t.from === d.from && t.to === d.to)) { toast('동일한 전이가 있어 추가하지 못했습니다. 다른 시작 · 끝 상태를 선택해 주세요.', true); return; }
-      d.transitions.push({ from: d.from, to: d.to, action: d.action || '' });
+      d.transitions.push({ from: d.from, to: d.to, action: d.action || '', ...ontGuardRow(null) });
       Object.assign(d, { from: '', to: '', action: '' });
       render();
     },
     ontTdel: (t) => { const d = S.it.d; if (d) { d.transitions.splice(Number(t.dataset.i), 1); render(); } },
+  });
+  Object.assign(INPUT, {
+    ontTg: (t) => {  // a move's guard: a new rule table starts at its first result, a result at the value it most likely wants
+      const it = S.it, r = it.d && it.d.transitions[Number(t.dataset.i)], k = t.dataset.k;
+      if (!r) return;
+      r[k] = t.value;
+      if (k === 'gk') Object.assign(r, { field: (ontGuardOuts(r)[0] || {}).name || '', rest: {} });
+      if (k === 'gk' || k === 'field') {
+        const o = ontGuardOuts(r).find((x) => x.name === r.field);
+        r.value = o && o.type === 'boolean' ? 'true' : '';
+        render();
+        return;
+      }
+      const box = $('#itchecks');
+      if (box) box.innerHTML = itemChecks(ITEM.state, it);
+    },
   });
   document.addEventListener('change', (ev) => {  // the states typed in: the choices of the selects follow once the box is left
     if (S.tab === 'state-form' && ev.target.dataset && ev.target.dataset.k === 'states' && S.it.d) render();
@@ -890,7 +1003,8 @@
       Object.assign(S.ont.g, { rel: l.name, rd: null, lay: null, want: '' });
       return { go: `model?rel=${encodeURIComponent(l.name)}` };
     },
-    remove: async (l) => { await ontEdit('delete_link', { name: l.name }); Object.assign(S.ont.g, { rel: '', rd: null, lay: null }); return {}; },
+    drops: (l) => [['delete_link', { name: l.name }]],
+    remove: async (l) => { await ontEdit(...ITEM.relation.drops(l)[0]); Object.assign(S.ont.g, { rel: '', rd: null, lay: null }); return {}; },
     history: (l) => ontItemHistory(`link:${l.name}`, 'Relation', true),
     revert: (l, e) => ontRevert('relation', l.name, e),
   });

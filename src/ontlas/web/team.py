@@ -27,19 +27,19 @@ NEEDS = {
     "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
     "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor", "catalog/use": "editor",
     "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "library": "editor", "catalog/move": "editor", "catalog/trash": "editor",
-    "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "admin",  # a data source: the ontology's admin
+    "draft": "editor", "draft/preview": "editor", "draft/apply": "editor", "connect": "admin",  # a data source: the ontology's admin
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
     "draft/map/apply": "approver", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
     "manage/questions": "editor", "space/store": "admin", "connect/gateway": "admin", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
-    "draft/table": "editor", "draft/review/apply": "approver", "draft/review/preview": "editor",  # a reviewed draft replaces the shared space: an approver applies it
+    "draft/table": "editor", "draft/review/apply": "editor", "draft/review/preview": "editor",  # a reviewed draft goes into the request being written
     "draft/request": "editor", "draft/request/drop": "editor", "draft/request/apply": "approver",  # an editor files the draft for an approver to apply
     "manage/undo": "editor", "manage/trial": "editor", "manage/yaml": "editor", "element/comment": "editor",
     "graph/view": "editor", "graph/view/forget": "editor", "workspace/layout": "editor",
-    "manage/discard": "editor", "manage/propose": "editor", "function/run": "editor",
+    "manage/discard": "editor", "manage/propose": "editor", "manage/conflict": "editor", "function/run": "editor",
     "manage/redo": "editor", "manage/revert": "editor", "lexicon/edit": "editor", "lexicon/import": "editor",
-    "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "approve": "approver", "rollback": "approver",
+    "change/decide": "approver", "change/mark": "approver", "change/comment": "editor", "change/reopen": "editor", "approve": "approver", "rollback": "approver",
     "flow/save": "admin", "reset": "admin",
     "library/file": "admin", "library/file/drop": "admin", "library/new": "admin", "library/drop": "admin",  # a library the whole team then works in
 }

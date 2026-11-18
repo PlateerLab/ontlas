@@ -159,3 +159,105 @@ def test_management_routes_need_an_editor():
     from ontlas.web.team import NEEDS
 
     assert {NEEDS[r] for r in ("manage/edit", "manage/questions", "manage/discard", "manage/propose")} == {"editor"}
+
+
+def test_edits_made_again_on_an_approved_version_hold_aside_what_it_also_changed(ws):
+    """After an approval the edits still being written are made again on it; one on an item the approval changed waits
+    aside with why, until a person makes it over the approval or lets it go. Each keeps who made it."""
+    from ontlas.manage import changed_elements
+    from ontlas.modules import Module
+
+    ws.apply("update_object", {"name": "Customer", "label": "회원"})
+    approved = Module.from_dict(ws.module.to_dict())  # the workspace module as the first approval left it
+    later = type(ws)(ws.base, approved, compose_kw=ws.kw)
+    later.who = "Choi"
+    product = later.apply("update_object", {"name": "Product", "label": "상품 마스터"})
+    later.apply("update_object", {"name": "Customer", "label": "고객 마스터"})
+    later.apply("add_property", {"object": "Customer", "name": "memo", "type": "string"})
+    second = approved.to_dict()
+    second["version"], second["extend"]["objects"]["Customer"]["label"] = "0.1.1", "고객"  # approved meanwhile
+    after = type(ws)(ws.base, Module.from_dict(second), compose_kw=ws.kw)
+    changed = changed_elements(later.started(), after.started())
+    assert changed == {"object:Customer"}
+    moved = later.rebase(ws.base, after.current, changed=changed, change="C2")
+    assert [(e.target, e.by) for e in moved.edits] == [("object:Product", "Choi"), ("property:Customer.memo", "Choi")]
+    assert moved.edits[0].id == product.id
+    assert [(e.target, e.conflict["why"], e.conflict["change"]) for e in moved.held] == [("object:Customer", "changed", "C2")]
+    assert moved.composed().ontology.objects["Customer"].label == "고객"  # what was approved is not written back
+    kept = later.rebase(ws.base, after.current, changed=changed, change="C2")
+    kept.drop_held(kept.held[0].id)
+    assert kept.held == [] and kept.composed().ontology.objects["Customer"].label == "고객"
+    made = moved.make_held(moved.held[0].id)
+    assert made.by == "Choi" and moved.held == [] and moved.composed().ontology.objects["Customer"].label == "고객 마스터"
+
+
+def test_a_property_names_the_standard_vocabulary_it_stands_for_and_lets_it_go(ws):
+    ws.apply("add_property", {"object": "Customer", "name": "nickname", "type": "string",
+                              "aligned": ["https://schema.org/alternateName"]})
+    assert ws.composed().ontology.objects["Customer"].properties["nickname"].aligned == ["https://schema.org/alternateName"]
+    ws.apply("update_property", {"object": "Customer", "name": "nickname", "aligned": []})  # the definition's own name again
+    assert ws.composed().ontology.objects["Customer"].properties["nickname"].aligned == []
+    ws.apply("update_property", {"object": "Customer", "name": "grade", "aligned": ["https://schema.org/category"]})  # a standard's
+    assert ws.composed().ontology.objects["Customer"].properties["grade"].aligned == ["https://schema.org/category"]
+    assert ws.module.extend["objects"]["Customer"]["properties"]["grade"] == {"aligned": ["https://schema.org/category"]}
+
+
+
+@pytest.fixture
+def shop():
+    """The example shop library as people get it: the decision tables and named values the rules screens edit."""
+    pytest.importorskip("yaml")
+    from ontlas.config import load_studio
+    from ontlas.web.api import StudioSession
+
+    from .conftest import EXAMPLE
+
+    return StudioSession(load_studio(EXAMPLE.parent / "library" / "studio.yaml"))
+
+
+def _table_rows(s, name):
+    return {c["rule"]: c for c in s.semantic_state()["cards"] if c["kind"] == "executable" and c["decision"] == name}
+
+
+def test_a_table_taken_to_priority_numbers_its_rules_and_answers_as_before(shop):
+    before = {k: shop.simulate("shippingFee", k)["verdict"] for k in ("O1", "O2", "O3", "O4")}
+    shop.manage_edit("update_decision", {"decision": "shippingFee", "hit_policy": "priority"})
+    got = _table_rows(shop, "shippingFee")
+    assert [(k, got[k]["priority"]) for k in ("cancelled", "free", "basic")] == [("cancelled", 1), ("free", 2), ("basic", 3)]
+    assert {k: shop.simulate("shippingFee", k)["verdict"] for k in before} == before
+    # a row's number is kept when it is edited without one, and a new one is given its own
+    shop.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": {}, "then": {"fee": 2500, "reason": "기본"}})
+    assert _table_rows(shop, "shippingFee")["basic"]["priority"] == 3
+    shop.manage_edit("add_rule", {"decision": "shippingFee", "id": "promo", "when": {}, "then": {"fee": 0, "reason": "행사"},
+                                     "priority": 0})
+    assert _table_rows(shop, "shippingFee")["promo"]["priority"] == 0
+    assert shop.simulate("shippingFee", "O1")["matched"][0] == "promo"
+    with pytest.raises(ValueError):
+        shop.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": {}, "then": {"fee": 1, "reason": "x"},
+                                            "priority": "high"})
+    # and back: in the order of the numbers, without them
+    shop.manage_edit("update_rule", {"decision": "shippingFee", "id": "free", "when": {"order_total": ">= @free_shipping_amount"},
+                                        "then": {"fee": 0, "reason": "무료"}, "priority": 9})
+    shop.manage_edit("update_decision", {"decision": "shippingFee", "hit_policy": "first"})
+    got = _table_rows(shop, "shippingFee")
+    assert sorted(got, key=lambda k: got[k]["position"]) == ["promo", "cancelled", "basic", "free"]
+    assert all(c["priority"] is None for c in got.values())
+
+
+def test_a_table_with_an_unnumbered_axiom_row_is_not_taken_to_priority(shop):
+    with pytest.raises(ValueError) as e:
+        shop.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "priority"})
+    assert str(e.value) == "AXIOM 규칙 'not-delivered'는 여기서 바꾸거나 옮기거나 지울 수 없습니다."
+
+
+def test_a_named_value_takes_an_owner(shop):
+    from ontlas.web import routes
+
+    routes.load()
+    shop.manage_edit("update_parameter", {"name": "return_window_days", "value": 7, "owner": "운영팀"})
+    p = next(x for x in shop.semantic_state()["parameters"] if x["name"] == "return_window_days")
+    assert p["owner"] == "운영팀"
+    hist = routes.find("GET", "sem/history")(shop, {"kind": "parameter", "name": "return_window_days"}, None)
+    assert {f["label"]: f["after"] for f in hist["entries"][0]["fields"]}["담당자"] == "운영팀"
+    item = routes.find("GET", "item/history")(shop, {"element": "parameter:return_window_days"}, None)
+    assert any(f["label"] == "담당" and f["after"] == "운영팀" for f in item["entries"][0]["fields"])

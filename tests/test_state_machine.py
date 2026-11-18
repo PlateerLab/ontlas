@@ -107,6 +107,7 @@ def _failed(p):
     return {c.name for c in p.checks if not c.passed}
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_transition_writes_its_side_effects(studio):
     p = studio.actions.request("ship", "A", {"carrier": "K"}, actor=AGENT)
     assert p.status == "pending", p.checks
@@ -122,6 +123,7 @@ def test_a_guard_on_a_decision_stops_the_transition(studio):
     assert next(c.detail for c in p.checks if c.name == "guard:canShip") == "{'ok': False}"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_guard_on_a_property_stops_the_transition(studio):
     assert _failed(studio.actions.request("deliver", "D", actor=AGENT)) == {"guard:signed"}
     p = studio.actions.request("deliver", "C", actor=AGENT)
@@ -143,6 +145,7 @@ def test_each_transition_of_an_action_is_its_own(studio):
     assert sm.find("PAID", "CONFIRMED") is None
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_transition_can_call_out_after_the_write(clock):
     d = _definition()
     trans = d["objects"]["Order"]["states"]["transitions"]
@@ -177,6 +180,7 @@ def test_a_transition_can_call_out_after_the_write(clock):
     assert sent[1][0].endswith("/pickup/A/cancel") and st.fetch("Order", "A")["status"] == "PAID"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_call_with_no_way_back_cannot_be_rolled_back(clock):
     d = _definition()
     d["objects"]["Order"]["states"]["transitions"][0]["call"] = {"url": "https://carrier.example.com/pickup/$key"}
@@ -215,6 +219,7 @@ def test_a_customer_value_moves_the_clock(clock):
     assert [x.key for x in _studio(clock, d).actions.due() if x.target == "CONFIRMED"] == ["E", "F"]
 
 
+@pytest.mark.usefixtures("action_write")
 def test_advancing_takes_what_is_due_with_its_side_effects_and_says_so(studio):
     done = studio.actions.advance()
     assert [(p.key, p.status) for p in done] == [("E", "executed"), ("G", "executed"), ("H", "rejected")]
@@ -229,6 +234,7 @@ def test_advancing_takes_what_is_due_with_its_side_effects_and_says_so(studio):
     assert [p.key for p in studio.actions.advance()] == ["H"]  # taken once
 
 
+@pytest.mark.usefixtures("action_write")
 def test_the_clock_takes_its_own_transition_where_an_action_shares_the_states(clock):
     d = _definition()
     trans = d["objects"]["Order"]["states"]["transitions"]
@@ -248,6 +254,7 @@ def test_a_call_on_the_clock_needs_an_allowed_host(clock):
     assert st.fetch("Order", "E")["status"] == "DELIVERED"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_transition_on_the_clock_is_not_rolled_back_as_an_action(studio):
     p = studio.actions.advance()[0]
     with pytest.raises(ActionError, match="taken on the clock"):
@@ -313,6 +320,7 @@ def test_a_request_goes_stale_when_the_row_leaves_the_requesters_scope(clock):
     assert p.status == "stale" and [c.name for c in p.revalidated if not c.passed] == ["scope"]
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_request_that_still_holds_runs_as_before_and_says_it_was_asked(studio):
     p = studio.actions.request("ship", "A", {"carrier": "K"}, actor=AGENT)
     studio.actions.approve(p.id, approver=CLERK)

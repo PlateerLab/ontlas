@@ -153,7 +153,12 @@
       Object.assign(S.bnd.map, { sel: d.prop, area: o && bndAreas(now).some((a) => a.name === o.area) ? o.area : '' });
       return { element: `property:${p.object}.${p.name}` };
     },
-    remove: async (x) => { await bndEdits([['update_property', { object: x.p.object, name: x.p.name, column: '', transform: '', source_type: '' }]]); },
+    uses: async (x) => {  // what reads the Property, and the column a delete sets it back to, where the connected source can say
+      const [rows, back] = await Promise.all([itemUsesOf(ITEM.map, x), api('bnd/reset?element=' + encodeURIComponent(`property:${x.p.object}.${x.p.name}`)).catch(() => null)]);
+      return [...rows, ...((back && back.reverts) || []).map((c) => ({ say: '되돌아갈 컬럼', sub: `${c.table}.${c.column} · ${c.exists ? '컬럼 확인됨' : '소스에 없음'}` }))];
+    },
+    drops: (x) => [['update_property', { object: x.p.object, name: x.p.name, column: '', transform: '', source_type: '' }]],
+    remove: async (x) => { await bndEdits(ITEM.map.drops(x)); },
   });
   Object.assign(INPUT, { bndMapProp: (t) => { const d = S.it.d, m = bndM(), p = m.properties.find((x) => bndMapId(x) === t.value); d.prop = t.value;
     if (p) Object.assign(d, { column: bndCols(p)[0], how: p.transform ? 'expr' : (p.values || []).length ? 'code' : 'same', codes: bndCodes(p), transform: p.transform || '', source_type: p.source_type || '', status: p.status || 'active' }); render(); } });
@@ -252,7 +257,8 @@
         links.length ? { say: `Relation Binding ${links.length}개`, sub: `${links.slice(0, 2).map((l) => `${(bndObj(m, l.source) || {}).label || l.source} → ${(bndObj(m, l.target) || {}).label || l.target}`).join(', ')}${links.length > 2 ? ` 외 ${links.length - 2}` : ''} 연결 해제`, href: 'model' } : null,
         ...r.uses.map((u) => ({ say: `${u.kind} ${u.names.length}개`, sub: `${u.names.slice(0, 2).join(', ')}${u.names.length > 2 ? ` 외 ${u.names.length - 2}` : ''} 값 조회 불가`, href: u.screen }))].filter(Boolean);
     },
-    remove: async (o) => { await bndEdits([['update_object', { name: o.name, table: '' }]]); Object.assign(S.bnd.bind, { d: null, sql: null, prof: null }); },
+    drops: (o) => [['update_object', { name: o.name, table: '' }]],
+    remove: async (o) => { await bndEdits(ITEM.binding.drops(o)); Object.assign(S.bnd.bind, { d: null, sql: null, prof: null }); },
   });
   Object.assign(INPUT, { bndBindEnt: (t) => { const m = bndM(), e = bndObj(m, t.value), d = S.it.d; Object.assign(d, { entity: t.value, table: e ? e.table || '' : '', key: e ? e.key || '' : '', rows: e ? bndBindRows(m, e.name) : [] }); render(); } });
 
@@ -381,9 +387,14 @@
       Object.assign(S.bnd.q, { st: null, sel: name, tr: null, run: null });
       return { element: `query:${name}`, go: `query?sel=${encodeURIComponent(name)}` };
     },
-    uses: async (x) => [...x.questions.length ? [{ say: `검증 질문 ${x.questions.length}개`, sub: x.questions.slice(0, 3).join(', '), href: 'check' }] : [],
-      ...x.roles.length ? [{ say: `접근 정책 ${x.roles.length}개`, sub: `${x.roles.map((r) => r.label).join(', ')}의 실행 범위`, href: 'roles' }] : []],
-    remove: async (x) => { await bndEdits([['delete_query', { name: x.name }]]); Object.assign(S.bnd.q, { st: null, sel: '', tr: null, run: null }); },
+    uses: async (x) => {  // the questions and policies as the list holds them; what else reads it (the validation flow) as item/uses says
+      const r = await api('item/uses?element=' + encodeURIComponent(`query:${x.name}`));
+      return [...x.questions.length ? [{ say: `검증 질문 ${x.questions.length}개`, sub: x.questions.slice(0, 3).join(', '), href: 'check' }] : [],
+        ...x.roles.length ? [{ say: `접근 정책 ${x.roles.length}개`, sub: `${x.roles.map((y) => y.label).join(', ')}의 실행 범위`, href: 'roles' }] : [],
+        ...r.uses.filter((g) => !['검증 질문', '접근 정책'].includes(g.kind)).map((g) => ({ say: `${g.kind} ${g.names.length}개`, sub: g.names.slice(0, 3).join(', '), href: known(g.screen) ? g.screen : '' }))];
+    },
+    drops: (x) => [['delete_query', { name: x.name }]],
+    remove: async (x) => { await bndEdits(ITEM.queryitem.drops(x)); Object.assign(S.bnd.q, { st: null, sel: '', tr: null, run: null }); },
     revert: async (x, e) => {  // the name, the description and the definition as that change left them
       const w = await bndWas(`query:${x.name}`, e);
       if (!w || !w.was) throw new Error(bndGone('질의'));
@@ -410,7 +421,7 @@
   // ---- Action: what it takes, what must hold, what it changes, who lets it through ---------------------------------------
   const bndTyped = (x) => (x === 'true' ? true : x === 'false' ? false : (x !== '' && !Number.isNaN(Number(x)) ? Number(x) : x));
   item('act', {
-    word: 'Action', under: 'actions', list: 'actions', load: bndReady, history: bndHist('act'), lead: { form: 'Action을 추가하거나 편집합니다.' },
+    word: 'Action', under: 'actions', list: 'actions', load: async () => { await bndReady(); await bndWriteLoad(); }, history: bndHist('act'), lead: { form: 'Action을 추가하거나 편집합니다.' },
     find: (id) => { const m = bndM(); return (m && m.actions.find((a) => a.name === id)) || null; },
     code: (a) => a.name, name: (a) => a.label, element: (a) => `action:${a.name}`,
     draft: (a) => {
@@ -467,6 +478,8 @@
         if (off.length) out.push({ say: '자동 승인 기준 오류 · 변경 값의 Property 또는 Parameter의 최댓값 · 최솟값', sub: off.map((l) => l.subject.slice(2)).join(', '), tone: 'bad' });
       }
       out.push(d.url.trim() ? { say: '호출 API 있음', sub: `${d.method} ${d.url.trim()}`, tone: 'ok' } : { say: '호출 API 없음 · 소스 값 변경', tone: 'note' });
+      const wr = bndWr();  // a run that changes values is only recorded where the server does not write
+      if (wr && wr.write === false && (d.set.some((r) => r.prop) || d.transition_to)) out.push({ say: '데이터 소스 쓰기 꺼짐', sub: '실행 결과만 기록', tone: 'warn', word: '서버 설정' });
       return out;
     },
     valid: (d) => (!d.label.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.name.trim() ? '키가 없어 저장하지 못했습니다. 키를 입력해 주세요.' : !d.target ? '대상 Entity가 없어 저장하지 못했습니다. 대상 Entity를 선택해 주세요.' : ''),
@@ -498,7 +511,8 @@
         moves.length ? { say: `상태 전이 ${moves.length}개`, sub: `${moves.slice(0, 2).join(', ')}${moves.length > 2 ? ` 외 ${moves.length - 2}` : ''} 전이`, href: 'states' } : null,
         asked.length ? { say: `연동 대상 ${asked.length}개`, sub: `${asked.map((t) => t.name).join(', ')} · 요청 기록 ${asked.reduce((n, t) => n + t.requests, 0)}건`, href: 'connect' } : null].filter(Boolean);
     },
-    remove: async (a) => { await bndEdits([['delete_action', { name: a.name }]]); Object.assign(S.bnd.act, { sel: '', res: null }); },
+    drops: (a) => [['delete_action', { name: a.name }]],
+    remove: async (a) => { await bndEdits(ITEM.act.drops(a)); Object.assign(S.bnd.act, { sel: '', res: null }); },
     revert: async (a, e) => {  // every part of the action as that change left it; its target stays what it is
       const w = await bndWas(`action:${a.name}`, e);
       if (!w || !w.was) throw new Error(bndGone('Action'));

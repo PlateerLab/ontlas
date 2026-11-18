@@ -30,7 +30,8 @@ _CARDINALITY = {"1:1": "one_to_one", "1:n": "one_to_many", "n:1": "many_to_one",
                 "0..n": "many_to_many", "1..n": "many_to_many", "*": "many_to_many"}
 _RELATION = {"혼동주의": "confusable", "혼동": "confusable", "confusable": "confusable", "동의어": "synonyms",
              "synonym": "synonyms", "synonyms": "synonyms", "쓰지않는표현": "avoid", "금칙어": "avoid", "avoid": "avoid",
-             "상위": "broader", "broader": "broader", "하위": "narrower", "narrower": "narrower"}
+             "상위": "broader", "broader": "broader", "하위": "narrower", "narrower": "narrower",
+             "상위하위": "narrower", "하위상위": "broader"}  # 상위 · 하위: the standard term (A) above the other (B)
 _NUMBER = re.compile(r"^(-?\d[\d,]*(?:\.\d+)?)\s*(%|원|일|개|시간|분|개월|년|kg|cm)?$")
 
 
@@ -61,6 +62,16 @@ def _strings(v: Any) -> list[str]:
     if isinstance(v, (list, tuple)):
         return [x for x in (_text(i) for i in v) if x]
     return [x for x in (_text(i) for i in re.split(r"\s*[,;]\s*", str(v or ""))) if x]
+
+
+def _own(entity: str, name: str) -> str:
+    """The name a property goes by on one Entity when another Entity's property of that name holds something else."""
+    return f"{entity[:1].lower()}{entity[1:]}{name[:1].upper()}{name[1:]}"
+
+
+def _yes(v: Any) -> bool:
+    """A check column as a draft marks it: true, Y, 예."""
+    return v is True or str(v or "").strip().lower() in ("y", "yes", "true", "예", "o")
 
 
 def _layer(v: Any) -> str:
@@ -146,13 +157,17 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         ko = _text(_get(o, "label_ko", "label")) or _split(str(raw).split("@")[-1])[1]
         ident = _ident(_split(str(raw).split("@")[-1])[1])
         said = [_text(_get(o, "definition", "description"))]
-        said += [f"{word}: {_text(o[k])}" for k, word in (("includes", "포함"), ("excludes", "제외"), ("identifier", "식별자"),
-                                                           ("lifecycle", "상태 흐름")) if _text(o.get(k))]
+        said += [f"{word}: {_text(o[k])}" for k, word in (("group", "묶음"), ("includes", "포함"), ("excludes", "제외"),
+                                                           ("identifier", "식별자"), ("lifecycle", "상태 흐름"),
+                                                           ("scope_without_data", "연결 없이"), ("scope_with_data", "연결 후"))
+                 if _text(o.get(k))]
         area = {"label": ko, "description": " · ".join(x for x in said if x), "status": "draft"}
         if aligned(raw, o.get("vocabulary")):
             area["aligned"] = aligned(raw, o.get("vocabulary"))
         if _text(o.get("owner")):
             area["owner"] = _text(o["owner"])
+        if _text(o.get("id")):  # the row it was drafted as, so the draft and the studio can be read side by side
+            area["cite"] = _text(o["id"])
         areas.setdefault(ident, area)
         area_of_label[ko] = ident
         for e in o.get("entities") or []:
@@ -168,6 +183,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
     objects: dict[str, dict] = {}
     type_of: dict[str, str] = {}  # an Entity as written (with and without its prefix) → its identifier
     pending_links: list[tuple[str, dict]] = []
+    enum_of: dict[tuple[str, str], str] = {}  # (Entity, property) → the enumeration it takes, as a glossary may name it
     for e in merged.get("entities", []):
         raw = str(_get(e, "name", "class"))
         prefix, local = _split(raw)
@@ -178,12 +194,17 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         raw = str(_get(e, "name", "class"))
         ident = type_of[raw]
         area = area_of_class.get(raw) or area_of_class.get(str(e.get("class") or "")) or area_of_label.get(_text(e.get("object")), "")
-        obj: dict[str, Any] = {"label": _text(_get(e, "label_ko", "label")) or ident, "description": _text(_get(e, "definition", "description")),
+        said = [_text(_get(e, "definition", "description"))]
+        if _text(e.get("rule_requirements")):  # what the rules need of it, as its author put it
+            said.append(f"규칙이 요구하는 것: {_text(e['rule_requirements'])}")
+        obj: dict[str, Any] = {"label": _text(_get(e, "label_ko", "label")) or ident, "description": " · ".join(x for x in said if x),
                                "status": "draft", "properties": {}}
         if area:
             obj["area"] = area
         if aligned(raw, e.get("vocabulary")):
             obj["aligned"] = aligned(raw, e.get("vocabulary"))
+        if _text(e.get("id")):
+            obj["cite"] = _text(e["id"])
         parent = type_of.get(str(e.get("subClassOf") or ""))
         if parent and parent != ident:
             obj["parent"] = parent
@@ -206,6 +227,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
                     prop["values"] = [c for c, _ in codes]
                     if any(word for _, word in codes):
                         prop["labels"] = {c: word for c, word in codes if word}
+                    enum_of[(ident, pname)] = _ident(_split(rng)[1])
                 else:
                     rep.adjusted.append(f"{ident}.{pname}: enumeration '{rng}' is not in the draft, kept as text")
             else:
@@ -246,19 +268,21 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
                 rep.adjusted.append(f"property {pname}: {prop['type']} on {tname}, {first[0]} on {first[1]}; read as {wide} on both")
                 seen[pname] = (wide, first[1])
             else:
-                own = f"{tname[:1].lower()}{tname[1:]}{pname[:1].upper()}{pname[1:]}"
+                own = _own(tname, pname)
                 renamed[pname] = own
                 seen[own] = (prop["type"], tname)
                 rep.adjusted.append(f"property {pname}: {prop['type']} on {tname}, {first[0]} on {first[1]}; on {tname} it goes by {own}")
         if renamed:
             o["properties"] = {renamed.get(k, k): v for k, v in o["properties"].items()}
             o["key"] = renamed.get(o["key"], o["key"])
+            enum_of.update({(tname, renamed[p]): enum_of.pop((t, p)) for t, p in list(enum_of) if t == tname and p in renamed})
     for o in objects.values():
         for pname, prop in o["properties"].items():
             prop["type"] = seen[pname][0]
 
     # ---- relations between Entities: a property whose value is another Entity ----
     links: dict[str, dict] = {}
+    link_of: dict[tuple[str, str], str] = {}  # (Entity, the property it was written as) → the relation's name
     link_names = _Names()
     link_names.taken.update({pname: f"property {pname}" for pname in seen})  # a relation is not named as a property is
 
@@ -276,6 +300,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         if aligned(praw, vocab):
             spec["aligned"] = aligned(praw, vocab)
         links[lname] = spec
+        link_of[(source, _ident(plocal))] = lname
         rep.preserved.append(f"link {lname}")
 
     done: set[tuple[str, str]] = set()
@@ -315,8 +340,15 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         rep.preserved.append(f"parameter {pname}")
 
     # ---- rules: one card each, in the module of its layer ----
-    entities_of_rule = {str(r.get("rule")): [type_of[x] for x in r.get("entities") or [] if x in type_of]
-                        for r in merged.get("rule_links", [])}
+    # what a rule is about, from every file that links it: the Entities it reads and the Object it is filed under
+    entities_of_rule: dict[str, list[str]] = {}
+    object_of_rule: dict[str, str] = {}
+    for r in merged.get("rule_links", []):
+        rid = str(r.get("rule"))
+        reads = [type_of[x] for x in r.get("entities") or [] if x in type_of]
+        entities_of_rule[rid] = list(dict.fromkeys([*entities_of_rule.get(rid, []), *reads]))
+        if _text(r.get("object")):
+            object_of_rule.setdefault(rid, _text(r["object"]))
     cards: dict[str, list[dict]] = {"axiom": [], "custom": [], "standard": []}
     for r in merged.get("rules", []):
         rid = re.sub(r"[^A-Za-z0-9_-]", "_", str(_get(r, "id", "rule")))
@@ -328,11 +360,21 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         title, result = _text(_get(r, "name", "title")), _text(r.get("result"))
         named = values_of_rule.get(str(_get(r, "id", "rule")), {})
         card: dict[str, Any] = {"id": rid, "type": ctype, "statement": title or result, "status": "draft"}
-        applies = [f"object:{x}" for x in entities_of_rule.get(str(_get(r, "id", "rule")), [])] + [f"parameter:{x}" for x in named]
+        said = _text(r.get("object")) or object_of_rule.get(str(_get(r, "id", "rule")), "")  # its Object, by label or name
+        area = area_of_label.get(said) or (said if said in areas else "")
+        if said and not area:
+            rep.adjusted.append(f"rule {rid}: Object '{said}' is not in the draft, left off what it applies to")
+        applies = ([f"area:{area}"] if area else []) + [f"object:{x}" for x in entities_of_rule.get(str(_get(r, "id", "rule")), [])] + \
+            [f"parameter:{x}" for x in named]
         for field, value in (("applies_to", applies), ("conditions", _strings([r.get("condition")]) if r.get("condition") else []),
                              ("result", result if title else ""), ("exceptions", _strings([r.get("exception")]) if r.get("exception") else []),
                              ("params", named), ("source", _text(_get(r, "basis", "source"))), ("owner", _text(r.get("owner"))),
-                             ("risk", _text(r.get("risk"))), ("verification", _text(r.get("verification")))):
+                             ("risk", _text(r.get("risk"))), ("verification", _text(r.get("verification"))),
+                             # the group a sheet files it under (its 영역), the law it rests on and the kind of that source,
+                             # how it stands against the policy already written, and what it is about in its author's words
+                             ("category", _text(_get(r, "area", "category"))), ("law", _text(r.get("law"))),
+                             ("source_kind", _text(_get(r, "basis_kind", "source_kind"))),
+                             ("policy_check", _text(r.get("policy_check"))), ("related", _text(r.get("related")))):
             if value:
                 card[field] = value
         if layer == "axiom":
@@ -340,7 +382,9 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         cards[layer].append(card)
         rep.preserved.append(f"rule {rid}")
     for i, b in enumerate(merged.get("banned_expressions", []), 1):
-        card = {"id": f"BX-{i:02d}", "type": "ban", "statement": f"{_text(b.get('scope'))}: {_text(b.get('reason'))}".strip(": "),
+        # an expression allowed once a condition is met (조건부) is limited; the others are banned
+        bkind = "limit" if re.search(r"조건|condition", str(b.get("kind") or ""), re.I) else "ban"
+        card = {"id": f"BX-{i:02d}", "type": bkind, "statement": f"{_text(b.get('scope'))}: {_text(b.get('reason'))}".strip(": "),
                 "status": "draft", "legal_review": "pending"}
         for field, value in (("conditions", _strings(re.split(r"\s+·\s+", str(b.get("examples") or "")))),
                              ("exceptions", _strings([b.get("allowed_when")]) if b.get("allowed_when") else []),
@@ -358,29 +402,56 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         ko = _text(ko)
         t = terms.setdefault(ko, {"term": ko})
         ident = type_of.get(en.strip()) if en else None
-        if ident and "concept" not in t:
+        area = _ident(_split(en)[1]) if en and _ident(_split(en)[1]) in areas else ""
+        # `word@Class` names an Entity, or the Object of that class where no Entity is, or where the word is the Object's
+        if area and (not ident or (areas[area]["label"] == ko and objects[ident]["label"] != ko)) and "concept" not in t:
+            t.update(concept=f"area:{area}", **({} if ident else {"english": _split(en)[1]}))  # the class's English is its Entity's
+        elif ident and "concept" not in t:
             t.update(concept=f"object:{ident}", english=_split(en)[1])
         return t
 
-    value_concept: dict[str, tuple[str, str]] = {}  # a code → (concept, its name): the first property that allows it
+    value_concept: dict[str, list[tuple[str, str, str]]] = {}  # a code → (concept, its name, Entity) of each property allowing it
     for tname, o in objects.items():
         for pname, p in o["properties"].items():
             for code in p.get("values") or []:
-                value_concept.setdefault(code, (f"value:{tname}.{pname}={code}", (p.get("labels") or {}).get(code, "")))
+                value_concept.setdefault(code, []).append((f"value:{tname}.{pname}={code}", (p.get("labels") or {}).get(code, ""), tname))
     by_label: dict[str, list[str]] = {}  # an Entity's label → the Entities called so
     for tname, o in objects.items():
         by_label.setdefault(o["label"], []).append(tname)
 
+    def named(tname: str, english: Any) -> str:
+        """What an Entity's English name stands for: a property, a relation, the enumeration a property takes, or one of
+        its codes written after it (`Enumeration · Code`)."""
+        if not english:
+            return f"object:{tname}"
+        pieces = [_text(x) for x in re.split(r"\s+·\s+", _split(english)[1], maxsplit=1)]
+        head, code, props = _ident(pieces[0]), pieces[1] if len(pieces) > 1 else "", objects[tname]["properties"]
+        head = head if head in props or _own(tname, head) not in props else _own(tname, head)  # it may go by its Entity's name
+        if not code and head in props:
+            return f"property:{tname}.{head}"
+        if not code and (tname, head) in link_of:
+            return f"link:{link_of[(tname, head)]}"
+        takes = [p for (t, p), e in enum_of.items() if t == tname and e == head]
+        if len(takes) == 1 and (not code or code in (props[takes[0]].get("values") or [])):
+            return f"value:{tname}.{takes[0]}={code}" if code else f"property:{tname}.{takes[0]}"
+        return ""
+
     def concept_of(path: Any, english: Any) -> str:
-        """`Object › Entity` with the property's own name, as the definition it stands for."""
-        parts = [_text(x) for x in re.split(r"[›>]", str(path or ""))]
-        found = [n for n in by_label.get(parts[-1], []) if len(parts) < 2 or areas.get(objects[n].get("area", ""), {}).get("label") == parts[0]]
-        if len(found) != 1:
-            return ""
-        prop = _ident(_split(english)[1]) if english else ""
-        return f"property:{found[0]}.{prop}" if prop in objects[found[0]]["properties"] else f"object:{found[0]}" if not english else ""
+        """`Object › Entity` with the property's own name, as the definition it stands for. A row that gives several paths
+        (`A › B · C › D`) stands for the first that names one; a path of an Object alone names that Object."""
+        whole = str(path or "")  # a name may hold a ·, so it is read whole first unless it holds two paths' ›
+        for one in [*([whole] if len(re.findall(r"[›>]", whole)) < 2 else []), *(re.split(r"\s+·\s+", whole) if "·" in whole else [])]:
+            parts = [_text(x) for x in re.split(r"[›>]", one)]
+            found = [n for n in by_label.get(parts[-1], []) if len(parts) < 2 or areas.get(objects[n].get("area", ""), {}).get("label") == parts[0]]
+            if len(found) == 1 and (got := named(found[0], english)):
+                return got
+            if not found and len(parts) == 1 and not english and parts[0] in area_of_label:
+                return f"area:{area_of_label[parts[0]]}"
+        return ""
     for x in merged.get("terms", []):
         t = term(_get(x, "term", "name"))
+        if _text(x.get("id")):  # the row's own id is the id the entry is edited by
+            t.setdefault("id", _text(x["id"]))
         for field, value in (("english", _text(x.get("english"))), ("kind", _text(x.get("kind"))),
                              ("concept", concept_of(x.get("concept"), x.get("english")) if "concept" not in t else ""),
                              ("definition", _text(_get(x, "definition", "description"))), ("source", _text(x.get("source"))),
@@ -400,15 +471,34 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         else:
             rep.unsupported.append(f"term relation '{x.get('relation')}' of {t['term']}: not a kind the lexicon keeps")
             continue
+        # as a glossary's pair rows are read (lexicon.merge): the ground a row gives, and a row marked to be checked
+        if _text(_get(x, "basis", "cite")) and not t.get("cite"):
+            t["cite"] = _text(_get(x, "basis", "cite"))
+        if _yes(_get(x, "needs_check", "check", default=False)):
+            t["status"] = "review"
         rep.preserved.append(f"term relation {t['term']} {field}")
+    for t in list(terms.values()):  # a broader term has the other as its narrower one, and the other way round
+        for field, back in (("broader", "narrower"), ("narrower", "broader")):
+            for w in t.get(field, []):
+                if w in terms and t["term"] not in terms[w].get(back, []):
+                    terms[w].setdefault(back, []).append(t["term"])
     for x in merged.get("customer_labels", []):
         code = str(x.get("standard_value") or "")
-        concept, word = value_concept.get(code, ("", ""))
-        if not concept:
+        found = value_concept.get(code, [])
+        where = _text(_get(x, "area", "영역"))  # of the codes' properties, the one of the Entity or Object the row names
+        pick = next((f for f in found if objects[f[2]]["label"] == where), None) or \
+            next((f for f in found if areas.get(objects[f[2]].get("area", ""), {}).get("label") == where), None) or (found or [None])[0]
+        if not pick:
             rep.unsupported.append(f"customer label '{x.get('customer_label')}': the value '{code}' is not a code of one property")
             continue
-        t = terms.setdefault(word or code, {"term": word or code})
+        concept, word = pick[:2]
+        key = word or code
+        if terms.get(key, {}).get("concept", concept) != concept:  # one word naming two things is two entries
+            key = f"{key}@{concept}"
+        t = terms.setdefault(key, {"term": word or code})
         t.setdefault("concept", concept)
+        if _yes(_get(x, "needs_check", "check", default=False)):
+            t["status"] = "review"
         shown = _text(x.get("customer_label"))
         if shown and shown != t["term"]:
             if "고객" in t.setdefault("channels", {}) and t["channels"]["고객"] != shown:

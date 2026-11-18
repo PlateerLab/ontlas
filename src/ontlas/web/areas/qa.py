@@ -16,10 +16,11 @@ META_KEYS = ("type", "holdout", "grading", "keywords", "owner")
 # an audit event as the log names it: (word, tone)
 EVENT = {"decided": ("판정", "b"), "answered": ("질문 답변", ""), "function_ran": ("함수 실행", ""),
          "requested": ("Action 요청", "warn"), "approved": ("승인", "ok"), "auto_approved": ("자동 승인", "ok"),
-         "rejected": ("반려", "bad"), "executed": ("데이터 소스 반영", "ok"), "written": ("데이터 소스 기록", "ok"),
+         "rejected": ("반려", "bad"), "executed": ("데이터 소스 반영", "ok"), "recorded": ("기록됨", "b"), "written": ("데이터 소스 기록", "ok"),
          "called": ("외부 호출", ""), "call_failed": ("외부 호출 실패", "bad"), "rolled_back": ("되돌림", "warn"),
          "stale": ("재검사 실패", "bad")}
-CHANGE_EVENT = {"proposed": ("변경 요청", ""), "approved": ("승인", "ok"), "rejected": ("반려", "bad")}
+CHANGE_EVENT = {"proposed": ("변경 요청", ""), "approved": ("승인", "ok"), "rejected": ("반려", "bad"),
+                "reopened": ("작성 중으로 되돌림", "")}
 # what the session noted of itself that the log keeps: a measurement of the pipeline, a draft asked for or applied
 SESSION_EVENT = {"measure": ("검증", ""), "draft": ("AI 초안", "")}
 DOC_KIND = {"policy": "정책서", "screen": "화면 정의", "other": "문서"}

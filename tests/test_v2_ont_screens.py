@@ -369,3 +369,76 @@ def test_a_property_its_parent_gives_reads_again_as_the_parent_says(session):
     out = _revert(session, "entity", "Customer", first)  # the Property cannot go: it reads as its parent's again
     assert next(p for p in out["properties"] if p["object"] == "Customer" and p["name"] == "name")["label"] == parent["label"]
     assert out["edits"] == ["update_property"]
+
+
+# ---- what a move needs to be taken (its guard), and how a Property stands beside the standard vocabularies --------------
+
+def _states(session) -> dict:
+    from ontlas.web.routes import find
+
+    return find("GET", "ont/states")(session, {}, None)["states"]
+
+
+def test_each_move_says_what_it_needs_to_be_taken_as_held_and_in_words(guarded):
+    moves = _states(guarded)["OrderItem"]
+    asked = next(m for m in moves if (m["from"], m["to"]) == ("NORMAL", "RETURN_REQUESTED"))
+    assert asked["guard"] == {"decision": "returnEligibility", "expect": {"eligible": True}}
+    assert asked["said"] == "반품 가능 여부 · 결과 가능"  # the table's first true or false result is its 결과
+    assert [m["said"] for m in moves if m is not asked] == ["", "", ""]
+    assert "OrderItem" in _states(guarded) and "Customer" not in _states(guarded)  # only the Entities with states
+
+
+def test_a_guard_the_state_form_sends_is_kept_said_and_read_in_the_history(guarded):
+    guarded.manage_edit("add_property", {"object": "OrderItem", "name": "inspected", "label": "검수 완료", "type": "boolean"})
+    machine = next(x for x in guarded.manage_state()["states"] if x["object"] == "OrderItem")
+    want = {("NORMAL", "RETURN_REQUESTED"): {"decision": "returnEligibility", "expect": {"eligible": False}},
+            ("RETURN_REQUESTED", "RETURNED"): {"property": "inspected"}}
+    guarded.manage_edit("update_states", {"object": "OrderItem", **{k: machine[k] for k in ("property", "states", "initial")},
+                                          "transitions": [{**t, "guard": want.get((t["from"], t["to"]), {})} for t in machine["transitions"]]})
+    said = {(m["from"], m["to"]): m["said"] for m in _states(guarded)["OrderItem"]}
+    assert said[("NORMAL", "RETURN_REQUESTED")] == "반품 가능 여부 · 결과 불가"
+    assert said[("RETURN_REQUESTED", "RETURNED")] == "검수 완료 예"  # a true or false Property of the Entity must be true
+    assert _moves(guarded)[("RETURN_REQUESTED", "RETURNED", "completeReturn")]["guard"] == {"property": "inspected"}
+    assert set(_moves(guarded)[("RETURN_REQUESTED", "RETURNED", "completeReturn")]) == {"guard", "set", "call"}  # the rest kept
+    (e,) = _history(guarded, "OrderItem", "state")
+    rows = {r["label"]: (r["before"], r["after"]) for r in e["rows"]}
+    assert rows["전이 조건"][0] == "NORMAL → RETURN_REQUESTED · 반품 가능 여부 · 결과 가능"
+    assert rows["전이 조건"][1].startswith("NORMAL → RETURN_REQUESTED · 반품 가능 여부 · 결과 불가, RETURN_REQUESTED → RETURNED · ")
+    assert "전이 조건" in [x["label"] for x in e["all"]]
+
+
+def test_the_vocabulary_route_is_registered_with_the_states_route():
+    from ontlas.web import routes
+
+    routes.load()
+    assert routes.find("GET", "ont/vocab") is not None and routes.find("GET", "ont/states") is not None
+
+
+def test_a_property_stands_beside_the_vocabulary_it_is_aligned_to_or_is_the_definitions_own(tmp_path):
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")
+    import shutil
+
+    from ontlas.config import load_studio
+    from ontlas.web import routes
+    from ontlas.web.api import StudioSession
+
+    shutil.copytree(LIB, tmp_path / "library")
+    shutil.copytree(LIB.parent / "commerce", tmp_path / "commerce")
+    path = tmp_path / "library" / "commerce" / "1.0.0.yaml"
+    text, was = path.read_bytes(), "      brand: {type: string, label: 브랜드}".encode()
+    assert text.count(was) == 1
+    path.write_bytes(text.replace(was, "      brand: {type: string, label: 브랜드, aligned: [https://schema.org/brand]}".encode()))
+    routes.load()
+    session = StudioSession(load_studio(tmp_path / "library" / "studio.yaml"))
+    vocab = lambda: routes.find("GET", "ont/vocab")(session, {}, None)  # noqa: E731
+    first = vocab()
+    assert first["properties"]["Product.brand"] == {"vocab": "schema.org", "name": "brand", "iri": "https://schema.org/brand"}
+    assert "Product.name" not in first["properties"] and first["prefix"] == ""  # no name of the definition's own has a prefix
+    # the prefix the definition's own names are written with: the one its terms' English names use, not a standard's
+    session.lexicon_edit("add_term", {"term": "포장 메모", "english": "shop:wrapNote"})
+    session.lexicon_edit("add_term", {"term": "선물 포장", "english": "shop:giftWrap"})
+    session.lexicon_edit("add_term", {"term": "상품 이름", "english": "schema:name"})
+    session.lexicon_edit("add_term", {"term": "상품 설명", "english": "schema:description"})
+    session.lexicon_edit("add_term", {"term": "상품 상표", "english": "schema:brand"})
+    assert vocab()["prefix"] == "shop"

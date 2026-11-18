@@ -170,6 +170,7 @@ def test_views_can_be_made_again(studio):
     assert len(studio.run({"match": {"l": "SaleEntry"}, "return": ["l.entry_id"]}).rows) == 2
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_write_goes_through_to_the_row_behind_the_view(studio):
     p = studio.actions.request("finish", "R3", actor=Actor("agent", "agent", ["clerk"]))
     assert all(c.passed for c in p.checks), p.checks
@@ -180,12 +181,14 @@ def test_a_write_goes_through_to_the_row_behind_the_view(studio):
     assert studio.backend().fetch("SELECT STATE FROM account_ledger WHERE ENTRY_ID = 'R3'") == [("OPEN",)]
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_write_under_another_name_lands_on_the_right_column(studio):
     p = studio.actions.request("recount", "R3", {"units": 5}, actor=CLERK)
     assert p.status == "executed", p.checks
     assert studio.backend().fetch("SELECT UNITS FROM account_ledger WHERE ENTRY_ID = 'R3'") == [(5,)]
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_text_date_behind_a_view_is_written_in_its_layout(studio):
     p = studio.actions.request("repost", "R3", {"on": "2026-02-01"}, actor=CLERK)
     assert p.status == "executed", p.checks

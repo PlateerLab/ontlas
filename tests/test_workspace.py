@@ -89,13 +89,14 @@ def test_a_rule_moves_and_the_table_is_tried_as_edited(session):
 
 
 def test_a_table_takes_another_hit_policy_only_when_its_rules_allow_it(session):
-    with pytest.raises(ValueError, match="우선순위"):
-        session.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "priority"})
     session.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "collect"})
     d = next(d for d in session.manage_state()["decisions"] if d["name"] == "returnEligibility")
     assert d["hit_policy"] == "collect" and any(r["module"] == "acme-overlay" for r in d["rules"])
     edited = [f for f in session.rules_state()["findings"] if f["decision"] == "returnEligibility"]
     assert not edited  # a collected table has nothing to overlap
+    session.manage_edit("update_decision", {"decision": "returnEligibility", "hit_policy": "priority"})  # numbered as tried
+    rows = [c for c in session.semantic_state()["cards"] if c["kind"] == "executable" and c["decision"] == "returnEligibility"]
+    assert sorted(c["priority"] for c in rows) == list(range(1, len(rows) + 1))
 
 
 def test_a_query_put_together_on_the_page_is_kept_by_its_name(session):

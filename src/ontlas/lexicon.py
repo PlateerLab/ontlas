@@ -29,7 +29,7 @@ _SECTION = {"decision": "decisions", "metric": "metrics", "query": "queries", "a
             "parameter": "parameters", "link": "links", "function": "functions"}
 LINK_ORDER = ("object", "property", "value", "area", "decision", "metric", "query", "action")  # who a bare label names first
 FIELDS = ("term", "english", "kind", "concept", "definition", "synonyms", "abbreviations", "channels", "hidden",
-          "related", "broader", "narrower", "confusable", "avoid", "source", "cite", "owner", "status")
+          "related", "broader", "narrower", "confusable", "avoid", "source", "cite", "note", "owner", "status")
 LISTS = ("synonyms", "abbreviations", "hidden", "related", "broader", "narrower", "avoid")
 # what a glossary's relation column says, lower case without spaces
 RELATIONS = {"동의어": "synonym", "유의어": "synonym", "이음동의어": "synonym", "같은말": "synonym", "synonym": "synonym",
@@ -37,7 +37,14 @@ RELATIONS = {"동의어": "synonym", "유의어": "synonym", "이음동의어": 
              "abbr": "abbreviation", "관련어": "related", "연관어": "related", "related": "related", "상위어": "broader",
              "broader": "broader", "하위어": "narrower", "narrower": "narrower", "혼동주의": "confusable", "혼동": "confusable",
              "혼동어": "confusable", "confusable": "confusable", "영문": "english", "영문명": "english", "english": "english",
-             "숨은표기": "hidden", "오타": "hidden", "구어": "hidden", "hidden": "hidden"}
+             "숨은표기": "hidden", "오타": "hidden", "구어": "hidden", "hidden": "hidden",
+             "상위하위": "above", "하위상위": "below",  # 상위 · 하위: A above B, unless the row's note says which is
+             "채널표기": "channel", "고객표기": "channel", "channel": "channel"}
+CHANNEL = "고객"  # the channel a channel word is for when its row names none, as a definition draft's customer words are kept
+_TO = re.compile(r"(?:→|->|⇒)\s*([^\s()\[\],]+)")  # 채널 표기 (BO→FO): the words are what FO calls the term
+_CODED = re.compile(r"^([A-Za-z]{1,8}\d{2,}\s+[A-Za-z0-9]{1,8})\s+(\S.*)$")  # OM005 11 주문접수: a code group and code first
+_MEMO = re.compile(r"^(.*?\S)\s+\((.+)\)$")  # 반품진행중 (정책서는 회수완료): a word, and a memo written after it
+_SIDE = re.compile(r"상위|하위")
 PAIR_HEADERS = {
     "kind": ["구분", "분류", "category", "kind", "group"],
     "a": ["용어a", "용어1", "기준용어", "terma", "term1", "from"],
@@ -97,7 +104,8 @@ def entry(d: dict) -> dict:
             "channels": {str(k): str(v).strip() for k, v in (d.get("channels") or {}).items() if str(v or "").strip()},
             "hidden": _list(d.get("hidden")), "related": _list(d.get("related")), "broader": _list(d.get("broader")),
             "narrower": _list(d.get("narrower")), "confusable": conf, "avoid": _list(d.get("avoid") or d.get("forbidden")),
-            "source": str(d.get("source") or ""), "cite": str(d.get("cite") or ""), "owner": str(d.get("owner") or ""),
+            "source": str(d.get("source") or ""), "cite": str(d.get("cite") or ""), "note": str(d.get("note") or ""),
+            "owner": str(d.get("owner") or ""),
             "status": status}
 
 
@@ -222,7 +230,8 @@ def link(e: dict, onto) -> tuple[str, list[str]]:
 
 def conflicts(terms: list[dict], onto=None) -> list[dict]:
     """What the lexicon says two ways: one label claimed by two definitions, a pair called both the same word and two
-    words not to be swapped, a term naming a definition that is not there."""
+    words not to be swapped, a term naming a definition that is not there. A word a channel shows for several values
+    (상품준비중 for three order states) and that no term calls itself otherwise is no conflict: it stands for each."""
     es = [entry(t) for t in terms]
     out: list[dict] = []
     claims: dict[str, dict[str, list[dict]]] = {}
@@ -231,7 +240,7 @@ def conflicts(terms: list[dict], onto=None) -> list[dict]:
             claims.setdefault(norm(label), {}).setdefault(e["concept"] or f"term:{e['id']}", []).append(
                 {"id": e["id"], "term": e["term"], "as": kind, "label": label})
     for by in claims.values():
-        if len(by) > 1:
+        if len(by) > 1 and not _shared(by):
             said = [x for xs in by.values() for x in xs]
             out.append({"kind": "label", "label": said[0]["label"], "terms": [x["id"] for x in said],
                         "concepts": [c for c in by if not c.startswith("term:")],
@@ -259,6 +268,11 @@ def conflicts(terms: list[dict], onto=None) -> list[dict]:
     return out
 
 
+def _shared(by: dict[str, list[dict]]) -> bool:
+    """A label several terms hold, each only as a word a channel shows it by: one channel word for several values."""
+    return all(x["as"] == "channel" for xs in by.values() for x in xs)
+
+
 def pairs(terms: list[dict]) -> dict[str, list[dict]]:
     """Each term's confusables, from either side: {preferred label (as compared): [{term, note}]}."""
     out: dict[str, list[dict]] = {}
@@ -282,20 +296,29 @@ def _pattern(label: str) -> re.Pattern:
 
 def read(text: str, terms: list[dict]) -> dict:
     """The terms a sentence uses, by any label: the sentence in their preferred words, what each stands for, and the
-    terms each must not be taken for. Longest label first, each stretch of text read once."""
+    terms each must not be taken for. Longest label first, each stretch of text read once. A word a channel shows for
+    several values stands for each of them and stays as it was written."""
     text = str(text or "")
     index = sorted(((label, kind, e) for e in (entry(t) for t in terms) for label, kind in labels(e) if len(norm(label)) >= 2),
                    key=lambda x: -len(norm(x[0])))
+    claims: dict[str, dict[str, list[dict]]] = {}
+    for label, kind, e in index:
+        claims.setdefault(norm(label), {}).setdefault(e["id"], []).append({"as": kind})
+    shared = {k for k, by in claims.items() if len(by) > 1 and _shared(by)}
     taken = [False] * len(text)
     spans: list[tuple[int, int, str, dict]] = []
+    held: dict[tuple[int, int], str] = {}  # the stretches a shared channel word took, by that word
     matched: list[dict] = []
     for label, kind, e in index:
         hit = False
         for m in _pattern(label).finditer(text):
             if any(taken[m.start():m.end()]):
+                hit = hit or held.get((m.start(), m.end())) == norm(label)  # the same word, standing for this value too
                 continue
             taken[m.start():m.end()] = [True] * (m.end() - m.start())
             spans.append((m.start(), m.end(), kind, e))
+            if norm(label) in shared:
+                held[(m.start(), m.end())] = norm(label)
             hit = True
         if hit and not any(x["id"] == e["id"] and x["as"] == kind for x in matched):
             matched.append({"label": label, "as": kind, "as_label": LABEL_WORD[kind], "id": e["id"], "term": e["term"],
@@ -303,7 +326,7 @@ def read(text: str, terms: list[dict]) -> dict:
     out, at = [], 0
     for start, end, kind, e in sorted(spans, key=lambda s: s[0]):
         out.append(text[at:start])
-        out.append(text[start:end] if kind == "preferred" else e["term"])
+        out.append(text[start:end] if kind == "preferred" or (start, end) in held else e["term"])
         at = end
     out.append(text[at:])
     known = pairs(terms)
@@ -409,7 +432,10 @@ def merge(glossary: dict, current: list[dict], onto=None, *, source: str = "") -
     """The entries a glossary adds to the lexicon or changes in it, and what became of each row: the words that became
     synonyms, related, broader or narrower terms, the pairs not to be swapped, the definitions each term was tied to,
     and what now says one thing two ways. A pair row reads as "B is A's <relation>": B a synonym of A, B a broader
-    term of A; of an abbreviation pair the shorter word is the abbreviation. Related and confusable go both ways."""
+    term of A, B what a channel calls A (the channel the row's 구분 points to, BO→FO, else 고객); 상위 · 하위 says A
+    is above B. Of an abbreviation pair the shorter word is the abbreviation. Related and confusable go both ways, and
+    so do broader and narrower. B may list several words (, ; ·). An A written after the code group and code it is
+    filed under (OM005 11 주문접수) is that word, the code kept as a hidden label."""
     have: dict[str, dict] = {}  # preferred label -> the entry written back
     for t in current:
         have.setdefault(norm(t.get("term")), t)
@@ -417,7 +443,7 @@ def merge(glossary: dict, current: list[dict], onto=None, *, source: str = "") -
     report: dict[str, Any] = {"source": source, "read": {"terms": len(glossary.get("terms") or []),
                                                          "pairs": len(glossary.get("pairs") or [])},
                               "added": [], "updated": [], "synonym": [], "abbreviation": [], "english": [], "hidden": [],
-                              "related": [], "broader": [], "narrower": [], "confusable": [], "linked": [],
+                              "related": [], "broader": [], "narrower": [], "confusable": [], "channel": [], "linked": [],
                               "unlinked": [], "review": [], "skipped": [], "conflicts": []}
 
     def get(term: str, create: bool = True) -> dict | None:
@@ -456,49 +482,93 @@ def merge(glossary: dict, current: list[dict], onto=None, *, source: str = "") -
             _confuse(e, x if isinstance(x, dict) else {"term": str(x), "note": ""})
         if d.get("status") in STATUSES:
             e["status"] = d["status"]
+    def note(e: dict, said: str) -> None:  # what a row wrote beside a word, kept on the term with the word it is about
+        if said and said not in str(e.get("note") or "").split(" · "):
+            e["note"] = " · ".join(x for x in (str(e.get("note") or ""), said) if x)
+
     for r in glossary.get("pairs") or []:
-        a, b, rel = r.get("a", ""), r.get("b", ""), RELATIONS.get(norm(r.get("relation")), "")
-        if not a or not b:
+        first, rel = r.get("a", ""), RELATIONS.get(re.sub(r"[\s·]", "", str(r.get("relation") or "")).lower(), "")
+        words = _words(r.get("b", ""))
+        if not first or not words:
             report["skipped"].append({"row": r["row"], "reason": "용어 A 또는 용어 B가 비어 있어 건너뛰었습니다."})
             continue
         if not rel:
             report["skipped"].append({"row": r["row"], "reason": with_particles(f"관계 '{r.get('relation', '')}'을(를) 알 수 없어 건너뛰었습니다. "
-                                                                                "동의어, 약어, 관련어, 상위어, 하위어, 혼동주의 중 하나로 적어 주세요.")})
+                                                                                "동의어, 약어, 관련어, 상위어, 하위어, 상위 · 하위, 혼동주의, 채널 표기 중 하나로 적어 주세요.")})
             continue
-        if rel == "abbreviation" and len(norm(a)) < len(norm(b)):  # PG, 결제대행: the shorter word is the abbreviation
-            a, b = b, a
-        e = get(a)
-        if r.get("kind") and not e.get("kind"):
-            e["kind"] = r["kind"]
-        if r.get("cite") and not e.get("cite"):
-            e["cite"] = r["cite"]
-        said = {"term": a, "with": b, "note": r.get("note", ""), "row": r["row"]}
-        if rel == "synonym":
-            add(e, "synonyms", b)
-        elif rel == "abbreviation":
-            add(e, "abbreviations", b)
-        elif rel == "english":
-            e["english"] = e.get("english") or b
-        elif rel == "hidden":
-            add(e, "hidden", b)
-        elif rel == "related":
-            add(e, "related", b)
-            other = get(b, create=False)
-            if other is not None:
-                add(other, "related", a)
-        elif rel in ("broader", "narrower"):
-            add(e, rel, b)
-            other = get(b, create=False)
-            if other is not None:
-                add(other, "narrower" if rel == "broader" else "broader", a)
-        else:
-            _confuse(e, {"term": b, "note": r.get("note", "")})
-            _confuse(get(b), {"term": a, "note": r.get("note", "")})
-        report[rel].append(said)
-        if r.get("check") and _truthy(r["check"]):
-            e["status"] = "review"
-            if a not in report["review"]:
-                report["review"].append(a)
+        coded = _CODED.match(first) if get(first, create=False) is None else None
+        if coded:
+            first = coded.group(2).strip()
+            add(get(first), "hidden", coded.group(1))
+        to = _TO.search(f"{r.get('kind', '')} {r.get('relation', '')}")
+        checked = bool(r.get("check")) and _truthy(r["check"])
+        if rel in ("above", "below"):  # the words above, the words below: each one above is the broader term of each below
+            others = [w for w, _ in words]
+            upper, lower = _ranks(r.get("note", ""), [first, *others]) or (([first], others) if rel == "above" else (others, [first]))
+            e = get(first)
+            for k in ("kind", "cite"):
+                if r.get(k) and not e.get(k):
+                    e[k] = r[k]
+            for w, memo in words:
+                note(e, f"{w} · {memo}" if memo else "")
+            for u in upper:
+                for low in lower:
+                    for w, field, other in ((u, "narrower", low), (low, "broader", u)):
+                        x = e if norm(w) == norm(first) else get(w, create=False)
+                        if x is not None:
+                            add(x, field, other)
+                    report["narrower"].append({"term": u, "with": low, "note": r.get("note", ""), "row": r["row"]})
+            if checked:
+                e["status"] = "review"
+                if first not in report["review"]:
+                    report["review"].append(first)
+            continue
+        for b, memo in words:
+            a = first
+            if rel == "abbreviation" and len(norm(a)) < len(norm(b)):  # PG, 결제대행: the shorter word is the abbreviation
+                a, b = b, a
+            e = get(a)
+            if r.get("kind") and not e.get("kind"):
+                e["kind"] = r["kind"]
+            if r.get("cite") and not e.get("cite"):
+                e["cite"] = r["cite"]
+            said = {"term": a, "with": b, "note": r.get("note", ""), "row": r["row"]}
+            if rel == "synonym":
+                add(e, "synonyms", b)
+            elif rel == "abbreviation":
+                add(e, "abbreviations", b)
+            elif rel == "english":
+                e["english"] = e.get("english") or b
+            elif rel == "hidden":
+                add(e, "hidden", b)
+            elif rel == "channel":  # a channel says the term one way: a second word for the same channel is a synonym
+                said["channel"] = to.group(1) if to else CHANNEL
+                channels = dict(e.get("channels") or {})
+                if channels.get(said["channel"]) and norm(channels[said["channel"]]) != norm(b):
+                    add(e, "synonyms", b)
+                else:
+                    e["channels"] = {**channels, said["channel"]: b}
+            elif rel == "related":
+                add(e, "related", b)
+                other = get(b, create=False)
+                if other is not None:
+                    add(other, "related", a)
+            elif rel in ("broader", "narrower"):
+                add(e, rel, b)
+                other = get(b, create=False)
+                if other is not None:
+                    add(other, "narrower" if rel == "broader" else "broader", a)
+            else:
+                _confuse(e, {"term": b, "note": r.get("note", "")})
+                _confuse(get(b), {"term": a, "note": r.get("note", "")})
+            if memo:
+                said["memo"] = memo
+                note(e, f"{said['channel']} {b} · {memo}" if rel == "channel" else f"{b} · {memo}")
+            report[rel].append(said)
+            if checked:
+                e["status"] = "review"
+                if a not in report["review"]:
+                    report["review"].append(a)
     for key, e in out.items():
         (report["updated"] if key in have else report["added"]).append(e["term"])
         if not e.get("concept"):
@@ -513,6 +583,37 @@ def merge(glossary: dict, current: list[dict], onto=None, *, source: str = "") -
     known = {(c["kind"], c["label"], tuple(c["terms"])) for c in conflicts(current, onto)}
     report["conflicts"] = [c for c in conflicts(after, onto) if (c["kind"], c["label"], tuple(c["terms"])) not in known]
     return list(out.values()), report
+
+
+def _words(cell: Any) -> list[tuple[str, str]]:
+    """The words a cell lists (, ; or · outside brackets), each with the memo written in brackets after it."""
+    out = []
+    for part in re.findall(r"(?:\([^)]*\)|[^,;·(])+", str(cell or "")):
+        m = _MEMO.match(part.strip())
+        word, memo = (m.group(1).strip(), m.group(2).strip()) if m else (part.strip(), "")
+        if word:
+            out.append((word, memo))
+    return out
+
+
+def _ranks(note: str, words: list[str]) -> tuple[list[str], list[str]] | None:
+    """Which words of a 상위 · 하위 row are above and which below, as its note names them before 상위 or 하위
+    ('파일첨부가 상위', '팝업 여부 · 알림 여부는 하위'), the words it does not name on the other side. A word is named
+    by itself, without the particle after it, or by its first words. None when the note names none of them."""
+    m = _SIDE.search(note or "")
+    if not m:
+        return None
+    named: list[str] = []
+    for part in re.split(r"[·,]", note[:m.start()]):
+        said = norm(part)
+        bare = re.sub(r"(이|가|은|는|도)$", "", said)
+        hit = [w for w in words if norm(w) in (said, bare)] or [w for w in words if bare and norm(w).startswith(bare)]
+        if len(hit) == 1 and hit[0] not in named:
+            named.append(hit[0])
+    rest = [w for w in words if w not in named]
+    if not named or not rest:
+        return None
+    return (named, rest) if m.group(0) == "상위" else (rest, named)
 
 
 def _confuse(e: dict, c: dict) -> None:

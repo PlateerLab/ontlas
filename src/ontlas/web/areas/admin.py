@@ -45,7 +45,8 @@ ROLE_WORD = {"viewer": "조회자", "editor": "편집자", "approver": "승인�
 TARGETS = {("check", "min_accuracy"): "정답률", ("check", "min_grounded"): "근거 제시율", ("decide", "min_agreement"): "판정 일치율",
            ("index", "min_found"): "문서 검색 적중률", ("query", "min_agree"): "저장소 간 결과 일치율", ("bind", "max_errors"): "Binding 검사 오류"}
 _targets_lock = threading.Lock()  # two admins saving at once each lay their change on what the other saved
-CHANGE_EVENT = {"proposed": "변경 요청", "approved": "승인 · 배포", "rejected": "반려", "marked": "항목 검토", "commented": "댓글"}
+CHANGE_EVENT = {"proposed": "변경 요청", "approved": "승인 · 배포", "rejected": "반려", "marked": "항목 검토", "commented": "댓글",
+                "reopened": "작성 중으로 되돌림"}
 # the screens the language model works behind: [what it does there, the screen]
 MODEL_USES = [("질문 답변 · 자연어 질의", "search"), ("AI 초안 생성", "ai"), ("정책서 규칙 초안", "ruleagent"),
               ("문서 관계 추출", "evidence"), ("개념 초안", "concepts")]
@@ -189,6 +190,8 @@ def user_save(s, a, who) -> dict:
         from ontlas.web.team import hash_password
 
         u = store.users[uid]
+        if (name or uid) == u.name and roles == list(u.roles) and not password:
+            raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
         was = list(u.roles)
         u.name, u.roles = name or uid, roles
         if password:
@@ -359,6 +362,7 @@ def targets(s, a, who) -> dict:
             return {"ok": True, "settings": now}
         kept = FlowSettings.from_dict(now).to_dict()
         s.studio.settings["flow"] = kept
+        s._keep_flow()
     text = "품질 목표 변경 · " + " · ".join(said)
     _note(s, who, "setting", text)
     s.event("flow", text)

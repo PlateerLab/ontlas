@@ -1,6 +1,7 @@
 """A decision table in people's words: what an input is called, what a cell asks, what a rule says."""
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from ontlas.check import _find_prop
@@ -143,6 +144,72 @@ def labels_of(onto: Ontology, table: DecisionTable, name: str) -> dict:
     return dict(p.labels or {}) if p is not None else {}
 
 
+def _stretch(atom: str) -> tuple[float, bool, float, bool] | None:
+    """A stretch of numbers as the table checks name it (decide.checks): 7, 1..6, (0.5..1), > 14, < 0; with whether
+    each end is in it. None for one that is not numbers."""
+    def num(s: str) -> float | None:
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    if atom.startswith(("> ", "< ")):
+        n = num(atom[2:])
+        return None if n is None else (n, False, math.inf, False) if atom[0] == ">" else (-math.inf, False, n, False)
+    low, dots, high = atom.strip("()").partition("..")
+    a, b = num(low), num(high) if dots else num(low)
+    if a is None or b is None:
+        return None
+    shut = not atom.startswith("(")
+    return a, shut, b, shut
+
+
+def _said_stretch(s: tuple[float, bool, float, bool], unit: str) -> str:
+    lo, lo_in, hi, hi_in = s
+    n = lambda v: f"{int(v):,}" if float(v).is_integer() else f"{v:,}"  # noqa: E731
+    if lo == -math.inf:
+        return "모든 값" if hi == math.inf else f"{n(hi)}{unit} {'이하' if hi_in else '미만'}"
+    if hi == math.inf:
+        return f"{n(lo)}{unit} {'이상' if lo_in else '초과'}"
+    return f"{n(lo)}{unit}" if lo == hi else f"{n(lo)}~{n(hi)}{unit}"
+
+
+def _atoms_words(atoms: list[str], unit: str, labels: dict, whole: bool) -> list[str]:
+    """The stretches of an input's values in words; numbers that run on into each other read as one (0, 1..6, 7 is
+    0~7, 50000 and > 50000 is 50,000 이상)."""
+    said = {"null": "값 없음", "true": WORDS[True], "false": WORDS[False], "any value": "모든 값", "any other value": "그 밖의 값"}
+    out: list[Any] = []
+    for atom in atoms:
+        s = _stretch(atom)
+        last = out[-1] if out and isinstance(out[-1], tuple) else None
+        if s is not None and last is not None and (last[2] == s[0] and (last[3] or s[1])
+                                                   or whole and last[3] and s[1] and s[0] == last[2] + 1):
+            out[-1] = (last[0], last[1], s[2], s[3])
+        elif s is not None:
+            out.append(s)
+        elif atom in said:
+            out.append(said[atom])
+        elif len(atom) >= 2 and atom[0] == atom[-1] == '"':
+            out.append(str(labels.get(atom[1:-1], atom[1:-1])))
+        else:
+            out.append(atom)
+    return [_said_stretch(x, unit) if isinstance(x, tuple) else x for x in out]
+
+
+def where_words(onto: Ontology, table: DecisionTable, where: dict[str, str]) -> str:
+    """Where a table check found something (an input and the stretches of its values), in people's words."""
+    out = []
+    for name, atoms in where.items():
+        if name not in table.inputs:
+            out.append(f"{name} {atoms}")
+            continue
+        src = table.inputs[name].source
+        whole = table.inputs[name].type == "integer" or "count" in src or "days_since" in src
+        said = _atoms_words(atoms.split(" | "), unit_of(onto, table, name).strip(), labels_of(onto, table, name), whole)
+        out.append(f"{input_label(onto, table, name)} {', '.join(said)}")
+    return " · ".join(out) or "모든 경우"
+
+
 def rule_sentence(onto: Ontology, table: DecisionTable, rule: DecisionRule) -> str:
     """One rule as a sentence: it is how a rule is found by a question, and what a person reads."""
     named = table.named
@@ -169,4 +236,5 @@ def verdict(table: DecisionTable, outputs: Any) -> tuple[str, bool]:
     return (f"{value:,}" if isinstance(value, (int, float)) else str(value)), True
 
 
-__all__ = ["cell_of", "cell_parts", "cell_words", "input_label", "labels_of", "reads", "rule_sentence", "unit_of", "verdict"]
+__all__ = ["cell_of", "cell_parts", "cell_words", "input_label", "labels_of", "reads", "rule_sentence", "unit_of", "verdict",
+           "where_words"]

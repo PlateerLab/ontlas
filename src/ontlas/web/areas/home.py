@@ -192,8 +192,12 @@ def find(s, a, who) -> dict:
 
 
 def _jobs(s) -> list[dict]:
+    """The drafts made from this screen, newest first: from the journal where the server keeps one, so a restart
+    does not forget them."""
     if getattr(s, "_ai_jobs", None) is None:
-        s._ai_jobs = []
+        journal = s.studio.changes.journal
+        kept = [r.get("job") for r in (journal.read() if journal is not None else []) if r.get("kind") == "ai_job"]
+        s._ai_jobs = [j for j in reversed(kept) if isinstance(j, dict)][:JOBS_MAX]
     return s._ai_jobs
 
 
@@ -287,4 +291,6 @@ def ai_job(s, a, who) -> dict:
     jobs = _jobs(s)
     jobs.insert(0, job)
     del jobs[JOBS_MAX:]
+    if s.studio.changes.journal is not None:
+        s.studio.changes.journal.write("ai_job", {"job": plain(job)})
     return plain(_ai_state(s))

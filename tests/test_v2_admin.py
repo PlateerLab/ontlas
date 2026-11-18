@@ -64,7 +64,7 @@ def test_the_settings_say_what_the_ontology_is_called_and_how_its_names_are_writ
     assert entity["style"] == "PascalCase" and entity["follow"] == entity["total"] == len(session.studio.onto.objects)
     assert prop["style"] == "snake_case" and 0 < prop["follow"] <= prop["total"]
     assert "schema.org" in [v["name"] for v in d["vocabularies"]]
-    assert d["approval"] == {"self_approve": True, "apply_needs": "approver", "decide_needs": "approver"}
+    assert d["approval"] == {"self_approve": True, "apply_needs": "editor", "decide_needs": "approver"}  # a draft goes into the request
     assert d["model_state"] == "off"  # no model: 미연결, and a model set but not yet called is not said to be 연결됨
 
 

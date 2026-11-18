@@ -33,7 +33,7 @@ def _rest(studio):
 
     return Rest([("token-of-the-workflow", StudioTools(studio, actor_id="workflow", read_only=True, audit=True)),
                  ("token-of-the-agent", StudioTools(studio, role="customer_agent", principal={"customer_id": "C001"},
-                                                    actor_id="cs-agent", audit=True))])
+                                                    actor_id="cs-agent", audit=True))], unscoped=True)
 
 
 def test_with_no_api_the_screen_is_told_so(session, ops):
@@ -95,7 +95,7 @@ def test_a_caller_whose_policy_this_ontology_does_not_define_is_marked(session, 
 def test_a_call_is_tried_as_the_policy_picked_would_make_it(session, ops):
     body = {"decision": "returnEligibility", "values": VALUES, "library": "ignored-on-the-page"}
     free = ops.try_call(session, {"path": "/v1/decide", "body": body}, None)
-    assert free["status"] == 200 and free["body"]["outputs"]["eligible"] is True and free["policy"] == ""
+    assert free["status"] == 403 and free["body"]["no_policy"] is True and free["policy"] == ""  # no policy, no answer
     may = ops.try_call(session, {"path": "/v1/decide", "policy": "customer_agent", "body": body}, None)
     assert may["status"] == 200 and may["policy"] == "customer_agent"
     may_not = ops.try_call(session, {"path": "/v1/decide", "policy": "support_agent", "body": body}, None)

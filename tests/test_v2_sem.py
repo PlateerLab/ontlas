@@ -224,7 +224,7 @@ def test_a_point_of_the_history_is_the_whole_item_and_setting_it_back_is_an_edit
     for v in (9, 11):
         session.manage_edit("update_rule_card", {"id": "return-request-moves", "result": f"결과 {v}"})
         session.manage_edit("update_parameter", {"name": "price_auto_percent", "value": v})
-        session.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": {}, "then": {"fee": 3000, "reason": f"기본 {v}"}})
+        session.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": {}, "then": {"fee": 3000, "reason": f"기본 배송비 {v}"}})  # OP6 reads 기본 배송비
         assert session.manage_propose()["change"]["status"] == "approved"
     card = get(session, "item/history", element="rule_card:return-request-moves")
     first = next(e for e in card["entries"] if e["change"] == "C1")
@@ -237,7 +237,7 @@ def test_a_point_of_the_history_is_the_whole_item_and_setting_it_back_is_an_edit
     row = next(e for e in get(session, "item/history", element="rule:shippingFee.basic")["entries"] if e["change"] == "C1")["after"]
     session.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": row.get("when") or {}, "then": row["then"]})
     basic = next(r for d in session.manage_state()["decisions"] if d["name"] == "shippingFee" for r in d["rules"] if r["id"] == "basic")
-    assert basic["then"]["reason"] == "기본 9"
+    assert basic["then"]["reason"] == "기본 배송비 9"
 
 
 def test_a_viewer_reads_the_drafts_and_an_editor_does_not_decide():
@@ -263,7 +263,8 @@ def test_what_reads_a_function_a_named_value_or_a_metric_is_said_to_every_screen
     def said(el):
         return {g["kind"]: g["names"] for g in get(s, "item/uses", element=el)["uses"]}
 
-    assert said("function:soldOut") == {"Action": ["판매가 변경"], "접근 정책": [s.studio.onto.roles["support_agent"].label or "support_agent"]}
+    assert said("function:soldOut") == {"검증 흐름": ["거래 값 대조 · 품절"], "Action": ["판매가 변경"],
+                                        "접근 정책": [s.studio.onto.roles["support_agent"].label or "support_agent"]}
     assert said("function:refundEstimate") == {"규칙 카드": ["law-refund-cap"]}
     window = said("parameter:return_window_days")
     assert window["규칙 카드"] == ["law-return-min-days"] and len(window["규칙"]) == 2 and "Q2" in window["검증 질문"]
@@ -272,3 +273,39 @@ def test_what_reads_a_function_a_named_value_or_a_metric_is_said_to_every_screen
     many = get(s, "item/uses/many", elements="function:soldOut,metric:returnRate,nonsense")["uses"]
     assert set(many) == {"function:soldOut", "metric:returnRate"} and many["metric:returnRate"] == []
     assert next(g for g in many["function:soldOut"] if g["kind"] == "접근 정책")["screen"] == "roles"
+
+
+def test_waiting_rules_are_counted_by_what_they_are_filed_by(session):
+    words = {"category": "표시", "law": "가상 법", "source_kind": "법률", "policy_check": "정책서와 차이 · 확인 필요", "related": "주문"}
+    draft_card(session, "probe-one", **words)
+    draft_card(session, "probe-two", **{**words, "category": "배송", "policy_check": "관련 내용 있음"})
+    out = get(session, "sem/drafts")
+    assert {d["word"]: d["count"] for d in out["by_category"]} == {"표시": 1, "배송": 1}
+    assert out["by_source_kind"] == [{"word": "법률", "count": 2}]
+    assert {d["word"] for d in out["by_policy_check"]} == {"정책서와 차이 · 확인 필요", "관련 내용 있음"}
+    mine = next(d for d in out["drafts"] if d["id"] == "probe-one")
+    assert {k: mine[k] for k in words} == words
+
+
+def test_taking_a_row_out_says_the_rows_across_from_it_who_answers_instead_and_the_gap(session):
+    out = get(session, "sem/rule/without", decision="returnEligibility", rule="in-window")
+    assert out["checked"] and out["decides"]
+    assert out["opposite"] == [{"rule": "not-delivered", "inputs": ["배송 완료 일시 경과일"]}]
+    assert [(t["rule"], t["same"], t["same_first"]) for t in out["takers"]] == [("expired", False, False)]
+    handoff = get(session, "sem/rule/without", decision="shippingFee", rule="cancelled")["takers"]
+    assert [(t["rule"], t["same"], t["same_first"]) for t in handoff] == [("free", False, True), ("basic", False, False)]
+    assert out["takers"][0]["where"][0].startswith("배송 완료 일시 경과일 0~7일") and out["gaps"] == []
+    last = get(session, "sem/rule/without", decision="shippingFee", rule="basic")
+    assert last["takers"] == [] and last["gaps"] == ["주문 금액 50,000원 미만 · 주문 상태 ORDERED, PAID, SHIPPED, DELIVERED"]
+    session.manage_edit("add_rule", {"decision": "shippingFee", "id": "probe-rest", "when": {}, "then": {"fee": 0, "reason": "시험"}, "first": False})
+    assert get(session, "sem/rule/without", decision="shippingFee", rule="basic")["gaps"] == []  # the pending row takes it
+    with pytest.raises(ValueError, match="규칙을 찾을 수 없어"):
+        get(session, "sem/rule/without", decision="shippingFee", rule="nothing")
+
+
+def test_a_change_to_what_a_card_is_filed_by_is_said_in_words(session):
+    rows = session._field_diff("rule_card:x", {"category": "표시", "law": "가"}, {"category": "배송", "source_kind": "법률", "related": "주문",
+                                                                            "policy_check": "보완"})
+    assert {r["field"]: r["label"] for r in rows} == {"category": "분류", "law": "대표 법령", "source_kind": "근거 종류",
+                                                     "policy_check": "정책서 대조", "related": "관련 대상"}
+    assert session._field_diff("rule:shippingFee.basic", {"priority": 1}, {"priority": 2})[0]["label"] == "우선순위"

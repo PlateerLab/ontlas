@@ -81,6 +81,8 @@ def targets(s, a, who) -> dict:
         for action, n in sorted(_asked(rest, tools, str(getattr(s, "library_id", "") or "")).items()):
             asked.setdefault(action, []).append({"name": tools.actor.id, "requests": n})
     return {"rest": on, "listed": rest is not None, "targets": rows, "month": month, "days": now.day,  # days of the month so far
+            # a caller with no policy is refused unless the server opens /v1 to it; an approved Action is written or recorded
+            "unscoped": bool(rest.unscoped) if rest is not None else False, "action_write": bool(s.studio.actions.write),
             "calls_month": sum(r["month"] for r in rows), "calls": sum(r["calls"] for r in rows), "actions": asked}
 
 

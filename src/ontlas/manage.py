@@ -8,8 +8,11 @@ a change request, is tried on a copy and is approved like any other.
 from __future__ import annotations
 
 import copy
+import json
 import re
-from dataclasses import dataclass, field
+import uuid
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Any
 
 from ontlas.lexicon import TermEdits, term_id
@@ -18,16 +21,17 @@ from ontlas.modules import Module, ModuleError, Requirement, compose, settle
 from ontlas.semantic import CARD_FIELDS, CARD_STATUS, CardError, card_spec
 
 NAME = "workspace"
+LABEL, DESCRIPTION = "관리 변경", "화면에서 편집한 정의"  # what a workspace module is called before a request gives it its own
 UNDO_DEPTH = 50  # the edits that can each be taken back; each keeps the module as it was before it
 HIT_POLICIES = ("first", "priority", "collect", "unique")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 PROP_FIELDS = ("label", "description", "type", "column", "unit", "values", "labels", "required", "mask", "expr",
-               "cite", "transform", "source_type", "status")
+               "cite", "transform", "source_type", "status", "aligned")
 OBJECT_FIELDS = ("label", "description", "parent", "table", "title", "cite", "status", "area", "owner")
 AREA_FIELDS = ("label", "description", "cite", "aligned", "status", "owner", "tier")
 LINK_FIELDS = ("label", "description", "cardinality", "inverse", "required", "cite", "status")
-PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max")
+PARAMETER_FIELDS = ("label", "unit", "description", "cite", "min", "max", "owner")
 METRIC_FIELDS = ("label", "description", "unit", "owner", "scale", "cite", "formula", "denominator", "time", "params")
 IDENTITY_FIELDS = ("label", "table", "members", "rules")
 CARD_REVIEW_FIELDS = ("statement", "conditions", "result", "exceptions", "source", "owner")  # what a reviewer may correct
@@ -49,23 +53,33 @@ class Edit:
     target: str
     took_out: list[str] = field(default_factory=list)
     args: dict[str, Any] = field(default_factory=dict)  # what it was asked with, to make it again
+    # the same edit keeps these when it is made again (redo, revert, on the definition after an approval, after a restart)
+    id: str = ""
+    by: str = ""
+    at: str = ""
+    # an edit held aside, not made: {"why": "changed" | "failed", "elements": [...], "change": "C3", "error": "..."}
+    conflict: dict[str, Any] = field(default_factory=dict)
 
 
 class Workspace(TermEdits):
     """Pending edits over the attached modules (`base`), with the attached workspace module as the starting point."""
 
-    def __init__(self, base: list[Module], current: Module | None = None, *, label: str = "관리 변경",
+    def __init__(self, base: list[Module], current: Module | None = None, *, label: str = LABEL,
                  compose_kw: dict | None = None):
         self.base, self.kw = [m for m in base if m.name != NAME], dict(compose_kw or {})
         self.current = current
         # a module filed before keeps what it says; only a new one is given the words (else it reads as changed)
         start = copy.deepcopy(current.to_dict()) if current else {"module": NAME, "version": "0.1.0", "kind": "customer",
-                                                                   "label": label, "description": "화면에서 편집한 정의"}
+                                                                   "label": label, "description": DESCRIPTION}
         self.module = Module.from_dict(start)
         self.edits: list[Edit] = []
         self._before: list[dict | None] = []  # the module before each edit, to take any one back
         self._undone: list[Edit] = []  # what was taken back and can be made again
         self._base_onto = compose(self.base, **self.kw).ontology
+        self.who = ""  # the person the next edit is by
+        # edits the definition moved under (an approval changed the same item, or they no longer hold): kept, not made,
+        # until a person makes them again over it or lets them go
+        self.held: list[Edit] = []
 
     # ---- reading ------------------------------------------------------------------------------------------------
 
@@ -75,8 +89,53 @@ class Workspace(TermEdits):
             {"module": NAME, "kind": "customer", "label": self.module.label,
              "description": self.module.description}).to_dict())
 
+    @property
+    def pending(self) -> bool:
+        """Anything a person wrote that is not filed yet: edits made, or held aside."""
+        return self.dirty or bool(self.held)
+
     def composed(self):
         return compose([*self.base, self.module], **self.kw)
+
+    def started(self):
+        """The definition the edits were made on: the modules with the workspace module as it was filed."""
+        return compose([*self.base, *([self.current] if self.current else [])], **self.kw)
+
+    def titled(self) -> tuple[str, str] | None:
+        """The title and description given to the request being written, when it was given its own."""
+        was = (self.current.label, self.current.description) if self.current else (LABEL, DESCRIPTION)
+        now = (self.module.label, self.module.description)
+        return now if now != was else None
+
+    def rebase(self, base: list[Module], current: Module | None, *, changed: set[str] = frozenset(),
+               change: str = "") -> Workspace:
+        """These edits made again, in order, on the modules as they now stand (`base`, `current`): an approval or another
+        module's change moved the definition under them. An edit on an item that change also changed (`changed`), or
+        one that no longer holds, is held aside with why; what was held before stays held."""
+        ws = made_again(self.edits, base, current, compose_kw=self.kw, changed=changed, change=change, who=self.who)
+        ws.held = [*self.held, *ws.held]
+        ws._undone = list(self._undone)
+        title = self.titled()
+        if title is not None:
+            ws.module.label, ws.module.description = title
+        return ws
+
+    def make_held(self, edit_id: str) -> Edit:
+        """A held edit made over the definition as it stands now: it leaves the held ones once it holds."""
+        edit = next((e for e in self.held if e.id == edit_id), None)
+        if edit is None:
+            raise EditError("held edit not found")
+        made = self.apply(edit.op, edit.args, like=edit)
+        self.held = [e for e in self.held if e.id != edit_id]
+        return made
+
+    def drop_held(self, edit_id: str) -> Edit:
+        """A held edit let go: what the definition now says of its item stays."""
+        edit = next((e for e in self.held if e.id == edit_id), None)
+        if edit is None:
+            raise EditError("held edit not found")
+        self.held = [e for e in self.held if e.id != edit_id]
+        return edit
 
     def _owns_object(self, name: str) -> bool:
         return name in (self.module.body.get("objects") or {})
@@ -94,7 +153,9 @@ class Workspace(TermEdits):
 
     # ---- edits --------------------------------------------------------------------------------------------------
 
-    def apply(self, op: str, a: dict[str, Any], *, again: bool = False) -> Edit:
+    def apply(self, op: str, a: dict[str, Any], *, again: bool = False, like: Edit | None = None) -> Edit:
+        """Make one edit. `like` is the same edit made before (taken back and made again, or made on another definition):
+        it keeps its id, its person and its time."""
         fn = getattr(self, f"_{op}", None)
         if fn is None or op.startswith("_"):
             raise EditError(f"unknown edit '{op}'")
@@ -114,7 +175,9 @@ class Workspace(TermEdits):
         except (ModuleError, KeyError, TypeError, ValueError) as e:  # the edit does not hold: nothing changes
             self.module = Module.from_dict(before)
             raise EditError(str(e)) from None
-        edit = Edit(op, target, took, copy.deepcopy(a))
+        made = ((like.id, like.by, like.at) if like is not None and like.id else
+                (uuid.uuid4().hex[:12], self.who, datetime.now().isoformat(timespec="seconds")))
+        edit = Edit(op, target, took, copy.deepcopy(a), *made)
         self.edits.append(edit)
         self._before.append(before)
         for i in range(len(self._before) - UNDO_DEPTH):  # each snapshot holds every edit before it: keep the last ones
@@ -140,7 +203,7 @@ class Workspace(TermEdits):
             return None
         edit = self._undone.pop()
         try:
-            return self.apply(edit.op, edit.args, again=True)
+            return self.apply(edit.op, edit.args, again=True, like=edit)
         except (EditError, ModuleError):  # it no longer holds: it stays to be made again
             self._undone.append(edit)
             raise
@@ -157,7 +220,7 @@ class Workspace(TermEdits):
         self.module, self.edits, self._before = Module.from_dict(before[index]), edits[:index], before[:index]
         for edit in later:
             try:
-                self.apply(edit.op, edit.args, again=True)
+                self.apply(edit.op, edit.args, again=True, like=edit)
             except (EditError, ModuleError):
                 self.module, self.edits, self._before = module, edits, before
                 raise EditError(edit.target) from None
@@ -462,6 +525,8 @@ class Workspace(TermEdits):
         if unknown:
             raise EditError(f"decision {table.name} has no output '{unknown[0]}'")
         spec: dict[str, Any] = {"id": rid, "when": when, "then": then}
+        if table.hit_policy == "priority":  # the number the table picks it by: the one given, its own, or after the last
+            spec["priority"] = _priority(a.get("priority"), table, rid)
         for k in ("cite", "owner", "status"):
             if a.get(k):
                 spec[k] = str(a[k])
@@ -539,13 +604,41 @@ class Workspace(TermEdits):
         _known_status(fields)
         if fields.get("hit_policy") and fields["hit_policy"] not in HIT_POLICIES:
             raise EditError(f"hit policy '{fields['hit_policy']}' is not one of {', '.join(HIT_POLICIES)}")
-        bare = [r.id for r in t.rules if r.priority is None]
-        if fields.get("hit_policy") == "priority" and bare:
-            raise EditError(f"hit policy priority needs a priority on every rule; {', '.join(bare)} have none")
         holder = (self._section("body", "decisions")[name] if self._owns("decisions", name)
                   else self._section("extend", "decisions").setdefault(name, {}))
         holder.update(fields)
+        to = fields.get("hit_policy")
+        if to and to != t.hit_policy and "priority" in (to, t.hit_policy):
+            self._renumber(t, name, to == "priority")
         return f"decision:{name}"
+
+    def _renumber(self, t, name: str, numbered: bool) -> None:
+        """A table taken to hit policy priority numbers its rules 1, 2, 3 in the order it tries them, so it answers as
+        before; one taken from it puts them in the order of their numbers and drops the numbers. AXIOM rules stay as
+        their module wrote them, ahead of the rest."""
+        from ontlas.decide.table import precedence
+
+        fixed = {r.id for r in t.rules if r.layer == "axiom"}
+        for r in t.rules:  # an AXIOM rule would have to be numbered, or lose its number: that is its module's to do
+            if r.id in fixed and (r.priority is None) == numbered:
+                self._not_axiom(t, r.id)
+        specs = {r["id"]: {k: v for k, v in r.items() if k != "layer"}  # the layer is the writer's, set on composing
+                 for r in self.composed().ontology.to_dict()["decisions"][name].get("rules") or []}
+        order = [r.id for r in (t.rules if numbered else sorted(t.rules, key=precedence)) if r.id not in fixed]
+        for n, rid in enumerate(order, 1):
+            if numbered:
+                specs[rid]["priority"] = n
+            else:
+                specs[rid].pop("priority", None)
+        if self._owns("decisions", name):
+            self._section("body", "decisions")[name]["rules"] = [specs[i] for i in order]
+            return
+        patch = self._section("extend", "decisions").setdefault(name, {})
+        mine = {r.get("id") for k in ("rules_prepend", "rules_append") for r in patch.get(k) or []}
+        patch["rules_remove"] = sorted(set(patch.get("rules_remove") or []) | {r.id for r in t.rules if r.id not in mine | fixed})
+        patch.pop("rules_append", None)
+        patch.pop("rules_replace", None)
+        patch["rules_prepend"] = [specs[i] for i in order]
 
     def _move_rule(self, a: dict) -> str:
         """A rule to another place in its table. Where the table is another module's, this module writes the whole
@@ -695,6 +788,42 @@ class Workspace(TermEdits):
             raise EditError(f"{kind} '{name}' already exists")
         self._section("body", section)[name] = {k: copy.deepcopy(a[k]) for k in fields if a.get(k) not in (None, "", [], {})}
         return f"{kind}:{name}"
+
+    def _restore_element(self, a: dict) -> str:
+        """An item a filed change took out, put back as an earlier version of this module had it (되살리기). `put` sets a
+        value at a path of the module ([part, section, key, ...]), `items` puts an entry back into a list at its place,
+        `unremove` takes a name off a list of what the module takes out: what restore_parts read off that version."""
+        from ontlas.review import _cards, _elements
+
+        el = str(a.get("element") or "")
+        roots = {"body": self.module.body, "extend": self.module.extend, "remove": self.module.remove}
+
+        def holder(path: list, make: bool):
+            d = roots.get(str(path[0]))
+            for k in path[1:-1]:
+                if not isinstance(d, dict):
+                    return None
+                d = d.setdefault(k, {}) if make else d.get(k)
+            return d if isinstance(d, dict) else None
+
+        for path, value in a.get("put") or []:
+            holder(path, True)[path[-1]] = copy.deepcopy(value)
+        for path, value, at in a.get("items") or []:
+            d = holder(path, True)
+            rows = [x for x in d.get(path[-1]) or [] if not (isinstance(x, dict) and x.get("id") == value.get("id"))]
+            rows.insert(min(int(at), len(rows)), copy.deepcopy(value))
+            d[path[-1]] = rows
+        for path, name in a.get("unremove") or []:
+            d = holder(path, False)
+            rows = d.get(path[-1]) if d is not None else None
+            if isinstance(rows, list) and name in rows:
+                rows.remove(name)
+                if not rows:
+                    del d[path[-1]]
+        comp = self.composed()
+        if el not in _elements(comp.ontology, _cards(comp)):
+            raise EditError(f"{el} is not put back by what the earlier version says of it")
+        return el
 
     def _gone_entry(self, section: str, kind: str, a: dict, known) -> str:
         name = str(a.get("name") or "")
@@ -1154,6 +1283,139 @@ class Workspace(TermEdits):
         self.module.requires = [Requirement(o) for o in sorted(o for o in owners if o and o != NAME)]
 
 
+def made_again(edits: list[Edit], base: list[Module], current: Module | None, *, compose_kw: dict | None = None,
+               changed: set[str] = frozenset(), change: str = "", who: str = "") -> Workspace:
+    """A workspace on `base` and `current` with `edits` made again in order, each keeping its id, person and time. One
+    that touches an item in `changed` (what an approved change also changed) is held aside: made again as it was asked,
+    it would write over what was approved. One that no longer holds there is held too, with what the definition said."""
+    ws = Workspace(base, current, compose_kw=compose_kw)
+    ws.who = who
+    for e in edits:
+        hit = sorted(touched(e, changed))
+        if hit:
+            ws.held.append(replace(e, conflict={"why": "changed", "elements": hit, "change": change}))
+            continue
+        try:
+            ws.apply(e.op, e.args, again=True, like=e)
+        except (EditError, ModuleError) as err:
+            ws.held.append(replace(e, conflict={"why": "failed", "elements": [e.target], "change": change, "error": str(err)}))
+    return ws
+
+
+# where a module keeps an item of each kind that is a named entry of a section
+_PLACE = {"area": "areas", "link": "links", "action": "actions", "role": "roles", "query": "queries", "function": "functions",
+          "identity": "identities", "parameter": "parameters", "metric": "metrics", "decision": "decisions", "object": "objects"}
+
+
+def restore_parts(old: Module | None, now: Module, el: str, ends: dict[str, tuple] | None = None) -> dict:
+    """What an earlier version of a module (`old`, None for none) says of an item a later one (`now`) took out, as the
+    parts of a restore_element edit: its own definition (body) or extension where the earlier one had them, back in
+    place, and its name off the lists of what the module takes out. An Entity comes back with the Relations taken out
+    with it: its module's own, and the base's ones that end at it (`ends`: a base Relation's two ends, by name)."""
+    parts = {"body": (old.body if old else {}), "extend": (old.extend if old else {}), "remove": (old.remove if old else {})}
+    here = {"body": now.body, "extend": now.extend, "remove": now.remove}
+    put: list = []
+    items: list = []
+    unremove: list = []
+
+    def get(root: dict, path: list):
+        d = root.get(path[0])
+        for k in path[1:]:
+            d = d.get(k) if isinstance(d, dict) else None
+        return d
+
+    def keep(path: list) -> None:  # a value the earlier version holds that is gone now
+        v = get(parts, path)
+        if v is not None and get(here, path) is None:
+            put.append([path, copy.deepcopy(v)])
+
+    def off(path: list, name: str) -> None:  # a name taken out now that the earlier version did not take out
+        if name in (get(here, path) or []) and name not in (get(parts, path) or []):
+            unremove.append([path, name])
+
+    def entry(path: list, iid: str) -> None:  # an entry of a list by its id, at the place it had
+        rows = get(parts, path) or []
+        at = next((i for i, x in enumerate(rows) if isinstance(x, dict) and x.get("id") == iid), None)
+        if at is not None and not any(isinstance(x, dict) and x.get("id") == iid for x in get(here, path) or []):
+            items.append([path, copy.deepcopy(rows[at]), at])
+
+    kind, _, name = el.partition(":")
+    if kind in _PLACE:
+        sec = _PLACE[kind]
+        keep(["body", sec, name])
+        keep(["extend", sec, name])
+        off(["remove", sec], name)
+        if kind == "object":
+            for lk, spec in (get(parts, ["body", "links"]) or {}).items():
+                if isinstance(spec, dict) and name in (spec.get("from"), spec.get("to")):
+                    keep(["body", "links", lk])
+            for lk, two in (ends or {}).items():
+                if name in two:
+                    off(["remove", "links"], lk)
+    elif kind == "property":
+        obj, _, prop = name.partition(".")
+        keep(["body", "objects", obj, "properties", prop])
+        keep(["extend", "objects", obj, "properties", prop])
+        off(["remove", "properties", obj], prop)
+    elif kind == "rule":
+        table, _, rid = name.partition(".")
+        entry(["body", "decisions", table, "rules"], rid)
+        for k in ("rules_prepend", "rules_append"):
+            entry(["extend", "decisions", table, k], rid)
+        keep(["extend", "decisions", table, "rules_replace", rid])
+        off(["extend", "decisions", table, "rules_remove"], rid)
+    elif kind == "rule_card":
+        entry(["body", "rule_cards"], name)
+        keep(["extend", "rule_cards", name])
+        off(["remove", "rule_cards"], name)
+    elif kind == "question":
+        entry(["body", "questions"], name)
+        off(["remove", "questions"], name)
+    return {"put": put, "items": items, "unremove": unremove}
+
+
+def touched(edit: Edit, changed: set[str]) -> set[str]:
+    """What of `changed` an edit touches: its item, what it took out with it, every term a glossary brought in, the
+    Entity whose states it sets, and the Properties of an Entity it deletes."""
+    if not changed:
+        return set()
+    mine = {edit.target, *edit.took_out}
+    kind, _, name = str(edit.target).partition(":")
+    if kind == "terms":
+        mine |= {f"term:{term_id(t)}" for t in edit.args.get("terms") or [] if isinstance(t, dict)}
+    elif kind == "states":
+        mine.add(f"object:{name}")
+    hit = mine & set(changed)
+    if kind == "object" and edit.op.startswith("delete_"):
+        hit |= {c for c in changed if c.startswith(f"property:{name}.")}
+    return hit
+
+
+def changed_elements(before, after) -> set[str]:
+    """The items one composition differs from another in (added, taken out or changed): the elements a change request
+    lists, and the terms."""
+    from ontlas.review import _elements
+
+    def items(comp) -> dict[str, str]:
+        out = _elements(comp.ontology, list(comp.cards))
+        out.update({f"term:{term_id(t)}": json.dumps(t, sort_keys=True, ensure_ascii=False, default=str) for t in comp.terms})
+        return out
+
+    a, b = items(before), items(after)
+    return {k for k in a.keys() | b.keys() if a.get(k) != b.get(k)}
+
+
+def _priority(given: Any, table, rid: str) -> int:
+    """The number a rule of a table under hit policy priority is picked by: the one given, else the rule's own, else
+    one after the table's last."""
+    if given in (None, ""):
+        own = next((r.priority for r in table.rules if r.id == rid), None)
+        return own if own is not None else max((r.priority for r in table.rules if r.priority is not None), default=0) + 1
+    if isinstance(given, bool) or not re.fullmatch(r"-?\d+", str(given).strip()):
+        raise EditError(f"priority '{given}' must be a whole number")
+    return int(str(given).strip())
+
+
 def row_rule(type_name: str, spec: dict) -> dict:
     """A row filter as the form reads it. One it cannot say comes back as it is, to be kept."""
     def side(who: Any) -> dict | None:
@@ -1267,6 +1529,8 @@ def _prop_spec(a: dict) -> dict:
         spec["columns"] = [str(c) for c in a["columns"]]
     if a.get("values"):
         spec["values"] = [str(v) for v in a["values"]]
+    if a.get("aligned"):  # the standard vocabulary names it stands for (https://schema.org/price)
+        spec["aligned"] = [str(u) for u in (a["aligned"] if isinstance(a["aligned"], list) else [a["aligned"]]) if str(u).strip()]
     if a.get("labels"):
         spec["labels"] = {str(k): str(v) for k, v in dict(a["labels"]).items() if str(v).strip()}
     if a.get("required"):

@@ -277,6 +277,7 @@ def test_a_definition_names_a_callable_and_brings_no_code():
         st.function("score", "G1")
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_condition_of_an_action_can_be_a_function(shop):
     d = spec()
     d["actions"]["setPrice"]["criteria"] = [{"function": "sellable", "expect": {"ok": True}}]
@@ -291,6 +292,7 @@ def test_a_condition_of_an_action_can_be_a_function(shop):
 
 # ---- approval limits
 
+@pytest.mark.usefixtures("action_write")
 def test_inside_its_limit_an_action_runs_and_past_it_a_person_approves(shop):
     who = Actor("kim", "human", ["clerk"])
     p = shop.actions.request("setPrice", "G1", {"to": 1300}, actor=who)  # 4% of 1250
@@ -302,6 +304,7 @@ def test_inside_its_limit_an_action_runs_and_past_it_a_person_approves(shop):
     assert shop.actions.approve(q.id, approver=Actor("lee", "human", ["clerk"])).status == "executed"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_an_agent_goes_to_a_person_unless_the_action_says_otherwise():
     d = spec()
     b = SqliteBackend()
@@ -327,6 +330,7 @@ def test_inside_the_limit_without_the_right_to_execute_it_waits():
     assert st.actions.request("setPrice", "G1", {"to": 1300}, actor=Actor("kim", "human", ["clerk"])).status == "pending"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_limit_by_delta_and_by_a_requested_amount():
     d = spec()
     d["actions"]["setPrice"]["approval"] = {"auto_within": [{"property": "list_price", "delta": 100}, {"parameter": "to", "max": 2000}]}

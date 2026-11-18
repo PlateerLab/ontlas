@@ -5,7 +5,7 @@ integrity: always true, nothing below can change or remove them), a `customer` m
 Custom rules, and every other module writes Standard ones. A table checks its AXIOM rules first.
 
 A rule card is the record of one rule: what it says, what it applies to, its conditions, result and exceptions, where it
-comes from, who answers for it and how far it is reviewed. Many rules run as decision rows; a card can also state a rule
+comes from (the citation, the law and the kind of source), who answers for it and how far it is reviewed. Many rules run as decision rows; a card can also state a rule
 that something else carries out (a computation, a state transition, what a screen shows) and point at it. An AXIOM card
 may carry a check on a named value (a parameter): a composition whose final value breaks it does not hold. A card of any
 layer may bound a property instead (an amount is never negative): each value a caller gives is checked against it.
@@ -30,7 +30,9 @@ CARD_TYPES = {"decide": "판정", "compute": "계산", "transition": "전이", "
 CARD_STATUS = {"draft": "초안", "review": "검토 중", "approved": "승인"}
 LEGAL_REVIEW = {"none": "해당 없음", "pending": "검토 대기", "done": "검토 완료"}
 CARD_FIELDS = ("id", "type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner",
-               "status", "legal_review", "layer", "implements", "check", "risk", "verification")
+               "status", "legal_review", "layer", "implements", "check", "risk", "verification",
+               "category", "law", "source_kind", "policy_check", "related")
+_WORDS = ("risk", "verification", "category", "law", "source_kind", "policy_check", "related")  # said in words, on one line
 STATE_WORD = {"fired": "적용", "passed": "통과", "none": "해당 없음", "held": "선행 규칙 적용"}
 REF_KINDS = ("decision", "function", "action", "object", "property", "link", "parameter", "query", "metric", "role",
              "states")
@@ -115,9 +117,10 @@ def card_spec(card: Any, kind: str = "domain") -> dict:
             "exceptions": _strings(card.get("exceptions")), "params": dict(params), "source": str(card.get("source") or ""),
             "owner": str(card.get("owner") or ""), "status": status, "legal_review": legal, "layer": layer,
             "implements": implements, "check": check,
-            # what breaking it costs, and how far its source was checked (read in the text, held against the text)
-            "risk": " ".join(str(card.get("risk") or "").split()),
-            "verification": " ".join(str(card.get("verification") or "").split())}
+            # what breaking it costs, how far its source was checked (read in the text, held against the text), the group
+            # it is filed under, the law it rests on and what kind of source that is, how it stands against the policy
+            # already written, and what it is about as its author put it
+            **{k: " ".join(str(card.get(k) or "").split()) for k in _WORDS}}
 
 
 # ---- composition ------------------------------------------------------------------------------------------------
@@ -336,7 +339,7 @@ def _row_cards(onto, labels: dict, stated: list[dict]) -> list[dict]:
             out.append({
                 "id": f"{t.name}#{r.id}", "kind": "executable", "ref": here, "type": "decide",
                 "type_label": CARD_TYPES["decide"], "decision": t.name, "decision_label": t.label or t.name,
-                "rule": r.id, "position": pos, "hit_policy": t.hit_policy,
+                "rule": r.id, "position": pos, "hit_policy": t.hit_policy, "priority": r.priority,
                 "statement": rule_sentence(onto, t, replace(r, then=gives)),
                 "applies_to": [f"object:{t.target}"] if target is not None else [],
                 "applies_to_labels": [target.label or t.target] if target is not None else [],
@@ -378,7 +381,7 @@ def semantic_view(onto, comp=None) -> dict:
         owner = comp.owner(f"parameter:{p.name}") if comp is not None else ""
         by = setters.get(p.name, owner)
         parameters.append({
-            "name": p.name, "label": p.label or p.name, "value": p.value, "type": p.type, "unit": p.unit, "min": p.min,
+            "name": p.name, "label": p.label or p.name, "value": p.value, "type": p.type, "unit": p.unit, "owner": p.owner, "min": p.min,
             "max": p.max, "cite": p.cite, "module": owner, "module_label": labels.get(owner, owner), "set_by": by,
             "set_by_label": labels.get(by, by),
             "axiom": {"min": max(lows) if lows else None, "max": min(highs) if highs else None,

@@ -275,6 +275,12 @@ class HttpCaller:
 
 
 class ActionService:
+    # Whether an action writes its changes to the data source. Off, one that would change the source still runs its
+    # checks and waits for its approval, then ends recorded: what it would change and the request it would send are
+    # kept, nothing is sent, the source stays as it was. A server turns it on for every studio it makes (ontlas serve
+    # --action-write); one studio may set its own.
+    write = False
+
     def __init__(self, studio, writeback=None, caller: HttpCaller | None = None):
         self.studio = studio
         self.writeback = writeback
@@ -586,6 +592,12 @@ class ActionService:
 
     def _write(self, p: Proposal, actor: Actor, current: dict[str, Any], call: dict[str, Any]) -> None:
         p.before = {k: current.get(k) for k in p.changes}  # what a rollback restores: the values just before
+        if p.changes and not self.write:  # writing is off: what the run would do is kept, and nothing is sent
+            if call:
+                p.call = {"method": str(call.get("method", "POST")).upper(), "url": str(call.get("url", "")), "sent": False}
+            p.status = "recorded"
+            self._log(actor, "recorded", p, before=p.before, after=p.changes, **({"call": p.call} if call else {}))
+            return
         n = self.writeback.apply(self.studio.onto, p.target, p.key, p.changes)
         if call:
             self._log(actor, "written", p, before=p.before, after=p.changes, rows=n)
@@ -654,6 +666,9 @@ class ActionService:
             raise KeyError(f"unknown proposal '{proposal_id}'")
         if p.status != "executed":
             raise ActionError(f"proposal {p.id} is {p.status}; only an executed action can be rolled back")
+        if not self.write:  # putting the values back is a write too
+            raise ActionError(f"writing to the data source is off, so {p.id} cannot be rolled back; a server started "
+                              "with --action-write rolls it back")
         if actor.kind != "human":
             raise PermissionError("only a person rolls back an action")
         if not self._allowed(actor, "execute", p.action):

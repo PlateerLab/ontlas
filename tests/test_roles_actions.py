@@ -29,6 +29,7 @@ def test_role_denials(studio):
         studio.run("revenueByCategory", role="customer_agent", principal=ME)
 
 
+@pytest.mark.usefixtures("action_write")
 def test_action_needs_a_person(studio):
     p = studio.actions.request("requestReturn", "I1001", {"reason": "사이즈"}, actor=AGENT)
     assert p.status == "pending" and all(c.passed for c in p.checks)

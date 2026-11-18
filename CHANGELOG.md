@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.25.4
+
+- **What a team enters is kept.** In a team (`--users` with `--journal`), approving one request no longer drops the
+  edits others have not sent yet: they are applied again on the new version, and an edit on an item the approval
+  changed is held, with who made it and why, for its writer to apply over the approved content or drop. Unsent edits,
+  flow settings, quality targets and AI draft history now survive a restart. A request filed while another was
+  pending is approved on the version that came in between, and a module an approved change switches on stays on.
+- **A team works in one place.** Applying a concept draft puts it into the request being written instead of moving
+  everyone to a new pipeline (which could leave a library the server would not start on); an editor discards only
+  their own edits, and only an admin discards all of them; a rejected request can be taken back into the edits being
+  written.
+- **Deleted items keep their history and come back.** Every kind's history opens for a deleted item, marked
+  삭제됨, with 되살리기.
+- **A delete that would fail later is stopped where it is asked.** What uses an item now includes the verification
+  flow and the decision tables that read it through a path, and the delete screen tries the delete first: a function
+  or query the flow reads, a Relation a legal decision table reads, a Mapping that would fall back to a column the
+  source does not have are refused there with the reason. A refusal at deploy names the request, the item and the check
+  instead of the engine's text.
+- **Four more pass conditions, on by default**: no gaps in a decision table, no unreachable rule, no conflict with an
+  AXIOM rule or bound, and no question newly answered wrong.
+- **Writing to a data source is off unless the server is started with `--action-write`.** Until then an approved
+  Action ends as 기록됨 with what it would have changed; the screens say so. A caller with no policy is refused by
+  `/v1` unless the server is started with `--api-open`.
+- **Rules carry what the definition drafts hold**: 적용 Object, 분류, 관련 대상, 대표 법령, 근거 종류 and 정책서 대조, on the
+  rule screen, its form, the filters and the draft counts. A decision table can pick by 우선순위, with a priority on
+  each rule; a named value has an owner; deleting a decision-table row shows the rule that takes its range and the gap
+  it leaves.
+- **Ontology screens**: a transition can carry a condition; a Restriction shows the function it is implemented by; a
+  Property shows its standard vocabulary and can change it; the glossary shows broader and narrower apart, and imports
+  channel labels and broader/narrower pairs, with a note kept apart from the label.
+- **Importing definition drafts** reads the object an item applies to, rule areas, laws and source kinds, merges two
+  files that describe the same rule, links glossary terms to enum values, relations and objects, and keeps draft ids.
+- Fixed: a metric could not be made on a library whose entities are all concepts; saving a change request's title or
+  a user unchanged was accepted.
+
 ## 0.25.3
 
 - **Every design screen was checked against the product, element by element.** All 93 screens of the design, 1,655

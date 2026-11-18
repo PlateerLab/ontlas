@@ -501,6 +501,8 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--agent", default="", help="the name the audit trail gives this agent")
     s.add_argument("--journal", default="", help="a file of this process's own that keeps its requests and audit trail")
     s.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
+    s.add_argument("--action-write", action="store_true",
+                   help="let an approved action write to the data source; without it the action is recorded")
 
     s = sub.add_parser("new", help="start an empty studio folder: no modules, no data; definitions are made by hand")
     s.add_argument("dir")
@@ -559,12 +561,16 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--embedder-url", default="")
     s.add_argument("--embedder-model", default="")
     s.add_argument("--api-token-env", default="", help="turns /v1 on: the environment variable that holds its bearer token")
-    s.add_argument("--api-role", default="", help="the role /v1 runs as; with none it reads everything")
+    s.add_argument("--api-role", default="", help="the role /v1 runs as; with none it is refused unless --api-open")
     s.add_argument("--api-principal", action="append", default=[], help="key=value, for a role's row scope")
     s.add_argument("--api-write", action="store_true", help="let /v1 request actions; a person still approves them")
     s.add_argument("--api-name", default="api", help="the name the audit trail gives the caller of --api-token-env")
     s.add_argument("--api-agents", default="", help="a YAML file of agents, each with its own token, role and rows: "
                                                     "agents: [{name, token_env, role, principal, write}]")
+    s.add_argument("--api-open", action="store_true", help="let a /v1 caller with no role read everything; without it "
+                                                           "such a caller is refused")
+    s.add_argument("--action-write", action="store_true", help="let an approved action write to the data source; "
+                                                               "without it the action is recorded and the source left as it is")
     s.add_argument("--journal", default="", help="a file that keeps requests, approvals, change requests and the audit "
                                                  "trail across restarts (with --users)")
     s.add_argument("config")
@@ -722,6 +728,7 @@ def _main(argv: list[str] | None = None) -> int:
         args = [a.config, "--transport", a.transport] + (["--role", a.role] if a.role else [])
         args += sum((["--principal", p] for p in a.principal), []) + (["--read-only"] if a.read_only else [])
         args += (["--agent", a.agent] if a.agent else []) + (["--journal", a.journal] if a.journal else [])
+        args += ["--action-write"] if a.action_write else []
         mcp_main(args)
         return 0
 
@@ -747,6 +754,14 @@ def _main(argv: list[str] | None = None) -> int:
     if a.cmd == "serve":
         from ontlas.web import serve_config
 
+        if a.action_write:  # every studio the server makes, on any library, writes an approved action to its source
+            from ontlas.actions import ActionService
+
+            ActionService.write = True
+        if a.api_open:
+            from ontlas.rest import Rest
+
+            Rest.unscoped = True
         llm = None
         if a.llm_url:
             from ontlas.nl import openai_chat
@@ -982,6 +997,7 @@ def _main(argv: list[str] | None = None) -> int:
         from dataclasses import asdict
 
         if a.apply:
+            studio.actions.write = True  # --apply writes, as it says
             _out([p.to_dict() for p in studio.actions.advance()])
         else:
             _out([asdict(d) for d in studio.actions.due()])

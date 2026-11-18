@@ -8,12 +8,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ontlas.web.routes import get
+from ontlas.web.routes import get, post
 
 STATUS_WORD = {"pending": "검토 중", "approved": "배포", "rejected": "반려"}
 # what a reader is, and the screen that shows it
-READER_SCREEN = {"검증 질문": "check", "Action": "actions", "함수": "semrules", "접근 정책": "roles", "규칙 카드": "semrules",
-                 "규칙": "semrules", "질의": "query", "계산 Property": "objects"}  # 규칙 카드 before 규칙: the longer word first
+READER_SCREEN = {"검증 흐름": "flow", "검증 질문": "check", "Action": "actions", "함수": "semrules", "접근 정책": "roles",
+                 "규칙 카드": "semrules", "규칙": "semrules", "질의": "query", "계산 Property": "objects"}  # 규칙 카드 before 규칙: the longer word first
 
 
 def _now_of(s, el: str) -> dict | None:
@@ -47,12 +47,29 @@ def uses_many(s, a, who) -> dict:
     return {"uses": {el: _groups(s, el) for el in els}}
 
 
+@post("item/try", needs="viewer")
+def try_edits(s, a, who) -> dict:
+    """The edits a delete screen would send ([[op, args], ...]), tried on a copy of the request being written before
+    anything is asked: whether the server would take them, the sentence it would refuse them with, and what they would
+    take out with them. Nothing is kept."""
+    edits = a.get("edits")
+    if not isinstance(edits, list) or not edits or not all(isinstance(e, list) and len(e) == 2 and isinstance(e[1], dict) for e in edits):
+        raise ValueError("확인할 편집이 없어 삭제 가능 여부를 확인하지 못했습니다. 삭제할 항목을 다시 선택해 주세요.")
+    return s.try_edits([(str(op), dict(args)) for op, args in edits[:20]])
+
+
 def _groups(s, el: str) -> list[dict]:
     groups: dict[str, list[str]] = {}
-    for r in s._readers(el):
+    for r in s._readers(el, limit=0):  # a delete screen lists every one
         kind = next((k for k in READER_SCREEN if r.startswith(k + " ")), "")
         groups.setdefault(kind or "기타", []).append(r[len(kind):].strip() if kind else r)
     return [{"kind": k, "screen": READER_SCREEN.get(k, ""), "names": v} for k, v in groups.items()]
+
+
+@post("item/restore", needs="editor")
+def restore(s, a, who) -> dict:
+    """An item taken out, put back as an edit of the request being written: from its history screen, whatever kind."""
+    return s.restore_element(str(a.get("element") or ""))
 
 
 @get("item/history")
@@ -101,4 +118,7 @@ def history(s, a, who) -> dict:
             home = next((e for e in filed if str(e["at"])[:16] >= at), None)
         if home is not None:
             home["notes"].append({k: n.get(k) for k in ("at", "by", "text")})
-    return {"element": el, "label": s._element_label(el), "now": _now_of(s, el), "entries": entries}
+    now = _now_of(s, el)
+    last = next((e["before"] or e["after"] for e in entries if isinstance(e["before"] or e["after"], dict)), None)
+    gone_label = (last or {}).get("label") if now is None else ""  # one taken out goes by the name it had last
+    return {"element": el, "label": gone_label or s._element_label(el), "now": now, "entries": entries}

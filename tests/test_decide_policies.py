@@ -257,3 +257,59 @@ def test_the_module_check_on_a_studio(tmp_path, capsys):
     assert main(["modules", str(LIB / "studio.yaml"), "--check"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["issues"] == [] and isinstance(out["findings"], list)
+
+
+def _layered(rule: DecisionRule, layer: str) -> DecisionRule:
+    rule.layer = layer
+    return rule
+
+
+def test_the_checks_and_the_export_put_an_axiom_rule_first_as_the_engine_does():
+    law = _layered(_rule({"a": "> 1"}, 0, "law", 9), "axiom")
+    mine = _layered(_rule({"a": "> 1"}, 5, "mine", 1), "custom")
+    t = _table("priority", [law, mine], {"a": DecisionInput("a", "integer", {"param": "a"})})
+    assert evaluate_table(t, {"a": 3})[1][0] == "law"
+    found = table_findings(t)
+    assert not [f for f in found if f.kind == "tie"]
+    assert [f.detail for f in found if f.kind == "overlap"] == ["rule law (priority 9) overrides mine (priority 1) at a = > 1"]
+    assert [f.rules for f in found if f.kind == "unreachable"] == [["mine", "law"]]  # the law answers all it would
+    assert [r["_id"] for r in to_jdm(t)["nodes"][1]["content"]["rules"]] == ["law", "mine"]
+    same = _table("priority", [_layered(_rule({"a": "> 1"}, 0, "law", 1), "axiom"), _layered(_rule({"a": "> 1"}, 5, "mine", 1), "custom")])
+    assert evaluate_table(same, {"a": 3})[0] == {"fee": 0}  # one number in two layers is no tie
+    assert not [f for f in table_findings(same) if f.kind == "tie"]
+
+
+def test_taking_a_rule_out_says_what_answers_instead_and_where_nothing_would():
+    from ontlas.decide.checks import without
+
+    a = {"a": DecisionInput("a", "integer", {"param": "a"}), "vip": DecisionInput("vip", "boolean", {"param": "vip"})}
+    t = _table("first", [_rule({"a": "null"}, 0, "none"), _rule({"a": "<= 7"}, 1, "short"),
+                         _rule({"vip": "true", "a": "<= 14"}, 1, "vip"), _rule({"a": "> 14"}, 2, "long")], a)
+    short = without(t, "short", None)
+    assert short["checked"] and short["decides"] and short["opposite"] == [{"rule": "none", "inputs": ["a"]},
+                                                                            {"rule": "long", "inputs": ["a"]}]
+    assert [(x["rule"], x["same"], x["same_first"]) for x in short["takers"]] == [("vip", True, True)]
+    assert short["takers"][0]["where"] == [{"a": "< 7 | 7", "vip": "true"}] and short["gaps"] == [{"a": "< 7 | 7", "vip": "false"}]
+    assert without(t, "long", None)["gaps"] and not without(t, "long", None)["takers"]
+    ranked = _table("priority", [_rule({"a": "> 1"}, 1, "wide", 2), _rule({"a": "> 5"}, 2, "narrow", 1)], a)
+    assert [(x["rule"], x["same"]) for x in without(ranked, "narrow", None)["takers"]] == [("wide", False)]
+    assert not without(ranked, "narrow", None)["gaps"]  # wide answers all of it
+    wide = without(ranked, "wide", None)  # narrow, ahead of it, answers none of what wide does
+    assert not wide["takers"] and wide["gaps"] == [{"a": "2..4 | 5"}]
+    covered = _table("first", [_rule({}, 1, "all"), _rule({"a": "> 1"}, 2, "later")], a)
+    assert without(covered, "later", None) | {"opposite": []} == {"rule": "later", "checked": True, "opposite": [],
+                                                                  "decides": False, "takers": [], "gaps": []}
+    assert not without(_table("collect", [_rule({}, 1, "all")]), "all", None)["checked"]
+
+
+def test_where_a_check_found_something_reads_in_words():
+    from ontlas.decide.words import where_words
+
+    t = _table("first", [], {"days": DecisionInput("days", "integer", {"param": "days", "label": "경과일"}),
+                             "total": DecisionInput("total", "decimal", {"param": "total", "label": "금액"}),
+                             "vip": DecisionInput("vip", "boolean", {"param": "vip", "label": "VIP"})})
+    o = Ontology.from_dict({"namespace": "https://example.com/o#"})
+    assert where_words(o, t, {"days": "0 | 1..6 | 7 | > 14", "vip": "false"}) == "경과일 0~7, 14 초과 · VIP 아니요"
+    assert where_words(o, t, {"total": "50000 | > 50000"}) == "금액 50,000 이상"
+    assert where_words(o, t, {"total": "< 0 | 0", "days": "null"}) == "금액 0 이하 · 경과일 값 없음"
+    assert where_words(o, t, {}) == "모든 경우"

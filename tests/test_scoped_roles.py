@@ -153,6 +153,7 @@ def test_a_decision_is_closed_to_the_role_until_it_is_asked_in_scope(studio):
     assert studio.decide("payable", "L2", role="admin").outputs == {"pay": False}
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_seller_acts_on_their_own_row(studio):
     p = studio.actions.request("reply", "L1", {"note": "shipped today"}, actor=_seller())
     assert p.status == "executed", p.checks
@@ -196,6 +197,7 @@ def test_an_unscoped_role_writes_as_before(studio):
     assert studio.actions.request("move", "L2", {"seller_id": "S1"}, actor=both).status == "pending"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_an_approver_in_another_scope_cannot_approve(studio):
     p = studio.actions.request("move", "L1", {}, actor=Actor("agent", "agent", ["seller"], dict(ALICE)))
     assert p.status == "pending"
@@ -206,6 +208,7 @@ def test_an_approver_in_another_scope_cannot_approve(studio):
     assert p.status == "executed"
 
 
+@pytest.mark.usefixtures("action_write")
 def test_a_rollback_stays_in_the_scope(studio):
     p = studio.actions.request("reply", "L1", {"note": "x"}, actor=_seller())
     with pytest.raises(PermissionError, match="outside the scope of bob"):

@@ -94,6 +94,7 @@ def test_one_query_in_every_language_and_under_a_role(session):
     assert not session.ask("anything")["ok"]
 
 
+@pytest.mark.usefixtures("action_write")
 def test_request_approve_and_the_decision_follows(session):
     d = session.decide("returnEligibility", "I1001")
     assert d["yes"] and d["evidence"][0]["source"] == "order_items.delivered_at"

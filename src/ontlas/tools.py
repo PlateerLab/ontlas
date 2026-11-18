@@ -212,7 +212,7 @@ class StudioTools:
         if k:
             cards = cards[:max(1, min(int(k), 200))]
         keep = ("id", "layer", "layer_label", "type", "type_label", "statement", "conditions", "result", "exceptions",
-                "risk", "verification",
+                "risk", "verification", "category", "law", "source_kind", "policy_check",
                 "params", "source", "owner", "status", "status_label", "legal_review", "legal_review_label", "check",
                 "module", "module_label", "version")
         return {"layers": [{"layer": x["layer"], "label": x["label"], "order": x["order"], "cards": x["cards"]} for x in view["layers"]],
@@ -376,7 +376,8 @@ class StudioTools:
                 "backends": {n: {"language": b.capabilities.language, "dialect": b.capabilities.dialect}
                              for n, b in st.backends.items()},
                 "space": space.state() if space is not None else None,
-                "reasoners": [r.describe() for r in st.reasoners.values()]}
+                "reasoners": [r.describe() for r in st.reasoners.values()],
+                "action_write": bool(st.actions.write)}  # off, an approved action is recorded and the source left as it is
 
     def list_documents(self) -> dict:
         space = self._space()

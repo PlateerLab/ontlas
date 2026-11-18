@@ -105,12 +105,16 @@ def _read(table: DecisionTable, hits: list[DecisionRule]) -> dict[str, Any]:
     return {n: named[n] for n in _NAMED.findall(text) if n in named}
 
 
+def precedence(r: DecisionRule) -> tuple[bool, float]:
+    """Where a rule stands under hit policy priority: an AXIOM rule before any number a lower layer gives its own
+    rules, then the lower number; a rule given none comes last, in table order (a sort keeps it)."""
+    return r.layer != "axiom", float("inf") if r.priority is None else r.priority
+
+
 def _by_priority(table: DecisionTable, hits: list[DecisionRule]) -> tuple[Any, list[str], list[str]]:
-    # an AXIOM rule is checked before any number a lower layer gives its own rules
-    ranked = sorted(hits, key=lambda r: (r.layer != "axiom", float("inf") if r.priority is None else r.priority))
+    ranked = sorted(hits, key=precedence)
     top = ranked[0]
-    tied = [r.id for r in ranked[1:] if r.priority == top.priority and r.then != top.then
-            and (r.layer == "axiom") == (top.layer == "axiom")]
+    tied = [r.id for r in ranked[1:] if precedence(r) == precedence(top) and r.then != top.then]
     if tied:
         raise DecisionError(f"{table.name}: rules {[top.id, *tied]} match at priority {top.priority} and answer "
                             "differently")

@@ -31,7 +31,7 @@ def studio():
 
 
 def _rest(studio, **kw):
-    return Rest([("t", StudioTools(studio, actor_id="flow", audit=True))], **kw)
+    return Rest([("t", StudioTools(studio, actor_id="flow", audit=True))], unscoped=True, **kw)
 
 
 def _call(rest, path, body, method="POST"):
@@ -247,6 +247,7 @@ def test_a_decision_question_needs_a_key_or_values_and_only_names_it_reads():
 
 # ---- the page --------------------------------------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("api_open")
 def test_the_page_tries_the_api_the_way_a_platform_calls_it():
     from ontlas.web.api import StudioSession
 

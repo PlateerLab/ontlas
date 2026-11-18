@@ -414,7 +414,11 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     with s.lock:
                         if user is not None:
                             s.who = user.name
-                        out = self._route(method, route, a, s, sid)
+                        try:
+                            out = self._route(method, route, a, s, sid)
+                        finally:
+                            if method == "POST":  # the edits being written, into the journal when they changed
+                                s.keep_pending()
             except NoSource:  # it reads rows, and this studio holds its definition only: said as that, not as a failure
                 return self._json(409, {"error": NO_SOURCE_SAID.get(route, NO_SOURCE), "no_source": True}, sid=sid, new=new)
             except LookupError as e:  # a sentence of the page's stays; an engine's key is not shown
@@ -748,8 +752,13 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.lexicon_edit(str(a.get("op", "")), a.get("args") if isinstance(a.get("args"), dict) else {})
             if route == "lexicon/import":
                 return s.lexicon_import(str(a.get("text", "") or ""), str(a.get("name", "") or ""), str(a.get("path", "") or ""))
-            if route == "manage/discard":
-                return s.manage_discard()
+            if route == "manage/discard":  # in a team a person's own edits; everyone's is the admin's
+                who = self._user()
+                everyone = bool(a.get("all"))
+                if everyone and who is not None and not who.may("admin"):
+                    raise PermissionError(f"{who.name} 님의 권한으로는 모든 사람의 편집을 폐기할 수 없어 처리하지 못했습니다. "
+                                          "자기 편집만 폐기하거나 관리자에게 요청해 주세요.")
+                return s.manage_discard(everyone)
             if route == "manage/undo":
                 return s.manage_undo()
             if route == "manage/redo":
@@ -771,6 +780,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.workspace_layout(str(a.get("pipeline", "")), a.get("positions") or {})
             if route == "manage/propose":
                 return s.manage_propose()
+            if route == "manage/conflict":
+                return s.manage_conflict(str(a.get("id", "")), bool(a.get("keep")))
             if route == "change/mark":
                 return s.change_mark(str(a.get("id", "")), str(a.get("element", "")), str(a.get("mark", "")))
             if route == "change/comment":
@@ -781,7 +792,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.simulate(str(a.get("name", "")), str(a.get("key", "") or ""),
                                   a.get("inputs") if isinstance(a.get("inputs"), dict) else {})
             if route == "change/decide":
-                return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")))
+                return s.decide_change(str(a.get("id", "")), bool(a.get("approve", True)), str(a.get("reason", "")),
+                                       back=bool(a.get("back")))
+            if route == "change/reopen":
+                return s.reopen_change(str(a.get("id", "")))
             if route == "flow/save":
                 return s.save_flow(a.get("settings") if isinstance(a.get("settings"), dict) else {},
                                    a.get("base") if isinstance(a.get("base"), dict) else None)

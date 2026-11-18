@@ -326,7 +326,7 @@ def test_axiom_rules_are_not_edited_moved_or_removed_on_the_page(session):
     assert sim["pending"] and sim["matched"] == ["in-window"] and sim["layer"] == "custom"  # the workspace wrote it now
     assert [x["said"] for x in sim["path"]["layers"]] == ["통과", "적용", "해당 없음"]
     assert sim["path"]["source"]["module_label"] == session._ws().module.label
-    with pytest.raises(ValueError, match="AXIOM 규칙 'not-delivered'가 든 결정표 'returnEligibility'가 함께 지워져"):
+    with pytest.raises(ValueError, match="AXIOM 규칙 'not-delivered'가 든 결정표 '반품 가능 여부'가 함께 지워져"):
         session.manage_edit("delete_property", {"object": "OrderItem", "name": "delivered_at"})
 
 
@@ -423,3 +423,20 @@ def test_a_rule_sentence_says_the_value_in_force_not_its_placeholder():
     table = st.onto.decisions["returnEligibility"]
     said = rule_sentence(st.onto, table, next(r for r in table.rules if r.id == "in-window"))
     assert "{@" not in said and "7일" in said  # the search index and answers read the sentence
+
+
+def test_a_row_card_says_its_number_and_a_named_value_its_owner():
+    shop = _shop()
+    t = shop.body["decisions"]["returnable"]
+    t["hit_policy"] = "priority"
+    for i, r in enumerate(t["rules"]):
+        r["priority"] = i + 1
+    shop.body["parameters"]["window"]["owner"] = "운영팀"
+    comp = compose([shop])
+    assert comp.issues == [] and comp.ontology.parameters["window"].owner == "운영팀"
+    assert Ontology.from_dict(comp.ontology.to_dict()).parameters["window"].owner == "운영팀"  # written back
+    view = semantic_view(comp.ontology, comp)
+    rows = {c["rule"]: c for c in view["cards"] if c["kind"] == "executable"}
+    assert [(k, rows[k]["priority"], rows[k]["hit_policy"]) for k in ("missing", "in", "out")] == \
+        [("missing", 1, "priority"), ("in", 2, "priority"), ("out", 3, "priority")]
+    assert next(p for p in view["parameters"] if p["name"] == "window")["owner"] == "운영팀"

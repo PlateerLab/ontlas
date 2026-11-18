@@ -91,8 +91,8 @@ def _merged(base, mine, now):
 
 
 STATUS_WORD = {"pending": "승인 대기", "stale": "실행 전 재검사 실패", "rejected": "반려", "executed": "실행",
-               "failed": "외부 호출 실패", "rolled_back": "되돌림"}
-EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "데이터 반영",
+               "recorded": "기록됨", "failed": "외부 호출 실패", "rolled_back": "되돌림"}
+EVENT_LABEL = {"requested": "요청", "rejected": "반려", "approved": "승인", "executed": "데이터 반영", "recorded": "기록됨",
                "written": "데이터 기록", "called": "외부 호출", "call_failed": "외부 호출 실패 · 데이터 복원",
                "rolled_back": "되돌림", "auto_approved": "자동 승인 기준 충족", "stale": "실행 전 재검사 실패",
                "decided": "판정 조회", "answered": "질문 답변", "function_ran": "함수 실행"}
@@ -100,7 +100,9 @@ GATE_LABEL = {("bind", "max_errors"): "DB 대조 오류 최대", ("bind", "max_w
               ("index", "min_found"): "문서 검색 적중률 최소",
               ("query", "min_agree"): "Backend 결과 일치율 최소", ("decide", "min_agreement"): "판정 일치율 최소",
               ("check", "min_accuracy"): "검증 질문 정답률 최소", ("check", "min_grounded"): "근거 제시율 최소",
-              ("check", "max_value_errors"): "거래 값 오류 최대"}
+              ("check", "max_value_errors"): "거래 값 오류 최대", ("check", "max_new_wrong"): "신규 오답 최대",
+              ("define", "max_gaps"): "결정표 빈 구간 최대", ("define", "max_unreachable"): "도달 불가 규칙 최대",
+              ("define", "max_axiom_conflicts"): "AXIOM 충돌 최대"}
 STAGE_LABEL = {"source": "데이터 소스", "define": "온톨로지 정의", "bind": "DB 대조", "project": "그래프 저장소 반영", "index": "문서 · 벡터 색인",
                "query": "질의", "decide": "판정 · 처리", "check": "검증"}
 CHANGE_STATUS = {"pending": "승인 대기", "approved": "승인 · 적용", "rejected": "반려"}
@@ -165,6 +167,10 @@ IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자
                 ("^term relation", "용어 사전에 없는 관계 종류"),
                 ("^customer label", "코드값을 찾지 못한 고객 표기"))
 WORKSPACE = "workspace"  # the module the management screens' edits are filed as (manage.NAME)
+# what an element is, as a sentence names it before its name (an Object's label already says it)
+ELEMENT_WORD = {"object": "Entity", "property": "Property", "link": "Relation", "function": "함수", "query": "질의",
+                "decision": "결정표", "rule": "규칙", "parameter": "기준값", "metric": "지표", "action": "Action",
+                "role": "접근 정책", "question": "검증 질문", "states": "상태 전이"}
 LEVEL_LABEL = ("L0 개념", "L1 논리", "L2 연결", "L3 검증")  # what bindings.entity_level gives, as the page says it
 SAMPLE_ROWS = 3  # rows of a table the draft review shows beside it
 IMPACT_KINDS = {"질의": "queries", "규칙": "decisions", "검증 질문": "questions", "Action": "actions", "접근 정책": "roles",
@@ -310,6 +316,9 @@ DECIDE_TEXT = [  # the engine refusing to decide on a record; the type arrives h
 
 
 ISSUE_TEXT = [
+    # one Property name, one type across the Entities (validate.py)
+    (r"^property '(\S+)' is (\S+) on (\S+) but (\S+) on (\S+)(?:; one name, one type)?$",
+     r"Property \1의 타입이 \3에서는 \2, \5에서는 \4입니다. 같은 이름의 Property는 타입을 하나로 맞춰 주세요."),
     # a definition not bound to a source: it has no text in a language that names tables
     (r"^(\S+) has no source table and no bound subtype$", r"\1 Entity가 데이터 소스 테이블에 연결되어 있지 않아 SQL로 변환하지 못했습니다. Mapping에서 테이블을 연결해 주세요."),
     (r"^link (\S+) has no source binding \(on/via\)$", r"Relation \1에 데이터 소스 연결 기준이 없어 SQL로 변환하지 못했습니다. Mapping에서 Relation의 연결 기준을 지정해 주세요."),
@@ -1188,7 +1197,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         p = self.studio.actions.request(action, key, params, actor=actor)
         if p.status == "executed":  # inside its limits it ran at once
             self._reproject()
-        state = {"pending": "접수했습니다", "executed": "자동 승인했습니다"}.get(p.status, "반려했습니다")
+        state = {"pending": "접수했습니다", "executed": "자동 승인했습니다",
+                 "recorded": "자동 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐)"}.get(p.status, "반려했습니다")
         self._note("request", f"{actor.id}의 {self._obj_label(p.target)} {key} {self._proposal(p)['label']} 요청을 {state}.")
         return {"ok": True, "proposal": self._proposal(p)}
 
@@ -1212,7 +1222,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         """Requests waiting for a person, whoever asked: this page, another person, a platform or an agent; and the
         latest that ran, so one can still be rolled back after the page that approved it is gone."""
         props = list(self.studio.actions.proposals.values())
-        ran = [p for p in props if p.status in ("executed", "rolled_back", "failed")][-10:]
+        ran = [p for p in props if p.status in ("executed", "recorded", "rolled_back", "failed")][-10:]
         return {"pending": [self._proposal(p) for p in props if p.status == "pending"],
                 "done": [self._proposal(p) for p in reversed(ran)]}
 
@@ -1240,7 +1250,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except (PermissionError, ValueError, RuntimeError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
-        said = {"executed": "요청을 승인했습니다", "failed": "요청의 외부 호출이 실패해 실행 전 값으로 복원했습니다"}.get(p.status, "요청을 반려했습니다")
+        said = {"executed": "요청을 승인했습니다", "recorded": "요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐)",
+                "failed": "요청의 외부 호출이 실패해 실행 전 값으로 복원했습니다"}.get(p.status, "요청을 반려했습니다")
         self._note("approve", f"{self._proposal(p)['label']} {said}.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
 
@@ -1446,9 +1457,11 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     # ---- pipelines: each applied draft kept beside the ones before it -----------------------------------------
 
     def _stash(self) -> None:
-        """Write what the current pipeline has come to back to its entry."""
+        """Write what the current pipeline has come to back to its entry, the edits being written on it too: they stay
+        with the definition they were made on, there again on coming back."""
         cur = next(p for p in self.pipelines if p["id"] == self.pipeline)
-        cur.update(studio=self.studio, origin=self.origin, rows=self._library_rows, log=self.log)
+        cur.update(studio=self.studio, origin=self.origin, rows=self._library_rows, log=self.log, workspace=self.workspace,
+                   ws_sig=self._ws_sig)
 
     def _make_room(self, label: str) -> None:
         if len(self.pipelines) >= PIPELINES_MAX and not any(p["label"] == label for p in self.pipelines[1:]):
@@ -1475,7 +1488,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._stash()
         self._adopt(target["studio"])
         self.origin, self._library_rows, self.log = target["origin"], target["rows"], target["log"]
-        self.pipeline, self.pending, self.draft_request, self.workspace, self._ws_sig = pid, None, None, None, ()
+        self.pipeline, self.pending, self.draft_request = pid, None, None
+        self.workspace, self._ws_sig = target.get("workspace"), target.get("ws_sig", ())
         self.event("pipeline", words.fix(f"{target['label']}(으)로 전환"))
         return {"ok": True}
 
@@ -1514,7 +1528,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._adopt(cur["studio"])
         self.origin, self._library_rows, self.log = cur["origin"], cur["rows"], cur["log"]
         self.pipeline, self.library_id = pid, lid
-        self.pending, self.draft_request, self.workspace, self._ws_sig = None, None, None, ()
+        self.pending, self.draft_request = None, None
+        self.workspace, self._ws_sig = cur.get("workspace"), cur.get("ws_sig", ())
         self._measured, self._measured_of, self._watch = {}, None, None
         self.event("library", words.fix(f"{target['label']}(으)로 전환"))
         return {"ok": True}
@@ -2349,6 +2364,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         tables joined."""
         if not self.pending:
             raise ValueError("생성된 초안이 없어 적용하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not self.self_approve:  # a team's studio: into the request being written, not a pipeline in its place
+            return self._draft_into_request(standard, edits, choices)
         if not any(c == "standard" for c in (choices or {}).values()):
             return self.apply_draft(edits)
         objects, extra = self._review_plan(standard, edits, choices)
@@ -2475,6 +2492,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 표준에 연결하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not self.self_approve:
+            raise ValueError("팀이 함께 쓰는 온톨로지라 초안을 새 파이프라인으로 적용하지 않았습니다. "
+                             "초안 화면의 단계별 검토에서 작성 중인 변경 요청에 추가해 주세요.")
         mods, onto = self._standard(standard)
         d = self._edit(self.pending[0], edits)
         s = suggest(d, onto, [str(x) for x in standard], self._terms())
@@ -2524,6 +2544,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._make_room(d.label)
         self._stash()
         self._adopt(st)
+        self.workspace, self._ws_sig = None, ()  # a new pipeline: nothing written on it yet
         self._library_rows = st.library.list()
         self.origin = {**d.origin, "label": d.label, "standard": [str(x) for x in standard]}
         self.pending, self.draft_request, self.log = None, None, []
@@ -2558,6 +2579,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
         if not self.pending:
             raise ValueError("생성된 초안이 없어 적용하지 못했습니다. 초안을 먼저 생성해 주세요.")
+        if not self.self_approve:  # a team's studio: into the request being written, not a pipeline in its place
+            return self._draft_into_request([], edits, {})
         d0, b, tables, rules = self.pending
         try:
             d = self._edit(d0, edits)
@@ -2587,12 +2610,87 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             self._adopt(studio_from(d, b, library=self.studio.library, use_zen=self.studio.use_zen))
         except ModuleError as e:
             raise ValueError(f"정의 검사에서 오류가 발견되어 적용하지 못했습니다. {e}") from None
+        self.workspace, self._ws_sig = None, ()  # a new pipeline: nothing written on it yet
         self._library_rows = self.studio.library.list()
         self.origin = {**d.origin, "label": d.label}
         self.pending, self.draft_request, self.log = None, None, []
         self._new_pipeline(d.label)
         self._note("draft", f"{d.label} 온톨로지를 적용했습니다. Entity {len(d.objects)}개, 관계 {len(d.links)}개")
         return {"ok": True}
+
+    def _draft_into_request(self, standard: list, edits: dict | None, choices: dict | None) -> dict:
+        """In a team the studio is everyone's, and a draft applied as a new pipeline in its place left the team's requests,
+        journal and library folder on the definition it replaced (an approval there wrote a version needing the draft's
+        modules into the folder, which then did not start). So the reviewed draft goes into the request being written,
+        as the edits the screens make, each by this person: a new Entity with its Properties and the table and columns
+        it reads; a table bound to a standard Entity as that Entity's table and the columns its Properties read; the
+        Relations between the new Entities. All of them hold, or none is made. What a definition edit does not carry
+        (the uploaded rows, a Relation through a table or to a bound table, and the queries, states, Actions, roles,
+        questions and decision tables drawn from the rows) stays out, counted in the answer."""
+        from ontlas.manage import EditError
+        from ontlas.mapping import suggest
+
+        try:
+            d = self._edit(self.pending[0], edits)
+        except ValueError as e:
+            raise ValueError(f"편집 내용을 확인할 수 없어 적용하지 못했습니다. {e}") from None
+        if not d.objects:
+            raise ValueError("선택된 Entity가 없어 적용하지 못했습니다. Entity를 하나 이상 선택해 주세요.")
+        picked = {str(t) for t, c in (choices or {}).items() if c == "standard"}
+        to_std = {}
+        if picked:
+            _, onto = self._standard(standard)
+            to_std = {m.table: m for m in suggest(d, onto, [str(x) for x in standard], self._terms()).objects if m.table in picked}
+        # the uploaded rows do not join the team's source: a table the source has not is no Binding there. Where there is
+        # no source the table is kept, as the one to bind when there is
+        src = self.studio.backends.get(self.studio.source) if self.studio.source else None
+
+        def has(table: str) -> bool:
+            try:
+                return src is None or not hasattr(src, "columns") or src.columns(table) is not None
+            except Exception:  # a source that cannot say: the table is left to the Binding check at approval
+                return True
+
+        plan: list[tuple[str, dict]] = []
+        std = 0  # the standard Entities given a table
+        for o in d.objects:
+            m = to_std.get(o.table)
+            if m is not None:  # the standard Entity reads this table; a Property read from several columns keeps its own
+                if has(o.table):
+                    std += 1
+                    plan.append(("update_object", {"name": m.object, "table": o.table}))
+                    plan += [("update_property", {"object": m.object, "name": c.property, "column": c.column})
+                             for c in m.columns if not c.columns]
+                continue
+            binds = has(o.table)
+            props = {p.name: {"type": p.type, "label": p.label, "values": list(p.values), "labels": dict(p.labels),
+                              "required": p.name == o.key,
+                              **(({"columns": list(p.columns)} if p.columns else {"column": p.column} if p.column != p.name else {})
+                                 if binds else {})}
+                     for p in o.properties}
+            plan.append(("add_object", {"name": o.name, "label": o.label, "key": o.key, "title": o.title,
+                                        "table": o.table if binds else "", "properties": props}))
+        news = {o.name for o in d.objects if o.table not in to_std}
+        links = [lk for lk in d.links if lk.on and not lk.via and {lk.source, lk.target} <= news]
+        plan += [("add_link", {"name": lk.name, "source": lk.source, "target": lk.target, "cardinality": lk.cardinality,
+                               "label": lk.label, "on": list(lk.on)}) for lk in links]
+        if not plan:  # every table was to bind a standard Entity, and the source has none of them
+            raise ValueError("연결할 테이블이 데이터 소스에 없어 표준에 연결하지 못했습니다. 새 Entity로 두거나 데이터 소스를 확인해 주세요.")
+        ws = self._ws()
+        snap, n, undone = copy.deepcopy(ws.module.to_dict()), len(ws.edits), list(ws._undone)
+        try:
+            for op, args in plan:
+                ws.apply(op, args)
+        except (EditError, ModuleError) as e:
+            ws.module, ws.edits, ws._before, ws._undone = Module.from_dict(snap), ws.edits[:n], ws._before[:n], undone
+            raise ValueError(self._edit_said(str(e))) from None
+        rules = next((s["items"] for s in d.steps() if s["id"] == "rules"), [])
+        left = {"links": len(d.links) - len(links), "rules": len(rules) + len(d.queries()), "tables": len(to_std) - std}
+        self.pending, self.draft_request = None, None
+        self._note("draft", f"{d.label} 초안을 작성 중인 변경 요청에 추가했습니다. 새 Entity {len(news)}개, 표준 연결 {std}개, "
+                            f"관계 {len(links)}개")
+        return {"ok": True, "request": True, "added": {"objects": len(news), "bound": std, "links": len(links)},
+                "left": left}
 
     # ---- module files: read, check, save into this visitor's library, plug in ---------------------------------
 
@@ -2711,16 +2809,19 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             "base_version": rv.get("base_version", ""), "mode": rv.get("mode", ""), "status": cr.status,
             "status_label": CHANGE_STATUS.get(cr.status, cr.status), "requested_by": cr.requested_by,
             "decided_by": cr.decided_by, "reason": cr.reason, "at": cr.at, "passed": rv.get("passed"),
-            "from_version": rv.get("from_version", ""), "decided_at": cr.decided_at,
+            "from_version": rv.get("from_version", ""), "decided_at": cr.decided_at, "reopened": cr.reopened,
+            "can_reopen": cr.status == "rejected" and cr.module == WORKSPACE and bool(cr.edits) and not cr.reopened,
             "regression": self._regression_view(rv.get("regression")),
-            "issues": rv.get("issues") or [], "diff": rv.get("diff") or {}, "gates": gates,
+            # a trial that could not be built, in the sentence its refusal says: never what the engine said
+            "issues": [self._trial_said(cr, [str(x) for x in rv["issues"]])] if rv.get("issues") else [],
+            "diff": rv.get("diff") or {}, "gates": gates,
             "measured": {"bind": {k: v for k, v in (m.get("bind") or {}).items() if k != "findings"},
                          "findings": (m.get("bind") or {}).get("findings", [])[:20],
                          "query": m.get("query"), "check": m.get("check"),
                          "decide": {k: v for k, v in (m.get("decide") or {}).items() if k != "mismatches"},
                          "mismatches": (m.get("decide") or {}).get("mismatches", [])[:20]}})
 
-    def propose_module(self, text: str, attach: bool = False) -> dict:
+    def propose_module(self, text: str, attach: bool = False, edits: list[dict] | None = None) -> dict:
         m = self._parse_module(text)
         issues = self._module_issues(m)
         if issues:
@@ -2731,7 +2832,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             if {**lib.get(m.name).to_dict(), "version": ""} == {**m.to_dict(), "version": ""}:  # an earlier version is a change from the latest
                 raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. 정의를 수정한 뒤 다시 요청해 주세요.")
             bumped, m.version = m.version, _next_version(lib.versions(m.name))
-        cr = self.studio.changes.propose(m, by=self.who, attach=attach)
+        cr = self.studio.changes.propose(m, by=self.who, attach=attach, edits=edits)
         self._file_notes(((cr.review or {}).get("elements") or {}).keys(), cr.id)
         self._note("change", f"{m.label or m.name} {m.version} 변경 요청을 등록했습니다.")  # passing and the version are in the request
         return {"ok": True, "change": self._change(cr), "bumped": bumped}
@@ -2741,7 +2842,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         return {"changes": [self._change(c) for c in reversed(list(ch.requests.values()))], "who": self.who,
                 "self_approve": ch.self_approve, "writes_folder": ch.store is not None}
 
-    def decide_change(self, change_id: str, approve: bool, reason: str = "") -> dict:
+    def decide_change(self, change_id: str, approve: bool, reason: str = "", back: bool = False) -> dict:
+        """Approve or reject a change. A rejection with `back` takes its edits back to writing (reopen_change)."""
         from ontlas.review import ChangeError
 
         ch = self.studio.changes
@@ -2750,32 +2852,269 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if approve and sent_back:
             return {"ok": False, "error": f"수정을 요청한 항목({', '.join(sent_back)})이 있어 승인하지 못했습니다. "
                                           "작성자가 고친 뒤 다시 검토해 주세요.", "change": self._change(held)}
+        if (approve and held is not None and held.status == "pending" and held.module == WORKSPACE
+                and (ch.self_approve or held.requested_by != self.who)):  # one the asker may not approve is refused below
+            refused = self._rebase_request(held)
+            if refused:
+                return {"ok": False, "error": refused, "change": self._change(held)}
         try:
             cr = ch.approve(change_id, by=self.who) if approve else                 ch.reject(change_id, by=self.who, reason=reason or "검토 후 반려")
         except PermissionError:
             return {"ok": False, "error": "변경을 요청한 사람은 같은 변경을 승인할 수 없어 승인하지 못했습니다. "
                                           "다른 승인자가 승인해 주세요."}
-        except (ChangeError, ModuleError) as e:
+        except (ChangeError, ModuleError):
             cr = ch.requests.get(change_id)
-            failed = [g["label"] for g in (self._change(cr)["gates"] if cr else []) if not g["passed"]]
-            why = ", ".join(failed) if failed else str(e)
-            return {"ok": False, "error": words.fix(f"통과 조건 {why}을(를) 충족하지 못해 승인하지 못했습니다. "
-                                                    "정의를 수정해 다시 요청해 주세요."),
-                    "change": self._change(cr) if cr else None}
+            return {"ok": False, "error": self._not_approved(cr, approve), "change": self._change(cr) if cr else None}
         proj = {}
         if cr.status == "approved":
             proj = self._reproject()
             self._library_rows = self.studio.library.list()
-            if cr.module == WORKSPACE:
-                self.workspace = None  # the edits are in the studio now; the next ones start from there
+            if (cr.review or {}).get("mode") == "attach" and cr.module != WORKSPACE:  # the workspace's comes back by itself
+                self._keep_applied()  # a module this approval put on stays on across a restart, as one attached by hand
+            if self.workspace is not None:  # what others are still writing is made again on what was approved (_ws)
+                self._ws(change=cr.id)
         verb = "승인했습니다" if cr.status == "approved" else "반려했습니다"
         self._note("change", f"{self._label(cr.module)} {cr.version} 변경 요청을 {verb}.", projection=proj)
+        if back and cr.status == "rejected" and cr.module == WORKSPACE and cr.edits:
+            out = self.reopen_change(cr.id)
+            return {"ok": True, "change": out["change"], "projection": proj, "reopened": {k: out[k] for k in ("made", "held")}}
         return {"ok": True, "change": self._change(cr), "projection": proj}
+
+    def reopen_change(self, change_id: str) -> dict:
+        """A rejected request of the screens' edits taken back to writing (작성 중으로 되돌리기): its edits are made again on
+        the request being written, each still its writer's and by its own id, so the person who wrote it can fix it and
+        ask again. One that no longer holds on the definition as it stands is held aside with why, for its writer. A
+        request is taken back once."""
+        from dataclasses import replace
+
+        from ontlas.manage import Edit, EditError
+        from ontlas.review import ChangeError
+
+        ch = self.studio.changes
+        cr = ch.requests.get(change_id)
+        if cr is None:
+            raise ValueError("변경 요청을 찾지 못해 작성 중으로 되돌리지 못했습니다. 화면을 새로고침해 주세요.")
+        if cr.status != "rejected" or cr.module != WORKSPACE or not cr.edits:
+            raise ValueError(words.fix(f"변경 요청 {cr.id}은(는) 반려된 화면 편집 요청이 아니어서 작성 중으로 되돌리지 못했습니다. "
+                                       "반려된 변경 요청을 선택해 주세요."))
+        if cr.reopened:
+            raise ValueError(words.fix(f"변경 요청 {cr.id}은(는) 이미 작성 중으로 되돌렸습니다. 작성 중인 변경 요청에서 확인해 주세요."))
+        ws = self._ws()
+        have = {e.id for e in [*ws.edits, *ws.held]}
+        made = held = 0
+        for r in cr.edits:
+            e = Edit(str(r.get("op") or ""), str(r.get("target") or ""), [], dict(r.get("args") or {}), str(r.get("id") or ""),
+                     str(r.get("by") or ""), str(r.get("at") or ""))
+            if e.id and e.id in have:  # already there again (taken back by hand): not twice
+                continue
+            try:
+                ws.apply(e.op, e.args, like=e)
+                made += 1
+            except (EditError, ModuleError) as err:
+                ws.held.append(replace(e, conflict={"why": "failed", "elements": [e.target], "change": cr.id, "error": str(err)}))
+                held += 1
+        try:
+            ch.reopen(cr.id, by=self.who)
+        except ChangeError:  # taken back meanwhile: what was made stays, as the edits are the same ones
+            pass
+        self._note("change", f"반려된 변경 요청 {cr.id}의 편집 {made + held}건을 작성 중으로 되돌렸습니다.")
+        return {"ok": True, "made": made, "held": held, "change": self._change(cr), **self.manage_state()}
+
+    def _rebase_request(self, cr) -> str:
+        """A request of the screens' edits filed on a workspace version another approval has since replaced: approved as
+        filed, it would write back what that approval changed (and take the version it took). Its edits are made again
+        on the version that stands, as the edits still being written are (_ws), and that is what is approved. Says why
+        not ('' when it can be approved): an edit on an item the approval after it also changed, or one that no longer
+        holds, is left for its writer."""
+        import yaml
+
+        from ontlas.manage import Edit, changed_elements, made_again
+
+        comp = self.studio.composition
+        current = next((m for m in comp.modules if m.name == WORKSPACE), None) if comp is not None else None
+        was = str((cr.review or {}).get("from_version") or "")  # the workspace version it was written on, "" for none
+        if comp is None or was == (current.version if current else ""):
+            return ""
+        if not cr.edits:  # filed from a module file, or before requests kept their edits: nothing to make again
+            return words.fix(f"변경 요청 {cr.id}은(는) 그 뒤에 승인된 변경 이전의 정의에서 작성되어 승인하지 못했습니다. "
+                             "반려한 뒤 지금 정의에서 다시 작성해 요청해 주세요.")
+        lib = self.studio.changes.store or self.studio.library
+        try:
+            before = [m for m in comp.modules if m.name != WORKSPACE] + ([lib.get(WORKSPACE, was)] if was else [])
+            changed = changed_elements(compose(before, **self.studio._compose_kw), comp)
+        except ModuleError:  # what it was written on no longer composes: each edit is only checked again
+            changed = set()
+        edits = [Edit(str(e.get("op") or ""), str(e.get("target") or ""), [], dict(e.get("args") or {}), str(e.get("id") or ""),
+                      str(e.get("by") or ""), str(e.get("at") or "")) for e in cr.edits]
+        ws = made_again(edits, list(comp.modules), current, compose_kw=self.studio._compose_kw, changed=changed)
+        if ws.held:
+            items = ", ".join(dict.fromkeys(self._held_view(e)["label"] for e in ws.held))
+            return words.fix(f"변경 요청 {cr.id}의 {items} 편집이 그 뒤에 승인된 변경과 겹쳐 승인하지 못했습니다. "
+                             "반려한 뒤 지금 정의에서 다시 작성해 요청해 주세요.")
+        filed = Module.from_dict(yaml.safe_load(cr.text))
+        ws.module.label, ws.module.description = filed.label, filed.description
+        ws.module.version = _next_version(lib.versions(WORKSPACE)) if lib.versions(WORKSPACE) else ws.module.version
+        cr.text, cr.version = yaml.safe_dump(ws.module.to_dict(), allow_unicode=True, sort_keys=False), ws.module.version
+        return ""
+
+    def _not_approved(self, cr, approve: bool = True) -> str:
+        """Why a change request was not approved (or rejected), as the screen says it: which request, which of its items
+        reached which check, and what to do. What the engine said (an SQL error, an exception) is not shown."""
+        verb = "승인하지" if approve else "반려하지"
+        if cr is None:
+            return f"변경 요청을 찾지 못해 {verb} 못했습니다. 변경 요청 목록을 새로고침해 주세요."
+        if cr.status != "pending":
+            return words.fix(f"변경 요청 {cr.id}은(는) 이미 {CHANGE_STATUS.get(cr.status, cr.status)} 상태라 {verb} 못했습니다. "
+                             "변경 요청 목록을 새로고침해 주세요.")
+        rv = cr.review or {}
+        failed = [g for g in rv.get("gates") or [] if not g.get("passed")]
+        if failed:
+            return self._gates_said(cr, failed)
+        if rv.get("issues"):
+            return self._trial_said(cr, [str(x) for x in rv["issues"]])
+        return words.fix(f"변경 요청 {cr.id}을(를) 적용하지 못해 {verb} 못했습니다. 정의를 수정해 다시 요청해 주세요." if approve else
+                         f"변경 요청 {cr.id}을(를) {verb} 못했습니다. 변경 요청 목록을 새로고침해 주세요.")
+
+    def _after_onto(self, cr):
+        """The definition a change request would leave, or None where its modules do not compose."""
+        import yaml
+
+        from ontlas.modules import compose
+
+        comp = self.studio.composition
+        try:
+            m = Module.from_dict(yaml.safe_load(cr.text))
+            mods = list(comp.modules) if comp is not None else []
+            mods = [m if x.name == m.name else x for x in mods] if any(x.name == m.name for x in mods) else [*mods, m]
+            return compose(mods, **self.studio._compose_kw).ontology
+        except Exception:  # what the request holds no longer composes: nothing to name the item by
+            return None
+
+    def _items_said(self, cr, items: list[str]) -> str:
+        diff = (cr.review or {}).get("diff") or {}
+        verb = {e: v for v, k in (("추가", "added"), ("변경", "changed"), ("삭제", "removed")) for e in diff.get(k) or []}
+        after = self._after_onto(cr)
+        said = [f"{self._element_word(e, after)} {verb.get(e, '변경')}" for e in items[:3]]
+        return ", ".join(said) + (f" 외 {len(items) - 3}개" if len(items) > 3 else "")
+
+    def _gates_said(self, cr, failed: list[dict]) -> str:
+        """Each pass condition not met, with what did not meet it (a value held against the transaction system, the past
+        cases, a query the stores answer differently, a question answered wrong, a column the source lacks) and the items
+        of the request those stand on, as the definition stands before it."""
+        from ontlas.web.pages_api import query_reads, table_reads
+
+        rv = cr.review or {}
+        m = rv.get("measured") or {}
+        check = m.get("check") or {}
+        diff = rv.get("diff") or {}
+        changed = {e for k in ("added", "changed", "removed") for e in diff.get(k) or []}
+        o, idx = self.studio.onto, self._what_reads()
+        cands: list[tuple[str, set, bool]] = []  # (who did not meet it, what it reads, whether it surely failed)
+
+        def part(name: str) -> dict | None:
+            return next((p for p in idx["flow"] if p["name"] == name), None)
+
+        for g in failed:
+            key = (g["stage"], g["condition"])
+            if key == ("check", "max_value_errors"):
+                wrong = [v.get("label") or v.get("name") for v in check.get("values") or [] if v.get("errors")]
+                parts = [p for p in idx["flow"] if p["name"].startswith("거래 값 대조")]
+                for p in parts:  # a value that could not be read at all fails them all: the request's items say which
+                    sure = any(p["name"] == f"거래 값 대조 · {w}" for w in wrong)
+                    if sure or check.get("value_error"):
+                        cands.append((f"검증 흐름 {p['name']}", p["reads"] | {f"object:{x}" for x in p["rows"]}, sure))
+            elif key == ("decide", "min_agreement"):
+                p = part("판정 일치율")
+                if p is not None:
+                    cands.append(("검증 흐름 판정 일치율", p["reads"] | {f"object:{x}" for x in p["rows"]}, True))
+            elif key == ("query", "min_agree"):
+                names = [r.get("name") for r in (m.get("query") or {}).get("reports") or []]
+                for rq, els in idx["queries"]:
+                    if rq.name in names or (m.get("query") or {}).get("error"):
+                        cands.append((f"질의 {rq.label or rq.name}", els, rq.name in names))
+            elif key in (("check", "min_accuracy"), ("check", "min_grounded")):
+                ids = (check.get("failed") or []) if key[1] == "min_accuracy" else list(check.get("ungrounded") or {})
+                for qid in ids:
+                    q = next((x for x in o.questions if x.id == qid), None)
+                    els = {f"question:{qid}"}
+                    if q is not None and q.decision in o.decisions:
+                        els |= table_reads(o, o.decisions[q.decision])
+                    if q is not None and q.query in o.queries:
+                        els |= query_reads(o, o.queries[q.query])
+                    cands.append((f"검증 질문 {qid}", els, True))
+            elif key[0] == "bind":
+                severity, after = "error" if key[1] == "max_errors" else "warning", self._after_onto(cr)
+                for f in (m.get("bind") or {}).get("findings") or []:
+                    el = str(f.get("element") or "")
+                    if f.get("severity") == severity and ":" in el:
+                        cands.append((self._element_word(el, after), {el}, True))
+        items = sorted({e for _, els, _ in cands for e in els} & changed)
+        named = [w for w, els, _ in cands if els & changed] or [w for w, _, sure in cands if sure]
+        named = list(dict.fromkeys(named))
+        gates = ", ".join(dict.fromkeys(GATE_LABEL.get((g["stage"], g["condition"]), g["condition"]) for g in failed))
+        who = ", ".join(named[:3]) + (f" 외 {len(named) - 3}개" if len(named) > 3 else "")
+        if items and named:
+            return words.fix(f"변경 요청 {cr.id}의 {self._items_said(cr, items)}(으)로 {who}이(가) 통과 조건 {gates}을(를) "
+                             "충족하지 못해 승인하지 못했습니다. 이 변경을 되돌리거나 정의를 수정해 다시 요청해 주세요.")
+        if named:
+            return words.fix(f"변경 요청 {cr.id}에서 {who}이(가) 통과 조건 {gates}을(를) 충족하지 못해 승인하지 못했습니다. "
+                             "정의를 수정해 다시 요청해 주세요.")
+        return words.fix(f"변경 요청 {cr.id}이(가) 통과 조건 {gates}을(를) 충족하지 못해 승인하지 못했습니다. 정의를 수정해 다시 요청해 주세요.")
+
+    def _trial_said(self, cr, issues: list[str]) -> str:
+        """A change request whose trial copy could not be built or read, by the item and the column or table it reads that
+        the source lacks where the engine names one; the engine's words are not shown."""
+        from ontlas.check import columns_of
+        from ontlas.review import element_diff
+
+        text = " ".join(issues)
+        after = self._after_onto(cr)
+        diff = (cr.review or {}).get("diff") or {}
+        if not diff and after is not None:  # a trial that could not be built kept no diff: what the request changes, again
+            diff = element_diff(self.studio.onto, after)
+        touched = [e for k in ("changed", "added") for e in diff.get(k) or []]
+        col = re.search(r"no such column: (?:\w+\.)?(\w+)|column \"?(?:\w+\.)?(\w+)\"? does not exist|"
+                        r"column (?:with name )?\"?(\w+)\"? (?:not found|does not exist)", text, re.I)
+        if col:
+            name = next(g for g in col.groups() if g)
+            for el in touched:
+                kind, _, ref = el.partition(":")
+                t, _, p = ref.partition(".")
+                obj = after.objects.get(t) if after is not None else None
+                if obj is None or not obj.table:
+                    continue
+                for prop in ([p] if kind == "property" and p else all_props(after, t) if kind == "object" else []):
+                    try:
+                        cols = columns_of(after, t, prop)
+                    except Exception:  # a Property the definition cannot place reads no column
+                        continue
+                    if name.lower() in (c.lower() for c in cols):
+                        return words.fix(f"변경 요청 {cr.id}의 {self._element_label(f'property:{t}.{prop}', after)}이(가) 읽는 컬럼 "
+                                         f"{obj.table}.{name}이(가) 데이터 소스에 없어 승인하지 못했습니다. "
+                                         f"Mapping에서 {obj.table} 테이블에 있는 컬럼으로 바꿔 다시 요청해 주세요.")
+            return words.fix(f"변경 요청 {cr.id}이(가) 데이터 소스에 없는 컬럼 {name}을(를) 읽어 승인하지 못했습니다. "
+                             "바꾼 Mapping · Binding의 컬럼을 확인해 다시 요청해 주세요.")
+        table = re.search(r"no such table: (?:\w+\.)?(\w+)|relation \"?(?:\w+\.)?(\w+)\"? does not exist|"
+                          r"table with name \"?(\w+)\"? does not exist", text, re.I)
+        if table:
+            name = next(g for g in table.groups() if g)
+            who = next((self._element_label(e, after) for e in touched if e.startswith("object:") and after is not None
+                        and getattr(after.objects.get(e.split(":", 1)[1]), "table", "") == name), "")
+            return words.fix((f"변경 요청 {cr.id}의 {who}이(가) 읽는 테이블 {name}이(가)" if who else
+                              f"변경 요청 {cr.id}이(가) 읽는 테이블 {name}이(가)") + " 데이터 소스에 없어 승인하지 못했습니다. "
+                             "Binding에서 데이터 소스에 있는 테이블로 바꿔 다시 요청해 주세요.")
+        said = [x for x in (_issue_text(i) for i in issues) if _HANGUL.search(x)]
+        if said:
+            return words.fix(f"변경 요청 {cr.id}을(를) 시험 적용하지 못해 승인하지 못했습니다. {said[0]}")
+        return words.fix(f"변경 요청 {cr.id}을(를) 시험 적용하지 못해 승인하지 못했습니다. 바꾼 항목을 확인해 다시 요청해 주세요.")
 
     # ---- management: objects, properties, relations, questions as one pending overlay module --------------------
 
-    def _ws(self):
-        from ontlas.manage import Workspace
+    def _ws(self, change: str = ""):
+        """The edits being written. When the modules moved under them (`change` approved, a module attached or taken
+        off), each is made again on the modules as they now stand, so a request filed next does not write back what was
+        approved: one on an item that move also changed, or one that no longer holds, is held aside for a person."""
+        from ontlas.manage import Workspace, changed_elements
 
         comp = self.studio.composition
         if comp is None:
@@ -2784,11 +3123,146 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if self.workspace is None or self._ws_sig != sig:
             current = next((m for m in comp.modules if m.name == WORKSPACE), None)
             old = self.workspace
-            ws = Workspace(list(comp.modules), current, compose_kw=self.studio._compose_kw)
-            if old is not None and old.dirty:  # unsent edits carry over to the new modules; they are checked again
-                ws.module, ws.edits, ws._before, ws._undone = old.module, old.edits, old._before, old._undone
+            if old is not None and old.pending:
+                try:
+                    changed = changed_elements(old.started(), comp)
+                except ModuleError:  # what they were made on no longer composes: each is only checked again
+                    changed = set()
+                ws = old.rebase(list(comp.modules), current, changed=changed, change=change)
+            else:
+                ws = Workspace(list(comp.modules), current, compose_kw=self.studio._compose_kw)
             self.workspace, self._ws_sig = ws, sig
+        self.workspace.who = self.who
         return self.workspace
+
+    # ---- the edits being written, in the journal: a restart makes them again -----------------------------------------
+
+    _ws_kept: dict | None = None  # what the journal last says of them, so a line is written only when they change
+    _ws_written: set | None = None  # the edits the journal holds a record of
+
+    def _ws_state(self) -> dict:
+        ws = self.workspace
+        if ws is None:
+            return {"edits": [], "held": [], "undone": [], "title": None}
+        title = ws.titled()
+        return {"edits": [e.id for e in ws.edits], "held": [{"id": e.id, "conflict": plain(e.conflict)} for e in ws.held],
+                "undone": [e.id for e in ws._undone], "title": list(title) if title else None}
+
+    def keep_pending(self) -> None:
+        """The edits being written, into the journal when they changed: a record of each edit once (what was asked, by
+        whom, when) and a line of which stand, which are held aside and which were taken back. The server calls this
+        after every request that may write; restore_pending makes them again at the next start."""
+        journal = self.studio.changes.journal
+        if journal is None:
+            return
+        state = self._ws_state()
+        if state == self._ws_kept:
+            return
+        ws = self.workspace
+        written = self._ws_written if self._ws_written is not None else set()
+        for e in [*ws.edits, *ws.held, *ws._undone] if ws is not None else []:
+            if e.id and e.id not in written:
+                journal.write("ws_edit", {"id": e.id, "op": e.op, "args": plain(e.args), "target": e.target, "by": e.by,
+                                          "at": e.at})
+                written.add(e.id)
+        self._ws_written = written
+        journal.write("ws", {"at": datetime.now().isoformat(timespec="seconds"), "by": self.who, **state,
+                             "base": list(self._ws_sig) if ws is not None else []})
+        self._ws_kept = state
+
+    def restore_pending(self) -> None:
+        """The edits that were being written when the server stopped, made again on the definition it starts with, each
+        by whom and when it was made. Where the definition moved since (an approval the journal holds but the edits had
+        not been made again on), they are made again as after an approval (_ws). A journal from before edits were kept
+        holds none of them, and nothing changes."""
+        from dataclasses import replace
+
+        from ontlas.manage import Edit, Workspace, changed_elements, made_again
+
+        journal = self.studio.changes.journal
+        comp = self.studio.composition
+        if journal is None or comp is None:
+            return
+        records: dict[str, dict] = {}
+        state = None
+        for r in journal.read():
+            if r.get("kind") == "ws_edit" and r.get("id"):
+                records[r["id"]] = r
+            elif r.get("kind") == "ws":
+                state = r
+        self._ws_written = set(records)
+        if state is None:
+            return
+
+        def edit(eid: str, conflict: dict | None = None) -> Edit | None:
+            r = records.get(eid)
+            return None if r is None else Edit(str(r.get("op") or ""), str(r.get("target") or ""), [], dict(r.get("args") or {}),
+                                              eid, str(r.get("by") or ""), str(r.get("at") or ""), dict(conflict or {}))
+
+        edits = [e for e in (edit(i) for i in state.get("edits") or []) if e is not None]
+        held = [e for e in (edit(str(h.get("id") or ""), h.get("conflict")) for h in state.get("held") or []) if e is not None]
+        now, kw = list(comp.modules), self.studio._compose_kw
+        current = next((m for m in now if m.name == WORKSPACE), None)
+        was = self._modules_at(state.get("base") or [])
+        ws = None
+        try:
+            if was is not None and [m.key for m in was] != [m.key for m in now]:
+                old = made_again(edits, was, next((m for m in was if m.name == WORKSPACE), None), compose_kw=kw)
+                ws = old.rebase(now, current, changed=changed_elements(old.started(), comp))
+        except ModuleError:  # what they were written on no longer composes: they are made again on today's as they are
+            ws = None
+        try:
+            if ws is None:
+                ws = made_again(edits, now, current, compose_kw=kw)
+        except Exception as e:  # noqa: BLE001 - a start is never stopped by them: every one is held, none is lost
+            ws = Workspace(now, current, compose_kw=kw)
+            ws.held = [replace(x, conflict={"why": "failed", "elements": [x.target], "change": "", "error": str(e)}) for x in edits]
+        ws.held = [*held, *ws.held]
+        ws._undone = [e for e in (edit(i) for i in state.get("undone") or []) if e is not None]
+        if state.get("title"):
+            ws.module.label, ws.module.description = state["title"]
+        self.workspace, self._ws_sig = ws, tuple(m.key for m in now)
+        self._ws_kept = {k: state.get(k) for k in ("edits", "held", "undone", "title")}
+        self.keep_pending()  # what could not be made again is written down held, as the screen now shows it
+
+    def _modules_at(self, keys: list[str]) -> list[Module] | None:
+        """The modules by their keys (name@version), where the library still has every one."""
+        lib = self.studio.changes.store or self.studio.library
+        out = []
+        for k in keys:
+            name, _, version = str(k).rpartition("@")
+            try:
+                out.append(lib.get(name, version))
+            except (ModuleError, LookupError, OSError, ValueError):
+                return None
+        return out if out else None
+
+    @staticmethod
+    def _edits_view(ws) -> list[dict]:
+        """The edits being written, each with who made it and when (one workspace is written by the whole team)."""
+        return [{"op": e.op, "target": e.target, "took_out": e.took_out, "id": e.id, "by": e.by, "at": e.at} for e in ws.edits]
+
+    def _held_view(self, e) -> dict:
+        """A held edit as the screen shows it: what it was, who made it, what it ran into, and the sentence to settle it."""
+        def word(el: str) -> str:
+            if ":" not in el:
+                return el
+            kind, name = el.split(":", 1)
+            return f"용어 {name}" if kind == "term" else self._element_word(el) if kind in ELEMENT_WORD else self._element_label(el)
+
+        c = e.conflict or {}
+        items = ", ".join(dict.fromkeys(word(x) for x in c.get("elements") or [e.target]))
+        if c.get("why") == "failed":
+            text = words.fix(f"정의가 바뀌어 {items} 편집을 다시 적용하지 못했습니다. {_edit_text(str(c.get('error') or ''))} "
+                             "바뀐 내용을 확인한 뒤 다시 적용하거나 버려 주세요.")
+        elif c.get("change"):
+            text = (f"승인된 변경 요청 {c['change']}에서 {items}도 바뀌어 이 편집을 보류했습니다. "
+                    "승인된 내용 위에 다시 적용하거나 버려 주세요.")
+        else:
+            text = f"적용된 정의에서 {items}도 바뀌어 이 편집을 보류했습니다. 바뀐 내용 위에 다시 적용하거나 버려 주세요."
+        return {"id": e.id, "op": e.op, "target": e.target, "label": word(e.target), "by": e.by, "at": e.at,
+                "why": c.get("why", ""), "change": c.get("change", ""), "elements": list(c.get("elements") or []),
+                "args": e.args, "text": text}
 
     def manage_state(self) -> dict:
         """The definition as the pending edits would leave it, and what the source holds, for the management screens."""
@@ -2979,8 +3453,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                                    for n, b in self.studio.backends.items() if n != self.studio.source]},
             "workspace": {"dirty": ws.dirty, "module": WORKSPACE, "label": mine.label,
                           "version": ws.current.version if ws.current else "",
-                          "edits": [{"op": e.op, "target": e.target, "took_out": e.took_out} for e in ws.edits], "redo": len(ws._undone),
-                          "issues": issues, "diff": diff, "impact": self._impact(diff), "findings": pending_check,
+                          "edits": self._edits_view(ws), "redo": len(ws._undone),
+                          "conflicts": [self._held_view(e) for e in ws.held], "issues": issues, "diff": diff, "impact": self._impact(diff), "findings": pending_check,
                           "yaml": yaml.safe_dump(mine.to_dict(), allow_unicode=True, sort_keys=False)},
         })
 
@@ -3243,12 +3717,259 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
     def manage_edit(self, op: str, args: dict) -> dict:
         from ontlas.manage import EditError
 
+        ws = self._ws()
+        refused = self._edit_refusal(ws, str(op), dict(args or {}))
+        if refused:
+            raise ValueError(refused)
         try:
-            edit = self._ws().apply(str(op), dict(args or {}))
+            edit = ws.apply(str(op), dict(args or {}))
         except EditError as e:
-            raise ValueError(_edit_text(str(e))) from None
+            raise ValueError(self._edit_said(str(e))) from None
         return {"ok": True, "edit": {"op": edit.op, "target": edit.target, "took_out": edit.took_out},
                 **self.manage_state()}
+
+    def _edit_said(self, msg: str) -> str:
+        """A refused edit in words; a decision table it would take out is named as the screens name it, not by its key."""
+        def named(m: re.Match) -> str:
+            d = self.studio.onto.decisions.get(m.group(2))
+            return f"{m.group(1)}{(d.label or d.name) if d is not None else m.group(2)}{m.group(3)}"
+
+        return _edit_text(re.sub(r"(removes decision ')([^']+)(')", named, msg))
+
+    @staticmethod
+    def _copy_ws(ws):
+        """The request being written, copied to try an edit on: the copy's edits do not reach it."""
+        scratch = copy.copy(ws)
+        scratch.module = Module.from_dict(copy.deepcopy(ws.module.to_dict()))
+        scratch.edits, scratch._before, scratch._undone = list(ws.edits), list(ws._before), list(ws._undone)
+        return scratch
+
+    def _element_word(self, el: str, onto=None) -> str:
+        """An element as a sentence names it: what it is, then its name."""
+        kind, name = el.split(":", 1)
+        label = name if kind == "question" else self._element_label(el, onto)
+        return f"{ELEMENT_WORD[kind]} {label}" if ELEMENT_WORD.get(kind) else label
+
+    def _edit_refusal(self, ws, op: str, args: dict) -> str:
+        """Why a delete, a Binding taken off or a Mapping set back to its default is refused before it is filed, in the
+        sentence the screen shows; '' when nothing stops it (an edit the definition turns down says so itself).
+
+        The flow settings are not part of the definition, so a delete cannot take a part of the validation flow out with
+        what that part reads (as it takes out a question on a query it deletes): what a part names, or what it names
+        and the delete leaves broken, is refused. A Binding taken off also leaves the flow, and the registered queries
+        the flow compares across stores, without the Entity's rows. A Mapping set back to its default reads a column of
+        the Property's own name: where the source table has none, it is refused (only a connected source can say)."""
+        from ontlas.manage import EditError
+
+        if op.startswith("delete_"):
+            verb = "삭제하지"
+        elif op == "update_object" and "table" in args and not args.get("table"):
+            verb = "Binding을 해제하지"
+        elif op == "update_property" and "column" in args and not args.get("column"):
+            verb = "Mapping을 기본값으로 되돌리지"
+        else:
+            return ""
+        try:
+            before = ws.composed().ontology
+            scratch = self._copy_ws(ws)
+            edit = scratch.apply(op, args)
+            after = scratch.composed().ontology
+        except (EditError, ModuleError):  # the edit does not hold: the definition's own refusal follows
+            return ""
+        st = self.studio
+        if verb != "삭제하지" and st.source:
+            lost = self._lost_columns(before, after, str(args.get("object") or args.get("name") or ""))
+            if lost:
+                x = lost[0]
+                what = (f"{self._element_label('property:' + x['property'], before)}의 Mapping을 기본값으로 되돌리지"
+                        if verb.startswith("Mapping") else f"{self._element_label('object:' + x['entity'], before)}의 Binding을 해제하지")
+                if not x["column"]:
+                    return words.fix(f"되돌아갈 테이블 {x['table']}이(가) 데이터 소스에 없어 {what} 못했습니다. "
+                                     "삭제 대신 편집해 데이터 소스에 있는 테이블로 바꿔 주세요.")
+                return words.fix(f"되돌아갈 컬럼 {x['table']}.{x['column']}이(가) 데이터 소스에 없어 {what} 못했습니다. "
+                                 f"삭제 대신 Mapping을 편집해 {x['table']} 테이블에 있는 컬럼으로 바꿔 주세요.")
+        from ontlas.web.pages_api import flow_parts
+
+        parts = flow_parts(before, st.flow)
+        if verb == "Binding을 해제하지":
+            name = str(args.get("name") or "")
+            unbound = name in before.objects and before.objects[name].table and not (after.objects.get(name) and after.objects[name].table)
+            if not unbound or not st.source:
+                return ""
+            in_use = st.onto.objects.get(name)
+            if not (in_use and in_use.table):  # a table bound only in the edits being written: releasing it goes back to what passed
+                return ""
+            entity = self._element_label(f"object:{name}", before)
+            for p in parts:
+                if name in p["rows"]:
+                    return words.fix(f"검증 흐름 {p['name']}이(가) {entity}의 행을 읽고 있어 Binding을 해제하지 못했습니다. "
+                                     f"검증 화면의 통과 조건 편집에서 {p['name']}을(를) 먼저 바꿔 주세요.")
+            gate = (st.flow.gates.get("query") or {}).get("min_agree")
+            if st.flow.on("query") and gate is not None and len(st.backends) > 1:  # the flow compares every registered query
+                from ontlas.web.pages_api import query_reads
+
+                for rq in before.queries.values():
+                    if f"object:{name}" in query_reads(before, rq):
+                        return words.fix(f"질의 {rq.label or rq.name}이(가) {entity}의 행을 읽고 있어 Binding을 해제하지 못했습니다. "
+                                         "질의를 먼저 바꿔 주세요.")
+            return ""
+        gone = self._gone(before, after)
+        for p in parts:
+            lost = sorted(e for e in p["named"] if e in gone)
+            if not lost:
+                continue
+            target = edit.target
+            if target in lost:
+                cause = f"검증 흐름 {p['name']}이(가) {self._element_word(target, before)}을(를) 읽고 있어"
+            else:
+                cause = f"검증 흐름 {p['name']}이(가) 읽는 {self._element_word(lost[0], before)}이(가) 함께 빠져"
+            return words.fix(f"{cause} {verb} 못했습니다. 검증 화면의 통과 조건 편집에서 {p['name']}을(를) 먼저 바꿔 주세요.")
+        return ""
+
+    @staticmethod
+    def _gone(before, after) -> set[str]:
+        """The elements a definition has that the other no longer does, by the names the flow settings use."""
+        out = {f"object:{t}" for t in before.objects if t not in after.objects}
+        out |= {f"property:{t}.{p}" for t, x in before.objects.items() for p in all_props(before, t)
+                if t not in after.objects or p not in all_props(after, t)}
+        for kind, section in (("query", "queries"), ("decision", "decisions"), ("function", "functions"), ("link", "links")):
+            out |= {f"{kind}:{n}" for n in getattr(before, section) if n not in getattr(after, section)}
+        return out
+
+    def _lost_columns(self, before, after, entity: str) -> list[dict]:
+        """The stored Properties of an Entity that read another table or column after an edit than before it, where the
+        connected source has no such table or column: what a Mapping set back or a Binding taken off would read."""
+        from ontlas.check import columns_of, stored_props
+        from ontlas.model import RAW_SUFFIX
+
+        t = after.objects.get(entity)
+        if t is None or not t.table:
+            return []
+        backend = self.studio.backend()
+        have = backend.columns(t.table)
+        was = before.objects.get(entity)
+        out = []
+        for p in stored_props(after, entity):
+            try:
+                cols = columns_of(after, entity, p)
+                old = columns_of(before, entity, p) if was is not None and was.table else []
+            except Exception:  # a Property the definition cannot place is left to the definition check to name
+                continue
+            if was is not None and was.table == t.table and cols == old:
+                continue
+            if have is None:
+                return [{"entity": entity, "property": f"{entity}.{p.removesuffix(RAW_SUFFIX)}", "table": t.table, "column": ""}]
+            out += [{"entity": entity, "property": f"{entity}.{p.removesuffix(RAW_SUFFIX)}", "table": t.table, "column": c}
+                    for c in cols if c.lower() not in have]
+        return out
+
+    def reset_check(self, element: str) -> dict:
+        """What taking a Mapping off (a Property's column set back to its default) or a Binding off (an Entity's table)
+        would leave reading, for the delete screen: the column or table it goes back to and whether the source has it,
+        and the sentence the delete request would be refused with ('' when it would be taken)."""
+        kind, _, name = element.partition(":")
+        ws = self._ws()
+        o = ws.composed().ontology
+        if kind == "property" and "." in name and name.split(".", 1)[0] in o.objects and name.split(".", 1)[1] in all_props(o, name.split(".", 1)[0]):
+            entity, prop = name.split(".", 1)
+            op, args = "update_property", {"object": entity, "name": prop, "column": "", "transform": "", "source_type": ""}
+        elif kind == "object" and name in o.objects:
+            entity, prop = name, ""
+            op, args = "update_object", {"name": name, "table": ""}
+        else:
+            raise LookupError(element)
+        connected = bool(self.studio.source)
+        reverts: list[dict] = []
+        if kind == "property":
+            p = find_prop(o, entity, prop)
+            if p.expr and not p.transform:  # a computed Property reads no column: it has no Mapping to take off
+                return {"element": element, "connected": connected, "reverts": [], "error": ""}
+        if connected and kind == "property":
+            from ontlas.check import columns_of
+            from ontlas.manage import EditError
+
+            try:
+                scratch = self._copy_ws(ws)
+                scratch.apply(op, args)
+                after = scratch.composed().ontology
+                t = after.objects[entity]
+                have = self.studio.backend().columns(t.table) if t.table else None
+                reverts = [{"table": t.table, "column": c, "exists": have is not None and c.lower() in have}
+                           for c in (columns_of(after, entity, prop) if t.table else [])]
+            except (EditError, ModuleError, KeyError, ValueError):  # a Property with no Mapping of its own to take off
+                reverts = []
+        return {"element": element, "connected": connected, "reverts": reverts, "error": self._edit_refusal(ws, op, args)}
+
+    def try_edits(self, edits: list[tuple[str, dict]]) -> dict:
+        """Edits tried in order on a copy of the request being written, each through the same checks a request for it
+        meets: the first refusal in its words, or what the edits would take out with them."""
+        from ontlas.manage import EditError
+
+        scratch = self._copy_ws(self._ws())
+        took: list[str] = []
+        for op, args in edits:
+            refused = self._edit_refusal(scratch, op, args)
+            if refused:
+                return {"ok": False, "error": refused, "took_out": []}
+            try:
+                edit = scratch.apply(op, args)
+            except (EditError, ModuleError) as e:
+                return {"ok": False, "error": self._edit_said(str(e)), "took_out": []}
+            took += [x for x in edit.took_out if x not in took]
+        before = self._ws().composed().ontology if took else None
+        return {"ok": True, "error": "", "took_out": [self._element_word(x, before) for x in took if ":" in x]}
+
+    def restore_element(self, el: str) -> dict:
+        """An item taken out, put back as an edit of the request being written (되살리기). One an edit not yet sent took
+        out is that edit taken back. One a filed change took out is put back as the screens' module had it in the
+        version before that change, whatever kind it is (manage.restore_parts); the change that took it out is named.
+        Says why not, in the screen's words."""
+        from ontlas.manage import EditError, TooFarBack, restore_parts
+        from ontlas.review import _cards, _elements
+
+        if ":" not in str(el):
+            raise ValueError("항목 이름이 없어 되살리지 못했습니다. 이력 화면에서 다시 선택해 주세요.")
+        ws = self._ws()
+        comp = ws.composed()
+        word = self._element_word(el) if el.split(":", 1)[0] in ELEMENT_WORD else self._element_label(el)
+        if el in _elements(comp.ontology, _cards(comp)):
+            raise ValueError(words.fix(f"{word}은(는) 지금 정의에 있어 되살리지 않았습니다. 이력에서 되돌릴 시점을 선택해 주세요."))
+        if el in _elements(self.studio.onto, _cards(self.studio.composition)):  # an edit not yet sent took it out
+            i = next((i for i in range(len(ws.edits) - 1, -1, -1) if el in (ws.edits[i].target, *ws.edits[i].took_out)), None)
+            if i is None:
+                raise ValueError("작성 중인 편집에서 지운 기록을 찾지 못해 되살리지 못했습니다. 변경 요청 · 버전에서 확인해 주세요.")
+            try:
+                ws.revert(i)
+            except TooFarBack:
+                raise ValueError("지운 편집이 너무 오래되어 되살리지 못했습니다. 다시 추가해 주세요.") from None
+            except EditError as e:  # a later edit leans on the delete: the message names it
+                later = self._element_label(str(e)) if ":" in str(e) else str(e)
+                raise ValueError(words.fix(f"뒤에 작성한 {later} 편집이 이 삭제에 기대고 있어 되살리지 못했습니다. "
+                                           "그 편집을 먼저 취소해 주세요.")) from None
+            self._note("change", words.fix(f"{word}을(를) 지운 편집을 취소했습니다."))
+            return {"ok": True, "how": "undone", "change": "", **self.manage_state()}
+        cr = next((c for c in reversed(list(self.studio.changes.requests.values())) if c.status == "approved"
+                   and (((c.review or {}).get("elements") or {}).get(el) or [None, ""])[1] is None), None)
+        if cr is None:
+            raise ValueError("이 항목을 지운 변경 요청을 찾지 못해 되살리지 못했습니다. 변경 요청 · 버전에서 확인해 주세요.")
+        if cr.module != WORKSPACE:
+            raise ValueError(words.fix(f"{self._change_label(cr)} 모듈을 바꾼 변경 요청 {cr.id}에서 지운 항목이라 여기서 되살리지 못했습니다. "
+                                       "변경 요청 · 버전에서 그 변경을 롤백해 주세요."))
+        from ontlas.modules import version_key
+
+        lib = self.studio.changes.store or self.studio.library
+        older = [v for v in lib.versions(WORKSPACE) if version_key(v) < version_key(cr.version)] if lib is not None else []
+        old = lib.get(WORKSPACE, older[-1]) if older else None
+        ends = {lk.name: (lk.source, lk.target) for lk in ws._base_onto.links.values()}
+        parts = restore_parts(old, ws.module, el, ends)
+        if not any(parts.values()):
+            raise ValueError(words.fix(f"변경 요청 {cr.id} 이전 버전에 {word}이(가) 없어 되살리지 못했습니다. 변경 요청 · 버전에서 확인해 주세요."))
+        try:
+            ws.apply("restore_element", {"element": el, **parts})
+        except EditError as e:
+            raise ValueError(self._edit_said(str(e))) from None
+        self._note("change", words.fix(f"변경 요청 {cr.id}에서 지운 {word}을(를) 되살리기로 작성 중인 변경 요청에 추가했습니다."))
+        return {"ok": True, "how": "edit", "change": cr.id, **self.manage_state()}
 
     def manage_import_questions(self, text: str) -> dict:
         """Questions from a YAML or JSON list ({id, text, query, params, expect} or {id, text, decision, key, expect})."""
@@ -3273,9 +3994,53 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                 failed.append(f"{q.get('id') if isinstance(q, dict) else q}: {_edit_text(str(e))}")
         return {"ok": True, "added": added, "failed": failed, **self.manage_state()}
 
-    def manage_discard(self) -> dict:
-        self._file_notes([el for el, ns in self._notes().items() if any("change" not in n for n in ns)], "")
-        self.workspace = None
+    def manage_discard(self, everyone: bool = False) -> dict:
+        """The edits being written, thrown away. In a team the request being written is everyone's: a person throws away
+        their own edits (held ones too), and the others' are made again without them, each still its writer's; one that
+        leaned on an edit thrown away is held aside for its writer, with why. Everyone's goes when `everyone` (an admin's,
+        the server checks)."""
+        from ontlas.manage import made_again
+
+        ws = self.workspace
+        if self.self_approve or everyone or ws is None:
+            self._file_notes([el for el, ns in self._notes().items() if any("change" not in n for n in ns)], "")
+            self.workspace = None
+            return {"ok": True, "discarded": len(ws.edits) + len(ws.held) if ws is not None else 0, **self.manage_state()}
+        mine = [e for e in [*ws.edits, *ws.held] if e.by == self.who]
+        if not mine:
+            raise ValueError("내가 작성한 편집이 없어 폐기하지 못했습니다. 다른 사람의 편집은 작성한 사람이나 관리자가 폐기합니다.")
+        others = [e for e in ws.edits if e.by != self.who]
+        title = ws.titled()
+        rest = made_again(others, ws.base, ws.current, compose_kw=ws.kw, who=self.who)
+        rest.held = [*[e for e in ws.held if e.by != self.who], *rest.held]
+        rest._undone = [e for e in ws._undone if e.by != self.who]
+        if title is not None:
+            rest.module.label, rest.module.description = title
+        kept = {e.target for e in [*rest.edits, *rest.held]}
+        self._file_notes(sorted({e.target for e in mine} - kept), "")
+        self.workspace = rest if rest.pending else None
+        return {"ok": True, "discarded": len(mine), "kept": len(others) + len(rest.held), **self.manage_state()}
+
+    def _ws_filed(self, ws) -> None:
+        """The edits just filed are in their request now; what a rebase held aside stays for a person to settle."""
+        self.workspace, self._ws_sig = None, ()
+        if ws.held:
+            self._ws().held = list(ws.held)
+
+    def manage_conflict(self, edit_id: str, keep: bool) -> dict:
+        """A held edit settled by a person: made over what was approved (`keep`), or let go for what was approved."""
+        from ontlas.manage import EditError
+
+        ws = self._ws()
+        if not any(e.id == edit_id for e in ws.held):
+            raise ValueError("충돌한 편집을 찾지 못해 처리하지 못했습니다. 화면을 새로고침해 주세요.")
+        if keep:
+            try:
+                ws.make_held(edit_id)
+            except (EditError, ModuleError) as e:
+                raise ValueError(self._edit_said(str(e))) from None
+        else:
+            ws.drop_held(edit_id)
         return {"ok": True, **self.manage_state()}
 
     def manage_propose(self) -> dict:
@@ -3286,16 +4051,18 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if not ws.dirty:
             raise ValueError("바뀐 내용이 없어 변경을 요청하지 못했습니다. Entity · 속성 · 관계를 수정한 뒤 다시 요청해 주세요.")
         text = yaml.safe_dump(ws.module.to_dict(), allow_unicode=True, sort_keys=False)
-        res = self.propose_module(text, attach=ws.current is None)
+        filed = [{"op": e.op, "args": plain(e.args), "target": e.target, "id": e.id, "by": e.by, "at": e.at} for e in ws.edits]
+        res = self.propose_module(text, attach=ws.current is None, edits=filed)
         change = res["change"]
+        sig = self._ws_sig
+        self._ws_filed(ws)
         if not self.studio.changes.self_approve:  # a person approves it on the library screen
-            self.workspace = None
             return {"ok": True, "pending": True, "change": change, **self.manage_state()}
         out = self.decide_change(change["id"], True)
         if not out["ok"]:  # the trial did not pass: the edits stay to be fixed, the request goes back with its review
+            self.workspace, self._ws_sig = ws, sig
             cr = self.studio.changes.reject(change["id"], by=self.who, reason="통과 조건 미충족")
             return {"ok": False, "error": out["error"], "change": self._change(cr), **self.manage_state()}
-        self.workspace = None  # approved: what comes next starts from the studio as it now stands
         return {"ok": True, "pending": False, "change": out["change"],
                 "warning": _projection_warning(out.get("projection") or {}), **self.manage_state()}
 
@@ -3338,6 +4105,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except ValueError:
             raise ValueError("통과 조건 값이 올바르지 않아 저장하지 못했습니다. 비율은 0에서 100 사이의 숫자로 입력해 주세요.") from None
         self.studio.settings["flow"] = fs.to_dict()
+        self._keep_flow()
         saved = plain(fs.to_dict())
         self._flow_seen[self.who] = copy.deepcopy(saved)
         text = "품질 목표와 흐름 단계를 저장했습니다."
@@ -3348,6 +4116,14 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         else:
             self._note("flow", text)
         return {"ok": True, "settings": saved}
+
+    def _keep_flow(self) -> None:
+        """The pass conditions just saved, into the journal: the studio takes the last saved back at a restart
+        (Studio.keep_journal), where without it the studio file's would come back."""
+        journal = self.studio.changes.journal
+        if journal is not None:
+            journal.write("flow", {"at": datetime.now().isoformat(timespec="seconds"), "by": self.who,
+                                   "settings": plain(self.studio.settings.get("flow") or {})})
 
     def agreement(self, pending: bool = False) -> dict:
         """Past cases decided again; with `pending`, by the tables as the workspace's unfiled edits leave them."""

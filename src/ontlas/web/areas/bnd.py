@@ -4,7 +4,8 @@
   who uses it), and its change or removal as an edit like any other,
 - a query being written, read into every store's language without being run,
 - the SQL an Entity's binding makes,
-- an action tried without being requested: the checks a request would meet, and nothing kept or called.
+- an action tried without being requested: the checks a request would meet, and nothing kept or called,
+- whether an approved action writes to the source here or is recorded only.
 """
 from __future__ import annotations
 
@@ -236,6 +237,18 @@ def binding(s, a, who) -> dict:
     return plain(out)
 
 
+@get("bnd/reset")
+def reset(s, a, who) -> dict:
+    """What deleting a Mapping (property:<Entity>.<Property>: its column set back to the Property's own name) or a
+    Binding (object:<Entity>: its table taken off) leaves reading, for the delete screen: the table and column it goes
+    back to and whether the connected source has it ([] with no source connected: nothing can say), and the sentence
+    the delete request would be refused with, '' when it would be taken. The request is checked the same way."""
+    element = str(a.get("element") or "")
+    if ":" not in element:
+        raise ValueError("항목 이름이 없어 삭제 영향을 확인하지 못했습니다. Mapping 또는 Binding을 다시 선택해 주세요.")
+    return plain(s.reset_check(element))
+
+
 @post("bnd/check", needs="viewer")
 def check(s, a, who) -> dict:
     """The definition as the pending edits leave it, against the source's tables, columns, types, keys and values: what
@@ -289,6 +302,14 @@ def _problem_said(problem: str) -> str:
     if " is not " in why:
         return f"{name} 자료형 다름"
     return problem
+
+
+@get("bnd/action/write")
+def action_write(s, a, who) -> dict:
+    """Whether an approved Action writes to the data source here (ontlas serve --action-write) or ends recorded with
+    what it would change, and whether the source connected can be written at all."""
+    acts = s.studio.actions
+    return {"write": bool(acts.write), "writable": acts.writeback is not None}
 
 
 @post("bnd/action/try", needs="viewer")
@@ -365,6 +386,8 @@ def action_try(s, a, who) -> dict:
     return plain({
         "ok": all(c["passed"] for c in checks), "action": name, "label": act.label or name, "key": key, "on_record": current is not None,
         "connected": connected, "checks": checks,
+        # whether a run of it would change the source, and whether this server writes it there or only records it
+        "writes": bool(act.set or act.transition_to), "write": bool(st.actions.write),
         "state": {"property": sm.property if sm and act.transition_to else "", "from": (current or {}).get(sm.property) if sm and current else None,
                   "to": act.transition_to},
         "call": {"method": str(call.get("method") or "POST"), "url": str(call.get("url") or "")} if call else None,

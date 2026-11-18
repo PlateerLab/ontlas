@@ -15,7 +15,7 @@ def test_a_quality_module_raises_the_pass_conditions_and_detaching_it_lowers_the
     own = s.studio.flow.gates
     assert s.attach("return-quality")["ok"]
     st = s.studio
-    assert st.flow.gates["check"] == {"min_accuracy": 1.0, "min_grounded": 1.0}
+    assert st.flow.gates["check"] == {"min_accuracy": 1.0, "min_grounded": 1.0, "max_new_wrong": 0}
     assert st.flow.gates["decide"]["min_agreement"] == 0.9 and st.flow.gates["bind"] == own["bind"]
     assert st.raised_gates() == {"check.min_accuracy": "return-quality", "check.min_grounded": "return-quality",
                                  "decide.min_agreement": "return-quality"}

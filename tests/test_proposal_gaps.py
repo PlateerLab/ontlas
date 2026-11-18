@@ -161,10 +161,11 @@ def test_past_cases_are_decided_by_the_edited_tables_when_asked(session):
     assert session.agreement()["agree"] == before["agree"]  # the applied tables have not changed
 
 
-def test_in_a_team_an_approver_applies_a_draft_and_a_viewer_moves_nothing():
+def test_in_a_team_an_editor_puts_a_draft_into_the_request_and_a_viewer_moves_nothing():
     from ontlas.web.team import NEEDS
 
-    assert NEEDS["draft/apply"] == NEEDS["draft/review/apply"] == NEEDS["draft/map/apply"] == "approver"
+    assert NEEDS["draft/apply"] == NEEDS["draft/review/apply"] == "editor"  # into the request being written, approved as any
+    assert NEEDS["draft/map/apply"] == "approver"
     assert NEEDS["draft/review/preview"] == NEEDS["draft/table"] == "editor"
     assert NEEDS["catalog/move"] == NEEDS["catalog/trash"] == NEEDS["catalog/use"] == "editor"
     assert NEEDS["graph/view"] == NEEDS["graph/view/forget"] == NEEDS["workspace/layout"] == "editor"
