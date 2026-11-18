@@ -181,8 +181,11 @@ def query_check(s, a, who) -> dict:
 @get("bnd/columns")
 def columns(s, a, who) -> dict:
     """The column or columns each stored Property reads, as the queries will read them: a Property an Entity takes from
-    the Entity it specialises may read another column there (its key reads the Entity's own key column)."""
+    the Entity it specialises may read another column there (its key reads the Entity's own key column). With them, the
+    Entities whose rows keep another Entity's history: values over time (series) or rows valid for a time (period),
+    each with the Relation that ties it to the Entity it records."""
     from ontlas.check import columns_of, stored_props
+    from ontlas.model import TEXT_SUFFIX
 
     onto, pending = s._pending_onto()
     out: dict[str, list[str]] = {}
@@ -192,7 +195,16 @@ def columns(s, a, who) -> dict:
                 out[f"{name}.{p}"] = [str(c) for c in columns_of(onto, name, p)]
             except Exception:  # a Property the definition cannot place is left to the checks to name
                 continue
-    return {"columns": out, "pending": pending}
+    histories = []
+    for t in onto.objects.values():
+        for kind, spec in (("series", t.series), ("period", t.period)):
+            if not spec:
+                continue
+            lk = onto.links.get(str(spec.get("of") or ""))
+            histories.append({"entity": t.name, "kind": kind, "of": lk.name if lk else "",
+                              "owner": (lk.target if lk.source == t.name else lk.source) if lk else "",
+                              "time": [str(spec[k]).removesuffix(TEXT_SUFFIX) for k in ("time", "start", "end") if spec.get(k)]})
+    return {"columns": out, "histories": histories, "pending": pending}
 
 
 @get("bnd/binding")

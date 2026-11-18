@@ -23,7 +23,7 @@
     const sig = bndSig();
     if (S.bnd.colsBusy) return S.bnd.colsBusy;
     if (S.bnd.cols && S.bnd.cols.sig === sig) return Promise.resolve();
-    S.bnd.colsBusy = api('bnd/columns').then((r) => { S.bnd.cols = { sig, map: r.columns }; }).catch(() => { S.bnd.cols = { sig, map: {} }; })
+    S.bnd.colsBusy = api('bnd/columns').then((r) => { S.bnd.cols = { sig, map: r.columns, hist: r.histories || [] }; }).catch(() => { S.bnd.cols = { sig, map: {}, hist: [] }; })
       .finally(() => { S.bnd.colsBusy = null; if (['db', 'sources', 'bind'].includes(S.tab)) render(); });
     return S.bnd.colsBusy;
   }
@@ -131,7 +131,7 @@
     const origin = st.origin || {};
     const what = origin.kind === 'files' ? '업로드 데이터' : '업무 DB';
     const sub = on ? `${BACKEND_KIND[src.kind] || src.kind} 읽기 전용 · ${origin.detail || origin.label || src.name}${store ? (store.state === 'ok' ? ` · 응답 ${store.ms}ms` : ` · ${store.error || '응답 없음'}`) : ''}` : '연결된 데이터 소스 없음';
-    const pipes = st.pipelines.length > 1 ? `<div class="k-h"><label class="k-f" style="flex:0 1 320px">데이터<select class="k-in sm" data-in="bndPipe" aria-label="데이터 선택">${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select></label>${st.pipeline !== 'p1' && isOntoAdmin() ? '<button class="k-lnk bad" data-act="bndPipeDrop" style="align-self:flex-end">데이터 삭제</button>' : ''}</div>` : '';
+    const pipes = st.pipelines.length > 1 ? `<div class="k-h"><label class="k-f" style="flex:0 1 320px">데이터<select class="k-in sm" data-in="bndPipe" aria-label="데이터 선택"${canEdit() ? '' : ' disabled'}>${st.pipelines.map((p, i) => `<option value="${esc(p.id)}"${p.id === st.pipeline ? ' selected' : ''}>${esc(i === 0 ? '기본 데이터' : p.label)}</option>`).join('')}</select></label>${st.pipeline !== 'p1' && isOntoAdmin() ? '<button class="k-lnk bad" data-act="bndPipeDrop" style="align-self:flex-end">데이터 삭제</button>' : ''}</div>` : '';
     const band = `<section class="k-wrap g16" aria-labelledby="bnd-src-h" style="align-items:stretch">
       <div class="k-v bnd-src${on ? ' on' : ''}"><div class="k-pha"><span class="bnd-ico">${ki('db', 20, 1.75)}</span><div class="k-g0"><h2 class="k-h2" id="bnd-src-h">${what} · ${on ? '연결됨' : '미연결'}</h2><p class="k-s" style="margin:0">${esc(sub)}</p></div><span class="k-chip">L2 · L3</span></div>${pipes}</div>
       <div class="k-card pad k-v" style="flex:1 1 280px"><p class="k-h2" style="margin:0">연결 방식</p>
@@ -143,7 +143,8 @@
       const obj = (r) => { const names = [...new Set(r.ents.map((o) => o.area_label || o.label || o.name))], rels = r.links.map((l) => l.label || l.name);
         return names.length || rels.length ? esc([...names, ...(rels.length ? [`Relation ${rels.join(', ')}`] : [])].join(' · ')) : '<span class="k-mut">-</span>'; };
       const real = (r) => (!on ? '<span class="k-mut">미연결</span>' : r.real ? `${r.real.columns.length}컬럼 · ${show(r.real.rows)}행` : '<span class="k-chip warn">테이블 없음</span>');
-      const read = (r) => (r.used ? '<span class="k-chip ok">사용</span>' : canEdit() ? `<a class="k-lnk" href="#entity-form?table=${encodeURIComponent(r.table)}">+ Entity</a>` : '<span class="k-chip">미사용</span>');
+      const masked = (r) => r.ents.reduce((n, o) => n + bndOwn(m, o.name).filter((p) => p.mask && !p.expr).length, 0);
+      const read = (r) => (r.used ? `<span class="k-chip ok">사용</span>${masked(r) ? ` <span class="k-chip">마스킹 컬럼 ${masked(r)}</span>` : ''}` : canEdit() ? `<a class="k-lnk" href="#entity-form?table=${encodeURIComponent(r.table)}">+ Entity</a>` : '<span class="k-chip">미사용</span>');
       scope = `<section class="k-card" aria-labelledby="bnd-tb-h" style="flex:2 1 560px"><div class="k-h g12" style="padding:16px 20px"><h2 class="k-h2" id="bnd-tb-h">테이블 범위</h2><span class="k-chip">정의 ${named}</span><span class="k-s k-push">${on ? `실제 스키마 ${m.sources.source.tables.length}개 테이블` : ''}</span></div>
         ${rows.length ? `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">테이블</th><th scope="col">대응 Object</th><th class="r" scope="col">정의서</th><th scope="col" class="bnd-dashl">실제 스키마</th><th scope="col">사용</th></tr></thead><tbody>
           ${rows.map((r) => `<tr><td class="k-code">${esc(r.table)}</td><td>${obj(r)}</td><td class="r">${r.used ? r.cols : '<span class="k-mut">-</span>'}</td><td class="bnd-dashl${on && r.real ? '' : ' mut'}">${real(r)}</td><td>${read(r)}</td></tr>`).join('')}</tbody></table></div>`

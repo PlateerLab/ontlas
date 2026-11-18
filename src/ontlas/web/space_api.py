@@ -382,9 +382,12 @@ class SpaceMixin:
         """Another vector store beside the one in use, on an install that allows connections."""
         if not self.data.allow_connect:
             raise PermissionError("서버 설정에서 외부 저장소 연결이 꺼져 있어 추가하지 못했습니다. 서버 관리자에게 설정을 요청해 주세요.")
+        from ontlas.web.areas.admin import _note  # kept in the audit log as the admin screens keep what they set
+
         name = str(name or kind).strip()[:32]
         if op == "remove":
             self.space.remove_store(name)
+            _note(self, None, "setting", f"벡터 저장소 {name} 삭제")
             return self.space_state()
         if kind not in known_kinds():
             raise ValueError("벡터 저장소 종류를 알 수 없어 추가하지 못했습니다. 목록의 종류를 골라 주세요.")
@@ -402,6 +405,7 @@ class SpaceMixin:
             self.space.errors.pop(name, None)
             raise ValueError(f"{kind} 저장소가 응답하지 않아 추가하지 못했습니다. 주소와 실행 상태를 확인해 주세요.")
         self.event("adapter", f"벡터 저장소 {name} 추가")
+        _note(self, None, "setting", f"벡터 저장소 {name} 추가 · {kind}")  # never the address: it may hold a password
         return self.space_state()
 
     def connect_gateway(self, url: str, connection: Any, token: str, dialect: str = "postgres", label: str = "",

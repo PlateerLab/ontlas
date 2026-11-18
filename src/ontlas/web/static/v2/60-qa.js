@@ -4,7 +4,8 @@
 
   S.qa2 = { set: 'dev', sel: '', pd: null, pdOf: '', imp: null, result: '', edit: false, ranAt: '', busy: false,
     ask: { text: '', busy: false, res: null, fb: '' }, attempt: { sig: '', busy: false, res: null, timer: 0 },
-    scene: false, log: null, monTimer: 0, monBusy: false, steps: false, ev: null, evBusy: false, docWant: '', secWant: '', gapN: 0, hitOf: '' };
+    scene: false, log: null, monTimer: 0, monBusy: false, steps: false, ev: null, evBusy: false, docWant: '', secWant: '', gapN: 0, hitOf: '',
+    asks: null, asksBusy: false, wait: null };
 
   const QA_TYPE = { definition: '정의형', decision: '판정형', value: '값 조회형' };
   const QA_GRADING = { match: '판정 일치', keywords: '키워드 포함', evidence: '근거 포함', llm: 'LLM 심사' };
@@ -46,11 +47,23 @@
     if (qaVia(q) === 'decision' && noSource() && !Object.keys(q.values || {}).length) return ['연결 필요', '데이터 소스 미연결 · 판정 값 없음'];
     return null;
   }
-  // the Object a question is about: the one its decision's target Entity is filed under
+  // the Object a question is about: the one its decision's target Entity, or the Entity its query answers about, is
+  // filed under
   function qaObjectOf(q) {
     const m = S.mg.st, dec = q.decision && (S.st.decisions || []).find((d) => d.name === q.decision);
-    const o = dec && m && m.objects ? m.objects.find((x) => x.name === dec.target) : null;
+    const ent = dec ? dec.target : q.query && S.qa2.asks ? S.qa2.asks[q.query] : '';
+    const o = ent && m && m.objects ? m.objects.find((x) => x.name === ent) : null;
     return o ? (o.area_label || o.label) : '';
+  }
+  async function qaLoadAsks() {  // the Entity each registered query answers about, read again when a query is new to it
+    const names = (S.mg.st && !S.mg.st.error ? S.mg.st.queries || [] : []).map((x) => x.name);
+    if (S.qa2.asksBusy || (S.qa2.asks && names.every((n) => n in S.qa2.asks))) return;
+    S.qa2.asksBusy = true;
+    let got = {};
+    try { got = (await api('qa/objects')).queries; } catch (_) { /* the Object stays unsaid */ }
+    S.qa2.asks = { ...Object.fromEntries(names.map((n) => [n, ''])), ...got };  // a name it does not answer for is not asked again
+    S.qa2.asksBusy = false;
+    if (S.tab === 'check') render();
   }
   const qaVersion = () => { const l = (S.st.layers.find((x) => x.kind === 'domain') || S.st.layers[0] || { modules: [] }).modules[0]; return l ? `v${l.version}` : ''; };
   async function qaManage() {  // the definition, once: the menu may already be reading it
@@ -333,7 +346,7 @@
     const m = S.mg.st, edit = canEdit();
     const lead = '정답이 정해진 검증 질문 세트를 관리합니다.';
     const acts = `${edit ? `<button class="k-btn" data-act="qaImp">목록 불러오기</button><a class="k-btn" href="${itemHref('question', 'form')}">${ki('plus', 16, 1.75)}질문</a>` : ''}<button class="k-btn" data-act="qaRunGo">${ki('play', 16, 1.75)}검증 실행</button>`;
-    const next = kNext([['semrules', '규칙'], ['search', '검색 · 질문'], ['flow?edit=1', '통과 조건']]);
+    const next = kNext([['semrules', '규칙'], ['search', '검색 · 질문'], ...(isOntoAdmin() ? [['settings', '품질 목표']] : [])]);
     if (!m) return kHead('검증 질문', lead, acts) + qaWait('검증 질문을 불러오는 중입니다.');
     if (m.error) return kHead('검증 질문', lead) + kEmpty('검증 질문을 불러오지 못했습니다', m.error, '<button class="k-btn" data-act="qaReload">다시 시도</button>');
     const qs = m.questions || [];
@@ -361,7 +374,7 @@
   }
 
   screen('check', { area: 'work', word: '검증 질문', view: qaSetView,
-    after: () => { if (!S.mg.st && !S.mg.busy) loadManage(); } });
+    after: () => { if (!S.mg.st && !S.mg.busy) loadManage(); qaLoadAsks(); } });
 
   Object.assign(INPUT, {
     qaPd: (t) => {
@@ -621,7 +634,6 @@
 
   screen('flow', { area: 'work', word: '검증', view: qaRunView,
     after: () => {
-      if (itemParam('edit') && !S.qa2.edit) { S.qa2.edit = true; S.qa2.editGo = true; history.replaceState(null, '', '#flow'); render(); return; }
       if (!S.qa) qaRun(); else if (!S.fl) qaLoadFlow();
       if (!S.flset) loadFlowSettings();
       if (!S.mg.st && !S.mg.busy) loadManage();
@@ -689,13 +701,21 @@
   function qaMonTiles(m) {
     const tile = (f) => `<li class="qa-step${f.status === 'warn' ? ' warn' : f.status === 'bad' ? ' bad' : ''}"><span class="qa-steph"><a class="k-b" href="#${esc(f.tab)}"${f.alerts ? ` data-act="issfloor" data-floor="${esc(f.id)}"` : ''}>${esc(QA_FLOOR[f.id] || f.label)}</a><i class="k-dot${QA_DOT[f.status] || ''}" role="img" aria-label="${esc(ST_WORD[f.status] || '')}"></i></span>
       <span class="${f.status === 'warn' ? 'k-warn k-13' : f.status === 'bad' ? 'k-bad k-13' : 'k-s'}">${f.alerts ? `알림 ${f.alerts} · ` : ''}${f.tags.filter((t) => t.value !== '0' && t.value !== '').slice(0, 2).map((t) => `${esc(t.label)} ${esc(t.value)}`).join(' · ') || esc((f.tags[0] || {}).label ? `${f.tags[0].label} ${f.tags[0].value}` : '')}</span></li>`;
-    const waits = S.st.changes || 0, inbox = S.home.box ? S.home.box.counts.assigned : 0;
-    const approve = `<li class="qa-step${waits ? ' warn' : ''}"><span class="qa-steph"><a class="k-b" href="#${known('changes') ? 'changes' : 'inbox'}">승인</a><i class="k-dot${waits ? ' warn' : ''}" role="img" aria-label="${waits ? '주의' : '정상'}"></i></span><span class="${waits ? 'k-warn k-13' : 'k-s'}">변경 요청 대기 ${waits}${inbox ? ` · 할 일 ${inbox}` : ''}</span></li>`;
+    const waits = S.st.changes || 0, inbox = S.home.box ? S.home.box.counts.assigned : 0, w = S.qa2.wait;
+    const longest = waits && w && w.changes && w.oldest_at ? ` · 최장 ${qaAge(w.waited)}` : '';
+    const approve = `<li class="qa-step${waits ? ' warn' : ''}"><span class="qa-steph"><a class="k-b" href="#${known('changes') ? 'changes' : 'inbox'}">승인</a><i class="k-dot${waits ? ' warn' : ''}" role="img" aria-label="${waits ? '주의' : '정상'}"></i></span><span class="${waits ? 'k-warn k-13' : 'k-s'}">변경 요청 대기 ${waits}${longest}${inbox ? ` · 할 일 ${inbox}` : ''}</span></li>`;
+    // the decision tables the flow measured, and whether they agree with the decisions made in the past
+    const dec = S.fl && S.fl.steps ? S.fl.steps.find((x) => x.id === 'decide') : null, gd = qaGate('decide', 'min_agreement'), off = !!gd && !gd.passed && !gd.unmeasured;
+    const engine = `<li class="qa-step${off ? ' warn' : ''}"><span class="qa-steph"><a class="k-b" href="#semrules">판정 엔진</a><i class="k-dot${off ? ' warn' : ''}" role="img" aria-label="${off ? '주의' : '정상'}"></i></span><span class="${off ? 'k-warn k-13' : 'k-s'}">${dec ? `결정표 ${count(dec.decisions)} · 규칙 ${count(dec.rules)}` : '-'}</span></li>`;
     const ver = qaVersion();
     const deploy = `<li class="qa-step"><span class="qa-steph"><a class="k-b" href="#changes">배포</a><i class="k-dot" role="img" aria-label="정상"></i></span><span class="k-s">${esc(ver || '-')}${waits ? ` · 검토 중 ${waits}` : ''}</span></li>`;
     const source = noSource() ? `<li class="qa-step dash"><span class="qa-steph"><b class="k-b">소스 차이 검사</b>${kChip('선택 사항')}</span><span class="k-s">미연결</span></li>` : '';
-    return m.floors.map(tile).join('') + approve + deploy + source;
+    // in the order the work goes: approved, decided on, checked, deployed
+    const tiles = m.floors.map(tile), at = m.floors.findIndex((f) => f.id === 'verify');
+    tiles.splice(at < 0 ? tiles.length : at, 0, approve, engine);
+    return tiles.join('') + deploy + source;
   }
+  const qaAge = (sec) => (sec >= 86400 ? `${Math.floor(sec / 86400)}일` : sec >= 3600 ? `${Math.floor(sec / 3600)}시간` : '1시간 미만');
 
   function qaMonRules(m) {
     const gates = qaGates();
@@ -714,7 +734,7 @@
     if (!l) return '<p class="k-cf">기록을 불러오는 중입니다.</p>';
     if (l.error) return `<p class="k-cf">${esc(l.error)}</p>`;
     if (!l.rows.length) return '<p class="k-cf">기록이 없습니다.</p>';
-    const basis = (r) => [r.rules.length ? r.rules.join(' · ') : '', r.change || '', ...r.versions.slice(0, 1).map((v) => `${v.label} ${v.version}`), r.versions.length > 1 ? `외 ${r.versions.length - 1}` : ''].filter(Boolean).join(' · ');
+    const basis = (r) => [r.source || '', r.rules.length ? r.rules.join(' · ') : '', r.change || '', ...r.versions.slice(0, 1).map((v) => `${v.label} ${v.version}`), r.versions.length > 1 ? `외 ${r.versions.length - 1}` : ''].filter(Boolean).join(' · ');
     return `<div class="k-x"><table class="k-t s"><thead><tr><th scope="col">시각</th><th scope="col">종류</th><th scope="col">내용</th><th scope="col">근거 · 버전</th></tr></thead><tbody>
       ${l.rows.map((r) => `<tr><td class="k-code" title="${esc(r.at)}">${esc(String(r.at).slice(0, 10) === new Date().toISOString().slice(0, 10) ? qaHm(r.at) : qaWhen(r.at))}</td><td>${kChip(r.kind, r.tone)}</td><td>${esc(r.text)}</td><td class="i3">${esc(basis(r) || '-')}</td></tr>`).join('')}</tbody></table></div>
       ${l.total > l.rows.length ? `<p class="k-cf line">최근 ${l.rows.length}건 표시 · 전체 ${l.total}건</p>` : ''}`;
@@ -748,7 +768,7 @@
     const active = m.faults.find((f) => f.on);
     const fault = m.faults.length && isOntoAdmin() ? `<select class="k-in sm" style="width:auto;max-width:220px" data-in="mfault" aria-label="장애 테스트 항목"${active ? ' disabled' : ''}>${m.faults.map((f, i) => `<option value="${i}"${i === S.mon.fault ? ' selected' : ''}>${esc(f.label)}</option>`).join('')}</select>
       <button class="k-btn sm" data-act="qaMonFault"${S.mon.busy ? ' disabled' : ''}>${S.mon.busy ? '처리 중' : active ? '복구' : '장애 테스트'}</button>` : '';
-    return `<div class="qa-scene"><div class="k-h g12" style="padding:0 0 12px"><div class="k-seg mseg" role="group" aria-label="보는 범위">${seg}</div><span class="k-push k-h">${fault}${S.st.pipeline === 'p1' || !canEdit() ? '' : '<button class="k-btn sm" data-act="mpipedel">파이프라인 삭제</button>'}</span></div>
+    return `<div class="qa-scene"><div class="k-h g12" style="padding:0 0 12px"><div class="k-seg mseg" role="group" aria-label="보는 범위">${seg}</div><span class="k-push k-h">${fault}${S.st.pipeline === 'p1' || !isOntoAdmin() ? '' : '<button class="k-btn sm" data-act="mpipedel">파이프라인 삭제</button>'}</span></div>
       <div class="mstage"><div class="mlink"><i class="dot mlive"></i>${QA_MON_EVERY / 1000}초마다 갱신</div>${m.notice ? `<div class="mnote">${esc(m.notice)}</div>` : ''}<div id="mscene"></div>
         <div class="mlegend"><span><i style="background:#22a06b"></i>정상</span><span><i style="background:#e2a03f"></i>주의</span><span><i style="background:#e5484d"></i>장애</span></div><div class="mtick" id="mtick">${monitorTicker(m)}</div></div></div>`;
   }
@@ -763,7 +783,7 @@
     return `${head}<section class="k-card pad k-v g12" aria-labelledby="qa-pl"><div class="k-h sb"><h2 class="k-h2" id="qa-pl">처리 상태</h2><span class="k-h g12"><span class="k-s" id="qa-monat">마지막 점검 ${esc(hms(m.measured_at))}</span><button class="k-lnk" data-act="qaMonSceneGo" aria-expanded="${S.qa2.scene}">${S.qa2.scene ? '그림 접기' : '그림 보기'}</button></span></div>
         <ol class="qa-steps" id="qa-montiles">${qaMonTiles(m)}</ol>${S.qa2.scene ? qaMonScene(m) : ''}</section>
       <div class="k-cols"><section class="k-card" aria-labelledby="qa-log" style="flex:3 1 560px"><div class="k-ch"><h2 id="qa-log">결정 로그</h2>${audit}</div><div id="qa-monlog">${qaMonLog()}</div></section>
-        <section class="k-card" aria-labelledby="qa-watch" style="flex:2 1 340px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-watch">알림 규칙</h2>${isOntoAdmin() ? '<a class="k-lnk k-push" href="#flow?edit=1">알림 기준</a>' : ''}</div><div id="qa-monrules">${qaMonRules(m)}</div></section></div>
+        <section class="k-card" aria-labelledby="qa-watch" style="flex:2 1 340px"><div class="k-ch" style="border-bottom:1px solid var(--row)"><h2 id="qa-watch">알림 규칙</h2>${isOntoAdmin() ? '<a class="k-lnk k-push" href="#settings">알림 기준</a>' : ''}</div><div id="qa-monrules">${qaMonRules(m)}</div></section></div>
       <section class="k-card" aria-labelledby="qa-stg"><div class="k-ch"><h2 id="qa-stg">단계별 측정</h2><div class="k-push"><button class="k-lnk" data-act="qaMonSteps" aria-expanded="${S.qa2.steps}">${S.qa2.steps ? '접기' : '보기'}</button></div></div>${S.qa2.steps ? qaMonSteps() : ''}</section>${next}`;
   }
 
@@ -771,6 +791,11 @@
     try { S.qa2.log = await api('qa/decisions'); } catch (e) { S.qa2.log = { error: e.message, rows: [], total: 0 }; }
     const box = $('#qa-monlog');
     if (box && S.tab === 'monitor') box.innerHTML = qaMonLog();
+  }
+  async function qaMonLoadWait() {  // the change requests waiting on an approver, for the 승인 stage
+    try { S.qa2.wait = await api('qa/approvals'); } catch (e) { S.qa2.wait = { error: e.message }; }
+    const box = $('#qa-montiles');
+    if (box && S.tab === 'monitor' && S.mon.st) box.innerHTML = qaMonTiles(S.mon.st);
   }
 
   async function qaMonTick() {
@@ -788,7 +813,7 @@
         put('#qa-monchip', qaMonChip(m)); put('#qa-montiles', qaMonTiles(m)); put('#qa-monrules', qaMonRules(m));
         put('#qa-monat', `마지막 점검 ${esc(hms(m.measured_at))}`);
         if (S.qa2.scene && $('#mscene svg')) { window.SpaceScene.patch(m); if (m.measured) window.SpaceScene.sweep(); put('#mtick', monitorTicker(m)); }
-        if (m.measured) qaMonLoadLog();
+        if (m.measured) { qaMonLoadLog(); qaMonLoadWait(); }
       } catch (e) { fail(e); }
     }
     S.qa2.monTimer = setTimeout(qaMonTick, QA_MON_EVERY);
@@ -800,6 +825,7 @@
       if (m && S.qa2.scene && $('#mscene')) { window.SpaceScene.mount($('#mscene'), m); S.mon.shape = m.shape; window.SpaceScene.focus(S.mon.focus); }
       if (!S.qa2.monTimer) qaMonTick();
       if (!S.qa2.log) qaMonLoadLog();
+      if (!S.qa2.wait || (!S.qa2.wait.error && S.qa2.wait.changes !== (S.st.changes || 0))) qaMonLoadWait();  // read again once the count moves
       if (!S.fl) qaLoadFlow();
       if (!S.home.box && !S.home.busy && !S.home.err) loadInbox();
     } });
@@ -808,7 +834,7 @@
     qaMonCheck: async () => {  // measured again now: the stages, the conditions, then the board
       if (S.qa2.monBusy) return;
       S.qa2.monBusy = true; render();
-      try { S.fl = await api('flow'); S.fl.at = new Date().toTimeString().slice(0, 5); S.mon.st = await api('monitor'); await qaMonLoadLog(); toast('파이프라인을 재점검했습니다.'); } catch (e) { fail(e); }
+      try { S.fl = await api('flow'); S.fl.at = new Date().toTimeString().slice(0, 5); S.mon.st = await api('monitor'); await qaMonLoadLog(); await qaMonLoadWait(); toast('파이프라인을 재점검했습니다.'); } catch (e) { fail(e); }
       S.qa2.monBusy = false; render();
     },
     qaMonSceneGo: () => { S.qa2.scene = !S.qa2.scene; render(); },

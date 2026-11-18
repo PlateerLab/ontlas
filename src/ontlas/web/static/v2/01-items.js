@@ -42,7 +42,7 @@
 
   function itemState(kind, what) {
     const id = itemParam('id'), key = `${kind}:${what}:${id}`;
-    if (S.it.key !== key) S.it = { key, kind, what, id, x: null, d: null, ready: false, loading: false, missing: false, busy: false, err: '', uses: null, hist: null, hsel: 0, hdep: false, hall: false, mode: 'request', reason: '', confirm: '' };
+    if (S.it.key !== key) S.it = { key, kind, what, id, x: null, d: null, ready: false, loading: false, missing: false, busy: false, err: '', uses: null, hist: null, hsel: 0, hdep: false, hall: false, hcmp: '', mode: 'request', reason: '', confirm: '' };
     return S.it;
   }
 
@@ -155,14 +155,29 @@
     const rows = list.map((e, i) => `<button class="k-row tight${e === sel ? ' on' : ''}" data-act="ithsel" data-i="${i}"${e === sel ? ' aria-current="true"' : ''}><span class="k-h sb"><span class="k-h">${e.ver ? `<span class="k-code k-ink">${esc(e.ver)}</span>` : ''}${e.mark ? `<span class="k-s">${esc(e.mark)}</span>` : ''}${e.cp ? `<span class="k-code k-mut">${esc(e.cp)}</span>` : ''}</span><span class="k-s">${when(e.at)}</span></span><span class="k-14">${esc(e.say)}</span><span class="k-s">${esc(e.who || '')}</span></button>`).join('')
       || '<p class="k-cf line">변경 이력이 없습니다.</p>';
     const said = (v) => (v === null || v === undefined || v === '' ? '<span class="k-mut">-</span>' : show(v));
-    const table = !sel ? '' : it.hall
+    // 다른 버전과 비교: the chosen change beside another one, field by field, as each left the item (older on the left)
+    const named = (e) => [e.ver, e.mark, e.cp].filter(Boolean).join(' ') || '선택한 변경';
+    const others = sel && (sel.all || []).length ? list.filter((e) => e !== sel && (e.all || []).length) : [];
+    const cmp = it.hcmp !== '' && others.includes(list[Number(it.hcmp)]) ? list[Number(it.hcmp)] : null;
+    const compared = () => {
+      const [old, now] = list.indexOf(cmp) > list.indexOf(sel) ? [cmp, sel] : [sel, cmp];
+      const a = new Map(old.all.map((r) => [r.label, r.value])), b = new Map(now.all.map((r) => [r.label, r.value]));
+      const same = (x, y) => JSON.stringify(x === undefined ? null : x) === JSON.stringify(y === undefined ? null : y);
+      const labels = [...new Set([...old.all, ...now.all].map((r) => r.label))].filter((l) => it.hall || !same(a.get(l), b.get(l)));
+      return `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">항목</th><th scope="col">${esc(named(old))}</th><th scope="col">${esc(named(now))}</th></tr></thead><tbody>${labels.map((l) => `<tr><td class="b">${esc(l)}</td><td class="k-bad">${said(a.get(l))}</td><td class="k-ok">${said(b.get(l))}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">차이 없음</td></tr>'}</tbody></table></div>`;
+    };
+    const table = !sel ? '' : cmp ? compared() : it.hall
       ? `<div class="k-x"><table class="k-t"><thead><tr><th scope="col">항목</th><th scope="col">값</th></tr></thead><tbody>${sel.all.map((r) => `<tr><td class="b">${esc(r.label)}</td><td>${said(r.value)}</td></tr>`).join('')}</tbody></table></div>`
       : `<div class="k-x"><table class="k-t end"><thead><tr><th scope="col">항목</th><th scope="col">이전</th><th scope="col">이후</th></tr></thead><tbody>${sel.rows.map((r) => `<tr><td class="b">${esc(r.label)}</td><td class="k-bad">${said(r.before)}</td><td class="k-ok">${said(r.after)}</td></tr>`).join('') || '<tr><td colspan="3" class="mut">변경 항목 없음</td></tr>'}</tbody></table></div>`;
+    const revert = sel && def.revert && canEdit() && !itemLocked(def, it.x) && sel.deployed && sel !== all[0] ? '<button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button>' : '';
+    const pick = cmp ? `<select class="k-in sm" style="width:auto;max-width:240px" data-in="ithcmp" aria-label="비교 버전">${others.map((e) => `<option value="${list.indexOf(e)}"${e === cmp ? ' selected' : ''}>${esc(named(e))}</option>`).join('')}</select><button class="k-btn" data-act="ithcmp" data-v="">비교 닫기</button>`
+      : others.length ? '<button class="k-btn" data-act="ithcmp">다른 버전과 비교</button>' : '';
     const detail = !sel ? '<p class="k-cf">선택된 변경이 없습니다.</p>' : `${table}${kKv('변경자', esc(sel.who || '-'))}${kKv('시각', when(sel.at) || '-')}${sel.cp ? kKv('변경 요청', `<a href="#changes?id=${encodeURIComponent(sel.cp)}">${esc(sel.cp)}</a>`) : ''}${kKv('사유', esc(sel.say))}
-      ${def.revert && canEdit() && !itemLocked(def, it.x) && sel.deployed && sel !== all[0] ? `<div class="k-cb" style="padding-top:12px"><div class="k-h"><button class="k-btn" data-act="itrevert">이 시점으로 되돌리기</button></div></div>` : ''}`;
+      ${pick || revert ? `<div class="k-cb" style="padding-top:12px"><div class="k-h">${pick}${revert}</div></div>` : ''}`;
+    const title = !sel ? '변경 내용' : cmp ? '버전 비교' : `${esc([sel.ver, sel.mark].filter(Boolean).join(' ') || '선택한 변경')} 변경 내용`;
     return `${head}${bar}<div class="k-cols"><div class="k-c2"><section class="k-card"><div class="k-ch"><h2>변경 이력</h2><span class="k-s">${all.length}건</span><div class="k-push"><div class="k-seg"><button class="${it.hdep ? '' : 'on'}" data-act="ithdep" data-v="">전체</button><button class="${it.hdep ? 'on' : ''}" data-act="ithdep" data-v="1">배포</button></div></div></div>${rows}</section></div>
-      <div class="k-c3"><section class="k-card"><div class="k-ch"><h2>${sel ? `${esc([sel.ver, sel.mark].filter(Boolean).join(' ') || '선택한 변경')} 변경 내용` : '변경 내용'}</h2>${sel ? `<div class="k-push"><div class="k-seg"><button class="${it.hall ? '' : 'on'}" data-act="ithall" data-v="">변경 항목</button><button class="${it.hall ? 'on' : ''}" data-act="ithall" data-v="1">전체 항목</button></div></div>` : ''}</div>${detail}</section>
-      </div></div>`;
+      <div class="k-c3"><section class="k-card"><div class="k-ch"><h2>${title}</h2>${sel ? `<div class="k-push"><div class="k-seg"><button class="${it.hall ? '' : 'on'}" data-act="ithall" data-v="">변경 항목</button><button class="${it.hall ? 'on' : ''}" data-act="ithall" data-v="1">전체 항목</button></div></div>` : ''}</div>${detail}</section>
+      </div></div>${kNext([['changes', '변경 요청 · 버전'], ['sys-audit', '감사 로그']])}`;
   }
 
   // leaving an item's screen forgets what was typed there: the next visit starts from the item as it is
@@ -180,6 +195,7 @@
     itmode: (t) => { S.it.mode = t.value; render(); },
     itreason: (t) => { S.it.reason = t.value; itemArm(); },
     itconfirm: (t) => { S.it.confirm = t.value; itemArm(); },
+    ithcmp: (t) => { S.it.hcmp = t.value; render(); },
   });
   // an edit that leaves every value as the item has it: nothing to file, only the reason would be kept
   const itemSame = (def, it) => { const plain = (d) => JSON.stringify({ ...d, reason: '' }); try { return plain(it.d) === plain(def.draft(it.x)); } catch (_) { return false; } };
@@ -219,11 +235,23 @@
         if (el) await api('element/comment', { id: el, text: `${it.mode === 'disable' ? '사용 중지' : '삭제 요청'} · ${it.reason.trim()}` }).catch(() => {});
         S.it = { key: '' };
         toast(out.said || (it.mode === 'disable' ? '사용을 중지했습니다.' : '작성 중인 변경 요청에 삭제를 추가했습니다.'));
-        location.hash = '#' + (out.go || def.list);
+        // a delete request lands on the change request it went into, open; what is taken out at once goes back to its list,
+        // and so does one that left nothing to send (an item added in the same request, taken out again)
+        const empty = S.mg.st && S.mg.st.workspace && !S.mg.st.workspace.dirty;
+        location.hash = '#' + (out.go || (def.direct || it.mode === 'disable' || empty || !known('changes') ? def.list : 'changes?id=draft'));
       } catch (e) { it.busy = false; render(); fail(e); }
     },
-    ithsel: (t) => { S.it.hsel = Number(t.dataset.i); render(); },
-    ithdep: (t) => { S.it.hdep = !!t.dataset.v; S.it.hsel = 0; render(); },
+    ithsel: (t) => { S.it.hsel = Number(t.dataset.i); if (S.it.hcmp === t.dataset.i) S.it.hcmp = ''; render(); },
+    ithdep: (t) => { S.it.hdep = !!t.dataset.v; S.it.hsel = 0; S.it.hcmp = ''; render(); },
+    ithcmp: (t) => {  // 다른 버전과 비교 starts with the change just before the chosen one; 비교 닫기 ends it
+      const it = S.it;
+      if ('v' in t.dataset) { it.hcmp = ''; render(); return; }
+      const list = it.hdep ? it.hist.filter((e) => e.deployed) : it.hist, at = Math.min(it.hsel, list.length - 1);
+      const ok = (i) => i !== at && (list[i].all || []).length;
+      const keys = [...list.keys()], i = keys.filter((k) => k > at).find(ok);
+      it.hcmp = String(i !== undefined ? i : keys.find(ok));
+      render();
+    },
     ithall: (t) => { S.it.hall = !!t.dataset.v; render(); },
     itrevert: async () => {
       const it = S.it, def = ITEM[it.kind], list = it.hdep ? it.hist.filter((e) => e.deployed) : it.hist, e = list[it.hsel];

@@ -261,3 +261,30 @@ def test_an_editor_files_management_edits_and_an_approver_applies_them(team):
     state = _call(base, "/api/manage", cookie=park)[1]
     assert next(o for o in state["objects"] if o["name"] == "Customer")["label"] == "회원"
     assert (root / "library" / "workspace" / "0.1.0.yaml").is_file()
+
+
+def test_only_an_admin_connects_a_data_source_or_takes_one_out(team):
+    """As the data source screen lets only the ontology's admin connect one (BND-01), so does the server."""
+    import sqlite3
+
+    from ontlas.web.api import DataOptions
+
+    base, root, sessions = team
+    sessions.logins.users.add("choi", "choi-password-1", name="최", roles=["admin"])
+    sessions.shared.data = DataOptions(allow_connect=True)
+    db = root / "shop.db"
+    with sqlite3.connect(db) as c:
+        c.execute("CREATE TABLE member (member_id TEXT PRIMARY KEY, name TEXT)")
+        c.execute("INSERT INTO member VALUES ('M1', '가')")
+    c.close()
+    kim, lee, choi = (_login(base, u, f"{u}-password-1") for u in ("kim", "lee", "choi"))
+    dsn = {"dsn": f"sqlite:///{db.as_posix()}"}
+    for who in (kim, lee):  # an editor, an approver
+        assert _call(base, "/api/connect", dsn, cookie=who)[0] == 403
+        assert _call(base, "/api/connect/gateway", {"url": "https://gw.example/q"}, cookie=who)[0] == 403
+        assert _call(base, "/api/pipeline", {"op": "delete", "id": "p2"}, cookie=who)[0] == 403
+    code, out, _ = _call(base, "/api/connect", dsn, cookie=choi)
+    assert code == 200 and out["pending"], out
+    code, out, _ = _call(base, "/api/pipeline", {"op": "delete", "id": "p1"}, cookie=choi)
+    assert code == 400 and "기본 파이프라인" in out["error"]  # past the gate: the first one stays
+    assert _call(base, "/api/pipeline", {"op": "use", "id": "p1"}, cookie=kim)[0] == 200  # switching stays the editor's

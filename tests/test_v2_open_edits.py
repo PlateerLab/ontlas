@@ -67,3 +67,8 @@ def test_an_axiom_card_is_changed_as_a_request_to_its_own_module(session):
 
     gone = change(session, {"id": "law-price-shown", "remove": True}, None)["change"]
     assert session.decide_change(gone["id"], True)["ok"] and card(session, "law-price-shown") is None
+
+def test_a_named_value_a_rule_reads_is_kept_and_the_refusal_says_why(session):
+    with pytest.raises(Exception) as e:
+        session.manage_edit("delete_parameter", {"name": "return_window_days"})
+    assert "기준값 'return_window_days'를 규칙 · 산식이 읽고 있어 삭제하지 못했습니다" in str(e.value)

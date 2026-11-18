@@ -85,8 +85,12 @@ def test_a_state_machines_history_is_only_what_touched_the_states(session):
                                           "initial": machine["initial"],
                                           "transitions": [*machine["transitions"], {"from": machine["states"][-1], "to": machine["states"][0]}]})
     (e,) = _history(session, "OrderItem", "state")
-    assert e["rows"] and all(r["label"].startswith("상태 전이") for r in e["rows"])
-    assert all(x["label"].startswith("states.") for x in e["all"])
+    # in the words of the form: the moves as moves, not the definition's text
+    assert [r["label"] for r in e["rows"]] == ["허용 전이"]
+    (row,) = e["rows"]
+    back = f"{machine['states'][-1]} → {machine['states'][0]}"
+    assert back in row["after"] and back not in row["before"] and "{" not in row["after"]
+    assert [x["label"] for x in e["all"]] == ["상태 Property", "상태 값", "초기 상태", "허용 전이"]
     assert len(_history(session, "OrderItem")[0]["rows"]) > len(e["rows"])  # the Entity's own history has the description too
 
 
@@ -148,3 +152,220 @@ def test_taking_out_states_that_are_not_there_is_refused(session):
         session.manage_edit("delete_states", {"object": "Customer"})
     with pytest.raises(ValueError):
         session.manage_edit("delete_states", {"object": "Nobody"})
+
+
+def test_a_rule_card_that_applies_to_the_entity_is_in_its_history(session):
+    session.manage_edit("add_rule_card", {"id": "QA-LIMIT-1", "type": "limit", "statement": "주문 수량은 99개 이하",
+                                          "applies_to": ["property:OrderItem.quantity"]})
+    session.manage_edit("add_rule_card", {"id": "QA-OTHER-1", "type": "limit", "statement": "다른 Entity의 제한",
+                                          "applies_to": ["object:Order"]})
+    (e,) = _history(session, "OrderItem")
+    rows = {r["label"]: (r["before"], r["after"]) for r in e["rows"]}
+    assert rows == {"Restriction QA-LIMIT-1": (None, "주문 수량은 99개 이하")}  # the card of another Entity is not
+    assert _history(session, "OrderItem", "state") == []
+    assert session.manage_propose()["ok"]
+    (filed,) = _history(session, "OrderItem")
+    assert filed["deployed"] and [r["label"] for r in filed["rows"]] == ["Restriction QA-LIMIT-1"]
+
+
+def test_each_reason_rides_on_the_change_it_was_filed_with(session):
+    session.manage_edit("update_object", {"name": "OrderItem", "description": "첫째"})
+    session.element_comment("object:OrderItem", "첫째 사유")
+    assert session.manage_propose()["ok"]
+    session.manage_edit("update_object", {"name": "OrderItem", "description": "둘째"})
+    session.element_comment("object:OrderItem", "둘째 사유")
+    assert session.manage_propose()["ok"]  # both within one minute: the time alone cannot tell them apart
+    newer, older = _history(session, "OrderItem")
+    assert [n["text"] for n in newer["notes"]] == ["둘째 사유"] and [n["text"] for n in older["notes"]] == ["첫째 사유"]
+
+
+def _revert(session, kind: str, name: str, change: str) -> dict:
+    from ontlas.web.routes import find
+
+    return find("POST", "ont/revert")(session, {"kind": kind, "name": name, "change": change}, None)
+
+
+def _filed(session) -> str:
+    out = session.manage_propose()
+    assert out["ok"] and not out["pending"], out.get("error")
+    return out["change"]["id"]
+
+
+def test_an_object_reverts_to_how_a_change_left_it(session):
+    area = next(a for a in session.manage_state()["areas"] if a["name"] == "Customer")
+    session.manage_edit("update_area", {"name": "Customer", "description": "첫째"})
+    first = _filed(session)
+    session.manage_edit("update_area", {"name": "Customer", "description": "둘째", "owner": "둘째 담당"})
+    _filed(session)
+    out = _revert(session, "object", "Customer", first)
+    now = next(a for a in out["areas"] if a["name"] == "Customer")
+    assert (now["description"], now["owner"]) == ("첫째", area["owner"])
+    assert out["edits"] == ["update_area"] and next(a for a in out["areas"] if a["name"] == "Customer")["pending"]
+
+
+def test_a_relation_reverts_and_the_edits_not_yet_sent_are_set_back_too(session):
+    session.manage_edit("update_link", {"name": "placed", "label": "첫째"})
+    first = _filed(session)
+    session.manage_edit("update_link", {"name": "placed", "label": "둘째", "required": True})
+    _filed(session)
+    session.manage_edit("update_link", {"name": "placed", "cite": "작성 중 근거"})
+    out = _revert(session, "relation", "placed", first)
+    link = next(x for x in out["links"] if x["name"] == "placed")
+    assert (link["label"], link["required"]) == ("첫째", False)
+    from ontlas.web.routes import find
+
+    assert find("GET", "ont/links")(session, {}, None)["links"]["placed"]["cite"] == ""
+
+
+def test_an_entity_reverts_with_its_properties(session):
+    _note(session)
+    first = _filed(session)
+    session.manage_edit("update_object", {"name": "Note", "description": "둘째"})
+    session.manage_edit("update_property", {"object": "Note", "name": "kind", "label": "분류"})
+    session.manage_edit("add_property", {"object": "Note", "name": "memo", "label": "메모", "type": "string"})
+    _filed(session)
+    out = _revert(session, "entity", "Note", first)
+    props = {p["name"]: p for p in out["properties"] if p["object"] == "Note"}
+    assert "memo" not in props and props["kind"]["label"] == "종류"
+    assert next(o for o in out["objects"] if o["name"] == "Note")["description"] == ""
+    assert sorted(out["edits"]) == ["delete_property", "update_object", "update_property"]
+
+
+def test_a_state_machine_reverts_to_its_moves_then(session):
+    machine = next(x for x in session.manage_state()["states"] if x["object"] == "OrderItem")
+    keep = {k: machine[k] for k in ("property", "states", "initial")}
+    back = {"from": machine["states"][-1], "to": machine["states"][0]}
+    session.manage_edit("update_states", {"object": "OrderItem", **keep, "transitions": [*machine["transitions"], back]})
+    first = _filed(session)
+    session.manage_edit("update_states", {"object": "OrderItem", **keep, "transitions": machine["transitions"]})
+    _filed(session)
+    out = _revert(session, "state", "OrderItem", first)
+    moves = next(x for x in out["states"] if x["object"] == "OrderItem")["transitions"]
+    assert any(m["from"] == back["from"] and m["to"] == back["to"] for m in moves)
+    assert out["edits"] == ["update_states"]
+
+
+MOVES = {  # what OrderItem's moves say beyond their ends and action, put on a copy of the library
+    "{from: NORMAL, to: RETURN_REQUESTED, action: requestReturn}":
+        "{from: NORMAL, to: RETURN_REQUESTED, action: requestReturn, guard: {decision: returnEligibility, expect: {eligible: true}}}",
+    "{from: RETURN_REQUESTED, to: RETURNED, action: completeReturn}":
+        "{from: RETURN_REQUESTED, to: RETURNED, action: completeReturn, set: {delivered_at: $now},"
+        " call: {url: 'https://oms.example/return/$key', method: POST}}",
+    "{from: RETURN_REQUESTED, to: NORMAL, action: rejectReturn}":
+        "{from: RETURN_REQUESTED, to: NORMAL, action: rejectReturn}\n        - {from: RETURNED, to: NORMAL, after: {days: 30, since: delivered_at}}",
+}
+
+
+@pytest.fixture
+def guarded(tmp_path):
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")
+    import shutil
+
+    from ontlas.config import load_studio
+    from ontlas.web import routes
+    from ontlas.web.api import StudioSession
+
+    shutil.copytree(LIB, tmp_path / "library")
+    shutil.copytree(LIB.parent / "commerce", tmp_path / "commerce")  # its data sits beside it
+    path = tmp_path / "library" / "commerce" / "1.0.0.yaml"
+    text = path.read_bytes()
+    for was, now in MOVES.items():
+        assert was.encode() in text
+        text = text.replace(was.encode(), now.encode())
+    path.write_bytes(text)
+    routes.load()
+    return StudioSession(load_studio(tmp_path / "library" / "studio.yaml"))
+
+
+def _moves(session) -> dict:
+    sm = session._ws().composed().ontology.objects["OrderItem"].states
+    return {(t.source, t.target, t.action): {k: getattr(t, k) for k in ("guard", "set", "call", "after") if getattr(t, k)}
+            for t in sm.transitions}
+
+
+def _form(session, extra: list[dict]) -> None:
+    """Saved as the state transition form saves: the moves as the screen has them, ends and action only."""
+    machine = next(x for x in session.manage_state()["states"] if x["object"] == "OrderItem")
+    session.manage_edit("update_states", {"object": "OrderItem", **{k: machine[k] for k in ("property", "states", "initial")},
+                                          "transitions": [*machine["transitions"], *extra]})
+
+
+def test_saving_the_state_form_keeps_what_the_moves_say_beyond_their_ends(guarded):
+    said = _moves(guarded)
+    assert said[("NORMAL", "RETURN_REQUESTED", "requestReturn")]["guard"]["decision"] == "returnEligibility"
+    assert set(said[("RETURN_REQUESTED", "RETURNED", "completeReturn")]) == {"set", "call"}
+    assert said[("RETURNED", "NORMAL", "")]["after"] == {"days": 30, "since": "delivered_at"}
+    _form(guarded, [{"from": "RETURNED", "to": "RETURN_REQUESTED", "action": ""}])
+    now = _moves(guarded)
+    assert {k: v for k, v in now.items() if k != ("RETURNED", "RETURN_REQUESTED", "")} == said
+    assert ("RETURNED", "RETURN_REQUESTED", "") in now
+    guarded.manage_edit("update_states", {  # a move that says its guard sends it, and an empty one takes it off
+        "object": "OrderItem", "property": "item_status", "states": ["NORMAL", "RETURN_REQUESTED", "RETURNED"],
+        "initial": "NORMAL", "transitions": [{"from": "NORMAL", "to": "RETURN_REQUESTED", "action": "requestReturn", "guard": {}}]})
+    assert _moves(guarded) == {("NORMAL", "RETURN_REQUESTED", "requestReturn"): {}}
+    with pytest.raises(ValueError):
+        guarded.manage_edit("update_states", {"object": "OrderItem", "property": "item_status", "states": ["NORMAL", "RETURNED"],
+                                              "transitions": [{"from": "NORMAL", "to": "RETURNED", "set": "x"}]})
+
+
+def test_a_state_machine_reverts_with_what_its_moves_said_then(guarded):
+    said = _moves(guarded)
+    _form(guarded, [{"from": "RETURNED", "to": "RETURN_REQUESTED", "action": ""}])
+    first = _filed(guarded)
+    machine = next(x for x in guarded.manage_state()["states"] if x["object"] == "OrderItem")
+    guarded.manage_edit("update_states", {"object": "OrderItem", **{k: machine[k] for k in ("property", "states", "initial")},
+                                          "transitions": [{**t, "guard": {}, "set": {}, "call": {}, "after": {}} for t in machine["transitions"]]})
+    _filed(guarded)
+    assert not any(_moves(guarded).values())
+    out = _revert(guarded, "state", "OrderItem", first)
+    assert out["edits"] == ["update_states"]
+    now = _moves(guarded)
+    assert {k: v for k, v in now.items() if k != ("RETURNED", "RETURN_REQUESTED", "")} == said
+
+
+def test_a_revert_needs_an_applied_change_and_something_to_set_back(session):
+    session.manage_edit("update_area", {"name": "Customer", "description": "첫째"})
+    first = _filed(session)
+    with pytest.raises(ValueError, match="현재 값과 같아"):  # nothing changed it since
+        _revert(session, "object", "Customer", first)
+    with pytest.raises(ValueError):
+        _revert(session, "object", "Customer", "")
+    with pytest.raises(ValueError):
+        _revert(session, "rule", "Customer", first)
+    with pytest.raises(ValueError, match="배포된 변경이 아니어서"):  # a change that did not touch it
+        _revert(session, "relation", "placed", first)
+    from ontlas.web.routes import find
+    from ontlas.web.team import NEEDS
+
+    assert find("POST", "ont/revert") is not None and NEEDS["ont/revert"] == "editor"
+
+
+def test_a_revert_that_cannot_be_made_leaves_no_edit_behind(session):
+    session.manage_edit("update_link", {"name": "placed", "label": "첫째"})
+    first = _filed(session)
+    session.manage_edit("update_link", {"name": "placed", "label": "둘째", "cardinality": "many_to_many"})
+    _filed(session)
+    before = len(session._ws().edits)
+    import ontlas.web.areas.ont as ont
+
+    real = ont._fields
+    ont._fields = lambda want, now, keys, blank=None: {**real(want, now, keys, blank), "cardinality": "never"}
+    try:
+        with pytest.raises(ValueError):
+            _revert(session, "relation", "placed", first)
+    finally:
+        ont._fields = real
+    assert len(session._ws().edits) == before and not session._ws().dirty
+
+
+def test_a_property_its_parent_gives_reads_again_as_the_parent_says(session):
+    parent = next(p for p in session.manage_state()["properties"] if p["object"] == "Customer" and p["name"] == "name")
+    assert parent["inherited"]  # Customer has it from the Entity it specialises
+    session.manage_edit("update_object", {"name": "Customer", "description": "첫째"})
+    first = _filed(session)
+    session.manage_edit("update_property", {"object": "Customer", "name": "name", "label": "고객 이름"})
+    _filed(session)
+    out = _revert(session, "entity", "Customer", first)  # the Property cannot go: it reads as its parent's again
+    assert next(p for p in out["properties"] if p["object"] == "Customer" and p["name"] == "name")["label"] == parent["label"]
+    assert out["edits"] == ["update_property"]

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.25.3
+
+- **Every design screen was checked against the product, element by element.** All 93 screens of the design, 1,655
+  elements: what the server holds and the page did not show is now there; what the server does not hold (webhooks,
+  keys issued on the page, monitoring rules, members by ontology, governance policies, SSO and LDAP, mail) is still
+  left out rather than drawn empty.
+- **Every history can go back and compare.** Each item's history has 이 시점으로 되돌리기, which writes that version's
+  values into the request being written, and 다른 버전과 비교, which shows the fields that differ between two versions.
+- **What uses an item is told in full before it is deleted**: the rules and calculations reading a named value, metric
+  or function, the questions a rule or expression is in, the Actions a policy allows, the terms a state value carries.
+- Screens gained what the design shows from values the server has: overlapping decision-table rows marked on 규칙, the
+  real users of metrics and functions, history bindings on Entity Binding, the 판정 엔진 stage and the oldest waiting
+  request on 파이프라인 관제, a period filter on 감사 로그, a report download and accuracy on 관리 현황, the pack and its
+  version in 온톨로지 설정, 온톨로지 만들기 from a domain pack, the kind and time of recent searches, a skip link to the
+  content.
+- Fixed: 관련 규칙 on 용어 사전 was always empty; AI 초안 생성 kept counting a file that was deleted and then failed;
+  removing a named value a rule reads said only that the definition did not pass, and now says what reads it.
+
 ## 0.25.2
 
 - **A node already picked keeps its pick on a double press** and opens its neighbours, as one not yet picked did.

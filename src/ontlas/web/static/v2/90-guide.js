@@ -38,7 +38,7 @@
   screen('guide', { area: 'bare', word: '사용 안내', crumb: ['사용 안내'],
     view: () => {
       const g = S.guide || { video: '', chapters: [] };
-      const row = ([key, word, what]) => (known(key) && (!V2[key] || !V2[key].may || V2[key].may()) ? `<a class="k-row" href="#${key}"><span class="k-col"><span class="k-ink k-14 k-b">${esc(word)}</span><span class="k-s">${esc(what)}</span></span>${ki('chevR', 16, 1.75)}</a>` : '');
+      const row = ([key, word, what]) => (mayOpen(key) ? `<a class="k-row" href="#${key}"><span class="k-col"><span class="k-ink k-14 k-b">${esc(word)}</span><span class="k-s">${esc(what)}</span></span>${ki('chevR', 16, 1.75)}</a>` : '');
       const parts = GUIDE_MAP.map(([part, rows]) => { const body = rows.map(row).join(''); return body ? `<section class="k-card"><div class="k-ch"><h2>${esc(part)}</h2></div>${body}</section>` : ''; }).join('');
       const head = kHead('사용 안내', '화면별 기능과 소개 영상');
       if (!g.video) return `${head}<div class="k-cols"><div class="k-c3">${parts}</div></div>`;

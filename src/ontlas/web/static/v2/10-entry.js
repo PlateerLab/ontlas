@@ -35,7 +35,7 @@
       return to[0] === '@' ? `<button class="${cls}" type="button" data-act="${esc(to.slice(1))}">${mark}${esc(word)}</button>` : `<a class="${cls}" href="${esc(to)}">${mark}${esc(word)}</a>`; };
     return `<section class="k-empty">${code ? `<span class="k-code k-mut">${code}</span>` : ''}<h2>${esc(opt.title || st.title)}</h2>${opt.say || st.say ? `<p>${esc(opt.say || st.say)}</p>` : ''}${acts.length ? `<div class="k-wrap g8">${acts.map(btn).join('')}</div>` : ''}</section>`;
   }
-  screen('state', { area: 'bare', word: '안내', find: false, crumb: ['안내'],
+  screen('state', { area: 'work', word: '안내', find: false, crumb: ['안내'],  // in the work sidebar, as the screens it stands for
     view: () => `<div class="ent-narrow">${stateBlock(ENT_STATE[itemParam('kind')] ? itemParam('kind') : 'missing')}</div>` });
 
   // ---- the ontologies -------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@
   function entRows() {
     const e = S.ent, q = e.q.trim().toLowerCase();
     const list = e.onto.ontologies.filter((o) => (e.kind === 'all' || (e.kind === 'made') === o.made) && (!q || `${o.label} ${o.description} ${entPack(o)}`.toLowerCase().includes(q)));
-    if (!list.length) return '<tr><td colspan="8" class="mut">조건에 맞는 온톨로지가 없습니다.</td></tr>';
+    if (!list.length) return '<tr><td colspan="8"><span class="k-h"><span class="k-mut">조건에 맞는 온톨로지가 없습니다</span><button class="k-lnk" data-act="entClear">필터 지우기</button></span></td></tr>';
     const acts = (o) => [entManages() && `<button class="k-lnk" data-act="entOpen" data-id="${esc(o.id)}" data-go="${esc(entManages())}">관리</button>`,
       canMakeLibrary() && o.modules.some((m) => m.on) && `<a class="k-lnk" href="#ontology-new?start=base&base=${encodeURIComponent(o.id)}">복제</a>`,
       o.modules.some((m) => m.on) && entCanOpen(o) && `<button class="k-lnk" data-act="entExport" data-id="${esc(o.id)}">내보내기</button>`,
@@ -154,8 +154,13 @@
   function entNew() {
     const e = S.ent, hash = location.hash;
     if (!e.nw || e.nw.from !== hash) {
-      const start = itemParam('start'), base = itemParam('base');
+      const start = itemParam('start'), base = itemParam('base'), pack = itemParam('pack');
       e.nw = { from: hash, start: ENT_START.some((x) => x[0] === start) ? start : (base ? 'base' : 'pack'), base: base || S.st.library_id, label: '', key: '', desc: '', mods: null, busy: false };
+      // a pack chosen on 도메인 팩: started from it alone, on the ontology whose library holds it (the open one first);
+      // the packs it requires come along as the table shows them
+      const holds = pack && e.onto ? e.onto.ontologies.filter((o) => o.modules.some((m) => m.name === pack)) : [];
+      const by = holds.find((o) => o.id === S.st.library_id) || holds[0];
+      if (by) Object.assign(e.nw, { start: 'pack', base: by.id, mods: new Set([pack]) });
     }
     return e.nw;
   }
@@ -442,6 +447,7 @@
       } catch (err) { fail(err); }
     },
     entKind: (t) => { S.ent.kind = t.dataset.k; render(); },
+    entClear: () => { Object.assign(S.ent, { q: '', kind: 'all' }); render(); },
     entMake: (t) => entMake(t.dataset.go),
     entTab: (t) => { S.ent.tab = t.dataset.k; render(); },
     entReload: () => location.reload(),

@@ -158,6 +158,33 @@ def test_the_overview_counts_the_open_ontology_and_lists_what_waits(session, rou
     assert [t["kind"] for t in d["todo"]] == [i["kind"] for i in session.inbox()["items"]]
 
 
+def test_the_overview_names_the_packs_the_last_accuracy_and_the_objects_no_one_answers_for(session, routes):
+    comp = session.studio.composition
+    packs = [f"{m.label or m.name} {m.version}" for m in comp.modules if m.kind == "domain"]
+    row = routes.GET["admin/overview"](session, {}, None)["libraries"][0]
+    assert packs and row["packs"] == packs == routes.GET["admin/settings"](session, {}, None)["packs"]
+    assert row["accuracy"] is None  # 검증 has not been looked at: no share is made up
+    session.flow()
+    d = routes.GET["admin/overview"](session, {}, None)
+    accuracy = d["libraries"][0]["accuracy"]
+    assert accuracy == session._measured["check"]["accuracy"] and 0 <= accuracy <= 1
+    assert d["unowned"] == [ar.label or ar.name for ar in session.studio.onto.areas.values() if not ar.owner] and d["unowned"]
+    session.manage_edit("update_object", {"name": next(iter(session.studio.onto.objects)), "label": "이름을 바꾼 것"})
+    session.manage_propose()  # another definition: the share measured on the one before is not its
+    assert routes.GET["admin/overview"](session, {}, None)["libraries"][0]["accuracy"] is None
+
+
+def test_a_signed_in_user_says_when_they_signed_in(session, routes, people):
+    from datetime import datetime
+
+    admin = people.users.users["root1"]
+    before = datetime.now().replace(microsecond=0)
+    people.sign_in("maker1", "maker-password-1")
+    rows = {u["id"]: u for u in routes.GET["admin/users"](session, {}, admin)["users"]}
+    assert rows["maker1"]["signed_in"] and before <= datetime.fromisoformat(rows["maker1"]["signed_at"]) <= datetime.now()
+    assert not rows["reader1"]["signed_in"] and rows["reader1"]["signed_at"] == ""
+
+
 def test_the_audit_holds_a_change_request_and_its_decision(session, routes):
     assert routes.GET["admin/audit"](session, {}, None)["total"] == 0
     name = next(iter(session.studio.onto.objects))
@@ -228,6 +255,20 @@ def test_the_model_is_tried_once_and_says_how_it_went(session, routes):
     session.llm = down
     out = routes.POST["admin/ai/test"](session, {}, None)
     assert not out["ok"] and out["state"] == "bad" and out["error"]
+
+
+def test_the_ai_screen_names_the_model_and_never_its_address_or_key(session, routes):
+    import json
+
+    from ontlas.nl import openai_chat
+
+    assert routes.GET["admin/ai"](session, {}, None)["llm"]["model"] == ""  # no model
+    session.llm = openai_chat("http://models.internal:8000/v1", "house-model-7b", key="secret-key-1")
+    d = routes.GET["admin/ai"](session, {}, None)
+    assert d["llm"]["model"] == "house-model-7b" and d["llm"]["kind"] == "openai"
+    said = json.dumps(d, ensure_ascii=False)
+    assert "secret-key-1" not in said and "models.internal" not in said
+    assert session.llm.roomier(100, 5).model == "house-model-7b"  # the roomier call asks the same model
 
 
 def test_the_model_is_not_tried_more_often_than_questions_may_be_asked(session, routes):

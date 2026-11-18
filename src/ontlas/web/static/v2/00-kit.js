@@ -85,6 +85,8 @@
 
   const oldTabs = () => new Set(NAV.map((x) => x[0]));
   const known = (key) => !!V2[key] || oldTabs().has(key);
+  // a screen the person may open: what the search box, 사용 안내 and a screen's related links offer
+  const mayOpen = (key) => known(key) && (!V2[key] || !V2[key].may || V2[key].may());
   const menuRow = (tab) => { const k = TABLE_TABS.includes(tab) ? 'objects' : tab; return MENU.find((r) => r[3].includes(k)) || MENU.find((r) => V2[tab] && V2[tab].under === r[0]); };
   const areaOf = (tab) => (V2[tab] && V2[tab].area) || (ADMIN_KEYS.includes(tab) ? 'admin' : 'work');
   const firstAdmin = (group) => { const g = ADMIN.find((x) => x[0] === group); const hit = g && g[2].find((x) => V2[x[0]]); return hit ? hit[0] : ''; };
@@ -220,7 +222,8 @@
   // the head: the screen's name, one or two sentences on what is done here, and what can be started from it
   const kHead = (title, lead, actions = '', meta = '') => `<section class="k-ph"><div><h1>${esc(title)}${meta ? `<small>${esc(meta)}</small>` : ''}</h1>${lead ? `<p class="k-lead">${esc(lead)}</p>` : ''}</div>${actions ? `<div class="k-pha">${actions}</div>` : ''}</section>`;
   // the screens this one leads to, at the foot: [[hash, word], ...]
-  const kNext = (links) => `<nav class="k-next" aria-label="관련 화면"><span>관련 화면</span>${links.filter((x) => known(x[0].split('?')[0])).map(([h, w]) => `<a class="k-lnk" href="#${h}">${esc(w)}${ki('chevR', 14, 1.75)}</a>`).join('')}</nav>`;
+  // a screen of the admin area is marked 관리; like every link here it shows to those who may open it
+  const kNext = (links) => `<nav class="k-next" aria-label="관련 화면"><span>관련 화면</span>${links.filter((x) => mayOpen(x[0].split('?')[0])).map(([h, w]) => `<a class="k-lnk" href="#${h}">${esc(w)}${(V2[h.split('?')[0]] || {}).area === 'admin' ? '<span class="k-chip w">관리</span>' : ''}${ki('chevR', 14, 1.75)}</a>`).join('')}</nav>`;
   const kChip = (word, tone = '') => `<span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span>`;
   const kLayer = (layer) => `<span class="k-layer ${esc(String(layer).toLowerCase())}"><i aria-hidden="true"></i>${esc(LAYER_WORD[String(layer).toLowerCase()] || layer)}</span>`;
   // a card: its title with what sits at the right of it, then its body as given
@@ -254,6 +257,8 @@
     if (s) s.focus();
     ev.stopImmediatePropagation();
   }, true);
+  // the first stop of the keyboard skips the menu and the bar: the screen's body takes the focus, the screen stays
+  Object.assign(ACT, { skipmain: () => $('#main').focus() });
 
   // the part a tab belongs to, for what still asks by tab: [part, the screen's word, its tabs]
   const groupOf = (tab) => { const r = menuRow(tab); return r ? [r[1], r[2], r[3]] : [ADMIN_KEYS.includes(tab) ? 'admin' : 'home', (V2[tab] && V2[tab].word) || navLabel(tab), [tab]]; };
@@ -261,14 +266,13 @@
   function screenList() {
     const part = (id) => (PARTS.find((p) => p[0] === id) || [])[1] || '';
     const rows = [['home', '홈', '', 'home']];
-    const may = (k) => (k === 'catalog' ? canEdit() : !V2[k] || !V2[k].may || V2[k].may());  // as the bar on top: only what the person may open
     if (V2.ai) rows.push(['ai', 'AI 초안 생성', '', 'home']);
-    MENU.filter((r) => known(r[0]) && may(r[0])).forEach((r) => {
+    MENU.filter((r) => mayOpen(r[0])).forEach((r) => {
       rows.push([r[0], r[2], part(r[1]), r[0]]);
       r[3].filter((k) => k !== r[0] && !NO_TAB.has(k) && oldTabs().has(k)).forEach((k) => rows.push([k, tabWord(k), `${part(r[1])} › ${r[2]}`, k]));
     });
-    Object.keys(ASIDE).filter((k) => known(k) && may(k)).forEach((k) => rows.push([k, ASIDE[k][0], '', k]));
-    Object.keys(V2).filter((k) => V2[k].find !== false && V2[k].area !== 'auth' && !rows.some((r) => r[0] === k) && (!V2[k].may || V2[k].may())).forEach((k) => rows.push([k, V2[k].word, V2[k].area === 'admin' ? '관리' : '', k]));
+    Object.keys(ASIDE).filter(mayOpen).forEach((k) => rows.push([k, ASIDE[k][0], '', k]));
+    Object.keys(V2).filter((k) => V2[k].find !== false && V2[k].area !== 'auth' && !rows.some((r) => r[0] === k) && mayOpen(k)).forEach((k) => rows.push([k, V2[k].word, V2[k].area === 'admin' ? '관리' : '', k]));
     return rows;
   }
   // what a person without the right to a screen sees in its place

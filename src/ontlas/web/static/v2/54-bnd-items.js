@@ -33,6 +33,17 @@
   const bndFieldWord = (label) => String(label).split(/ · |\./).map((w) => BND_FIELD[w] || w).join(' · ');
   const bndWords = (list) => list.map((e) => ({ ...e, rows: e.rows.map((r) => ({ ...r, label: bndFieldWord(r.label) })), all: e.all.map((r) => ({ ...r, label: bndFieldWord(r.label) })) }));
   const bndHist = (kind) => async (x) => bndWords(await itemHistoryOf(ITEM[kind], x));
+  // an item as a change in its history left it, in the definition's own words (item/history keeps both sides), and as it
+  // reads now (the edits not yet sent included): a point that reads as now has nothing to set back
+  async function bndWas(el, e) {
+    const r = await api('item/history?element=' + encodeURIComponent(el));
+    const hit = r.entries.find((x) => x.change && x.change === e.cp), draft = r.entries.find((x) => x.status === 'draft');
+    if (!hit) return null;
+    const now = draft ? draft.after : r.now;
+    return { was: hit.after, now, same: JSON.stringify(hit.after) === JSON.stringify(now) };
+  }
+  const BND_SAME = '선택한 시점의 값이 현재 값과 같아 되돌리지 못했습니다. 이전 시점을 선택해 주세요.';
+  const bndGone = (word) => `선택한 시점에 ${word}${josa(word, '이', '가')} 없어 되돌리지 못했습니다. 다른 시점을 선택해 주세요.`;
   const bndFlat = (d, pre = '') => Object.entries(d || {}).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) ? bndFlat(v, `${pre}${k}.`) : [[`${pre}${k}`, v]]));
   const bndSame = (a, b) => ['string', 'enum'].includes(a) ? ['string', 'enum'].includes(b) : ['integer', 'decimal'].includes(a) ? ['integer', 'decimal'].includes(b) : ['date', 'datetime'].includes(a) ? ['date', 'datetime', 'string'].includes(b) : a === 'boolean' ? ['boolean', 'integer'].includes(b) : true;
 
@@ -65,9 +76,27 @@
     }
     return bndWords(list);
   }
+  // a Mapping set back: the column, the conversion and the codes the Property read with after that change
+  async function bndMapRevert(x, e) {
+    const w = await bndWas(`property:${x.p.object}.${x.p.name}`, e);
+    if (!w || !w.was) throw new Error(bndGone('Mapping'));
+    if (w.same) throw new Error(BND_SAME);
+    const v = typeof w.was === 'object' ? w.was : {};  // a Property written as its type alone reads the column of its own name
+    const args = { object: x.p.object, name: x.p.name, transform: v.transform || '', source_type: v.source_type || '', values: v.values || [], labels: v.labels || {}, status: v.status || 'active' };
+    if (!(x.p.columns && x.p.columns.length > 1)) args.column = v.column || '';
+    await bndEdits([['update_property', args]]);
+    S.bnd.map.sel = bndMapId(x.p);
+    return { go: 'changes' };
+  }
 
   item('map', {
-    word: 'Mapping', under: 'sources', list: 'sources', load: bndReady, history: bndMapHist,
+    word: 'Mapping', under: 'sources', list: 'sources', history: bndMapHist, revert: bndMapRevert,
+    load: async () => {  // the values the source holds are what the last check read: one is taken where none is of this definition
+      await bndReady();
+      if (S.it.what !== 'form') return;
+      if (!noSource() && !bndChecked() && !(S.bind && S.bind.busy)) bndCheckRun().finally(() => { if (S.it && S.it.kind === 'map') bndRecheck(); });
+      S.bnd.lex = await api('lexicon').then((r) => r.rows).catch(() => null);  // the terms that name a code (value:Entity.Property=code)
+    },
     lead: { form: 'Mapping을 추가하거나 편집합니다.', delete: 'Property의 컬럼 · 변환식 Mapping을 기본값으로 되돌립니다.' },
     find: (id) => { const m = bndM(), p = m && m.properties.find((x) => bndMapId(x) === id && !x.expr); return p ? { p, o: bndObj(m, p.object) } : null; },  // a computed Property has no Mapping
     code: (x) => `${x.o ? x.o.label || x.o.name : x.p.object}.${x.p.label || x.p.name}`,
@@ -98,6 +127,18 @@
         if (c && d.how !== 'expr' && !bndSame(p.type, sqlType(c.type))) out.push({ say: `타입이 다름 · ${TYPE_WORD[p.type] || p.type} ↔ ${c.type}`, tone: 'warn', word: '확인 필요' });
       } else out.push({ say: '컬럼 명세', sub: `${o.table}.${d.column}`, tone: 'ok' });
       if (d.how === 'code') { const n = bndCodeRows(d.codes).length; out.push(n ? { say: `코드값 ${n}종`, tone: 'ok' } : { say: '코드 변환표가 비어 있음', tone: 'warn', word: '확인 필요' }); }
+      if (d.how === 'code' && S.bnd.lex && bndCodeRows(d.codes).length) {  // each code named by a term of the glossary
+        const codes = bndCodeRows(d.codes).map(([v]) => String(v)), named = new Set(S.bnd.lex.map((t) => t.concept));
+        const loose = codes.filter((v) => !named.has(`value:${p.object}.${p.name}=${v}`) && !(p.inherited && named.has(`value:${p.inherited}.${p.name}=${v}`)));
+        out.push(!loose.length ? { say: `코드값 ${codes.length}종 용어 사전 등록`, tone: 'ok' } : { say: `용어 사전 미등록 코드값 ${loose.length}종`, sub: loose.slice(0, 5).join(' · '), tone: 'note' });
+      }
+      if (d.how === 'code' && o && o.table) {  // the values the source holds, against the codes in the form, by the last check
+        const codes = bndCodeRows(d.codes).map(([v]) => String(v));
+        const seen = !noSource() && bndChecked() ? (bndFound()[`property:${p.object}.${p.name}`] || []).filter((f) => f.kind === 'enum') : null;
+        const extra = seen ? [...new Set(seen.flatMap((f) => ((f.data || {}).extra || []).map(String)))].filter((v) => !codes.includes(v)) : [];
+        out.push(noSource() ? { say: '실제 값 분포 · 데이터 소스 미연결', tone: 'note' } : !seen ? { say: '실제 값 분포 · 차이 검사 전', tone: 'note' }
+          : extra.length ? { say: `코드 변환표에 없는 실제 값 ${extra.length}종`, sub: extra.slice(0, 5).join(' · '), tone: 'warn', word: '확인 필요' } : { say: '실제 값 분포 확인됨', tone: 'ok' });
+      }
       if (d.how === 'expr') out.push(d.transform.trim() ? { say: '변환식 있음', sub: d.transform.trim(), tone: 'ok' } : { say: '변환식이 비어 있음', tone: 'warn', word: '확인 필요' });
       return out;
     },
@@ -133,8 +174,22 @@
     const list = [...at.values()].sort((a, b) => (a.cp ? 1 : 0) - (b.cp ? 1 : 0) || String(b.at || '').localeCompare(String(a.at || '')));
     return bndWords(list);
   }
+  // a Binding set back: the table, and the column of each Property, as that change left them (what it did not touch stays)
+  async function bndBindRevert(o, e) {
+    const m = bndM(), ops = [], col = (v) => (v && typeof v === 'object' && v.column) || '';
+    const w = await bndWas(`object:${o.name}`, e);
+    if (w && w.was && !w.same && ((w.was.source || {}).table || '') !== (((w.now || {}).source || {}).table || '')) ops.push(['update_object', { name: o.name, table: (w.was.source || {}).table || '' }]);
+    for (const p of bndStored(m, o.name).filter((q) => bndCols(q).length < 2)) {
+      const pw = await bndWas(`property:${o.name}.${p.name}`, e);
+      if (pw && pw.was && col(pw.was) !== col(pw.now)) ops.push(['update_property', { object: o.name, name: p.name, column: col(pw.was) }]);
+    }
+    if (!ops.length) throw new Error(BND_SAME);
+    await bndEdits(ops);
+    Object.assign(S.bnd.bind, { sel: o.name, d: null, sql: null, prof: null });
+    return { go: 'changes' };
+  }
   item('binding', {
-    word: 'Binding', under: 'bind', list: 'bind', load: bndReady, history: bndBindHist,
+    word: 'Binding', under: 'bind', list: 'bind', load: bndReady, history: bndBindHist, revert: bndBindRevert,
     lead: { form: 'Binding을 추가하거나 편집합니다.', delete: 'Entity의 테이블 연결을 해제합니다.' },
     find: (id) => { const m = bndM(); return m ? bndObj(m, id) : null; },
     code: (o) => bndEnt(o), name: (o) => o.table || '테이블 미지정', element: (o) => `object:${o.name}`,
@@ -306,10 +361,15 @@
         out.push(ok.length ? { say: `저장소 언어 ${ok.length}개 변환`, sub: bad.length ? `변환 실패 ${bad.map((t) => t.label).join(', ')}` : '', tone: bad.length ? 'warn' : 'ok', word: bad.length ? '확인 필요' : '' } : { say: '저장소 언어 변환 실패', sub: (bad[0] || {}).error || '', tone: 'bad' });
         out.push((c.masked || []).length ? { say: `반환 Property 중 마스킹 대상 ${c.masked.length}개`, sub: c.masked.join(', '), tone: 'note' } : { say: '마스킹 대상 없음', tone: 'ok' });
         if ((c.params || []).length) out.push({ say: `입력값 ${c.params.length}개`, sub: c.params.join(', '), tone: 'note' }); }
-      let start = d.start;
-      if (d.mode === 'json') { try { start = Object.values(JSON.parse(d.json).match || {})[0] || ''; } catch (e) { start = ''; } }
-      const o = bndObj(m, start);
-      if (o) out.push(o.table ? { say: '시작 Entity 테이블 확인됨', sub: `${o.label || o.name} · ${o.table}`, tone: 'ok' } : { say: '시작 Entity 테이블 미지정', tone: 'warn', word: '확인 필요' });
+      // where the query reads: the start Entity and each Entity a returned Property is on, each read from a table
+      let ir = null;
+      try { ir = bndQIr(d); } catch (e) { ir = null; }
+      const at = (ir && ir.match) || {}, aliasOf = (c) => String(typeof c === 'string' ? c : (c && c.col) || '').split('.')[0];
+      const ents = [...new Set([Object.values(at)[0], ...((ir && ir.return) || []).map((c) => at[aliasOf(c)])].filter(Boolean))].map((n) => bndObj(m, n)).filter(Boolean);
+      const loose = ents.filter((o) => !o.table);
+      if (ents.length) out.push(loose.length ? { say: '시작 · 반환 Entity 테이블 미지정', sub: loose.map((o) => o.label || o.name).join(', '), tone: 'warn', word: '확인 필요' }
+        : { say: '시작 Entity · 반환 Property Mapping 확인됨', sub: ents.map((o) => `${o.label || o.name} · ${o.table}`).join(', '), tone: 'ok' });
+      if (noSource()) out.push({ say: '실행 · 데이터 소스 미연결', tone: 'note' });
       return out;
     },
     valid: (d) => (!d.label.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.name.trim() ? '키가 없어 저장하지 못했습니다. 키를 입력해 주세요.' : ''),
@@ -324,6 +384,14 @@
     uses: async (x) => [...x.questions.length ? [{ say: `검증 질문 ${x.questions.length}개`, sub: x.questions.slice(0, 3).join(', '), href: 'check' }] : [],
       ...x.roles.length ? [{ say: `접근 정책 ${x.roles.length}개`, sub: `${x.roles.map((r) => r.label).join(', ')}의 실행 범위`, href: 'roles' }] : []],
     remove: async (x) => { await bndEdits([['delete_query', { name: x.name }]]); Object.assign(S.bnd.q, { st: null, sel: '', tr: null, run: null }); },
+    revert: async (x, e) => {  // the name, the description and the definition as that change left them
+      const w = await bndWas(`query:${x.name}`, e);
+      if (!w || !w.was) throw new Error(bndGone('질의'));
+      if (w.same) throw new Error(BND_SAME);
+      await bndEdits([['update_query', { name: x.name, label: w.was.label || '', description: w.was.description || '', query: w.was.query }]]);
+      Object.assign(S.bnd.q, { st: null, sel: x.name, tr: null, run: null });
+      return { go: 'changes' };
+    },
   });
   Object.assign(INPUT, {
     bndQStart: (t) => { Object.assign(S.it.d, { start: t.value, link: '', fields: [], conds: [], order: null }); render(); },
@@ -423,10 +491,24 @@
     uses: async (a) => {
       const m = bndM(), may = m.roles.filter((r) => bndCan(r, 'request', a.name) || bndCan(r, 'execute', a.name));
       const moves = m.states.flatMap((s) => (s.transitions || []).filter((t) => t.action === a.name).map((t) => `${s.label} ${t.from} → ${t.to}`));
+      let tg = null;
+      try { tg = await api('ops/targets'); } catch (_) { /* the callers stay unsaid; the rest of what uses it still shows */ }
+      const asked = ((tg && tg.actions) || {})[a.name] || [];  // the callers whose requests for it the audit trail holds
       return [may.length ? { say: `접근 정책 ${may.length}개`, sub: `${may.map((r) => r.label || r.name).join(', ')}의 요청 · 실행 범위`, href: 'roles' } : null,
-        moves.length ? { say: `상태 전이 ${moves.length}개`, sub: `${moves.slice(0, 2).join(', ')}${moves.length > 2 ? ` 외 ${moves.length - 2}` : ''} 전이`, href: 'states' } : null].filter(Boolean);
+        moves.length ? { say: `상태 전이 ${moves.length}개`, sub: `${moves.slice(0, 2).join(', ')}${moves.length > 2 ? ` 외 ${moves.length - 2}` : ''} 전이`, href: 'states' } : null,
+        asked.length ? { say: `연동 대상 ${asked.length}개`, sub: `${asked.map((t) => t.name).join(', ')} · 요청 기록 ${asked.reduce((n, t) => n + t.requests, 0)}건`, href: 'connect' } : null].filter(Boolean);
     },
     remove: async (a) => { await bndEdits([['delete_action', { name: a.name }]]); Object.assign(S.bnd.act, { sel: '', res: null }); },
+    revert: async (a, e) => {  // every part of the action as that change left it; its target stays what it is
+      const w = await bndWas(`action:${a.name}`, e);
+      if (!w || !w.was) throw new Error(bndGone('Action'));
+      if (w.same) throw new Error(BND_SAME);
+      const v = w.was, ap = v.approval;
+      await bndEdits([['update_action', { name: a.name, label: v.label || a.name, parameters: v.parameters || {}, criteria: v.criteria || [], set: v.set || {}, transition_to: v.transition_to || '',
+        approval: ap && typeof ap === 'object' ? { auto_within: ap.auto_within || [], agents: !!ap.agents } : ap !== false, cite: v.cite || '', call: v.call || {}, undo: v.undo || {} }]]);
+      Object.assign(S.bnd.act, { sel: a.name, res: null });
+      return { go: 'changes' };
+    },
   });
   Object.assign(INPUT, {
     bndActTarget: (t) => { Object.assign(S.it.d, { target: t.value, criteria: [], set: [], limits: [], transition_to: '' }); render(); },

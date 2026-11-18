@@ -212,6 +212,8 @@ EDIT_TEXT = [
      r"\1의 자료형은 표준 모듈에서 정해져 있어 바꾸지 못했습니다. 새 Property를 추가해 주세요."),
     (r"^'(.+)' is the key of (.+); delete the object instead$",
      r"'\1'은(는) \2의 키라서 지우지 못했습니다. Entity를 지워 주세요."),
+    (r"^'(.+)' is read by rules or expressions; change those first$",
+     r"기준값 '\1'을(를) 규칙 · 산식이 읽고 있어 삭제하지 못했습니다. 읽는 규칙 · 산식을 먼저 바꿔 주세요."),
     (r"^'(.+)' comes from (.+), which (.+) specialises; delete it on (.+)$",
      r"'\1'은(는) 상위 Entity \2에서 상속 Property라 \3에서 지우지 못했습니다. \2에서 지워 주세요."),
     (r"^link '(.+)' already exists$", r"Relation '\1'이(가) 이미 있어 추가하지 못했습니다. 다른 이름을 입력해 주세요."),

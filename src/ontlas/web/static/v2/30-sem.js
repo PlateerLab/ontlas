@@ -14,10 +14,10 @@
   function smrFresh() {  // another ontology, other data, or an edit made on another screen: what was read is read again
     const x = S.smr, sig = `${S.st.library_id}|${S.st.pipeline}`;
     if (x.sig !== sig) {
-      Object.assign(x, { sig, ws: '', err: '', sel: '', psel: '', area: '', layer: '', more: 40, pmore: 30, dec: '', vals: {}, key: '', res: null, simErr: '', agree: null, dr: null, drSel: '', drEdit: null, drMore: 12, docs: [], genNote: '' });
+      Object.assign(x, { sig, ws: '', err: '', sel: '', psel: '', area: '', layer: '', more: 40, pmore: 30, dec: '', vals: {}, key: '', res: null, simErr: '', agree: null, dr: null, drSel: '', drEdit: null, drMore: 12, docs: [], genNote: '', uses: null });
       S.ru = null;
     }
-    if (S.mg.st && !S.mg.st.error && x.ws && x.ws !== smrWs(S.mg.st)) { S.sem.st = null; S.ru = null; x.dr = null; x.res = null; x.agree = null; }
+    if (S.mg.st && !S.mg.st.error && x.ws && x.ws !== smrWs(S.mg.st)) { S.sem.st = null; S.ru = null; x.dr = null; x.res = null; x.agree = null; x.uses = null; }
   }
 
   const smrReady = (drafts) => !!(S.sem.st && !S.sem.st.error && S.mg.st && !S.mg.st.error && S.ru && (!drafts || (S.smr.dr && S.files && !S.files.busy)));
@@ -34,7 +34,8 @@
         !S.ru ? api('rules').then((r) => { S.ru = r; }) : 0,
         opt.drafts && !x.dr ? api('sem/drafts').then((r) => { x.dr = r; }) : 0,
         opt.drafts && (!S.files || S.files.error || S.files.busy) ? api('files').then((r) => { S.files = r; }) : 0,
-      ]).then(() => { x.err = ''; x.ws = smrWs(S.mg.st); }, (e) => { x.err = e.message || String(e); })
+      ]).then(() => (x.uses || !S.mg.st || S.mg.st.error ? 0 : api('item/uses/many?elements=' + encodeURIComponent(smrValueIds(S.mg.st).join(','))).then((r) => { x.uses = r.uses; })))
+        .then(() => { x.err = ''; x.ws = smrWs(S.mg.st); }, (e) => { x.err = e.message || String(e); })
         .then(() => { x.loading = false; x.job = null; });
     }
     return x.job.then(() => { if (!opt.quiet && smrMine()) render(); });
@@ -49,7 +50,7 @@
   function smrEdited(r) {  // an edit went in: the definition the screens read has moved
     if (r && r.workspace) S.mg.st = r;
     S.sem.st = null; S.ru = null; S.qa = null;
-    Object.assign(S.smr, { dr: null, res: null, agree: null, ws: '' });
+    Object.assign(S.smr, { dr: null, res: null, agree: null, ws: '', uses: null });
   }
 
   const smrWait = (head) => `${head}<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>`;
@@ -115,7 +116,9 @@
       <span class="k-code k-mut">${l.order}</span><span class="k-col">${kLayer(l.layer)}<span class="k-s">${LY_SAY[l.layer] || esc(l.description)}</span></span><span class="smr-n">${count(l.rules + l.cards)}</span></button>`).join('')}</section>`;
     const shown = cards.slice(0, x.more);
     const owner = (c) => (c.legal_review === 'pending' ? '<span class="k-chip warn">법무 검토 중</span>' : `${esc(c.owner || '-')}${c.status !== 'approved' ? ` <span class="k-chip ${SMR_STATUS[c.status] || ''}">${esc(c.status_label || c.status)}</span>` : ''}`);
-    const tr = (c) => `<tr class="${c.ref === x.sel ? 'on' : ''}" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-selected="true"' : ''}><td class="k-code smr-id${c.ref === x.sel ? ' b' : ''}"><button type="button" class="smr-pickb" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-current="true"' : ''}>${esc(c.id).replace('#', '#<wbr>')}</button></td><td class="${c.ref === x.sel ? 'b' : ''}">${esc(c.statement)}</td><td>${kLayer(c.layer)}</td><td>${smrCite(c.source)}</td><td class="k-code">${esc(smrVer(c))}</td><td>${owner(c)}</td></tr>`;
+    const over = sel && sel.kind === 'executable' ? smrOverlaps(sel.decision, sel.rule) : [];  // the rows of the chosen row's table its conditions overlap
+    const lap = (c) => (c.kind === 'executable' && c.decision === sel.decision && over.includes(c.rule) ? ' <span class="k-chip b">조건 겹침</span>' : '');
+    const tr = (c) => `<tr class="${c.ref === x.sel ? 'on' : ''}" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-selected="true"' : ''}><td class="k-code smr-id${c.ref === x.sel ? ' b' : ''}"><button type="button" class="smr-pickb" data-act="smrPick" data-ref="${esc(c.ref)}"${c.ref === x.sel ? ' aria-current="true"' : ''}>${esc(c.id).replace('#', '#<wbr>')}</button></td><td class="${c.ref === x.sel ? 'b' : ''}">${esc(c.statement)}${lap(c)}</td><td>${kLayer(c.layer)}</td><td>${smrCite(c.source)}</td><td class="k-code">${esc(smrVer(c))}</td><td>${owner(c)}</td></tr>`;
     const picks = `<select class="smr-pick${x.area ? ' on' : ''}" data-in="smrArea" aria-label="영역"><option value="">영역 · 전체</option>${areas.map((a) => `<option value="${esc(a)}"${a === x.area ? ' selected' : ''}>영역 · ${esc(smrAreaWord(a))}</option>`).join('')}</select>
       <select class="smr-pick${x.layer ? ' on' : ''}" data-in="smrLayerPick" aria-label="계층"><option value="">계층 · 전체</option>${st.layers.map((l) => `<option value="${esc(l.layer)}"${l.layer === x.layer ? ' selected' : ''}>계층 · ${esc(l.label)}</option>`).join('')}</select>`;
     const pending = st.cards.filter((c) => c.pending || c.new).length;
@@ -200,6 +203,9 @@
     if (tests) tests.innerHTML = smrTests();
   }
 
+  // the rules of a table whose conditions overlap one of its rules, as the checks of the table found them
+  const smrOverlaps = (decision, rule) => [...new Set(smrFound().filter((f) => f.decision === decision && ['overlap', 'tie'].includes(f.kind) && f.rules.includes(rule)).flatMap((f) => f.rules).filter((id) => id !== rule))];
+
   // 규칙 검사: what the checks of the table found, and which rules overlap the one chosen
   function smrChecks(sel) {
     const x = S.smr, st = S.sem.st, d = S.mg.st.decisions.find((t) => t.name === x.dec);
@@ -209,7 +215,7 @@
     const fs = (S.ru.findings || []).filter((f) => f.decision === d.name);
     const n = (k) => fs.filter((f) => f.kind === k).length;
     const tone = (k, soft) => { const c = n(k); return `<span class="k-chip ${c ? (soft ? 'b' : 'warn') : 'ok'}">${c}${c && soft ? ` · ${esc(POLICY_WORD[d.hit_policy] || d.hit_policy)} 우선` : ''}</span>`; };
-    const mine = sel && sel.kind === 'executable' && sel.decision === d.name ? [...new Set(fs.filter((f) => ['overlap', 'tie'].includes(f.kind) && f.rules.includes(sel.rule)).flatMap((f) => f.rules).filter((id) => id !== sel.rule))] : null;
+    const mine = sel && sel.kind === 'executable' && sel.decision === d.name ? smrOverlaps(d.name, sel.rule) : null;
     const say = mine === null ? '' : mine.length ? `${sel.rule} 조건 겹침 · ${mine.join(', ')}` : `${sel.rule} 조건 겹침 없음`;
     return `<div class="k-h sb"><h2 class="k-h2" id="smr-chk">규칙 검사 · ${esc(d.label)}</h2><a class="k-lnk flat" href="#mgrules?decision=${encodeURIComponent(d.name)}">결정표 편집${ki('chevR', 14, 1.75)}</a></div>
       ${row('중복 조건', tone('overlap', true))}${row('도달 불가 규칙', tone('unreachable'))}${row('빈 구간', tone('gap'))}${row('우선순위 동률', tone('tie'))}${axiom}${say ? `<p class="k-s" style="margin:0">${esc(say)}</p>` : ''}`;
@@ -235,16 +241,23 @@
       <button class="k-btn" type="button" data-act="smrRerun" style="align-self:flex-start;margin-top:4px"${x.busy ? ' disabled' : ''}>${ki('play', 16, 1.75)}테스트 재실행</button>`;
   }
 
+  // the elements of the named values, metrics and functions: what reads each is the server's item/uses, read for all at once
+  const smrValueIds = (m) => [...m.parameters.map((p) => `parameter:${p.name}`), ...m.metrics.map((y) => `metric:${y.name}`), ...m.functions.map((f) => `function:${f.name}`)];
+
   // the named values, metrics and functions the rules read, as one list
   function smrValueRows() {
     const m = S.mg.st, of = (mod) => { const r = S.st.library.find((y) => y.name === mod); return r ? `v${r.version}` : ''; };
     const said = Object.fromEntries((S.ru.metrics || []).map((y) => [y.metric, y]));
     const range = (p) => (p.min !== null && p.min !== undefined && p.max !== null && p.max !== undefined ? ` · 범위 ${p.min}~${p.max}` : p.min !== null && p.min !== undefined ? ` · 범위 ${p.min} 이상` : p.max !== null && p.max !== undefined ? ` · 범위 ${p.max} 이하` : '');
-    const uses = (xs) => (xs && xs.length ? `${xs.slice(0, 2).join(' · ')}${xs.length > 2 ? ` 외 ${xs.length - 2}` : ''}` : '-');
+    const uses = (kind, name) => {  // the rules and cards by their names, the rest by what they are; the questions on the delete screen only
+      const xs = ((S.smr.uses || {})[`${kind}:${name}`] || []).filter((g) => g.kind !== '검증 질문')
+        .flatMap((g) => (['규칙', '규칙 카드'].includes(g.kind) ? g.names : g.names.map((n) => `${g.kind} ${n}`)));
+      return xs.length ? `${xs.slice(0, 2).join(' · ')}${xs.length > 2 ? ` 외 ${xs.length - 2}` : ''}` : '-';
+    };
     const run = (k) => (RUNTIME.find((y) => y[0] === k) || [k, k])[1];
-    return m.parameters.map((p) => ({ id: `parameter:${p.name}`, kind: '기준값', code: `@${p.name}`, label: p.label, say: `${yesNo(p.value)}${esc(p.unit || '')}${esc(range(p))}`, uses: uses(p.readers), who: [p.module_label, of(p.module)].filter(Boolean).join(' · '), x: p }))
-      .concat(m.metrics.map((y) => ({ id: `metric:${y.name}`, kind: '지표', code: y.name, label: y.label, say: esc(said[y.name] ? `${said[y.name].formula}${said[y.name].denominator ? ` · 분모 ${said[y.name].denominator}` : ''}` : y.description || '-'), uses: y.unit ? `단위 ${y.unit}` : '-', who: [y.owner || y.module_label, of(y.module)].filter(Boolean).join(' · '), x: y })))
-      .concat(m.functions.map((f) => ({ id: `function:${f.name}`, kind: '함수', code: f.name, label: f.label, say: esc(`${run(f.runtime)} · ${f.expr || f.decision || f.query || f.entry || (f.call || {}).url || '-'}`), uses: f.target ? `대상 ${mgLabel(f.target)}` : '-', who: [f.owner || f.module_label, f.version ? `v${f.version}` : ''].filter(Boolean).join(' · '), x: f })));
+    return m.parameters.map((p) => ({ id: `parameter:${p.name}`, kind: '기준값', code: `@${p.name}`, label: p.label, say: `${yesNo(p.value)}${esc(p.unit || '')}${esc(range(p))}`, uses: uses('parameter', p.name), who: [p.module_label, of(p.module)].filter(Boolean).join(' · '), x: p }))
+      .concat(m.metrics.map((y) => ({ id: `metric:${y.name}`, kind: '지표', code: y.name, label: y.label, say: esc(`${said[y.name] ? `${said[y.name].formula}${said[y.name].denominator ? ` · 분모 ${said[y.name].denominator}` : ''}` : y.description || '-'}${y.unit ? ` · 단위 ${y.unit}` : ''}`), uses: uses('metric', y.name), who: [y.owner || y.module_label, of(y.module)].filter(Boolean).join(' · '), x: y })))
+      .concat(m.functions.map((f) => ({ id: `function:${f.name}`, kind: '함수', code: f.name, label: f.label, say: esc(`${run(f.runtime)} · ${f.expr || f.decision || f.query || f.entry || (f.call || {}).url || '-'}${f.target ? ` · 대상 ${mgLabel(f.target)}` : ''}`), uses: uses('function', f.name), who: [f.owner || f.module_label, f.version ? `v${f.version}` : ''].filter(Boolean).join(' · '), x: f })));
   }
 
   function smrValues() {
@@ -254,7 +267,7 @@
     const bar = sel ? kBar('선택한 기준값 · 지표 · 함수', sel.code, sel.label, itemActs('param', sel.id)) : '';
     const add = (type, word) => `<a class="k-btn" href="#param-form" data-act="smrNew" data-kind="param" data-type="${type}">${ki('plus', 16, 1.75)}${word}</a>`;
     const shown = rows.slice(0, x.pmore);
-    const tr = (r) => `<tr class="${r.id === x.psel ? 'on' : ''}" data-act="smrPickValue" data-id="${esc(r.id)}"><td><span class="k-chip">${r.kind}</span>${r.x.new ? ' <span class="k-chip warn">새로 추가</span>' : r.x.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}</td><td><button type="button" class="smr-pickb" data-act="smrPickValue" data-id="${esc(r.id)}"${r.id === x.psel ? ' aria-current="true"' : ''}>${esc(r.label)}<br><span class="k-code k-mut">${esc(r.code)}</span></button></td><td>${r.say}</td><td>${esc(r.uses)}</td><td>${esc(r.who || '-')}</td></tr>`;
+    const tr = (r) => `<tr class="${r.id === x.psel ? 'on' : ''}" data-act="smrPickValue" data-id="${esc(r.id)}"><td><span class="k-chip">${r.kind}</span>${r.x.new ? ' <span class="k-chip warn">새로 추가</span>' : r.x.pending ? ' <span class="k-chip warn">변경 대기</span>' : ''}${r.x.status === 'retired' ? ' <span class="k-chip dash">중단</span>' : ''}</td><td><button type="button" class="smr-pickb" data-act="smrPickValue" data-id="${esc(r.id)}"${r.id === x.psel ? ' aria-current="true"' : ''}>${esc(r.label)}<br><span class="k-code k-mut">${esc(r.code)}</span></button></td><td>${r.say}</td><td>${esc(r.uses)}</td><td>${esc(r.who || '-')}</td></tr>`;
     const more = [S.mg.st.metrics.length ? '<a class="k-lnk" href="#rules">지표 계산 · 출처 충돌</a>' : '<a class="k-lnk" href="#rules">출처 충돌 · 기한 전이</a>', S.mg.st.functions.length ? '<a class="k-lnk" href="#mgfuncs">함수 실행</a>' : ''].join('');
     return `${bar}<section class="k-card" aria-labelledby="smr-prm"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="smr-prm">기준값 · 지표 · 함수</h2>${can ? `<div class="k-push k-h">${add('parameter', '기준값')}${add('metric', '지표')}${add('function', '함수')}</div>` : ''}</div>
       <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">종류</th><th scope="col">이름</th><th scope="col">값 · 산식</th><th scope="col">사용처</th><th scope="col">담당 · 버전</th></tr></thead><tbody>${shown.map(tr).join('') || '<tr><td colspan="5" class="mut">등록된 기준값 · 지표 · 함수가 없습니다.</td></tr>'}</tbody></table></div>
@@ -328,12 +341,26 @@
     const nodes = S.st.graph.nodes.filter((nd) => nd.table);
     const typed = `<details class="smr-typed"${x.text ? ' open' : ''}><summary class="k-lnk flat">조항을 직접 입력</summary><div class="k-v" style="padding-top:8px"><textarea class="k-in" rows="6" data-in="smrText" aria-label="정책서 조항" placeholder="제1조 (목적) ...">${esc(x.text)}</textarea>
       <div class="k-h"><label class="k-f" style="flex:0 1 260px">대상 Entity<select class="k-in" data-in="smrTarget"><option value="">자동</option>${nodes.map((nd) => `<option value="${esc(nd.id)}"${nd.id === x.target ? ' selected' : ''}>${esc(nd.label)}</option>`).join('')}</select></label>${S.st.data.policy_sample ? '<button class="k-btn" data-act="smrSample" style="align-self:flex-end">예시 정책서 불러오기</button>' : ''}</div></div></details>`;
-    const last = res ? (res.ok ? `<span class="k-s">마지막 생성 · 결정표 ${esc(res.label || res.decision)} · 규칙 ${count(res.rules.length)} · 모델 시도 ${count(res.attempts)}회</span><span class="k-push k-h g6"><span class="k-chip ${res.issues.length ? 'warn' : 'ok'}">${res.issues.length ? `초안 검사 오류 ${res.issues.length}` : '초안 검사 통과'}</span><span class="k-chip warn">조항 LLM 초안</span></span>` : `<span class="k-bad k-13">${esc(res.error)}</span>`)
+    const said = res ? (res.ok ? `<span class="k-s">마지막 생성 · 결정표 ${esc(res.label || res.decision)} · 규칙 ${count(res.rules.length)} · 모델 시도 ${count(res.attempts)}회</span>` : `<span class="k-bad k-13">${esc(res.error)}</span>`)
       : `<span class="k-s">${x.gen ? '초안 생성 중 · 최대 5분' : x.genNote ? esc(x.genNote) : '생성 이력 없음'}</span>`;
+    // what the material has given so far: the rule drafts here, the concept candidates of 개념 초안
+    const n = x.dr.counts, made = smrMade().length, cc = smrConcepts();
+    const tally = `<span class="k-h g6 nw">${ki('scale', 15, 1.75)}규칙 후보 ${count(n.waiting + n.approved + n.rejected + made)} · 대기 ${count(n.waiting + made)}</span>${cc && known('concepts') ? `<a class="k-h g6 nw" href="#concepts">${ki('nodes', 15, 1.75)}개념 · 관계 후보 ${count(cc.all)} · 대기 ${count(cc.wait)}</a>` : ''}`;
+    const chips = res && res.ok ? `<span class="k-push k-h g6"><span class="k-chip ${res.issues.length ? 'warn' : 'ok'}">${res.issues.length ? `초안 검사 오류 ${res.issues.length}` : '초안 검사 통과'}</span><span class="k-chip warn">조항 LLM 초안</span></span>` : '';
+    const last = `${said}${tally}${chips}`;
     return `<section class="k-card" aria-labelledby="smr-src"><div class="k-h g12 smr-line"><span class="smr-tile">${ki('doc', 18, 1.75)}</span><div class="k-h g8" style="flex:1 1 320px;min-width:0"><h2 class="k-h2" id="smr-src">바탕 자료</h2>${ask ? '' : '<span class="k-chip warn">언어 모델 미연결</span>'}</div>
         ${can ? `<a class="k-btn" href="#catalog">${ki('plus', 16, 1.75)}자료 업로드</a><button class="k-btn" type="button" data-act="smrGen"${ready ? '' : ' disabled'}>${ki('play', 16, 1.75)}${x.gen ? '초안 생성 중' : '초안 생성'}</button>` : ''}</div>
       <div class="k-wrap g8 smr-line" role="group" aria-label="추출할 자료">${pills || '<span class="k-s">등록된 문서가 없습니다.</span>'}<a class="k-lnk" href="#${known('evidence') ? 'evidence' : 'docs'}">전체 자료 ${count(docs.length)} · ${known('evidence') ? '근거 지도' : '문서'}${ki('chevR', 14, 1.75)}</a></div>
       ${can && ask ? `<div class="smr-line">${typed}</div>` : ''}<div class="k-14 k-h g16" style="padding:12px 20px">${last}</div></section>`;
+  }
+
+  // the Entity, Property and Relation candidates of the draft made from the material, and those not yet kept or dropped
+  function smrConcepts() {
+    const p = (S.files || {}).pending;
+    if (!p || !p.steps) return null;
+    const ok = S.dr.ok || {}, drop = (S.dr.ed || {}).drop || {};
+    const items = p.steps.filter((s) => ['objects', 'properties', 'links'].includes(s.id)).flatMap((s) => s.items.map((y) => ({ el: y.element, of: s.id === 'properties' ? `object:${y.object}` : '' })));
+    return { all: items.length, wait: items.filter((y) => !ok[y.el] && !drop[y.el] && !(y.of && drop[y.of])).length };
   }
 
   function smrDraftDetail(r) {
@@ -457,8 +484,9 @@
       if (t && !t.outputs.every((o) => d.then[o.name] !== undefined && d.then[o.name] !== '')) out.push({ say: '결과 입력 필요', tone: 'warn' });
       if (t) out.push(...smrCellChecks(d, t));
       if (c && c.layer === 'standard') out.push({ say: '저장 후 계층 Standard → Custom', tone: 'note' });
-      const over = c ? [...new Set(smrFound().filter((f) => f.decision === d.decision && ['overlap', 'tie'].includes(f.kind) && f.rules.includes(d.id)).flatMap((f) => f.rules).filter((id) => id !== d.id))] : [];
+      const over = c ? smrOverlaps(d.decision, d.id) : [];
       if (over.length) out.push({ say: `${over.join(', ')}${josa(over[over.length - 1], '과', '와')} 조건 겹침 · ${POLICY_WORD[(t || {}).hit_policy] || ''} 적용`, tone: 'note' });
+      else if (c) out.push({ say: '다른 규칙과 조건 겹침 없음', tone: 'ok' });
       out.push(d.source ? { say: '근거 자료 입력됨', tone: 'ok' } : { say: '근거 자료 없음', tone: 'warn' });
       const qs = S.st.questions.filter((q) => q.decision === d.decision).length;
       if (qs) out.push({ say: `연결된 검증 질문 ${qs}개`, tone: 'note' });
@@ -470,8 +498,18 @@
     const named = d.params.filter((y) => S.mg.st.parameters.some((p) => p.name === y.name)).length;
     if (named) out.push({ say: `기준값 ${named}개 연결`, tone: 'ok' });
     if (d.params.length - named) out.push({ say: `직접 입력 값 ${d.params.length - named}개`, tone: 'note' });
+    d.params.forEach((y) => {  // a named value the card reads, held to the AXIOM bounds set on it
+      const ax = ((st.parameters || []).find((p) => p.name === y.name) || {}).axiom, p = S.mg.st.parameters.find((q) => q.name === y.name);
+      if (!ax || !p) return;
+      const v = Number(p.value), off = (ax.min !== null && ax.min !== undefined && v < ax.min) || (ax.max !== null && ax.max !== undefined && v > ax.max);
+      out.push({ say: `@${y.name} · AXIOM 규칙 ${ax.cards.join(', ')}의 범위 ${off ? '밖' : '안'}`, tone: off ? 'warn' : 'ok' });
+    });
+    const qs = smrQuestionsOf(c).length;
+    if (qs) out.push({ say: `연결된 검증 질문 ${qs}개`, tone: 'note' });
     return out;
   }
+  // the questions asked of the tables a card is carried out by
+  const smrQuestionsOf = (c) => { const tables = (c ? c.implements || [] : []).filter((r) => r.kind === 'decision').map((r) => String(r.ref).replace(/^decision:/, '').split('#')[0]); return S.st.questions.filter((q) => tables.includes(q.decision)).map((q) => q.id); };
 
   // what the table would refuse or read as something else, in the words of the table: a number that is not one, a
   // value its Property does not allow, a condition with nothing to compare
@@ -540,6 +578,8 @@
     (c.implements || []).forEach((r) => { (by[r.kind] = by[r.kind] || []).push(r.label || r.ref); });
     const out = Object.entries(by).map(([k, names]) => ({ say: `${WORD[k] || k} ${names.length}개`, sub: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}` : ''} · 연결 해제`, href: TAB[k] || '' }));
     if (c.check && c.check.parameter) out.push({ say: '기준값 1개', sub: `@${c.check.parameter} 범위 규칙`, href: 'semrules' });
+    const qs = smrQuestionsOf(c);
+    if (qs.length) out.push({ say: `검증 질문 ${qs.length}개`, sub: `${qs.slice(0, 3).join(', ')}${qs.length > 3 ? ` 외 ${qs.length - 3}` : ''}`, href: known('check') ? 'check' : '' });
     return out;
   }
 
@@ -551,6 +591,26 @@
       say: (e.notes || []).map((n) => n.text).join(' · ') || e.reason || `${word} ${WORD[e.kind] || '변경'}`,
       rows: e.fields.map((f) => ({ label: f.label, before: f.before, after: f.after })), all: Object.entries(e.all || {}).map(([k, v]) => ({ label: k, value: v })) }));
   }
+
+  // taking an item back to a point of its history: the shared history keeps the whole item as each change request left
+  // it, and the values that differ from it now become an edit of the request being written
+  const smrCanon = (v) => (Array.isArray(v) ? v.map(smrCanon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, smrCanon(v[k])])) : v);
+  const smrBlank = (v) => v === undefined || v === null || v === '' || (typeof v === 'object' && !Object.keys(v).length);
+  async function smrThen(el, cp) {
+    const r = await api(`item/history?element=${encodeURIComponent(el)}`);
+    const at = r.entries.find((y) => y.change && y.change === cp);
+    if (!at || !at.after) throw new Error('선택한 시점의 값을 찾지 못해 되돌리지 못했습니다. 다른 시점을 선택해 주세요.');
+    const top = r.entries[0], now = (top && top.status === 'draft' ? top.after : r.now) || {};
+    if (JSON.stringify(smrCanon(at.after)) === JSON.stringify(smrCanon(now))) throw new Error('선택한 시점의 값이 현재 값과 같아 되돌리지 못했습니다. 이전 시점을 선택해 주세요.');
+    return { was: at.after, now };
+  }
+  // the fields to set: those the point had, and those it had not that are set now (cleared)
+  const smrBack = (was, now, keys) => Object.fromEntries(keys.filter((k) => !smrBlank(was[k]) || !smrBlank(now[k])).map((k) => [k, smrBlank(was[k]) ? '' : was[k]]));
+  const SMR_CARD_KEYS = ['type', 'statement', 'applies_to', 'conditions', 'result', 'exceptions', 'params', 'source', 'owner', 'status', 'legal_review', 'implements', 'check', 'risk', 'verification'];
+  const SMR_AXIOM_KEYS = ['type', 'statement', 'applies_to', 'conditions', 'result', 'exceptions', 'params', 'source', 'owner', 'status'];  // what sem/axiom/card takes
+  const SMR_VALUE_KEYS = { parameter: ['value', 'label', 'unit', 'description', 'cite', 'min', 'max'],
+    metric: ['label', 'description', 'unit', 'owner', 'scale', 'cite', 'formula', 'denominator', 'time', 'params'],
+    function: ['label', 'description', 'runtime', 'target', 'version', 'owner', 'status', 'inputs', 'outputs', 'expr', 'decision', 'query', 'entry', 'call', 'depends', 'cite'] };
 
   // a rule the pending edits take out is gone from the list, and its history still says how it went
   function smrGone(id) {
@@ -577,6 +637,21 @@
       if (smrAxiomCard(c)) { const r = await api('sem/axiom/card', { id: c.id, remove: true }); S.sem.st = null; S.changes = null; return { go: `changes?id=${encodeURIComponent(r.change.id)}`, said: SMR_AXIOM_SAID }; }
       if (!smrEditable(c)) throw new Error('정의 모듈의 AXIOM 규칙이어서 삭제를 요청하지 못했습니다. 모듈 라이브러리에서 모듈 파일을 편집해 주세요.');
       smrEdited(await api('manage/edit', c.kind === 'executable' ? { op: 'delete_rule', args: { decision: c.decision, id: c.rule } } : { op: 'delete_rule_card', args: { id: c.id } }));
+    },
+    revert: async (c, e) => {
+      if (c.kind === 'executable') {  // a row of a table is written whole
+        const { was } = await smrThen(`rule:${c.decision}.${c.rule}`, e.cp);
+        smrEdited(await api('manage/edit', { op: 'update_rule', args: { decision: c.decision, id: c.rule, when: was.when || {}, then: was.then || {}, cite: was.cite || '', owner: was.owner || '', status: was.status || '' } }));
+        return { go: 'changes' };
+      }
+      const { was, now } = await smrThen(`rule_card:${c.id}`, e.cp);
+      if (smrAxiomCard(c)) {
+        const r = await api('sem/axiom/card', { id: c.id, fields: smrBack(was, now, SMR_AXIOM_KEYS) });
+        S.sem.st = null; S.changes = null;
+        return { go: `changes?id=${encodeURIComponent(r.change.id)}`, said: SMR_AXIOM_SAID };
+      }
+      smrEdited(await api('manage/edit', { op: 'update_rule_card', args: { id: c.id, ...smrBack(was, now, SMR_CARD_KEYS) } }));
+      return { go: 'changes' };
     },
   });
 
@@ -815,16 +890,32 @@
     code: (v) => (v.kind === 'parameter' ? `@${v.name}` : v.name), name: (v) => v.x.label,
     element: (v) => `${v.kind}:${v.name}`,
     draft: smrValueDraft, form: smrValueForm, checks: smrValueChecks, valid: smrValueValid, save: smrValueSave,
-    uses: async (v) => {
-      if (v.kind === 'function') return itemUsesOf(ITEM.param, v);
-      const readers = v.kind === 'parameter' ? v.x.readers || [] : [];
-      return readers.length ? [{ say: `규칙 · 계산 ${readers.length}개`, sub: `${readers.slice(0, 3).join(', ')}${readers.length > 3 ? ` 외 ${readers.length - 3}` : ''} · 참조 조건 변경 후 삭제 가능`, href: 'semrules' }] : [];
+    uses: async (v) => {  // what reads it, as item/uses says; what keeps a named value from being taken out says so
+      const r = await api('item/uses?element=' + encodeURIComponent(`${v.kind}:${v.name}`));
+      const hold = v.kind === 'parameter' ? ['규칙', '계산 Property', 'Action', '함수'] : [];  // the readers remove() refuses on
+      return r.uses.map((g) => ({ say: `${g.kind} ${g.names.length}개`,
+        sub: `${g.names.slice(0, 3).join(', ')}${g.names.length > 3 ? ` 외 ${g.names.length - 3}` : ''}${hold.includes(g.kind) ? ' · 참조 조건 변경 후 삭제 가능' : ''}`, href: known(g.screen) ? g.screen : '' }));
     },
     history: (v) => (v.kind === 'function' ? smrFnHistory(v) : smrHistory(v.kind, v.name, SMR_VALUE[v.kind])),
-    remove: async (v) => {
+    get disable() {  // a function can be stopped: it stays defined and is not run
+      const v = itemParam('id').startsWith('function:') && S.mg.st ? smrValueOf(itemParam('id')) : null;
+      return !!v && v.x.status !== 'retired';
+    },
+    remove: async (v, { mode } = {}) => {
+      if (mode === 'disable') {
+        smrEdited(await api('manage/edit', { op: 'update_function', args: { name: v.name, status: 'retired' } }));
+        return { said: '작성 중인 변경 요청에 사용 중지를 저장했습니다.' };
+      }
       const readers = v.kind === 'parameter' ? v.x.readers || [] : [];
       if (readers.length) throw new Error(`규칙 · 계산 ${readers.length}개가 읽고 있어 삭제를 요청하지 못했습니다. 사용처의 참조를 바꾼 뒤 다시 요청해 주세요.`);
       smrEdited(await api('manage/edit', { op: `delete_${v.kind}`, args: { name: v.name } }));
+    },
+    revert: async (v, e) => {
+      const { was, now } = await smrThen(`${v.kind}:${v.name}`, e.cp);
+      const args = smrBack(was, now, SMR_VALUE_KEYS[v.kind]);
+      if (v.kind === 'parameter') ['min', 'max'].forEach((k) => { if (args[k] === '') args[k] = null; });  // no bound, not an empty one
+      smrEdited(await api('manage/edit', { op: `update_${v.kind}`, args: { name: v.name, ...args } }));
+      return { go: 'changes' };
     },
   });
   [['form', '추가 · 편집'], ['delete', '삭제'], ['history', '이력']].forEach(([what, tail]) => Object.defineProperty(V2[`param-${what}`], 'word', { get: () => `${smrValueWord()} ${tail}` }));

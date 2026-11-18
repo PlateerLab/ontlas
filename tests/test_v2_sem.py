@@ -216,6 +216,30 @@ def test_an_axiom_card_taken_out_is_a_removal_in_its_history(session):
     assert e["fields"] and all(f["after"] is None for f in e["fields"])
 
 
+def test_a_point_of_the_history_is_the_whole_item_and_setting_it_back_is_an_edit(session):
+    """이 시점으로 되돌리기 on the rules screens reads the item as a change request left it from the shared history, and
+    sets the fields that differ as an edit of the request being written: a card, a named value, a row of a table."""
+    card_keys = ("type", "statement", "applies_to", "conditions", "result", "exceptions", "params", "source", "owner", "status",
+                 "legal_review", "implements", "check", "risk", "verification")
+    for v in (9, 11):
+        session.manage_edit("update_rule_card", {"id": "return-request-moves", "result": f"결과 {v}"})
+        session.manage_edit("update_parameter", {"name": "price_auto_percent", "value": v})
+        session.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": {}, "then": {"fee": 3000, "reason": f"기본 {v}"}})
+        assert session.manage_propose()["change"]["status"] == "approved"
+    card = get(session, "item/history", element="rule_card:return-request-moves")
+    first = next(e for e in card["entries"] if e["change"] == "C1")
+    assert first["deployed"] and first["after"]["result"] == "결과 9" and first["after"]["statement"] and card["now"]["result"] == "결과 11"
+    session.manage_edit("update_rule_card", {"id": "return-request-moves", **{k: first["after"].get(k) or "" for k in card_keys}})
+    assert next(c for c in session.semantic_state()["cards"] if c["id"] == "return-request-moves")["result"] == "결과 9"
+    value = next(e for e in get(session, "item/history", element="parameter:price_auto_percent")["entries"] if e["change"] == "C1")["after"]
+    session.manage_edit("update_parameter", {"name": "price_auto_percent", "value": value["value"], "min": value.get("min"), "max": value.get("max")})
+    assert next(p for p in session.manage_state()["parameters"] if p["name"] == "price_auto_percent")["value"] == 9
+    row = next(e for e in get(session, "item/history", element="rule:shippingFee.basic")["entries"] if e["change"] == "C1")["after"]
+    session.manage_edit("update_rule", {"decision": "shippingFee", "id": "basic", "when": row.get("when") or {}, "then": row["then"]})
+    basic = next(r for d in session.manage_state()["decisions"] if d["name"] == "shippingFee" for r in d["rules"] if r["id"] == "basic")
+    assert basic["then"]["reason"] == "기본 9"
+
+
 def test_a_viewer_reads_the_drafts_and_an_editor_does_not_decide():
     from ontlas.web.team import User
 
@@ -226,3 +250,25 @@ def test_a_viewer_reads_the_drafts_and_an_editor_does_not_decide():
     assert viewer.may("viewer") and not editor.may(NEEDS["sem/draft/decide"]) and approver.may(NEEDS["sem/draft/decide"])
     s = StudioSession(load_studio(SHOP))
     assert routes.find("GET", "sem/drafts")(s, {}, SimpleNamespace(name="보는 사람"))["counts"]["waiting"] == 1
+
+
+def test_what_reads_a_function_a_named_value_or_a_metric_is_said_to_every_screen_that_asks(session):
+    """item/uses counts the rule cards that state a value, the Actions that check a function, the access policies that
+    run it, and the rows, limits and questions that read a named value; item/uses/many says it for a list at once."""
+    s = session
+    s.manage_edit("update_action", {"name": "changePrice", "criteria": [{"function": "soldOut", "expect": {"sold_out": False}}]})
+    s.manage_edit("update_role", {"name": "support_agent", "run": [*s.studio.onto.roles["support_agent"].run, "soldOut"]})
+    assert s.manage_propose()["ok"]  # what reads it is what the deployed definition reads
+
+    def said(el):
+        return {g["kind"]: g["names"] for g in get(s, "item/uses", element=el)["uses"]}
+
+    assert said("function:soldOut") == {"Action": ["판매가 변경"], "접근 정책": [s.studio.onto.roles["support_agent"].label or "support_agent"]}
+    assert said("function:refundEstimate") == {"규칙 카드": ["law-refund-cap"]}
+    window = said("parameter:return_window_days")
+    assert window["규칙 카드"] == ["law-return-min-days"] and len(window["규칙"]) == 2 and "Q2" in window["검증 질문"]
+    assert said("parameter:price_auto_percent") == {"Action": ["판매가 변경"]}  # the limit it sets on an Action
+    assert said("metric:returnRate") == {}
+    many = get(s, "item/uses/many", elements="function:soldOut,metric:returnRate,nonsense")["uses"]
+    assert set(many) == {"function:soldOut", "metric:returnRate"} and many["metric:returnRate"] == []
+    assert next(g for g in many["function:soldOut"] if g["kind"] == "접근 정책")["screen"] == "roles"

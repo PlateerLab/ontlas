@@ -64,6 +64,22 @@ def test_what_a_caller_asked_is_counted_from_the_audit_trail(session, ops):
     first, second = out["targets"]
     assert (first["calls"], first["month"], first["events"]) == (1, 1, {"판정": 1}) and first["last"]
     assert second["calls"] == 0 and out["calls_month"] == 1 and out["month"] == first["last"][:7]
+    assert out["days"] == int(first["last"][8:10])  # the days of the month so far, for the average a day
+
+
+def test_the_callers_that_requested_an_action_are_said_by_the_action(session, ops):
+    """What taking an Action out leaves: the callers whose requests for it the audit trail holds, each with how many."""
+    rest = _rest(session.studio)
+    ops.register_rest(rest)
+    for key, want in (("I1001", 200), ("I1005", 200), ("I1003", 403)):  # the last is another customer's: never asked
+        code, _ = rest.answer("POST", "/v1/actions", {"action": "requestReturn", "key": key, "params": {"reason": "변심"}},
+                              rest.clients[1][1])
+        assert code == want
+    code, _ = rest.answer("POST", "/v1/decide", {"decision": "returnEligibility", "values": VALUES}, rest.clients[0][1])
+    out = ops.targets(session, {}, None)
+    assert out["actions"] == {"requestReturn": [{"name": "cs-agent", "requests": 2}]}  # a decision is no request
+    ops.register_rest(None)
+    assert ops.targets(session, {}, None)["actions"] == {}
 
 
 def test_a_caller_whose_policy_this_ontology_does_not_define_is_marked(session, ops):
@@ -149,3 +165,18 @@ def test_the_routes_ask_for_the_level_they_need(ops):
     assert routes.find("GET", "ops/targets") is ops.targets
     assert routes.find("POST", "ops/try") is ops.try_call and NEEDS["ops/try"] == "viewer"
     assert routes.find("POST", "ops/reindex") is ops.reindex and NEEDS["ops/reindex"] == "editor"
+
+
+def test_a_store_added_or_taken_out_is_in_the_audit_log(session):
+    """As the admin screens keep what they set: a vector store added and one taken out, by whom, never its address."""
+    from ontlas.web import routes
+    from ontlas.web.api import DataOptions
+
+    routes.load()
+    session.data = DataOptions(allow_connect=True)
+    session.who = "관리자 갑"
+    session.space_store("add", "side", "memory", "")
+    session.space_store("remove", "side")
+    rows = [r for r in routes.GET["admin/audit"](session, {}, None)["rows"] if r["kind"] == "setting" and "side" in r["text"]]
+    assert [r["text"] for r in rows] == ["벡터 저장소 side 삭제", "벡터 저장소 side 추가 · memory"]  # newest first
+    assert {r["by"] for r in rows} == {"관리자 갑"}

@@ -26,6 +26,7 @@ def test_the_page_holds_the_kit_and_every_area_file_inside_the_script():
     html = page().decode("utf-8")
     assert "/*PARTS*/" not in html and "/*CSS*/" not in html and "/*JS*/" not in html
     assert ".k-main" in html and "const V2 = {};" in html
+    assert '<a class="k-skip" href="#main" data-act="skipmain">본문으로 건너뛰기</a>' in html  # the keyboard's first stop
     for part in sorted((STATIC / "v2").glob("*.js")):
         first = next(line for line in part.read_text(encoding="utf-8").splitlines() if line.strip())
         assert first.strip() in html, part.name

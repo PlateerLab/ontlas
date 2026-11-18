@@ -3,7 +3,7 @@
   // its connections, its limits and the records it keeps. What this version does not have (groups, LDAP, licences,
   // backups) is not drawn. The few things that can be set here are the pass conditions and the users.
   S.adm = { at: '', d: {}, busy: {}, err: {}, flow: null, flowBusy: false, gates: null, typed: {}, dirty: false, saving: false,
-    uq: '', mq: '', aq: '', akind: 'all', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false, seen: '', st: null };
+    uq: '', mq: '', aq: '', akind: 'all', aspan: 'all', afrom: '', ato: '', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false, seen: '', st: null };
 
   const admSig = () => `${S.st.library_id}|${S.st.pipeline}`;
   // what was read belongs to the ontology it was read from: another one starts empty
@@ -85,10 +85,10 @@
     const save = f && !f.error ? `<button class="k-btn pri" id="admsave" data-act="admSave"${A.dirty && !A.saving ? '' : ' disabled'}>${A.saving ? '저장 중' : '저장'}</button>` : '';
     const head = kHead('온톨로지 설정', '이름, 명명 규칙, 승인 정책과 품질 목표를 관리합니다.', save);
     return head + admBody('settings', (d) => {
-      const ro = (label, value, hint = '') => `<label class="k-f">${label}<input class="k-in" type="text" value="${esc(value)}" readonly>${hint ? `<span class="k-hint">${hint}</span>` : ''}</label>`;
+      const ro = (label, value, hint = '') => `<label class="k-f">${label}<input class="k-in" type="text" value="${esc(value)}" title="${esc(value)}" readonly>${hint ? `<span class="k-hint">${hint}</span>` : ''}</label>`;
       const basic = `<section class="k-card adm-ro"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
           ${ro('이름', d.label)}${ro('식별자', d.id, 'API library 값')}
-          ${ro('도메인 팩', `모듈 ${d.modules.length}개`)}${ro('운영 버전', d.version.label)}</div>
+          ${ro('도메인 팩', d.packs.join(' · ') || `모듈 ${d.modules.length}개`)}${ro('운영 버전', d.version.label)}</div>
           ${d.description ? `<label class="k-f">설명<textarea class="k-in" rows="3" readonly>${esc(d.description)}</textarea></label>` : ''}
           ${known('library') ? '<a class="k-lnk flat" href="#library">모듈 라이브러리</a>' : ''}</div></section>`;
       const vocab = d.vocabularies.map((v) => v.name).join(' · ');
@@ -101,7 +101,7 @@
           ${known('ai') ? '<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ai">AI 초안 생성</a></div>' : ''}</section>`;
       const targets = !f ? admWait() : f.error ? `<section class="k-card"><div class="k-ch"><h2>품질 목표</h2></div><p class="k-cf">${esc(f.error)}</p></section>`
         : `<section class="k-card"><div class="k-ch"><h2>품질 목표</h2></div><div class="k-cb"><div class="adm-g3">${ADM_TARGETS.map(([s, c, word, unit]) => `<label class="k-f">${word}<input class="k-in" type="text" inputmode="decimal" data-in="admGate" data-s="${s}" data-c="${c}" value="${esc(admGate(s, c))}" placeholder="조건 없음"><span class="k-hint">${unit}</span></label>`).join('')}</div>
-          ${f.raised && f.raised.length ? `<span class="k-s">모듈 기준 우선 적용 ${f.raised.length}개</span>` : ''}</div></section>`;
+          ${f.raised && f.raised.length ? `<span class="k-s">모듈 기준 우선 적용 ${f.raised.length}개</span>` : ''}${known('flow') ? '<a class="k-lnk flat" href="#flow">검증</a>' : ''}</div></section>`;
       const ap = d.approval;
       const approval = `<section class="k-card"><div class="k-ch"><h2>승인 정책</h2></div>
           ${admFact('정의 변경 시 변경 요청 필수', '', 'ok', '적용')}${admFact('배포 전 회귀 테스트 통과 필수', '', 'ok', '적용')}
@@ -122,7 +122,9 @@
 
   // ---- SET-02 멤버 · 권한 -------------------------------------------------------------------------------------------
   const admUserHit = (u, q) => !q || `${u.name} ${u.id}`.toLowerCase().includes(q.toLowerCase());
-  const admMemberRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.mq)).map((u) => `<tr><td><b class="k-b">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td>${u.signed_in ? kChip('로그인 중', 'ok') : '<span class="k-mut">-</span>'}</td>
+  // signed in now, and when: a session is kept from its sign-in, so that is the last one the server knows of
+  const admSigned = (u) => (u.signed_in ? `${kChip('로그인 중', 'ok')}${u.signed_at ? ` <span class="k-s">${esc(admWhen(u.signed_at))}</span>` : ''}` : '<span class="k-mut">-</span>');
+  const admMemberRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.mq)).map((u) => `<tr><td><b class="k-b">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td class="nw">${admSigned(u)}</td>
     <td class="r">${d.managed && isSysAdmin() && V2['user-form'] ? `<a class="k-lnk" href="${itemHref('user', 'form', u.id)}">편집</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">검색 결과가 없습니다.</td></tr>';
   const admMatrix = (rows) => `<div class="k-x"><table class="k-t adm-mid"><thead><tr><th scope="col">작업</th>${['admin', 'approver', 'editor', 'viewer'].map((r) => `<th scope="col" class="c">${WORK_ROLE[r]}</th>`).join('')}</tr></thead>
     <tbody>${rows.map((m) => `<tr><td>${esc(m.label)}</td>${['admin', 'approver', 'editor', 'viewer'].map((r) => `<td class="c">${m.may[r] ? `<span class="k-blue" aria-label="${WORK_ROLE[r]} 가능">${ki('check', 16, 1.75)}</span>` : `<span class="k-mut" aria-label="${WORK_ROLE[r]} 불가">-</span>`}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -158,23 +160,37 @@
     const low = levels.findIndex((n) => n > 0), at = Math.min(low + 1, 3);
     return low >= 3 ? 'L3' : `L${at} · ${levels.slice(at).reduce((a, b) => a + b, 0)} / ${total}`;
   }
+  // an ontology's row as the overview table and its report say it
+  const admPacksSaid = (x) => (x.packs && x.packs.length ? x.packs.join(' · ') : `모듈 ${x.modules || 0}개`);
+  const admShare = (v) => (v === null || v === undefined ? '' : `${Math.round(v * 100)}%`);
+  const admFew = (xs, n = 3) => xs.slice(0, n).join(' · ') + (xs.length > n ? ` 외 ${xs.length - n}` : '');
+  // what an admin should see to beyond the inbox, in the open ontology: modules the library holds newer, Objects with no owner
+  function admTend(d) {
+    const stale = (S.st.library || []).filter((r) => r.on && r.version !== r.latest);
+    return [stale.length && { href: 'sys-packs', title: `도메인 팩 새 버전 미반영 ${stale.length}건`, detail: admFew(stale.map((r) => `${r.label || r.name} ${r.latest}`)), chip: kChip('도메인 팩', 'b') },
+      d.unowned.length && { href: 'members', title: `영역 담당 미지정 ${d.unowned.length}건`, detail: admFew(d.unowned), chip: kChip('영역 담당', 'warn') }].filter((t) => t && known(t.href));
+  }
   function admOverview() {
+    const d0 = admGot('overview');
     const head = kHead('관리 현황', '설치 전체의 온톨로지와 처리 대기 항목을 확인합니다.',
-      V2['ontology-new'] && canMakeLibrary() ? `<a class="k-btn pri" href="#ontology-new">${ki('plus', 16, 1.75)}온톨로지 만들기</a>` : '');
+      `${d0 ? '<button class="k-btn" data-act="admOverviewCsv">현황 보고서 내려받기</button>' : ''}${V2['ontology-new'] && canMakeLibrary() ? `<a class="k-btn pri" href="#ontology-new">${ki('plus', 16, 1.75)}온톨로지 만들기</a>` : ''}`);
     return head + admBody('overview', (d) => {
       const made = d.libraries.filter((x) => x.made).length, waits = d.todo.filter((t) => ['action', 'change', 'draft'].includes(t.kind)).length;
+      const tend = admTend(d);
       const stats = `<section class="k-wrap" aria-label="현황">${admStat('온톨로지', String(d.libraries.length), made ? `세션 생성 ${made}` : '서버 등록')}
-        ${d.users === null ? '' : admStat('사용자', String(d.users), '팀 계정')}${admStat('승인 대기', String(waits), `현재 온톨로지 · 처리 대기 ${d.todo.length}건`, waits ? 'warn' : '')}
+        ${d.users === null ? '' : admStat('사용자', String(d.users), '팀 계정')}${admStat('승인 대기', String(waits), `현재 온톨로지 · 처리 대기 ${d.todo.length + tend.length}건`, waits ? 'warn' : '')}
         ${admStat('연동 대상', d.clients === null ? '-' : String(d.clients), d.rest ? 'REST /v1 · MCP' : '외부 API 사용 안 함')}</section>`;
       const num = (v) => (v === null || v === undefined ? '<span class="k-mut">-</span>' : String(v));
-      const rows = d.libraries.map((x) => `<tr><td><button class="k-lnk flat" data-act="admOpen" data-id="${esc(x.id)}">${esc(x.label)}</button></td><td>모듈 ${x.modules || 0}개</td><td>${x.source ? esc(BACKEND_KIND[String(x.source).toLowerCase()] || x.source) : '<span class="k-mut">미연결</span>'}</td>
+      const rows = d.libraries.map((x) => `<tr><td><button class="k-lnk flat" data-act="admOpen" data-id="${esc(x.id)}">${esc(x.label)}</button></td><td>${esc(admPacksSaid(x))}</td><td>${x.source ? esc(BACKEND_KIND[String(x.source).toLowerCase()] || x.source) : '<span class="k-mut">미연결</span>'}</td>
         <td>${x.levels ? `<span class="k-code k-blue">${esc(admLevel(x.levels))}</span>` : '<span class="k-mut">-</span>'}</td><td>${x.version ? `<span class="k-code k-mut">${esc(x.version)}</span>` : '<span class="k-mut">-</span>'}</td>
-        <td>${num(x.counts && x.counts.objects)}</td><td>${num(x.counts && x.counts.entities)}</td><td>${num(x.counts && x.counts.rules)}</td><td>${num(x.counts && x.counts.pending)}</td>
+        <td>${x.accuracy === null || x.accuracy === undefined ? '<span class="k-mut">-</span>' : admShare(x.accuracy)}</td><td>${num(x.counts && x.counts.objects)}</td><td>${num(x.counts && x.counts.entities)}</td><td>${num(x.counts && x.counts.rules)}</td><td>${num(x.counts && x.counts.pending)}</td>
         <td>${x.open ? kChip('현재', 'ok') : x.made ? kChip('세션 생성') : ''}</td></tr>`).join('');
-      const table = `<section class="k-card"><div class="k-ch"><h2>온톨로지</h2><span class="k-s">${d.libraries.length}개</span></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">이름</th><th scope="col">도메인 팩</th><th scope="col">데이터 소스</th><th scope="col">성숙도</th><th scope="col">운영 버전</th><th scope="col">Object</th><th scope="col">Entity</th><th scope="col">규칙</th><th scope="col">승인 대기</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>
+      const table = `<section class="k-card"><div class="k-ch"><h2>온톨로지</h2><span class="k-s">${d.libraries.length}개</span></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">이름</th><th scope="col">도메인 팩</th><th scope="col">데이터 소스</th><th scope="col">성숙도</th><th scope="col">운영 버전</th><th scope="col">정답률</th><th scope="col">Object</th><th scope="col">Entity</th><th scope="col">규칙</th><th scope="col">승인 대기</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>
         </section>`;
-      const todo = `<section class="k-card" style="flex:3 1 520px"><div class="k-ch"><h2>처리 대기</h2><span class="k-s">${d.todo.length}건</span></div>
-        ${d.todo.map((t) => { const [tone, word] = INBOX_KIND[t.kind] || ['', t.kind]; return `<a class="k-row" href="#inbox"><span class="k-col"><span class="k-ink k-14">${esc(t.title)}</span>${t.detail ? `<span class="k-s">${esc(t.detail)}</span>` : ''}</span><span class="k-h end">${kChip(word, tone === 'bad' ? 'bad' : tone === 'warn' ? 'warn' : tone === 'b' ? 'b' : '')}</span>${ki('chevR', 16, 1.75)}</a>`; }).join('') || '<p class="k-cf line">처리 대기 항목이 없습니다.</p>'}</section>`;
+      const line = (href, title, detail, chip) => `<a class="k-row" href="#${href}"><span class="k-col"><span class="k-ink k-14">${esc(title)}</span>${detail ? `<span class="k-s">${esc(detail)}</span>` : ''}</span><span class="k-h end">${chip}</span>${ki('chevR', 16, 1.75)}</a>`;
+      const todo = `<section class="k-card" style="flex:3 1 520px"><div class="k-ch"><h2>처리 대기</h2><span class="k-s">${d.todo.length + tend.length}건</span></div>
+        ${d.todo.map((t) => { const [tone, word] = INBOX_KIND[t.kind] || ['', t.kind]; return line('inbox', t.title, t.detail, kChip(word, tone === 'bad' ? 'bad' : tone === 'warn' ? 'warn' : tone === 'b' ? 'b' : '')); }).join('')}
+        ${tend.map((t) => line(t.href, t.title, t.detail, t.chip)).join('')}${d.todo.length || tend.length ? '' : '<p class="k-cf line">처리 대기 항목이 없습니다.</p>'}</section>`;
       const recent = `<div class="k-v g24" style="flex:2 1 380px;min-width:0"><section class="k-card"><div class="k-ch"><h2>최근 관리 활동</h2></div>
         ${d.recent.map((e) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(e.text)}</span><span class="k-s">${esc([e.by, admWhen(e.at)].filter(Boolean).join(' · '))}</span></span></div>`).join('') || '<p class="k-cf line">기록된 활동이 없습니다.</p>'}
         ${V2['sys-audit'] ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#sys-audit">감사 로그${ki('chevR', 14, 1.75)}</a></div>` : ''}</section></div>`;
@@ -183,7 +199,7 @@
   }
 
   // ---- SYS-04 사용자 · 그룹 -----------------------------------------------------------------------------------------
-  const admUserRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => `<tr><td><b class="k-b" style="white-space:nowrap">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td>${u.signed_in ? kChip('로그인 중', 'ok') : '<span class="k-mut">-</span>'}</td>
+  const admUserRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => `<tr><td><b class="k-b" style="white-space:nowrap">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td class="nw">${admSigned(u)}</td>
     <td class="r">${d.managed ? `<a class="k-lnk" href="${itemHref('user', 'form', u.id)}">편집</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">검색 결과가 없습니다.</td></tr>';
   // what a role adds to the one below it, in the words of the table of what each may do
   const admAdds = (matrix, role) => matrix.filter((m) => m.needs === role).map((m) => m.label).join(' · ');
@@ -241,7 +257,7 @@
               : !['viewer', 'editor', 'approver', 'admin'].some((r) => d[`r_${r}`]) ? '역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.'
                 : x && x.roles.includes('admin') && !d.r_admin && !admins ? '마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.' : '';
     },
-    saves: () => [['적용', '저장 즉시'], ['기록', V2['sys-audit'] ? '<a href="#sys-audit">감사 로그</a>' : '감사 로그']],
+    saves: () => [['적용', '저장 즉시'], ['기록', V2['sys-audit'] ? '<a href="#sys-audit">감사 로그</a>' : '감사 로그'], ['되돌리기', '편집으로 다시 수정']],
     save: async (d, x) => {
       await api('admin/user/save', { id: d.id.trim(), name: d.name.trim(), password: d.password, roles: ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]), new: !x });
       admAgain('users'); admAgain('members'); admAgain('audit'); admAgain('overview');
@@ -288,8 +304,9 @@
     if (!rows.length) return head + kEmpty('등록된 도메인 팩이 없습니다', '');
     const seg = `<div class="k-x"><div class="k-seg" role="group" aria-label="팩 종류"><button class="${A.pkind === 'all' ? 'on' : ''}" data-act="admPkind" data-k="all">전체 ${rows.length}</button>${kinds.map((k) => `<button class="${A.pkind === k ? 'on' : ''}" data-act="admPkind" data-k="${esc(k)}">${esc(k)} ${rows.filter((r) => r.kind_label === k).length}</button>`).join('')}</div></div>`;
     const state = (r) => (!r.on ? kChip('미적용') : r.version !== r.latest ? kChip(`새 버전 ${r.latest}`, 'b') : kChip('최신', 'ok'));
-    const table = `<section class="k-card" style="flex:3 1 600px"><div class="k-ch"><h2>도메인 팩</h2></div><div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">팩</th><th scope="col">종류</th><th scope="col">버전</th><th scope="col">포함</th><th scope="col">적용</th><th scope="col">상태</th></tr></thead>
-      <tbody>${shown.map((r) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="admPsel" data-n="${esc(r.name)}"><td>${admPick('admPsel', r.name, r.label || r.name, sel && r.name === sel.name)}</td><td class="nw">${esc(r.kind_label)}</td><td><span class="k-code k-mut">${esc(r.version)}</span></td><td>${esc(admHolds(r.counts))}</td><td class="nw">${r.on ? '적용' : '<span class="k-mut">-</span>'}</td><td>${state(r)}</td></tr>`).join('')}</tbody></table></div>
+    const make = known('ontology-new') && canMakeLibrary();  // as 온톨로지 만들기 itself lets in
+    const table = `<section class="k-card" style="flex:3 1 600px"><div class="k-ch"><h2>도메인 팩</h2></div><div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">팩</th><th scope="col">종류</th><th scope="col">버전</th><th scope="col">포함</th><th scope="col">적용</th><th scope="col">상태</th>${make ? '<th scope="col"></th>' : ''}</tr></thead>
+      <tbody>${shown.map((r) => `<tr class="${sel && r.name === sel.name ? 'on' : ''}" data-act="admPsel" data-n="${esc(r.name)}"><td>${admPick('admPsel', r.name, r.label || r.name, sel && r.name === sel.name)}</td><td class="nw">${esc(r.kind_label)}</td><td><span class="k-code k-mut">${esc(r.version)}</span></td><td>${esc(admHolds(r.counts))}</td><td class="nw">${r.on ? '적용' : '<span class="k-mut">-</span>'}</td><td>${state(r)}</td>${make ? `<td class="nw"><button class="k-lnk" data-act="admPackNew" data-n="${esc(r.name)}">온톨로지 만들기</button></td>` : ''}</tr>`).join('')}</tbody></table></div>
       </section>`;
     const detail = !sel ? '' : `<div class="k-v g24" style="flex:2 1 360px;min-width:0"><section class="k-card"><div class="k-ch"><h2>${esc(sel.label || sel.name)} · 구성</h2></div>
       ${ADM_COUNT.filter(([k]) => sel.counts[k]).map(([k, w]) => kKv(w, `<span class="k-code k-ink">${sel.counts[k]}</span>`)).join('') || '<p class="k-cf line">포함된 정의가 없습니다.</p>'}
@@ -328,12 +345,13 @@
       const llm = A.test && A.test.state ? A.test : d.llm, [tone, word] = ADM_LLM[llm.state] || ['', llm.state];
       const on = llm.state !== 'off';
       const server = `<section class="k-card"><div class="k-ch"><h2>모델 서버</h2><span class="k-pha k-push">${kChip(A.test && A.test.ms !== undefined && A.test.ok ? `${word} · 응답 ${(A.test.ms / 1000).toFixed(1)}초` : word, tone)}</span></div>
-        ${kKv('연결 방식', on ? (LLM_KIND_WORD[llm.kind] || esc(llm.kind || '-')) : '사용 안 함')}${on ? kKv('주소 · 모델 이름', '서버 설정') : ''}${on ? kKv('마지막 호출', llm.at ? esc(String(llm.at).replace('T', ' ')) : '<span class="k-mut">-</span>') : ''}
+        ${kKv('연결 방식', on ? (LLM_KIND_WORD[llm.kind] || esc(llm.kind || '-')) : '사용 안 함')}${on ? kKv('주소', '서버 설정') : ''}${on ? kKv('마지막 호출', llm.at ? esc(String(llm.at).replace('T', ' ')) : '<span class="k-mut">-</span>') : ''}
         ${llm.error ? kKv('마지막 오류', `<span class="k-bad">${esc(llm.error)}</span>`) : ''}${d.ask_per_minute ? kKv('분당 질문 한도', `${d.ask_per_minute}회 · 전체 사용자`) : ''}
         </section>`;
       const uses = d.uses.filter((u) => known(u.screen));
-      const table = `<section class="k-card"><div class="k-ch"><h2>모델 사용처</h2></div><div class="k-x"><table class="k-t end"><thead><tr><th scope="col">용도</th><th scope="col">화면</th><th scope="col">상태</th></tr></thead>
-        <tbody>${uses.map((u) => `<tr><td>${esc(u.label)}</td><td><a href="#${u.screen}">${esc(groupOf(u.screen)[1])}</a></td><td>${!on ? kChip('사용 안 함') : llm.state === 'bad' ? kChip('응답 없음', 'bad') : kChip('사용 가능', 'ok')}</td></tr>`).join('')}</tbody></table></div>
+      const model = on && d.llm.model ? `<span class="k-code k-ink">${esc(d.llm.model)}</span>` : '<span class="k-mut">-</span>';  // one model answers every use
+      const table = `<section class="k-card"><div class="k-ch"><h2>모델 사용처</h2></div><div class="k-x"><table class="k-t end"><thead><tr><th scope="col">용도</th><th scope="col">모델</th><th scope="col">화면</th><th scope="col">상태</th></tr></thead>
+        <tbody>${uses.map((u) => `<tr><td>${esc(u.label)}</td><td>${model}</td><td><a href="#${u.screen}">${esc(groupOf(u.screen)[1])}</a></td><td>${!on ? kChip('사용 안 함') : llm.state === 'bad' ? kChip('응답 없음', 'bad') : kChip('사용 가능', 'ok')}</td></tr>`).join('')}</tbody></table></div>
         </section>`;
       const emb = `<section class="k-card"><div class="k-ch"><h2>임베딩 모델</h2></div>${kKv('종류', esc(d.embedder.kind || '-'))}${d.embedder.name ? kKv('이름', `<span class="k-code k-ink">${esc(d.embedder.name)}</span>`) : ''}${kKv('차원', d.embedder.dim ? String(d.embedder.dim) : '-')}
         ${known('adapters') ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#adapters">저장소 · 엔진${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
@@ -344,7 +362,15 @@
 
   // ---- SYS-07 감사 로그 ---------------------------------------------------------------------------------------------
   const ADM_KIND = { change: '정의 · 배포', action: '판정 · 처리', api: 'API', user: '사용자', setting: '설정', note: '활동' };
-  const admAuditHit = (r) => (S.adm.akind === 'all' || r.kind === S.adm.akind) && (!S.adm.aq || `${r.by} ${r.text}`.toLowerCase().includes(S.adm.aq.toLowerCase()));
+  const ADM_SPAN = [['all', '전체 기간'], ['7', '최근 7일'], ['30', '최근 30일'], ['pick', '직접 지정']];
+  // a record's time is the server's local time (2026-11-18T08:54:00), read as this browser's local time
+  const admInSpan = (at) => {
+    const A = S.adm, day = String(at || '').slice(0, 10);
+    if (A.aspan === 'all') return true;
+    if (A.aspan === 'pick') return (!A.afrom || day >= A.afrom) && (!A.ato || day <= A.ato);
+    return !!at && new Date(at).getTime() >= Date.now() - Number(A.aspan) * 86400000;
+  };
+  const admAuditHit = (r) => (S.adm.akind === 'all' || r.kind === S.adm.akind) && admInSpan(r.at) && (!S.adm.aq || `${r.by} ${r.text}`.toLowerCase().includes(S.adm.aq.toLowerCase()));
   const admAuditRows = (d) => d.rows.filter(admAuditHit).slice(0, 200).map((r) => `<tr><td><span class="k-code k-mut">${esc(admWhen(r.at))}</span></td><td>${r.by ? esc(r.by) : '<span class="k-mut">-</span>'}</td><td>${kChip(ADM_KIND[r.kind] || r.kind)}</td><td>${esc(r.text)}</td></tr>`).join('')
     || `<tr><td colspan="4" class="mut">${d.rows.length ? '검색 결과가 없습니다.' : '기록이 없습니다.'}</td></tr>`;
   const admAuditFoot = (d) => `${Math.min(d.rows.filter(admAuditHit).length, 200)} / ${d.total}건 · ${d.kept ? '저널 보관' : '메모리 보관'}`;
@@ -353,6 +379,8 @@
     const head = kHead('감사 로그', '정의 변경, 배포, 판정, 외부 호출, 사용자 관리 기록을 조회합니다.', d0 && d0.rows.length ? '<button class="k-btn" data-act="admAuditCsv">CSV로 내보내기</button>' : '');
     return head + admBody('audit', (d) => {
       const bar = `<div class="k-pha"><div class="k-x"><div class="k-seg" role="group" aria-label="기록 종류"><button class="${A.akind === 'all' ? 'on' : ''}" data-act="admAkind" data-k="all">전체</button>${Object.entries(ADM_KIND).map(([k, w]) => `<button class="${A.akind === k ? 'on' : ''}" data-act="admAkind" data-k="${k}">${w}${d.counts[k] ? `&nbsp;<span class="k-m12">${d.counts[k]}</span>` : ''}</button>`).join('')}</div></div>
+        <select class="k-in sm" style="width:auto" data-in="admAspan" aria-label="기간">${ADM_SPAN.map(([k, w]) => `<option value="${k}"${A.aspan === k ? ' selected' : ''}>${w}</option>`).join('')}</select>
+        ${A.aspan === 'pick' ? `<input class="k-in sm" style="width:auto" type="date" data-in="admAday" data-k="afrom" aria-label="시작일" value="${esc(A.afrom)}"><input class="k-in sm" style="width:auto" type="date" data-in="admAday" data-k="ato" aria-label="종료일" value="${esc(A.ato)}">` : ''}
         <label class="k-search" style="flex:0 1 280px">${ki('search', 16, 1.75)}<input type="search" placeholder="사람 · 내용 검색" aria-label="사람 · 내용 검색" data-in="admAq" value="${esc(A.aq)}"></label></div>`;
       return `${bar}<section class="k-card"><div class="k-ch"><h2>기록</h2></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">시각</th><th scope="col">사람</th><th scope="col">종류</th><th scope="col">내용</th></tr></thead><tbody id="admaudit">${admAuditRows(d)}</tbody></table></div>
         <p class="k-cf" id="admauditfoot">${admAuditFoot(d)}</p></section>${kNext([['sys-users', '사용자 · 그룹'], ['sys-auth', '인증 · 보안'], ['sys-system', '시스템']])}`;
@@ -414,14 +442,17 @@
       const box = $(`#${t.dataset.box}`), d = admGot(users ? 'users' : 'members');
       if (box && d) box.innerHTML = users ? admUserRows(d) : admMemberRows(d);
     },
-    admAq: (t) => {
-      S.adm.aq = t.value;
-      const d = admGot('audit');
-      if (d && $('#admaudit')) { $('#admaudit').innerHTML = admAuditRows(d); $('#admauditfoot').innerHTML = admAuditFoot(d); }
-    },
+    admAq: (t) => { S.adm.aq = t.value; admAuditShow(); },
+    admAspan: (t) => { S.adm.aspan = t.value; render(); },  // 직접 지정 brings the two dates, the others take them away
+    admAday: (t) => { S.adm[t.dataset.k] = t.value; admAuditShow(); },
   });
+  function admAuditShow() {  // the rows and the count again, leaving the box being typed in where it is
+    const d = admGot('audit');
+    if (d && $('#admaudit')) { $('#admaudit').innerHTML = admAuditRows(d); $('#admauditfoot').innerHTML = admAuditFoot(d); }
+  }
 
   Object.assign(ACT, {
+    admPackNew: (t) => { location.hash = `#ontology-new?pack=${encodeURIComponent(t.dataset.n)}`; },  // 온톨로지 만들기 with that pack picked
     admRetry: (t) => { admAgain(t.dataset.k); if (t.dataset.k === 'ai') S.adm.test = null; render(); },
     admSave: async () => {
       const A = S.adm;
@@ -454,6 +485,14 @@
     admVsel: (t) => { S.adm.vsel = t.dataset.n; render(); if (t.tagName === 'BUTTON') admRefocus('admVsel', t.dataset.n); },
     admAkind: (t) => { S.adm.akind = t.dataset.k; render(); },
     admUsersCsv: () => { const d = admGot('users'); if (d) admCsv('ontlas-users.csv', ['아이디', '이름', '역할'], d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => [u.id, u.name, u.roles.map((r) => WORK_ROLE[r] || r).join(' · ')])); },
+    admOverviewCsv: () => {
+      const d = admGot('overview');
+      if (!d) return;
+      admCsv('ontlas-overview.csv', ['이름', '도메인 팩', '데이터 소스', '성숙도', '운영 버전', '정답률', 'Object', 'Entity', '규칙', '승인 대기', '상태'],
+        d.libraries.map((x) => { const c = x.counts || {};
+          return [x.label, admPacksSaid(x), x.source ? BACKEND_KIND[String(x.source).toLowerCase()] || x.source : '미연결', x.levels ? admLevel(x.levels) : '', x.version, admShare(x.accuracy),
+            c.objects, c.entities, c.rules, c.pending, x.open ? '현재' : x.made ? '세션 생성' : '']; }));
+    },
     admAuditCsv: () => { const d = admGot('audit'); if (d) admCsv('ontlas-audit.csv', ['시각', '사람', '종류', '내용'], d.rows.filter(admAuditHit).map((r) => [r.at, r.by, ADM_KIND[r.kind] || r.kind, r.text])); },
     admDiag: () => {
       const d = admGot('system');

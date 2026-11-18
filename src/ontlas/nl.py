@@ -286,6 +286,7 @@ def openai_chat(url: str, model: str, *, key: str = "", extra: dict | None = Non
 
     call.roomier = roomier
     call.kind = "openai"  # what a page names the connection by
+    call.model = model  # and the model it asks; never the address or the key
     return call
 
 

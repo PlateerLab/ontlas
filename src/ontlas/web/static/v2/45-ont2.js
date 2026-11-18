@@ -116,7 +116,7 @@
       Object.assign(c, { sel: made.id, tab: '' });
     }
     c.seen = all.length;
-    if (c.landed) { c.missing = c.sel === c.landed && !all.some((x) => x.id === c.landed) ? c.landed : ''; c.landed = ''; }  // a link to no request says so
+    if (c.landed) { c.missing = c.sel === c.landed && !(c.landed === 'draft' ? draft : all.some((x) => x.id === c.landed)) ? c.landed : ''; c.landed = ''; }  // a link to no request says so; #changes?id=draft is the one being written
     if (c.sel && !(c.sel === 'draft' ? draft : all.some((x) => x.id === c.sel))) c.sel = '';
     if (c.sel && c.sel !== 'draft' && c.tab && tabOf(c.sel) !== c.tab) c.tab = tabOf(c.sel);  // one approved or rejected here stays open, under its new state
     if (!c.tab) c.tab = (c.sel && tabOf(c.sel)) || (draft || open.length ? 'open' : done.length ? 'done' : no.length ? 'no' : 'open');
@@ -304,7 +304,7 @@
   item('change', {
     word: '변경 요청', under: 'changes', list: 'changes', direct: true,
     lead: { form: '작성 중인 변경 요청의 제목과 설명을 편집합니다.' },
-    load: async () => { if (!S.mg.st) await loadManage(); S.o2.ch.dm = await api('ont2/draft'); S.o2.ch.dmFor = S.mg.st; },
+    load: async () => { if (!S.mg.st) await loadManage(); if (!S.changes || !S.changes.changes) await loadChanges(); S.o2.ch.dm = await api('ont2/draft'); S.o2.ch.dmFor = S.mg.st; },
     find: (id) => (id === 'draft' ? S.o2.ch.dm : null),
     code: () => '작성 중', name: (x) => x.title || O2_UNTITLED,
     draft: (x) => { const d = x || S.o2.ch.dm || {}; return { title: d.title || '', description: d.description || '', test: 'auto' }; },
@@ -328,8 +328,12 @@
     saves: () => [['저장', '즉시 적용'], ['검토 요청', '<a href="#changes">변경 요청 · 버전</a>']],
     checks: (d) => {
       const ws = S.mg.st && !S.mg.st.error ? S.mg.st.workspace : null, n = ws ? ws.edits.length : 0, bad = ws ? ws.issues.length : 0;
+      // a request under review that changes an element this one changes too: the later one approved writes over it
+      const mine = ws ? new Set([...ws.diff.added, ...ws.diff.changed, ...ws.diff.removed]) : new Set();
+      const both = ((S.changes && S.changes.changes) || []).filter((x) => x.status === 'pending' && ['added', 'changed', 'removed'].some((k) => ((x.diff || {})[k] || []).some((e) => mine.has(e))));
       return [!String(d.title).trim() ? { say: '제목 없음', tone: 'bad' } : { say: '제목 있음', tone: 'ok' },
-        n ? { say: bad ? `포함 항목 ${n}개 · 정의 오류 ${bad}건` : `포함 항목 ${n}개 · 정의 검사 통과`, tone: bad ? 'warn' : 'ok', word: bad ? '확인' : '' } : { say: '포함 항목 없음', tone: 'bad' }];
+        n ? { say: bad ? `포함 항목 ${n}개 · 정의 오류 ${bad}건` : `포함 항목 ${n}개 · 정의 검사 통과`, tone: bad ? 'warn' : 'ok', word: bad ? '확인' : '' } : { say: '포함 항목 없음', tone: 'bad' },
+        ...(n ? [both.length ? { say: `같은 항목을 담은 변경 요청 있음 · ${both.map((x) => x.id).join(', ')}`, tone: 'warn' } : { say: '같은 항목을 담은 다른 변경 요청 없음', tone: 'ok' }] : [])];
     },
     valid: (d) => (!(S.mg.st && !S.mg.st.error && S.mg.st.workspace.dirty) ? '포함 항목이 없어 저장하지 못했습니다. 정의나 용어를 먼저 편집해 주세요.'
       : String(d.title).trim() ? '' : '제목이 없어 저장하지 못했습니다. 제목을 입력해 주세요.'),

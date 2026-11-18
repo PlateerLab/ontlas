@@ -1074,8 +1074,21 @@ class Workspace(TermEdits):
         states = [str(s).strip() for s in a.get("states") or [] if str(s).strip()]
         if len(states) < 2:
             raise EditError("a state machine has at least two states")
-        moves = [{k: v for k, v in {"from": m.get("from"), "to": m.get("to"), "action": m.get("action")}.items() if v}
-                 for m in a.get("transitions") or []]
+        # what a move says beyond its ends and action is kept from the move it was, unless it is sent: the form sends none
+        was = list(t.states.transitions) if t.states else []
+        moves = []
+        for m in a.get("transitions") or []:
+            move = {k: v for k, v in {"from": m.get("from"), "to": m.get("to"), "action": m.get("action")}.items() if v}
+            old = next((x for x in was if (x.source, x.target, x.action) == (m.get("from"), m.get("to"), m.get("action") or "")), None)
+            if old is not None:
+                was.remove(old)
+            for k in ("guard", "set", "call", "after"):
+                v = m[k] if k in m else getattr(old, k, None)
+                if v and not isinstance(v, dict):
+                    raise EditError(f"a transition's {k} is a mapping")
+                if v:
+                    move[k] = dict(v)
+            moves.append(move)
         for m in moves:
             if m.get("from") not in states or m.get("to") not in states:
                 raise EditError(f"a transition goes between states: {m.get('from')} to {m.get('to')}")

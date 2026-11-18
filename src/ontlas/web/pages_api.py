@@ -923,6 +923,23 @@ class PagesMixin:
         elif kind == "query":
             out += [f"검증 질문 {q.id}" for q in o.questions if q.query == name]
             out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if name in r.run]
+        elif kind in ("parameter", "metric", "function"):
+            if kind == "parameter":  # the rows, computed values, limits and functions that name it, and the questions on those tables
+                at = re.compile(rf"@{re.escape(name)}\b")
+                tables = [d for d in o.decisions.values() if any(at.search(f"{r.when} {r.then}") for r in d.rules)]
+                out += [f"규칙 {d.label or d.name} · {r.id}" for d in tables for r in d.rules if at.search(f"{r.when} {r.then}")]
+                out += [f"계산 Property {t.label or tn} · {p.label or pn}" for tn, t in o.objects.items()
+                        for pn, p in t.properties.items() if p.expr and at.search(p.expr)]
+                out += [f"Action {a.label or a.name}" for a in o.actions.values() if at.search(str(a.auto_within))]
+                out += [f"함수 {f.label or f.name}" for f in o.functions.values() if at.search(f"{f.expr} {f.inputs}")]
+            cards = self.studio.composition.cards if self.studio.composition is not None else []
+            out += [f"규칙 카드 {c['id']}" for c in cards if el in (c.get("implements") or [])
+                    or kind == "parameter" and ((c.get("check") or {}).get("parameter") == name or name in (c.get("params") or {}))]
+            if kind == "function":
+                out += [f"Action {a.label or a.name}" for a in o.actions.values() if any(c.function == name for c in a.criteria)]
+                out += [f"접근 정책 {r.label or r.name}" for r in o.roles.values() if name in r.run]
+            if kind == "parameter":
+                out += [f"검증 질문 {q.id}" for q in o.questions if q.decision in {d.name for d in tables}]
         return list(dict.fromkeys(out))[:12]
 
     # ---- a decision table tried before it is filed ------------------------------------------------------------------

@@ -3,7 +3,7 @@
   // started). The other three are reached from the menu and the bar on top: making drafts, asking, bringing files in.
 
   S.h2 = { busy: false, err: '', find: null, findBusy: false, findFor: null, cat: 'all',
-    ai: { st: null, busy: false, run: false, said: '', kinds: { concepts: true, questions: true, rules: false }, target: '', doc: '', section: '', sections: [], guide: false },
+    ai: { st: null, cat: null, busy: false, run: false, said: '', kinds: { concepts: true, questions: true, rules: false }, target: '', doc: '', section: '', sections: [], guide: false },
     up: { staged: [], use: '', then: true, busy: false, links: null } };
 
   // ---- 홈 ----------------------------------------------------------------------------------------------------------
@@ -168,6 +168,21 @@
   const SQ_CAT = [['all', '전체'], ['answer', '답'], ['def', '정의'], ['rule', '규칙'], ['term', '용어'], ['doc', '자료']];
   const SQ_SHOWN = 8;
 
+  // what each question asked on this browser turned out to be and when it was asked, beside the questions app.js keeps
+  const SQ_SEEN = 'ontlas-asked-seen';
+  const sqNorm = (s) => String(s || '').split(/\s+/).filter(Boolean).join(' ');
+  const sqSeen = () => { try { const v = JSON.parse(localStorage.getItem(SQ_SEEN) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } };
+  function sqKeep(res, found) {
+    const top = (found || [])[0];
+    const word = pickedDecision(res) || res.record || res.query ? '질문' : (top && (SQ_CAT.find(([k]) => k === top.group) || [])[1]) || '검색';
+    const now = new Date(), two = (n) => String(n).padStart(2, '0');
+    const at = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}T${two(now.getHours())}:${two(now.getMinutes())}`;
+    const kept = askedBefore().map(sqNorm), seen = sqSeen();
+    seen[sqNorm(res.question)] = { word, at };
+    Object.keys(seen).forEach((q) => { if (!kept.includes(q)) delete seen[q]; });
+    try { localStorage.setItem(SQ_SEEN, JSON.stringify(seen)); } catch (e) { /* this visit only */ }
+  }
+
   // everything the answer `res` touches, in the scope it was asked in; kept with the answer it belongs to
   async function sqFind(res) {
     const h = S.h2;
@@ -175,6 +190,7 @@
     let out;
     try { out = await api(`home/find?q=${encodeURIComponent(res.question)}&folder=${encodeURIComponent(S.sr.folder || '')}`); } catch (e) { out = { error: e.message, found: [], total: 0, counts: {} }; }
     Object.assign(h, { find: out, findFor: res, findBusy: false });
+    sqKeep(res, out.found);
     if (S.tab === 'search') render();
   }
 
@@ -266,9 +282,10 @@
   }
 
   function sqSide(res) {
-    const asked = askedBefore();
+    const asked = askedBefore(), seen = sqSeen();
+    const said = (q) => { const x = seen[sqNorm(q)]; return x ? `<span class="k-s">${esc([x.word, entWhen(x.at)].filter(Boolean).join(' · '))}</span>` : ''; };
     const recent = `<section class="k-card" aria-labelledby="sq-recent"><div class="k-ch"><h2 id="sq-recent">최근 검색</h2></div>
-      ${asked.map((q) => `<button class="k-row" data-act="homeask" data-q="${esc(q)}"><span class="k-col"><span class="k-ink k-14">${esc(q)}</span></span></button>`).join('') || '<p class="k-cf line">검색 기록이 없습니다.</p>'}</section>`;
+      ${asked.map((q) => `<button class="k-row" data-act="homeask" data-q="${esc(q)}"><span class="k-col"><span class="k-ink k-14">${esc(q)}</span>${said(q)}</span></button>`).join('') || '<p class="k-cf line">검색 기록이 없습니다.</p>'}</section>`;
     const others = res && (res.decisions || []).length > 1 ? `<section class="k-card" aria-labelledby="sq-others"><div class="k-ch"><h2 id="sq-others">관련 판정</h2></div>
       ${res.decisions.map((x, i) => `<button class="k-row${i === (S.sr.di || 0) ? ' on' : ''}" data-act="srdi" data-i="${i}" aria-pressed="${i === (S.sr.di || 0)}"><span class="k-col"><span class="k-ink k-14">${esc(x.label)}</span></span><span class="k-chip ${x.good ? 'ok' : 'warn'}">${esc(x.verdict)}</span></button>`).join('')}</section>` : '';
     const rel = res && (res.relations || []).length ? `<section class="k-card" aria-labelledby="sq-rel"><div class="k-ch"><h2 id="sq-rel">연결 관계</h2><span class="k-s">검색 엔진 · ${esc(res.engine || '')}</span></div><div class="k-cb"><div class="k-v g4 k-s">${res.relations.slice(0, 6).map((x) => `<span>${esc(x)}</span>`).join('')}</div></div></section>` : '';
@@ -400,7 +417,6 @@
     const head = kHead('자료 업로드', '정책서 · 정의서 · 용어집 · 테이블 파일을 업로드합니다.', `<a class="k-btn" href="#${back}"${u.staged.length ? ' data-act="upCancel"' : ''}>취소</a>`);
     if (!c.st) return head + '<section class="k-card pad"><p class="k-p s">불러오는 중입니다.</p></section>';
     if (c.st.error) return head + kEmpty('요청을 처리하지 못했습니다', c.st.error, '<button class="k-btn" data-act="creload">다시 시도</button>');
-    if (!canEdit()) return head + kEmpty('업로드 권한이 없습니다', '', '<a class="k-btn pri" href="#home">홈</a>');
     const st = c.st, lim = st.limits;
     const path = st.server_paths && u.from === 'path';
     const seg = st.server_paths ? `<div class="k-seg self" role="group" aria-label="업로드 방법"><button class="${path ? '' : 'on'}" data-act="upFrom" data-k="file">파일</button><button class="${path ? 'on' : ''}" data-act="upFrom" data-k="path">서버 경로</button></div>` : '';
@@ -423,10 +439,10 @@
   }
 
   screen('catalog', {
-    area: 'work', word: '자료 업로드', under: 'evidence', crumb: ['자료 업로드'], view: upView,
+    area: 'work', word: '자료 업로드', under: 'evidence', crumb: ['자료 업로드'], may: () => canEdit(), view: upView,
     after: () => {
       if (!S.cat.st && !S.cat.busy) loadCatalog();
-      if (!S.h2.ai.st && !S.h2.ai.busy) aiLoad();
+      if ((!S.h2.ai.st && !S.h2.ai.busy) || aiStale()) aiLoad();
       const box = $('#cedit');
       if (box && document.activeElement !== box) { box.focus(); box.select(); }
     },
@@ -479,10 +495,14 @@
   async function aiLoad() {
     const a = S.h2.ai;
     a.busy = true;
+    a.cat = S.cat.st;  // the files it is read against
     try { a.st = await api('home/ai'); a.err = ''; } catch (e) { a.err = e.message || String(e); }
     a.busy = false;
     if (S.tab === 'ai' || S.tab === 'catalog') render();
   }
+  // the files changed on 자료 업로드 since it was read (a file deleted, left out of the draft): read it again, so 바탕 자료
+  // and the check before 초안 생성 never count a file that is gone
+  const aiStale = () => { const a = S.h2.ai; return !a.busy && !!a.st && !!S.cat.st && a.cat !== S.cat.st; };
 
   const aiConcepts = () => (known('concepts') ? 'concepts' : 'data');
   const aiWhen = (at) => { const s = String(at || ''), today = new Date().toISOString().slice(0, 10); return s.slice(0, 10) === today ? `오늘 ${s.slice(11, 16)}` : `${s.slice(5, 10).replace('-', '/')} ${s.slice(11, 16)}`; };
@@ -573,10 +593,10 @@
   }
 
   screen('ai', {
-    area: 'work', word: 'AI 초안 생성', crumb: ['AI 초안 생성'], view: aiView,
+    area: 'work', word: 'AI 초안 생성', crumb: ['AI 초안', 'AI 초안 생성'], view: aiView,
     after: () => {
       const a = S.h2.ai;
-      if (!a.st && !a.busy && !a.err) aiLoad();
+      if ((!a.st && !a.busy && !a.err) || aiStale()) aiLoad();
       if (!S.files) loadFiles();  // what a draft is made from, and the settings it is made with
     },
   });

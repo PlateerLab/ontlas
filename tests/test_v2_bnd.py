@@ -144,6 +144,12 @@ def test_each_property_is_listed_with_the_column_it_is_read_from(session):
     assert out["pending"] and out["columns"]["OrderItem.quantity"] == ["qty"]
 
 
+def test_an_entity_that_keeps_another_entitys_history_is_listed_with_the_relation_it_hangs_on(session):
+    hist = get(session, "bnd/columns")["histories"]
+    assert {"entity": "PriceChange", "kind": "series", "of": "priceOf", "owner": "Sku", "time": ["changed_at"]} in hist
+    assert all(h["owner"] in session.studio.onto.objects for h in hist)
+
+
 def test_the_sql_of_a_binding_reads_the_bound_properties_from_the_table(session):
     out = get(session, "bnd/binding", entity="OrderItem")
     assert out["table"] == "order_items" and out["target"] == "sql:sqlite" and not out["error"]

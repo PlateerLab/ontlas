@@ -21,9 +21,6 @@
   const opsGood = (x) => (x && !x.error && !x.busy ? x : null);
   const opsWait = (say = '불러오는 중입니다.') => `<section class="k-card pad"><p class="k-p s">${esc(say)}</p></section>`;
   const opsFailed = (say) => kEmpty('불러오지 못했습니다', say, '<button class="k-btn" data-act="opsRetry">다시 시도</button>');
-  // the screens this one leads to; a screen of the admin area is marked and shown to those who may open it
-  const opsNext = (links) => `<nav class="k-next" aria-label="관련 화면"><span>관련 화면</span>${links.filter(([h, , admin]) => known(h.split('?')[0]) && (!admin || (admin === 'onto' ? isOntoAdmin() : isSysAdmin())))
-    .map(([h, w, admin]) => `<a class="k-lnk" href="#${h}">${esc(w)}${admin ? '<span class="k-chip w">관리</span>' : ''}${ki('chevR', 14, 1.75)}</a>`).join('')}</nav>`;
   const opsCopy = (text, say) => `<button class="k-lnk ops-copy" data-act="copycode" data-v="${esc(text)}" aria-label="${esc(say)}" title="${esc(say)}">${ki('copy', 16, 1.75)}</button>`;
   const opsTake = (text, word) => `<button class="k-btn sm" data-act="copycode" data-v="${esc(text)}">${esc(word)}</button>`;
   const opsPre = (text, say) => `<div class="ops-pre"><pre class="k-pre">${esc(text)}</pre>${opsCopy(text, say)}</div>`;
@@ -111,7 +108,7 @@
     }).join('');
     const reas = `<section class="k-card" aria-labelledby="ops-rz-h" style="flex:2 1 340px"><div class="k-ch ops-line"><h2 id="ops-rz-h">추론 엔진</h2></div>${reasRows || '<p class="k-cf">등록된 추론 엔진이 없습니다.</p>'}</section>`;
     return `${head}${seg}${tiles}${stores}<div class="k-cols">${langs}${reas}</div>${opsVectors(a, sp, cn)}${opsUsedBy(a, tg)}
-      ${opsNext([['query', '질의'], ['sys-ai', 'AI 운영', 'sys'], ['monitor', '파이프라인 관제'], ['sys-system', '시스템', 'sys']])}`;
+      ${kNext([['query', '질의'], ['sys-ai', 'AI 운영'], ['monitor', '파이프라인 관제'], ['sys-system', '시스템']])}`;
   }
 
   // the embedding model, the engine that finds things for a question, and what is indexed
@@ -217,7 +214,7 @@
     const tile = (label, big, sub, warn) => `<div class="k-stat${warn ? ' warn' : ''}"><p>${label}</p><p class="k-big${warn ? ' warn' : ''}">${big}</p><p class="k-s ops-sub">${sub}</p></div>`;
     const tiles = `<section class="k-wrap" aria-label="현황">
       ${tile('연동 대상', tg && tg.listed ? count(list.length) : i.rest ? '-' : '0', esc(!i.rest ? 'REST API 꺼짐' : list.length ? list.map((t) => t.name).join(' · ') : 'REST API 켜짐'), !i.rest)}
-      ${tg && tg.listed ? tile('이번 달 호출', count(tg.calls_month), '판정 · 답변 · 함수 · Action 요청') : ''}
+      ${tg && tg.listed ? tile('이번 달 호출', count(tg.calls_month), `하루 평균 ${count(Math.round((tg.calls_month / (tg.days || 1)) * 10) / 10)}`) : ''}
       ${tile('REST 도구', count(i.tools.length), 'OpenAPI 문서 포함')}
       ${i.libraries > 1 ? tile('온톨로지', count(i.libraries), '요청의 library 값으로 지정') : ''}</section>`;
     // who may call: named by the server, each with the policy it runs as
@@ -262,7 +259,7 @@
       <li><b>Agent 컨텍스트</b><span><span class="k-code">/v1/context</span> · Geny 시스템 프롬프트 ${chip(`${base}/v1/context`, '주소 복사')}</span></li>
       <li><b>검증</b><span><span class="k-code">/v1/questions</span> ${chip(`${base}/v1/questions`, '주소 복사')}</span></li></ol></section>`;
     return `${head}${tiles}${targets}${ways}<div class="ops-halves"><div class="ops-half">${endpoints}${mcp}</div><div class="ops-half">${opsTry(i)}</div></div>${xgen}
-      ${opsNext([['actions', 'Action'], ['changes', '변경 요청 · 버전'], ['members', '멤버 · 권한', 'onto']])}`;
+      ${kNext([['actions', 'Action'], ['changes', '변경 요청 · 버전'], ['members', '멤버 · 권한']])}`;
   }
 
   // the policies a call is tried as: those of the definition being written, where a policy added or changed and not
@@ -521,7 +518,7 @@
     const table = `<section class="k-card" aria-labelledby="ops-tgp-h" style="flex:3 1 600px"><div class="k-ch"><h2 id="ops-tgp-h">연동 대상별 정책</h2><span class="k-chip">${count(roles.length)}</span></div>
       <div class="k-x"><table class="k-t s"><thead><tr><th scope="col">연동 대상</th><th scope="col">정책</th><th scope="col">정의 범위</th><th scope="col">데이터 행 범위</th><th scope="col" class="r">마스킹</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
     return `${head}${bar}${tiles}<div class="k-cols">${table}${opsPolicyAside(m, sel, src)}</div>${opsPolicyScope(m, sel, src)}
-      ${opsNext([['changes', '변경 요청 · 버전'], ['query', '질의'], ['connect', '연동 · API'], ['members', '멤버 · 권한', 'onto']])}`;
+      ${kNext([['changes', '변경 요청 · 버전'], ['query', '질의'], ['connect', '연동 · API'], ['members', '멤버 · 권한']])}`;
   }
 
   // the policy picked, in three parts: what it reads of the definition, of the data, and what it may ask to be done
@@ -699,6 +696,7 @@
         ${field('데이터 행 범위', `${d.rows.map(rule).join('')}${add('rows', '행 범위 추가')}`, later)}
         ${field('마스킹 Property', `${d.mask.map(mask).join('')}${add('mask', '마스킹 Property 추가')}`, later)}
         ${m.actions.length ? field('요청 허용 Action', ticks('request', m.actions.map((a) => [a.name, a.label])), later) : ''}
+        ${m.actions.length ? field('실행 허용 Action', ticks('execute', m.actions.map((a) => [a.name, a.label])), later) : ''}
       </div></div></section>
       <section class="k-card"><div class="k-ch"><h2>실행 · 문서 · 조직 범위</h2></div><div class="k-cb"><div class="k-g2">
         ${field('실행 허용 질의 · 결정 · 함수', ticks('run', [...m.decisions.map((q) => [q.name, q.label]), ...m.functions.map((q) => [q.name, q.label]), ...m.queries.map((q) => [q.name, q.label])]))}
@@ -713,8 +711,8 @@
     load: async () => { opsFresh(); if (!S.mg.st || S.mg.st.error) await loadManage(); if (!S.ops.tg) { try { S.ops.tg = await api('ops/targets'); } catch (e) { S.ops.tg = { error: e.message }; } } },
     find: (id) => (S.mg.st && !S.mg.st.error ? S.mg.st.roles.find((r) => r.name === id) || null : null),
     code: (x) => x.name, name: (x) => x.label, element: (x) => `role:${x.name}`,
-    draft: (r) => (!r ? { name: '', label: '', read: [], run: [], request: [], mask: [], rows: [], scope_attr: '', scopes: [], docs: ['*'], reason: '' } : {
-      name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], mask: Object.entries(r.mask).map(([prop, style]) => ({ prop, style })),
+    draft: (r) => (!r ? { name: '', label: '', read: [], run: [], request: [], execute: [], mask: [], rows: [], scope_attr: '', scopes: [], docs: ['*'], reason: '' } : {
+      name: r.name, label: r.label, read: [...r.read], run: [...r.run], request: [...r.request], execute: [...r.execute], mask:Object.entries(r.mask).map(([prop, style]) => ({ prop, style })),
       rows: r.rows.map((x) => (x.raw ? { ...x } : { type: x.type, via: (x.via || [])[0] || '', property: x.property, mode: x.principal ? 'principal' : 'value', value: x.principal || String(x.value ?? '') })),
       scope_attr: (r.scope || {}).attribute || '', scopes: Object.entries((r.scope || {}).types || {}).map(([type, w]) => (typeof w === 'string' ? { type, via: '', property: w } : { type, via: (w.via || [])[0] || '', property: w.property })),
       docs: r.documents === null || r.documents === undefined ? ['*'] : [...r.documents], reason: '' }),
@@ -752,15 +750,31 @@
       const rows = d.rows.map((r) => (r.raw ? { type: r.type, raw: r.raw } : { type: r.type, via: r.via ? [r.via] : [], property: r.property, ...(r.mode === 'value' ? { value: asValue(r.value) } : { principal: r.value }) }));
       const scope = d.scope_attr ? { attribute: d.scope_attr, types: d.scopes.map((r) => ({ type: r.type, via: r.via ? [r.via] : [], property: r.property })) } : {};
       const name = x ? x.name : d.name.trim();
-      S.mg.st = await api('manage/edit', { op: x ? 'update_role' : 'add_role', args: { name, label: d.label.trim(), read: d.read, run: d.run, request: d.request, mask, rows, scope, documents: d.docs.includes('*') ? null : d.docs } });
+      S.mg.st = await api('manage/edit', { op: x ? 'update_role' : 'add_role', args: { name, label: d.label.trim(), read: d.read, run: d.run, request: d.request, execute: d.execute, mask, rows, scope, documents: d.docs.includes('*') ? null : d.docs } });
       S.ops.sel = name;
       return { go: 'roles', element: `role:${name}` };
     },
-    uses: async (x) => opsCallers(x.name).map((t) => ({ say: `연동 대상 ${t.name}`, sub: `호출 ${count(t.calls)}건`, href: 'connect' })),
-    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; return { go: 'roles' }; },
+    // the callers that run as it, and the Actions it lets a caller request or execute
+    uses: async (x) => {
+      const acts = S.mg.st.actions.filter((a) => opsCan(x.request, a.name) || opsCan(x.execute, a.name)), names = acts.map((a) => a.label || a.name);
+      return [...opsCallers(x.name).map((t) => ({ say: `연동 대상 ${t.name}`, sub: `호출 ${count(t.calls)}건`, href: 'connect' })),
+        ...(acts.length ? [{ say: `Action ${count(acts.length)}개`, sub: `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}` : ''}`, href: known('actions') ? 'actions' : '' }] : [])];
+    },
+    remove: async (x) => { S.mg.st = await api('manage/edit', { op: 'delete_role', args: { name: x.name } }); S.ops.sel = ''; if (S.ops.tryPol === x.name) S.ops.tryPol = ''; },
     history: async (x) => (await itemHistoryOf({ word: '접근 정책', element: (y) => `role:${y.name}` }, x)).map((e) => ({ ...e,
       rows: e.rows.map((r) => ({ ...r, label: opsRoleWord(r.label), before: opsRoleSaid(r.label, r.before), after: opsRoleSaid(r.label, r.after) })),
       all: e.all.map((r) => ({ ...r, label: opsRoleWord(r.label), value: opsRoleSaid(r.label, r.value) })) })),
+    revert: async (x, e) => {  // the policy as that change left it, as an edit of the change request being written
+      const r = await api('item/history?element=' + encodeURIComponent(`role:${x.name}`));
+      const was = (r.entries.find((h) => h.change === e.cp) || {}).after, draft = r.entries[0] && r.entries[0].status === 'draft' ? r.entries[0] : null;
+      if (!was) throw new Error('선택한 시점에 접근 정책이 없어 되돌리지 못했습니다. 다른 시점을 선택해 주세요.');
+      if (JSON.stringify(was) === JSON.stringify(draft ? draft.after : r.now)) throw new Error('선택한 시점의 값이 현재 값과 같아 되돌리지 못했습니다. 이전 시점을 선택해 주세요.');
+      const types = Object.entries((was.scope || {}).types || {}).map(([type, w]) => (typeof w === 'string' ? { type, via: [], property: w } : { type, via: w.via || [], property: w.property }));
+      S.mg.st = await api('manage/edit', { op: 'update_role', args: { name: x.name, label: was.label || '', read: was.read || [], run: was.run || [], request: was.request || [],
+        execute: was.execute || [], mask: was.mask || {}, rows: Object.entries(was.row_filters || {}).map(([type, raw]) => ({ type, raw })),
+        scope: (was.scope || {}).attribute ? { attribute: was.scope.attribute, types } : {}, documents: was.documents === undefined ? null : was.documents } });
+      return { go: 'changes' };
+    },
   });
 
   // ---- a vector store added beside the one in use (an install that allows connections) -----------------------------

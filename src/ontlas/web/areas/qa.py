@@ -7,6 +7,7 @@ import re
 from collections import Counter
 from typing import Any
 
+from ontlas.web.areas.home import _jobs
 from ontlas.web.routes import get, post
 from ontlas.words import fix as with_particles
 
@@ -19,6 +20,8 @@ EVENT = {"decided": ("판정", "b"), "answered": ("질문 답변", ""), "functio
          "called": ("외부 호출", ""), "call_failed": ("외부 호출 실패", "bad"), "rolled_back": ("되돌림", "warn"),
          "stale": ("재검사 실패", "bad")}
 CHANGE_EVENT = {"proposed": ("변경 요청", ""), "approved": ("승인", "ok"), "rejected": ("반려", "bad")}
+# what the session noted of itself that the log keeps: a measurement of the pipeline, a draft asked for or applied
+SESSION_EVENT = {"measure": ("검증", ""), "draft": ("AI 초안", "")}
 DOC_KIND = {"policy": "정책서", "screen": "화면 정의", "other": "문서"}
 DOC_STATE = {"embedded": "색인 완료", "pending": "색인 대기", "failed": "색인 실패", "off": "검색 제외", "none": "본문 없음"}
 
@@ -189,8 +192,9 @@ def question_try(s, a, who) -> dict:
 
 @get("qa/decisions")
 def decisions(s, a, who) -> dict:
-    """Decisions, answers, action requests and their approvals, change requests and their approvals, and each
-    measurement of the pipeline, newest first. Each row says what it stood on: the rules and the module versions."""
+    """Decisions, answers, action requests and their approvals, change requests and their approvals, the drafts made
+    and applied, and each measurement of the pipeline, newest first. Each row says what it stood on: the rules and the
+    module versions, or the material a draft was made from."""
     st = s.studio
     rows: list[dict] = []
     label = s._label
@@ -228,8 +232,17 @@ def decisions(s, a, who) -> dict:
                      "versions": [{"module": e.get("module", ""), "label": label(e.get("module", "")),
                                    "version": e.get("version", "")}]})
     for e in s.events:
-        if e.get("kind") == "measure":
-            rows.append({"at": e["at"], "kind": "검증", "tone": "", "text": e["text"], "by": "", "rules": [], "versions": []})
+        if e.get("kind") in SESSION_EVENT:
+            word, tone = SESSION_EVENT[e["kind"]]
+            rows.append({"at": e["at"], "kind": word, "tone": tone, "text": e["text"], "by": "", "rules": [], "versions": []})
+    for j in _jobs(s):  # the drafts made on the AI 초안 생성 screen, each with what it was made from
+        if j.get("error"):
+            continue  # a making that failed made nothing
+        made = j.get("made") or {}
+        what = (f"규칙 초안 {made.get('rules', 0)}개 생성" if j.get("kind") == "rules"
+                else f"개념 초안 Entity {made.get('objects', 0)}개 · 관계 {made.get('links', 0)}개 생성")
+        rows.append({"at": j.get("at", ""), "kind": "AI 초안", "tone": "", "text": " · ".join(x for x in (j.get("label"), what) if x),
+                     "by": j.get("by", ""), "rules": [], "versions": [], "source": str(j.get("scope") or "")})
     # newest first; of two written in the same second, the one written later comes first
     rows = [r for _, r in sorted(enumerate(rows), key=lambda p: (str(p[1]["at"]), p[0]), reverse=True)]
     limit = max(1, min(int(a.get("limit") or 50), 200))
@@ -238,6 +251,44 @@ def decisions(s, a, who) -> dict:
 
 def _word(v: Any) -> str:
     return "예" if v is True else "아니요" if v is False else "값 없음" if v is None else str(v)
+
+
+@get("qa/approvals")
+def approvals(s, a, who) -> dict:
+    """The change requests waiting on an approver, and how long the oldest of them has waited, in seconds."""
+    from datetime import datetime
+
+    waiting = sorted(str(c.at) for c in s.studio.changes.requests.values() if c.status == "pending")
+    waited = 0
+    if waiting:
+        try:
+            waited = max(0, int((datetime.now() - datetime.fromisoformat(waiting[0])).total_seconds()))
+        except ValueError:  # a request stamped in a form no clock reads: counted, not timed
+            waited = 0
+    return {"changes": len(waiting), "oldest_at": waiting[0] if waiting else "", "waited": waited}
+
+
+# ---- what a question is about --------------------------------------------------------------------------------------
+
+def _answers_about(rq) -> str:
+    """The Entity a registered query answers about: the one its first returned column reads (o.order_id, or a count or
+    sum over o), else the one it starts from."""
+    q = rq.query or {}
+    nodes = q.get("match") if isinstance(q.get("match"), dict) else {}
+    for c in q.get("return") or []:
+        refs = [c] if isinstance(c, str) else [v for k, v in c.items() if k != "as"] if isinstance(c, dict) else []
+        for ref in refs:
+            if isinstance(ref, str) and ref.split(".", 1)[0] in nodes:
+                return str(nodes[ref.split(".", 1)[0]])
+    return str(next(iter(nodes.values()), ""))
+
+
+@get("qa/objects")
+def objects(s, a, who) -> dict:
+    """Each registered query, as the pending edits leave them, with the Entity it answers about: a value question is
+    about that Entity's Object."""
+    onto, _ = s._pending_onto()
+    return {"queries": {name: _answers_about(rq) for name, rq in onto.queries.items()}}
 
 
 # ---- which documents stand behind which Object ---------------------------------------------------------------------

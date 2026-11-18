@@ -36,8 +36,9 @@
     const open = all.filter((x) => x.status === 'pending');
     const hist = Object.fromEntries([...v.pending, ...v.history].map((x) => [x.id, x]));
     const stat = (word, value) => `<div class="k-card" style="flex:1 1 130px;padding:16px"><p class="k-s" style="margin:0">${word}</p><p class="k-big">${value}</p></div>`;
+    const held = sem ? sem.cards.filter((c) => ['limit', 'duty', 'ban'].includes(c.type) || c.check).length : null;  // a Restriction: a limit, duty or ban card, or a value check (as Entity counts them)
     const stats = `<section class="k-wrap" aria-label="규모">${stat('Object', count(st.stats.areas))}${stat('Entity', count(st.stats.objects))}${stat('Relation', count(st.stats.links))}${stat('Property', count(st.stats.properties))}
-      ${stat('규칙', sem ? count(sem.cards.length) : '-')}${stat('현재 버전', esc(cur.label))}</section>`;
+      ${stat('Restriction', held === null ? '-' : count(held))}${stat('규칙', sem ? count(sem.cards.length) : '-')}${stat('현재 버전', esc(cur.label))}</section>`;
     // the layers a rule is judged in, with the modules that make each one
     const LAYER_SAY = { axiom: '모든 고객사 공통', standard: '표준 + 업종 확장', custom: '고객사별' };
     const layers = sem ? ['axiom', 'standard', 'custom'].map((k) => sem.layers.find((l) => l.layer === k)).filter(Boolean).map((l, i, xs) => `<div class="k-v g4" style="padding:12px 0${i < xs.length - 1 ? ';border-bottom:1px solid var(--row)' : ''}">

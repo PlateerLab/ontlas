@@ -52,19 +52,36 @@ def _target(rest, tools, month: str) -> dict:
             "principal": sorted(tools.principal), "calls": calls, "month": this_month, "last": last, "events": by_event}
 
 
+def _asked(rest, tools, library: str) -> dict[str, int]:
+    """The Actions this caller requested of the ontology open on the page, each with its requests, from the audit trail:
+    a request filed, or one turned away before it was (both stamped with the caller)."""
+    first = not rest.libraries or library in ("", rest.libraries[0].get("id"))
+    held = tools if first else rest._tools.get((id(tools), library))
+    out: dict[str, set] = {}
+    for e in held.studio.actions.audit if held is not None else []:
+        if e.actor == tools.actor.id and e.actor_kind == "agent" and e.action and e.event in ("requested", "rejected"):
+            out.setdefault(e.action, set()).add(e.proposal)
+    return {k: len(v) for k, v in out.items()}
+
+
 @get("ops/targets")
 def targets(s, a, who) -> dict:
     """The callers of /v1 on this server: each with its policy, whether it may request actions, and what the audit
     trail holds of it (decisions, answers, functions, action requests: the calls that are recorded)."""
     rest = _REST["rest"]
     on = bool(getattr(s.data, "rest", False))
-    month = dt.datetime.now().strftime("%Y-%m")  # the audit trail is stamped by the machine's clock, so the month is too
+    now = dt.datetime.now()  # the audit trail is stamped by the machine's clock, so the month is too
+    month = now.strftime("%Y-%m")
     rows = [_target(rest, tools, month) for _, tools in rest.clients] if rest is not None else []
     roles = set(s.studio.onto.roles)
     for r in rows:
         r["policy_known"] = not r["policy"] or r["policy"] in roles
-    return {"rest": on, "listed": rest is not None, "targets": rows, "month": month,
-            "calls_month": sum(r["month"] for r in rows), "calls": sum(r["calls"] for r in rows)}
+    asked: dict[str, list] = {}  # by Action: the callers that requested it, for what taking the Action out leaves
+    for _, tools in rest.clients if rest is not None else []:
+        for action, n in sorted(_asked(rest, tools, str(getattr(s, "library_id", "") or "")).items()):
+            asked.setdefault(action, []).append({"name": tools.actor.id, "requests": n})
+    return {"rest": on, "listed": rest is not None, "targets": rows, "month": month, "days": now.day,  # days of the month so far
+            "calls_month": sum(r["month"] for r in rows), "calls": sum(r["calls"] for r in rows), "actions": asked}
 
 
 def _tried_on(s, role: str):

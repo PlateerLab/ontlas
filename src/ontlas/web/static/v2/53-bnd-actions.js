@@ -65,7 +65,9 @@
     const mk = bndActMark(a);
     const pre = a.criteria.map((c) => (c.decision ? `<a class="k-chip" href="#mgrules?decision=${encodeURIComponent(c.decision)}">${esc(bndExpect(m, c))}</a>` : (c.states || []).length ? `<span class="k-chip">허용 상태 ${esc(c.states.join(', '))}</span>` : c.function ? `<span class="k-chip">함수 ${esc(c.function)}</span>` : '')).join('');
     const machine = m.states.find((s) => s.object === a.target);
-    const rights = m.roles.map((r) => { const verbs = [bndCan(r, 'request', a.name) ? '요청' : '', bndCan(r, 'execute', a.name) ? '실행' : ''].filter(Boolean); return verbs.length ? `<span class="k-13">${esc(r.label || r.name)} · ${verbs.join(', ')}</span>` : ''; }).join('');
+    // a policy that keeps to some rows of the target (a row filter, or a scope that reaches the type) asks of those rows only
+    const rowsOnly = (r) => (r.filters || []).includes(a.target) || !!((r.scope || {}).types || {})[a.target];
+    const rights = m.roles.map((r) => { const verbs = [bndCan(r, 'request', a.name) ? '요청' : '', bndCan(r, 'execute', a.name) ? '실행' : ''].filter(Boolean); return verbs.length ? `<span class="k-13">${esc(r.label || r.name)} · ${verbs.join(', ')}${rowsOnly(r) ? ' · 행 범위 제한' : ''}</span>` : ''; }).join('');
     const props = bndOwn(m, a.target);
     const sets = Object.entries(a.set || {}).map(([k, v]) => `${(props.find((p) => p.name === k) || {}).label || k} = ${v}`).join(' · ');
     const half = (title, body) => `<div style="flex:1 1 220px;display:flex;flex-direction:column;gap:6px;min-width:0"><p class="k-b k-14" style="margin:0">${title}</p>${body}</div>`;

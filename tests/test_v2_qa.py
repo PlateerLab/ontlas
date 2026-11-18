@@ -163,6 +163,51 @@ def test_the_log_lists_change_requests_and_measurements_newest_first(s):
     assert len(log(s, {"limit": 1}, None)["rows"]) == 1
 
 
+def test_the_log_keeps_the_drafts_made_beside_the_measurements(s):
+    from ontlas.web.areas.home import _jobs
+
+    log = routes().find("GET", "qa/decisions")
+    s.event("draft", "반품 가능 여부: 지난 12건으로 규칙 3개를 만들었습니다.")
+    s.event("pipeline", "가상 쇼핑몰(으)로 전환")  # what the session did besides is not a decision
+    _jobs(s)[:0] = [{"at": "2026-11-18T09:10", "by": "편집자", "kind": "rules", "label": "반품 규칙", "scope": "반품정책서",
+                     "made": {"rules": 9, "all": 9, "excluded": 0}},
+                    {"at": "2026-11-18T09:12", "by": "편집자", "kind": "rules", "error": "모델 응답 없음", "made": {"all": 0}}]
+    rows = log(s, {}, None)["rows"]
+    said = {(r["kind"], r["text"], r.get("source", "")) for r in rows}
+    assert ("AI 초안", "반품 가능 여부: 지난 12건으로 규칙 3개를 만들었습니다.", "") in said
+    assert ("AI 초안", "반품 규칙 · 규칙 초안 9개 생성", "반품정책서") in said  # what it was made from stands beside it
+    assert len(rows) == 2  # neither the switch nor the making that failed
+
+
+def test_approvals_say_how_long_the_oldest_change_request_has_waited(s):
+    from datetime import datetime, timedelta
+
+    wait = routes().find("GET", "qa/approvals")
+    assert wait(s, {}, None) == {"changes": 0, "oldest_at": "", "waited": 0}
+    s.studio.changes.self_approve = False  # a person approves it: the request waits
+    s.manage_edit("update_question", {"id": "Q2", "holdout": True})
+    s.manage_propose()
+    cr = next(iter(s.studio.changes.requests.values()))
+    cr.at = (datetime.now() - timedelta(days=3, hours=2)).isoformat(timespec="seconds")
+    out = wait(s, {}, None)
+    assert out["changes"] == 1 and out["oldest_at"] == cr.at and 3 * 86400 <= out["waited"] < 4 * 86400
+
+
+def test_a_value_question_is_about_the_entity_its_query_answers_about(s):
+    from ontlas.model import RegisteredQuery
+    from ontlas.web.areas.qa import _answers_about
+
+    asks = routes().find("GET", "qa/objects")(s, {}, None)["queries"]
+    assert set(asks) == set(s.studio.onto.queries)
+    assert asks["ordersOfCustomer"] == "Order"  # the orders a customer placed: it answers about Order, not Customer
+    q = lambda r: RegisteredQuery(name="x", query={"match": {"c": "Customer", "p": "Payment"}, "return": r})  # noqa: E731
+    assert _answers_about(q([{"count": "p", "as": "n"}])) == "Payment"
+    assert _answers_about(q([{"sum": "p.amount", "as": "total"}])) == "Payment"
+    assert _answers_about(q([{"col": "c.name", "as": "who"}])) == "Customer"
+    assert _answers_about(q([])) == "Customer"
+    assert _answers_about(RegisteredQuery(name="y", query={})) == ""
+
+
 def test_every_table_the_quality_screens_read_is_declared_in_the_page():
     """A table of words read by name and declared nowhere stops the screen that reads it (검증 drew nothing once a
     wrong answer came in, when the table of diagnoses it read had been taken out of the page)."""

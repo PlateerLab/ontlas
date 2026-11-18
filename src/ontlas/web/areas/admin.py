@@ -108,9 +108,14 @@ def _user_rows() -> list[dict]:
     if users is None:
         return []
     now = time.time()
+    signed: dict[str, float] = {}  # who is signed in, and when they last signed in (a token lasts ttl from then)
     with logins.lock:
-        signed = {uid for uid, until in logins.tokens.values() if until > now}
-    return [{"id": u.id, "name": u.name, "roles": list(u.roles), "signed_in": u.id in signed} for u in users.users.values()]
+        for uid, until in logins.tokens.values():
+            if until > now:
+                signed[uid] = max(signed.get(uid, 0.0), until - logins.ttl)
+    return [{"id": u.id, "name": u.name, "roles": list(u.roles), "signed_in": u.id in signed,
+             "signed_at": datetime.fromtimestamp(signed[u.id]).isoformat(timespec="seconds") if u.id in signed else ""}
+            for u in users.users.values()]
 
 
 def _matrix() -> list[dict]:
@@ -286,6 +291,7 @@ def settings(s, a, who) -> dict:
             "description": next((m.description for m in (comp.modules if comp else []) if m.kind == "domain" and m.description), ""),
             "made": bool(lib.get("made")), "version": {"number": version["number"], "label": version["label"]},
             "modules": [{"label": m["label"], "kind_label": m["kind_label"], "version": m["version"]} for m in version["modules"]],
+            "packs": _packs(st),
             "naming": {"entity": _naming(list(o.objects)), "property": _naming(props), "link": _naming(list(o.links))},
             "vocabularies": [{"name": v["name"], "terms": len(v["terms"])} for v in _vocabularies(o)],
             "aligned": aligned, "defined": len(o.objects) + len(o.areas),
@@ -293,6 +299,12 @@ def settings(s, a, who) -> dict:
                          "decide_needs": NEEDS.get("change/decide", "viewer")},
             "model": s.llm is not None, "model_state": _model_state(s),
             "kept": st.changes.journal is not None, "writes_folder": st.changes.store is not None}
+
+
+def _packs(studio) -> list[str]:
+    """The domain packs an ontology applies, named as 온톨로지 만들기 names them: its domain modules at their versions."""
+    comp = studio.composition
+    return [f"{m.label or m.name} {m.version}" for m in comp.modules if m.kind == "domain"] if comp is not None else []
 
 
 def _model_state(s) -> str:
@@ -390,24 +402,29 @@ def overview(s, a, who) -> dict:
     rows = []
     for x in s.libraries:
         row = {"id": x["id"], "label": x["label"], "modules": x.get("modules", 0), "source": x.get("source", ""),
-               "made": bool(x.get("made")), "open": x["id"] == s.library_id, "counts": None, "version": "", "levels": None}
+               "made": bool(x.get("made")), "open": x["id"] == s.library_id, "counts": None, "version": "", "levels": None,
+               "accuracy": None, "packs": None}
         if row["open"]:
-            row["counts"] = _counts(s.studio)
+            row["counts"], row["packs"] = _counts(s.studio), _packs(s.studio)
             if s.studio.composition is not None:
                 row["version"] = s._space_version()["label"]
             levels = s._entity_levels()
             row["levels"] = [sum(1 for v in levels.values() if v == i) for i in range(4)]
+            # the share of questions the last 검증 answered right, while the definition it was measured on is this one
+            got = (s._measured.get("check") or {}) if s._measured_of is s.studio.onto else {}
+            row["accuracy"] = got.get("accuracy")
         elif x["id"] in s._library_held:  # opened earlier in this space: its definition is still in hand
             pipelines, pid = s._library_held[x["id"]]
             studio = next(p for p in pipelines if p["id"] == pid)["studio"]
-            row["counts"] = _counts(studio)
+            row["counts"], row["packs"] = _counts(studio), _packs(studio)
         rows.append(row)
     box = s.inbox()
     todo = [{"kind": i["kind"], "title": i["title"], "detail": i.get("detail") or i.get("change") or "", "by": i.get("by") or "",
              "at": i.get("at") or ""} for i in box["items"]]
     recent = sorted([{"at": e["at"], "text": e["text"], "by": ""} for e in s.log]
                     + [{"at": e["at"], "text": e["text"], "by": e["by"]} for e in _notes(s)], key=lambda e: e["at"], reverse=True)[:8]
-    return {"libraries": rows, "todo": todo, "recent": recent, "users": len(_user_rows()) if _users() is not None else None,
+    unowned = [ar.label or ar.name for ar in s.studio.onto.areas.values() if not ar.owner]  # the open ontology's Objects no one answers for
+    return {"libraries": rows, "todo": todo, "recent": recent, "unowned": unowned, "users": len(_user_rows()) if _users() is not None else None,
             "clients": len(_clients()) if SERVER.get("rest") is not None else None, "rest": bool(getattr(s.data, "rest", False)),
             "team": who is not None or _users() is not None}
 
@@ -510,7 +527,8 @@ def security(s, a, who) -> dict:
 def ai(s, a, who) -> dict:
     require(who, "admin")
     con = s.connections()
-    return {"llm": con["llm"], "embedder": con["embedder"], "ask_per_minute": _ask_per_minute(),
+    model = str(getattr(s.llm, "model", "") or "") if s.llm is not None else ""  # the model's name, to an admin only
+    return {"llm": {**con["llm"], "model": model}, "embedder": con["embedder"], "ask_per_minute": _ask_per_minute(),
             "uses": [{"label": label, "screen": screen} for label, screen in MODEL_USES]}
 
 

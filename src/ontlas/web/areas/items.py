@@ -12,8 +12,8 @@ from ontlas.web.routes import get
 
 STATUS_WORD = {"pending": "검토 중", "approved": "배포", "rejected": "반려"}
 # what a reader is, and the screen that shows it
-READER_SCREEN = {"검증 질문": "check", "Action": "actions", "함수": "semrules", "접근 정책": "roles", "규칙": "semrules", "질의": "query",
-                 "계산 Property": "objects"}
+READER_SCREEN = {"검증 질문": "check", "Action": "actions", "함수": "semrules", "접근 정책": "roles", "규칙 카드": "semrules",
+                 "규칙": "semrules", "질의": "query", "계산 Property": "objects"}  # 규칙 카드 before 규칙: the longer word first
 
 
 def _now_of(s, el: str) -> dict | None:
@@ -37,12 +37,22 @@ def uses(s, a, who) -> dict:
     el = str(a.get("element") or "")
     if ":" not in el:
         raise ValueError("항목 이름이 없어 사용처를 찾지 못했습니다.")
+    return {"element": el, "label": s._element_label(el), "exists": _now_of(s, el) is not None, "uses": _groups(s, el)}
+
+
+@get("item/uses/many")
+def uses_many(s, a, who) -> dict:
+    """What reads each of several items, for a list that says it on every row: by element, as item/uses groups it."""
+    els = [e for e in str(a.get("elements") or "").split(",") if ":" in e][:200]
+    return {"uses": {el: _groups(s, el) for el in els}}
+
+
+def _groups(s, el: str) -> list[dict]:
     groups: dict[str, list[str]] = {}
     for r in s._readers(el):
         kind = next((k for k in READER_SCREEN if r.startswith(k + " ")), "")
         groups.setdefault(kind or "기타", []).append(r[len(kind):].strip() if kind else r)
-    return {"element": el, "label": s._element_label(el), "exists": _now_of(s, el) is not None,
-            "uses": [{"kind": k, "screen": READER_SCREEN.get(k, ""), "names": v} for k, v in groups.items()]}
+    return [{"kind": k, "screen": READER_SCREEN.get(k, ""), "names": v} for k, v in groups.items()]
 
 
 @get("item/history")

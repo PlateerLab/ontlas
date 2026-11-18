@@ -27,11 +27,11 @@ NEEDS = {
     "upload": "editor", "files/sample": "editor", "catalog/folder": "editor",
     "catalog/remove": "editor", "catalog/rename": "editor", "catalog/include": "editor", "catalog/embed": "editor", "catalog/use": "editor",
     "catalog/repository": "editor", "catalog/import": "editor", "pipeline": "editor", "library": "editor", "catalog/move": "editor", "catalog/trash": "editor",
-    "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "editor",
+    "draft": "editor", "draft/preview": "editor", "draft/apply": "approver", "connect": "admin",  # a data source: the ontology's admin
     "module/save": "editor", "module/propose": "editor", "request": "editor", "identity/resolve": "editor",
     "sync": "editor", "draft/decision": "editor", "draft/decision/drop": "editor", "draft/map": "editor",
     "draft/map/apply": "approver", "policy/draft": "editor", "policy/draft/result": "editor", "manage/edit": "editor",
-    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "editor", "space/embedder": "admin",
+    "manage/questions": "editor", "space/store": "admin", "connect/gateway": "admin", "space/embedder": "admin",
     "space/relations/start": "editor", "space/relations/stop": "editor", "space/relations/forget": "editor", "conflict/pick": "editor", "transitions/advance": "approver",
     "draft/table": "editor", "draft/review/apply": "approver", "draft/review/preview": "editor",  # a reviewed draft replaces the shared space: an approver applies it
     "draft/request": "editor", "draft/request/drop": "editor", "draft/request/apply": "approver",  # an editor files the draft for an approver to apply

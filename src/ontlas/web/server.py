@@ -674,7 +674,11 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             if route == "library/drop":
                 return s.library_drop(str(a.get("id", "")))
             if route == "pipeline":
-                if a.get("op") == "delete":
+                if a.get("op") == "delete":  # taking a data source out is as connecting one: the admin's
+                    who = self._user()
+                    if who is not None and not who.may(NEEDS["connect"]):
+                        raise PermissionError(f"{who.name} 님의 권한으로는 이 작업을 할 수 없어 처리하지 못했습니다. "
+                                              "권한이 있는 사람에게 요청해 주세요.")
                     return s.pipeline_delete(str(a.get("id", "")))
                 return s.pipeline_use(str(a.get("id", "")))
             if route == "catalog/folder":

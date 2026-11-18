@@ -13,6 +13,8 @@
     return B.d;
   }
   const bndBindDirty = (o, d) => d.table !== (o.table || '') || Object.keys(d.cols).length > 0 || Object.keys(d.add).length > 0;
+  // the Entities whose rows keep an Entity's history: its values over time (series) or rows valid for a time (period)
+  const bndHists = (name) => ((S.bnd.cols && S.bnd.cols.hist) || []).filter((h) => h.owner === name);
   // a relation's table and the two columns that hold its ends, as its definition says them
   function bndLinkRow(m, l, by) {
     const s = bndObj(m, l.source), t = bndObj(m, l.target);
@@ -55,7 +57,7 @@
     const status = !d.table ? ['', '테이블 미지정'] : !on ? ['b', 'L2 · 명세'] : real ? ['ok', 'L2 · 실제 스키마'] : ['warn', '테이블 없음'];
     const head = `<p class="k-h g6 k-s" style="margin:0">${area ? `${BND_OBJ}<a class="k-ink k-b" href="#objmgr?area=${encodeURIComponent(area.name)}">${esc(`${area.label || area.name}@${area.name}`)}</a><span aria-hidden="true">›</span>` : ''}<span class="bnd-ent">Entity</span><span>${esc(bndEnt(o))}</span></p>
       <div class="k-pha"><h2 class="bnd-h" id="bnd-bd-h">${esc(bndEnt(o))} Binding</h2><span class="k-chip${status[0] ? ` ${status[0]}` : ''}">${status[1]}</span></div>
-      <div class="k-seg self" role="tablist" aria-label="Binding 종류"><button type="button" role="tab" aria-selected="true" class="on">기본 Binding</button><button type="button" role="tab" aria-selected="false" data-act="bndBindRel">Relation Binding ${links.length}</button></div>`;
+      <div class="k-seg self" role="tablist" aria-label="Binding 종류"><button type="button" role="tab" aria-selected="true" class="on">기본 Binding</button><button type="button" role="tab" aria-selected="false" data-act="bndBindPast"${bndHists(o.name).length ? '' : ' disabled'}>이력 Binding ${bndHists(o.name).length}</button><button type="button" role="tab" aria-selected="false" data-act="bndBindRel">Relation Binding ${links.length}</button></div>`;
     const tables = m.sources.source.tables;
     const tableField = tables.length ? `<select class="k-in" data-in="bndBindTable" aria-label="테이블"${canEdit() ? '' : ' disabled'}><option value="">테이블 없음</option>${tables.map((t) => `<option value="${esc(t.table)}"${t.table === d.table ? ' selected' : ''}>${esc(t.table)}${t.objects.filter((x) => x !== o.name).length ? ` · ${esc(t.objects.filter((x) => x !== o.name).map((x) => (bndObj(m, x) || {}).label || x).join(', '))}` : ''}</option>`).join('')}${d.table && !real ? `<option value="${esc(d.table)}" selected>${esc(d.table)} · 소스에 없음</option>` : ''}</select>`
       : `<input class="k-in mono" type="text" data-in="bndBindTable" value="${esc(d.table)}" placeholder="테이블 이름" aria-label="테이블"${canEdit() ? '' : ' disabled'}>`;
@@ -191,11 +193,19 @@
       ${mine.length ? `<div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Relation</th><th scope="col">시작 → 끝</th><th scope="col">소스 테이블</th><th scope="col">시작 키 컬럼</th><th scope="col">끝 키 컬럼</th><th scope="col">상태</th></tr></thead><tbody>
         ${mine.map((r) => `<tr data-row="bind:link:${esc(r.l.name)}"><td class="k-code">${esc(r.l.name)}</td><td>${esc(lab(r.s, r.l.source))} → ${esc(lab(r.t, r.l.target))}</td><td class="k-code">${esc(r.table || '-')}</td><td class="k-code">${esc(r.a || '-')}</td><td class="k-code">${esc(r.b || '-')}</td><td><span class="k-chip${r.mark[0] ? ` ${r.mark[0]}` : ''}">${esc(r.mark[1])}</span></td></tr>`).join('')}</tbody></table></div>` : '<p class="k-cf line">Relation이 없습니다.</p>'}
       </section>`;
+    const hists = bndHists(o.name);
+    const histRow = (h) => { const x = bndObj(m, h.entity), lk = m.links.find((l) => l.name === h.of), bad = (by[`object:${h.entity}`] || [])[0];
+      const cols = h.time.map((n) => { const p = x && bndOwn(m, x.name).find((q) => q.name === n); return p ? bndCol(p) : n; });
+      const mark = !(x && x.table) ? ['', '테이블 미지정'] : bad ? ['warn', FINDING[bad.kind] || bad.kind] : ['ok', '연결됨'];
+      return `<tr><td><a href="#bind?entity=${encodeURIComponent(h.entity)}">${esc(x ? bndEnt(x) : h.entity)}</a></td><td class="nw">${h.kind === 'period' ? '유효 기간' : '시계열'}</td><td class="k-code">${esc((x && x.table) || '-')}</td>
+        <td class="k-code">${esc(cols.join(' · ') || '-')}</td><td>${esc(lk ? lk.label || lk.name : h.of || '-')}</td><td><span class="k-chip${mark[0] ? ` ${mark[0]}` : ''}">${esc(mark[1])}</span></td></tr>`; };
+    const histCard = !hists.length ? '' : `<section class="k-card" id="bnd-hist" aria-labelledby="bnd-hb-h"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="bnd-hb-h">이력 Binding</h2><span class="k-chip">${hists.length}</span></div>
+      <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">Entity</th><th scope="col">종류</th><th scope="col">소스 테이블</th><th scope="col">시간 컬럼</th><th scope="col">Relation</th><th scope="col">상태</th></tr></thead><tbody>${hists.map(histRow).join('')}</tbody></table></div></section>`;
     const found = on && bndChecked() ? S.bind.findings : [];
     const foundCard = found.length ? `<section class="k-card" aria-labelledby="bnd-fd-h"><div class="k-pha" style="padding:16px 20px"><h2 class="k-h2" id="bnd-fd-h">Binding 검사 결과</h2><span class="k-chip warn">${found.length}</span></div>
       <div class="k-x"><table class="k-t s end"><thead><tr><th scope="col">심각도</th><th scope="col">종류</th><th scope="col">항목</th><th scope="col">조치</th><th scope="col"></th></tr></thead><tbody>${found.map((f) => `<tr data-row="bind:${esc(f.element)}"><td><span class="k-chip ${f.severity === 'error' ? 'bad' : 'warn'}">${f.severity === 'error' ? '오류' : '주의'}</span></td><td class="nw">${esc(FINDING[f.kind] || f.kind)}</td><td class="k-code">${esc(f.element.split(':').slice(1).join(':'))}</td><td>${esc(FIX[f.kind] || '')}<br><span class="k-s">${esc(f.detail || '')}</span></td><td>${canEdit() && bndFixHref(f.element) ? `<a class="k-lnk" href="${bndFixHref(f.element)}">편집</a>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`
       : on && bndChecked() ? `<section class="k-card pad k-h"><span class="k-ok">${ki('check', 16, 1.75)}</span><span class="k-14">정의와 데이터 소스 일치 · 테이블 ${S.bind.checked.tables} · 컬럼 ${S.bind.checked.columns} · 데이터 점검 ${S.bind.checked.data_checks}건</span></section>` : '';
-    return bndPg(`${head}${bar}${stats}<div class="k-cols">${bndBindTree(m, o.name)}<div class="k-v g16" style="flex:3 1 640px;min-width:0">${bndBindCard(m, o, by)}${sqlCard}${checkCard}</div></div>${relCard}${foundCard}
+    return bndPg(`${head}${bar}${stats}<div class="k-cols">${bndBindTree(m, o.name)}<div class="k-v g16" style="flex:3 1 640px;min-width:0">${bndBindCard(m, o, by)}${sqlCard}${checkCard}</div></div>${histCard}${relCard}${foundCard}
       ${kNext([['sources', 'Mapping'], ['db', '데이터 소스'], ['objects', 'Entity'], ['query', '질의'], ['records', '레코드 탐색']])}`);
   }
 
@@ -251,6 +261,7 @@
     },
     bndBindFold: (t) => { const B = S.bnd.bind, a = t.dataset.a; B.fold[a] = t.getAttribute('aria-expanded') === 'true'; render(); },
     bndBindRel: () => { const el = $('#bnd-rel'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
+    bndBindPast: () => { const el = $('#bnd-hist'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
     bndBindReset: () => { S.bnd.bind.d = null; render(); },
     bndBindAddAll: () => {
       const m = bndM(), o = bndObj(m, S.bnd.bind.sel), d = bndBindDraft(o), t = bndTable(m, d.table);
