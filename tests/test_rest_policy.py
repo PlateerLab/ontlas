@@ -15,6 +15,7 @@ DECIDE = {"decision": "returnEligibility", "values": VALUES}
 @pytest.fixture(scope="module")
 def studio():
     pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     return load_studio(LIB / "studio.yaml")
 
 

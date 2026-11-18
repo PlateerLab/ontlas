@@ -117,7 +117,7 @@ def test_postgres_answers_like_sqlite_including_computed_properties_and_decision
     assert st.check_bindings().ok and st.questions().accuracy == 1.0
 
 
-def test_postgres_takes_writes_in_one_transaction_and_rolls_back_a_failed_one():
+def test_postgres_takes_writes_in_one_transaction_and_rolls_back_a_failed_one(action_write):
     from ontlas.actions import Actor
 
     pg = _pg()

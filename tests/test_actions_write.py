@@ -58,6 +58,8 @@ def test_a_server_turns_it_on_for_every_studio_it_makes_and_one_studio_may_keep_
 
 def test_the_price_change_on_the_example_shop_leaves_the_price_alone():
     """The case that was found: a price changed from 59,000 to 12,345 was written to the source once approved."""
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     st = load_studio(SHOP)
     before = st.fetch("Sku", "S1")["price"]
     p = st.actions.request("changePrice", "S1", {"price": 12345}, actor=OPERATOR)
@@ -163,6 +165,8 @@ def test_serve_turns_writing_on_only_when_told(monkeypatch):
 
 
 def test_mcp_hands_the_option_on_and_turns_writing_on(monkeypatch):
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     from ontlas import mcp_server
     from ontlas.cli import main
 

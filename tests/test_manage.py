@@ -207,6 +207,7 @@ def test_a_property_names_the_standard_vocabulary_it_stands_for_and_lets_it_go(w
 def shop():
     """The example shop library as people get it: the decision tables and named values the rules screens edit."""
     pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
     from ontlas.config import load_studio
     from ontlas.web.api import StudioSession
 
