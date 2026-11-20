@@ -115,7 +115,8 @@
     const menu = `<button class="k-tbtn k-menu" data-act="navopen" aria-label="메뉴 열기">${ki('menu', 17, 1.75)}</button>`;
     const crumb = `<p class="k-crumb">${crumbs().map(esc).join(' › ')}</p>`;
     const find = `<button class="k-find" data-act="palette" aria-label="검색 또는 질문">${ki('search', 16, 1.75)}<span>검색 또는 질문</span><span class="k-kbd">${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'}</span></button>`;
-    const upload = canEdit() ? `<a class="k-tbtn${S.tab === 'catalog' ? ' on' : ''}" href="#catalog">${ki('upload', 17, 1.75)}<span class="w">자료 업로드</span></a>` : '';
+    // 자료 업로드 is a screen under 근거 지도: the menu marks where the person is, the button stays as it is
+    const upload = canEdit() ? `<a class="k-tbtn" href="#catalog">${ki('upload', 17, 1.75)}<span class="w">자료 업로드</span></a>` : '';
     const inbox = `<a class="k-tbtn${S.tab === 'inbox' ? ' on' : ''}" href="#inbox" aria-label="할 일 ${waits}건">${ki('inbox', 17, 1.75)}<span class="w">할 일</span>${waits ? `<span class="n">${waits}</span>` : ''}</a>`;
     const me = `<a class="k-me${S.tab === 'me' ? ' on' : ''}" href="#me" aria-label="내 계정">${ki('user', 18, 1.75)}</a>`;
     const repo = area === 'work' && REPO_TABS.has(S.tab) ? `<button class="k-tbtn" data-act="repopick" aria-label="저장소 선택">${ki('box', 17)}<span class="w k-cut" style="max-width:160px">${esc(st.repository.label)}</span>${ki('chevD', 16, 1.75)}</button>` : '';
@@ -137,8 +138,8 @@
     const role = workRole();
     const row = (x) => { const on = area === 'work' && x.id === st.library_id;
       return `<button class="k-opt${on ? ' on' : ''}" data-act="swlib" data-id="${esc(x.id)}"><span>${esc(x.label)}</span><span class="k-chip w">${esc(role)}</span>${on ? ki('check', 16, 1.75) : ''}</button>`; };
-    const open = libs.filter((x) => x.id === st.library_id || canEdit());  // switching moves the shared space, which an editor may do
-    const rows = open.length ? open.map(row).join('') : `<button class="k-opt${area === 'work' ? ' on' : ''}" data-act="swlib" data-id=""><span>${esc(st.title || '온톨로지')}</span><span class="k-chip w">${esc(role)}</span></button>`;
+    // every ontology the person may open: opening one changes what this person looks at, nobody else's
+    const rows = libs.length ? libs.map(row).join('') : `<button class="k-opt${area === 'work' ? ' on' : ''}" data-act="swlib" data-id=""><span>${esc(st.title || '온톨로지')}</span><span class="k-chip w">${esc(role)}</span></button>`;
     const all = V2.ontologies ? `<a class="k-opt${S.tab === 'ontologies' ? ' on' : ''}" href="#ontologies">${ki('layers')}<span>전체 온톨로지</span></a>` : '';
     const make = V2['ontology-new'] && canMakeLibrary() ? `<a class="k-opt${S.tab === 'ontology-new' ? ' on' : ''}" href="#ontology-new">${ki('plus')}<span>온톨로지 만들기</span></a>` : '';
     const onto = isOntoAdmin() && firstAdmin('onto'), sys = isSysAdmin() && firstAdmin('sys');

@@ -8,8 +8,9 @@
 .smr-ly .k-s { overflow-wrap:anywhere; }
 .smr-n { font-size:28px; font-weight:500; font-variant-numeric:tabular-nums; }
 
-/* a choice shown as a mark: which Object, which layer */
-.smr-picks { display:flex; gap:6px; flex-wrap:wrap; }
+/* a choice shown as a mark: which Object, which layer, which of the words the rules are filed by */
+.smr-picks { display:flex; gap:6px; flex-wrap:wrap; min-width:0; max-width:100%; }
+.smr-picks select.smr-pick { max-width:100%; }  /* a filter is as wide as its longest choice: the one chosen is read whole */
 select.smr-pick { width:auto; max-width:200px; min-height:28px; padding:2px 26px 2px 8px !important; border:0; border-radius:6px; background-color:transparent; color:var(--muted); font-family:inherit; font-size:12px;
   background-position:right 6px center !important; background-size:14px 14px !important; }
 select.smr-pick.on { background-color:var(--blue-soft); color:var(--blue-t); font-weight:500; }

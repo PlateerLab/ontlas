@@ -235,7 +235,7 @@
     const tone = (k, soft) => { const c = n(k); return `<span class="k-chip ${c ? (soft ? 'b' : 'warn') : 'ok'}">${c}${c && soft ? ` · ${esc(POLICY_WORD[d.hit_policy] || d.hit_policy)} 우선` : ''}</span>`; };
     const mine = sel && sel.kind === 'executable' && sel.decision === d.name ? smrOverlaps(d.name, sel.rule) : null;
     const say = mine === null ? '' : mine.length ? `${sel.rule} 조건 겹침 · ${mine.join(', ')}` : `${sel.rule} 조건 겹침 없음`;
-    const policy = `<select class="k-in sm" style="width:auto;max-width:200px" data-in="smrPolicy" aria-label="적용 방식"${canEdit() ? '' : ' disabled'}>${Object.entries(POLICY_WORD).map(([k, w]) => smrOpt(k, w, d.hit_policy)).join('')}</select>`;
+    const policy = `<select class="smr-pick on" data-in="smrPolicy" aria-label="적용 방식"${canEdit() ? '' : ' disabled'}>${Object.entries(POLICY_WORD).map(([k, w]) => smrOpt(k, w, d.hit_policy)).join('')}</select>`;
     return `<div class="k-h sb"><h2 class="k-h2" id="smr-chk">규칙 검사 · ${esc(d.label)}</h2><a class="k-lnk flat" href="#mgrules?decision=${encodeURIComponent(d.name)}">결정표 편집${ki('chevR', 14, 1.75)}</a></div>
       ${row('적용 방식', policy)}${row('중복 조건', tone('overlap', true))}${row('도달 불가 규칙', tone('unreachable'))}${row('빈 구간', tone('gap'))}${row('우선순위 동률', tone('tie'))}${axiom}${say ? `<p class="k-s" style="margin:0">${esc(say)}</p>` : ''}`;
   }
@@ -336,7 +336,7 @@
     const imported = n.waiting ? `<section class="k-card pad smr-imp" aria-labelledby="smr-imp"><div class="k-v g4" style="flex:1 1 420px;min-width:0"><h2 class="k-h2" id="smr-imp">가져온 규칙 초안${dr.modules.length ? ` · ${dr.modules.slice(0, 2).map(esc).join(' · ')}${dr.modules.length > 2 ? ` 외 ${dr.modules.length - 2}` : ''}` : ''}</h2>
         <p class="k-p">검토 대기 ${count(n.waiting)}건${dr.axiom ? ` · AXIOM 후보 ${count(dr.axiom)}건` : ''}${std ? ` · Standard · Custom 제안 ${count(std)}건` : ''}${dr.parameters ? ` · 기준값 ${count(dr.parameters)}개` : ''}</p>
         ${dr.by_area.length ? `<p class="k-s" style="margin:0">${top(dr.by_area, 9)}</p>` : ''}
-        ${SMR_FACETS.map(([k, word]) => ((dr[`by_${k}`] || []).length ? `<div class="k-wrap g6" role="group" aria-label="${word}"><span class="k-s">${word}</span>${dr[`by_${k}`].map((v) => `<span class="k-chip ${k === 'policy_check' ? smrCheckTone(v.word) : ''}">${esc(v.word)} ${count(v.count)}</span>`).join('')}</div>` : '')).join('')}</div>
+        <div class="smr-facts">${SMR_FACETS.map(([k, word]) => ((dr[`by_${k}`] || []).length ? `<span class="k-s">${word}</span><span class="k-h g6" role="group" aria-label="${word}">${dr[`by_${k}`].map((v) => `<span class="k-chip ${k === 'policy_check' ? smrCheckTone(v.word) : ''}">${esc(v.word)} ${count(v.count)}</span>`).join('')}</span>` : '')).join('')}</div></div>
       <div class="k-wrap g8">${dr.by_verification.slice(0, 4).map((v) => `<span class="k-chip ${tone(v.word)}">${esc(v.word)} ${count(v.count)}</span>`).join('')}<a class="k-btn" href="#semrules">승인된 규칙</a></div></section>` : '';
     const stat = (k, big, sub, warn) => `<div class="k-stat${warn ? ' warn' : ''}" style="flex:1 1 180px"><p class="k-s" style="margin:0">${k}</p><p class="k-big${warn ? ' warn' : ''}">${big}</p><p class="${warn ? 'k-warn k-13' : 'k-s'}" style="margin:4px 0 0">${sub}</p></div>`;
     const total = n.waiting + n.approved + n.rejected + made.length;
@@ -792,7 +792,7 @@
       const bound = ax ? `AXIOM 범위 ${ax.min !== null && ax.min !== undefined ? `${ax.min} 이상` : ''}${ax.min !== null && ax.min !== undefined && ax.max !== null && ax.max !== undefined ? ' · ' : ''}${ax.max !== null && ax.max !== undefined ? `${ax.max} 이하` : ''}` : '';
       const value = d.type === 'boolean' ? `<label class="k-f">값<select class="k-in" data-in="itf" data-k="value"><option value="">선택</option>${[['true', '예'], ['false', '아니요']].map(([k, w]) => smrOpt(k, w, String(d.value))).join('')}</select></label>`
         : `<label class="k-f">값 · 산식${smrIn('value', d.value)}</label>`;
-      body = `${kind}${key('')}${name}${value}<label class="k-f">담당자${smrIn('owner', d.owner, 'list="smr-owners"')}</label>
+      body = `${kind}${key('')}${name}<label class="k-f">담당자${smrIn('owner', d.owner, 'list="smr-owners"')}</label>${value}
         ${fresh ? `<label class="k-f">자료형<select class="k-in" data-in="itf" data-k="type" data-re="1">${[['integer', '정수'], ['decimal', '소수'], ['string', '문자열'], ['boolean', '참 · 거짓']].map(([k, w]) => smrOpt(k, w, d.type)).join('')}</select></label>` : ''}
         <label class="k-f">단위${smrIn('unit', d.unit, 'list="smr-units"')}</label>
         ${SMR_NUM.includes(d.type) ? `<div class="k-f"><span>허용 범위</span><div class="k-h nw">${smrIn('min', d.min, 'placeholder="최솟값" aria-label="최솟값" inputmode="decimal"')}<span class="k-s">~</span>${smrIn('max', d.max, 'placeholder="최댓값" aria-label="최댓값" inputmode="decimal"')}</div>${bound ? `<span class="k-hint">${esc(bound)}</span>` : ''}</div>` : ''}${tail}${cite}`;
@@ -880,7 +880,7 @@
           let j = i + 1;
           for (let depth = 0; j < toks.length; j += 1) { depth += toks[j] === '(' ? 1 : toks[j] === ')' ? -1 : 0; if (!depth) break; }
           i = j;
-        } else if (!SMR_EXPR_FNS.includes(low)) out.push({ say: `산식의 ${v}() · 쓸 수 없는 함수`, tone: 'bad', error: `${v}()${josa(v, '은', '는')} 산식에 쓸 수 없는 함수여서 함수를 저장하지 못했습니다. 함수 이름을 확인해 주세요.` });
+        } else if (!SMR_EXPR_FNS.includes(low)) out.push({ say: `산식의 ${v}() · 미지원 함수`, tone: 'bad', error: `${v}()${josa(v, '은', '는')} 산식에 쓸 수 없는 함수여서 함수를 저장하지 못했습니다. 함수 이름을 확인해 주세요.` });
       } else if (!['and', 'or', 'not', 'true', 'false', 'null'].includes(low) && next !== '.' && !props.has(v)) {
         out.push({ say: `산식의 ${v} · ${label}의 Property 아님`, tone: 'bad', error: `${v}${josa(v, '이', '가')} ${label}의 Property가 아니어서 함수를 저장하지 못했습니다. 산식의 Property 이름을 확인해 주세요.` });
       }

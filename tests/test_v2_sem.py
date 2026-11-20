@@ -182,7 +182,7 @@ def test_the_history_says_codes_and_references_in_words(session):
     session.manage_edit("update_rule_card", {"id": "unit-price-not-negative", "status": "review"})
     (e,) = get(session, "sem/history", kind="card", name="unit-price-not-negative")["entries"]
     assert {"field": "status", "label": "상태", "before": "승인", "after": "검토 중"} in e["fields"]
-    assert e["all"]["적용 대상"] == "주문상품 · 결제 단가" and e["all"]["유형"] == "계산" and e["all"]["검사"] == "주문상품 · 결제 단가 0 이상"
+    assert e["all"]["적용 대상"] == "Object 주문, 주문상품 · 결제 단가" and e["all"]["유형"] == "계산" and e["all"]["검사"] == "주문상품 · 결제 단가 0 이상"
     session.manage_edit("update_metric", {"name": "returnRate", "formula": {"match": {"i": "OrderItem"}, "where": {"eq": ["i.item_status", "RETURN_REQUESTED"]},
                                                                            "value": {"count": "i"}}})
     (m,) = get(session, "sem/history", kind="metric", name="returnRate")["entries"]
@@ -280,11 +280,27 @@ def test_waiting_rules_are_counted_by_what_they_are_filed_by(session):
     draft_card(session, "probe-one", **words)
     draft_card(session, "probe-two", **{**words, "category": "배송", "policy_check": "관련 내용 있음"})
     out = get(session, "sem/drafts")
-    assert {d["word"]: d["count"] for d in out["by_category"]} == {"표시": 1, "배송": 1}
-    assert out["by_source_kind"] == [{"word": "법률", "count": 2}]
-    assert {d["word"] for d in out["by_policy_check"]} == {"정책서와 차이 · 확인 필요", "관련 내용 있음"}
+    # with the example's own waiting rule (law-price-shown: 가격 표시, 법률, 정책서에 없음)
+    assert {d["word"]: d["count"] for d in out["by_category"]} == {"표시": 1, "배송": 1, "가격 표시": 1}
+    assert out["by_source_kind"] == [{"word": "법률", "count": 3}]
+    assert {d["word"] for d in out["by_policy_check"]} == {"정책서와 차이 · 확인 필요", "관련 내용 있음", "정책서에 없음"}
     mine = next(d for d in out["drafts"] if d["id"] == "probe-one")
     assert {k: mine[k] for k in words} == words
+
+
+def test_every_rule_card_of_the_example_is_filed_and_the_ones_read_from_a_law_name_it(session):
+    """What the rule screen, its form and its filters show of the example: each card under one Object the example
+    has, with its group and the kind of its source; an AXIOM card with the law it rests on."""
+    cards = [c for c in session.semantic_state()["cards"] if c["kind"] == "stated"]
+    assert len(cards) == 7
+    for c in cards:
+        filed = [r[5:] for r in c["applies_to"] if r.startswith("area:")]
+        assert len(filed) == 1 and filed[0] in session.studio.onto.areas and c["category"] and c["source_kind"], c["id"]
+    axiom = [c for c in cards if c["layer"] == "axiom"]
+    assert len(axiom) == 4 and {c["source_kind"] for c in axiom} == {"법률"} and all(c["policy_check"] for c in axiom)
+    assert all(c["law"].startswith("전자상거래 등에서의 소비자보호에 관한 법률 제") for c in axiom)
+    assert not [c["id"] for c in cards if c["layer"] != "axiom" and c["law"]]  # a rule of the shop's own rests on no law
+    assert sum(1 for c in cards if c["related"]) == 4
 
 
 def test_taking_a_row_out_says_the_rows_across_from_it_who_answers_instead_and_the_gap(session):

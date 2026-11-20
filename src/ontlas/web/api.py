@@ -5,6 +5,7 @@ import ast
 import copy
 import json
 import re
+import sys
 import threading
 import time
 import uuid
@@ -24,7 +25,7 @@ from ontlas.compile.base import CompileError, compiler_for
 from ontlas.conformance import normalize_rows
 from ontlas.decide.table import answer as rule_gives
 from ontlas.ir import Column, Query, Ref
-from ontlas.library import Library, OverlayLibrary
+from ontlas.library import MODULES, STUDIO_FILE, Library, OverlayLibrary
 from ontlas.modules import Module, ModuleError, Requirement, compose
 from ontlas.preview import MODULE_COLOR, MODULE_KIND, TARGETS, _highlight, _ir_text
 from ontlas.repository import Repositories, clean_path, is_litter
@@ -147,7 +148,10 @@ RAW_FILES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", 
              ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".zip", ".7z", ".rar", ".tar", ".gz", ".exe", ".dll", ".bin"}
 MONITOR_EVERY = 20.0  # seconds between measurements of the pipeline while the board is open
 PIPELINES_MAX = 5  # applied pipelines a visitor keeps to switch between
-LIBRARIES_MADE_MAX = 3  # libraries made on the page, kept beside the ones the deployment offers
+LIBRARIES_MADE_MAX = 3  # libraries made on the page, kept beside the ones the deployment offers while the session lasts
+LIBRARIES_KEPT_MAX = 30  # the same where the server writes them to a folder of its own (serve --libraries-max)
+# one library is made, taken away or put back at a time: where the server writes them, or a team works, the list is shared
+MAKING = threading.Lock()
 LIBRARY_FILES_MAX = 8  # files a new library is made from: a definition draft's are read together as one
 LIBRARY_FILES = {".yaml": "definitions", ".yml": "definitions", ".json": "definitions",  # a draft, else OWL as rdflib reads it
                  ".ttl": "turtle", ".owl": "xml", ".rdf": "xml"}
@@ -162,6 +166,7 @@ IMPORT_NOTES = (("no property reads as its identifier|no owl:hasKey", "식별자
                 ("superclasses -> kept", "상위 Entity 하나만 유지"),
                 ("no join binding|no source tables", "데이터 소스 Mapping 필요"),
                 ("^section ", "모듈에 자리가 없는 구역"),
+                ("^sheet ", "읽지 않은 시트 · 열"),
                 ("relations between Objects", "Object 간 관계"),
                 ("the Entity it reaches is not in the draft", "초안에 없는 Entity 를 가리키는 관계"),
                 ("^term relation", "용어 사전에 없는 관계 종류"),
@@ -525,6 +530,35 @@ def _made_counts(studio: Studio) -> dict:
             "cards": len(comp.cards), "terms": len(comp.terms), "decisions": len(o.decisions), "modules": len(comp.modules)}
 
 
+MADE_ORIGIN = {"kind": "config", "config": "", "notice": "", "backends": {}, "seeds": []}  # a made library reads no source
+
+
+def _made_entry(home: Path, spec: dict) -> dict:
+    """A library on the shelf as the list of libraries holds it, from its studio file alone: the modules counted are
+    the ones its next opening applies (config.load_studio)."""
+    made = spec.get("made") or {}
+    lib = Library(home / str(spec.get("library") or "."))
+    on = lib.applied() or list(spec.get("modules") or [])
+    if WORKSPACE in lib.names() and WORKSPACE not in on:
+        on.append(WORKSPACE)
+    return {"id": str(made["id"]), "label": str(spec.get("label") or spec.get("name") or home.name), "path": str(home / STUDIO_FILE),
+            "origin": dict(MADE_ORIGIN), "source": "", "made": True, "modules": len(on),
+            "description": str(spec.get("description") or ""),
+            **({"base_label": str(made["base_label"])} if made.get("base_label") else {})}
+
+
+def made_entries(shelf) -> list[dict]:
+    """The libraries a shelf keeps, in the order they were made. A folder put there by hand carries no id to go by
+    across restarts, and is said and left out."""
+    out = []
+    for home, spec in shelf.kept():
+        if not re.fullmatch(r"s\d+", str((spec.get("made") or {}).get("id") or "")):
+            print(f"{home}: no made.id in its studio file; not listed", file=sys.stderr)
+            continue
+        out.append(_made_entry(home, spec))
+    return sorted(out, key=lambda x: int(x["id"][1:]))
+
+
 def _import_report(reports: list) -> dict:
     """What the imports carried, adjusted and left out, the last two counted by what kind of thing each was."""
     def told(lines: list[str]) -> dict:
@@ -603,6 +637,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._library_held: dict[str, tuple] = {}  # library id -> (its pipelines, the one on screen), to come back to
         self._library_files: dict[str, dict] = {}  # the files a new library is about to be made from, by name
         self._library_stores: dict[str, Any] = {}  # library id -> the folder its approved changes are written to, if any
+        self.shelf = None  # where a server that writes keeps the libraries made here (library.Shelf); else they end with the session
+        self.made_max = LIBRARIES_MADE_MAX
+        self.team = None  # the team's studios this is one of (team.TeamSessions): there each library has a studio of its own
         self.pipeline = "p1"  # the one on screen; every applied draft stays here to switch back to
         self.pipelines: list[dict] = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": self.origin,
                                        "rows": self._library_rows, "log": self.log}]
@@ -729,8 +766,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             "pipelines": [{"id": p["id"], "label": p["label"]} for p in self.pipelines],
             "pipeline": self.pipeline,
             "libraries": [{"id": x["id"], "label": x["label"], "modules": x.get("modules", 0), "source": x.get("source", ""),
-                           "made": bool(x.get("made"))} for x in self.libraries],
+                           "made": bool(x.get("made"))} for x in list(self.libraries)],
             "library_id": self.library_id,
+            "made_kept": self.shelf is not None,  # the made ones are the server's, there after a restart; else this session's
             "data": {"samples": bool(self._sample_files()), "connect": self.data.allow_connect,
                      "kept": self.repositories.persistent,
                      "files": sum(r["files"] for r in self.repositories.rows() if r["id"] == self.repo),
@@ -1198,7 +1236,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if p.status == "executed":  # inside its limits it ran at once
             self._reproject()
         state = {"pending": "접수했습니다", "executed": "자동 승인했습니다",
-                 "recorded": "자동 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐)"}.get(p.status, "반려했습니다")
+                 "recorded": "자동 승인했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다"}.get(p.status, "반려했습니다")
         self._note("request", f"{actor.id}의 {self._obj_label(p.target)} {key} {self._proposal(p)['label']} 요청을 {state}.")
         return {"ok": True, "proposal": self._proposal(p)}
 
@@ -1250,7 +1288,7 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         except (PermissionError, ValueError, RuntimeError) as e:
             return {"ok": False, "error": str(e)}
         proj = self._reproject() if p.status == "executed" else {}
-        said = {"executed": "요청을 승인했습니다", "recorded": "요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐)",
+        said = {"executed": "요청을 승인했습니다", "recorded": "요청을 승인했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다",
                 "failed": "요청의 외부 호출이 실패해 실행 전 값으로 복원했습니다"}.get(p.status, "요청을 반려했습니다")
         self._note("approve", f"{self._proposal(p)['label']} {said}.", projection=proj)
         return {"ok": True, "proposal": self._proposal(p), "projection": proj}
@@ -1495,9 +1533,18 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
 
     # ---- libraries: other studio files the deployment offers, each with its own pipelines ---------------------------
 
+    @staticmethod
+    def _library_pipes(studio: Studio, origin: dict) -> list[dict]:
+        """A library's pipelines as it is first opened: its studio, what is edited in it kept over its folder."""
+        if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
+            studio.library = OverlayLibrary(studio.library, [])
+        return [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": dict(origin),
+                 "rows": studio.library.list() if studio.library is not None else [], "log": []}]
+
     def library_use(self, lid: str) -> dict:
         """Switch to another library: its studio is read from its file the first time, and what was applied on the
-        one left (its pipelines) is there again on coming back."""
+        one left (its pipelines) is there again on coming back. A team's studio is never switched: there each library
+        has a studio of its own and a person changes which one they look at (team.TeamSessions.look)."""
         from ontlas.config import load_studio
 
         target = next((x for x in self.libraries if x["id"] == lid), None)
@@ -1511,16 +1558,11 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         if lid in self._library_held:
             self.pipelines, pid = self._library_held.pop(lid)
         else:
-            studio = load_studio(target["path"])
-            if studio.library is not None and not isinstance(studio.library, OverlayLibrary):
-                studio.library = OverlayLibrary(studio.library, [])
-            self.pipelines = [{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": dict(target["origin"]),
-                               "rows": studio.library.list() if studio.library is not None else [], "log": []}]
-            pid = "p1"
+            self.pipelines, pid = self._library_pipes(load_studio(target["path"]), target["origin"]), "p1"
         cur = next(p for p in self.pipelines if p["id"] == pid)
         if lid not in self._library_stores:
             # where the deployment writes approved changes, each library is written to its own folder: a change approved
-            # in this one must not land in the first one's. A library made on the page has no folder and is written nowhere.
+            # in this one must not land in the first one's. A library kept with the session has no folder and is written nowhere.
             writes = self._library_stores.get(self.libraries[0]["id"]) is not None
             folder = getattr(self.pipelines[0]["studio"].library, "base", None)
             self._library_stores[lid] = Library(folder.root) if writes and target.get("path") and folder is not None else None
@@ -1534,30 +1576,53 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self.event("library", words.fix(f"{target['label']}(으)로 전환"))
         return {"ok": True}
 
+    def library_studio(self, lid: str) -> Studio | None:
+        """The studio of a library in hand: the one open, one this session opened or made before, or in a team the one
+        its people work in (read as it stands, without waiting on what is being done there). None for one not opened."""
+        if lid == self.library_id:
+            return self.studio
+        if self.team is not None:
+            other = self.team.items.get(lid)
+            return other.studio if other is not None else None
+        held = self._library_held.get(lid)
+        return next(p for p in held[0] if p["id"] == held[1])["studio"] if held else None
+
     # ---- a library made on the page: from definition files, on the one that is open, or with nothing in it ---------
 
     def library_files(self) -> dict:
         return {"files": [{k: f[k] for k in ("name", "kind", "size", "sections")} for f in self._library_files.values()],
                 "files_max": LIBRARY_FILES_MAX, "made": sum(bool(x.get("made")) for x in self.libraries),
-                "made_max": LIBRARIES_MADE_MAX}
+                "made_max": self.made_max}
 
     def library_file(self, name: str, data: bytes) -> dict:
         """Hold one file a new library is to be made from. A draft's files are read together when it is made, so here
         each is read only far enough to refuse one that is not a draft."""
+        from ontlas.draft import ReadError
+        from ontlas.exchange.workbook import WORKBOOKS, read_workbook
+
         name = Path(str(name or "").replace("\\", "/")).name.strip()[:120]
-        kind = LIBRARY_FILES.get(Path(name).suffix.lower())
+        book = Path(name).suffix.lower() in WORKBOOKS  # a draft kept as a workbook: its sheets are the draft's sections
+        kind = "definitions" if book else LIBRARY_FILES.get(Path(name).suffix.lower())
         if kind is None:
-            raise ValueError("정의 초안(.yaml · .yml · .json) 또는 OWL(.ttl · .owl · .rdf) 형식이 아니어서 추가하지 못했습니다. "
+            raise ValueError("정의 초안(.yaml · .yml · .json · .xlsx) 또는 OWL(.ttl · .owl · .rdf) 형식이 아니어서 추가하지 못했습니다. "
                              "형식을 확인해 다시 선택해 주세요.")
         if name not in self._library_files and len(self._library_files) >= LIBRARY_FILES_MAX:
             raise ValueError(f"파일 수가 {LIBRARY_FILES_MAX}개 한도에 도달해 추가하지 못했습니다. 파일을 뺀 뒤 다시 추가해 주세요.")
         try:
-            text = data.decode("utf-8-sig")
+            text = "" if book else data.decode("utf-8-sig")
         except UnicodeDecodeError:
             raise ValueError(f"{name} 파일이 UTF-8 이 아니어서 읽지 못했습니다. UTF-8 로 저장해 다시 선택해 주세요.") from None
         entry = {"name": name, "kind": kind, "size": len(data), "text": text, "sections": {}}
         if kind == "definitions":
-            entry["doc"] = doc = _definition_doc(name, text)
+            try:
+                entry["doc"] = doc = read_workbook(data, name) if book else _definition_doc(name, text)
+            except ReadError as e:  # a workbook that could not be read as a draft, by why
+                raise ValueError({
+                    "empty": f"{name} 파일에 정의 목록이 없어 추가하지 못했습니다. 시트 이름(Object · Entity · Property · 규칙 · "
+                             "기준값 · 용어)을 확인해 주세요.",
+                    "openpyxl": "Excel 을 읽는 모듈(openpyxl)이 서버에 없어 읽지 못했습니다. YAML 또는 JSON 으로 저장해 다시 선택해 주세요.",
+                    "workbook_size": f"{name}: " + READ_ERROR["workbook_size"],
+                }.get(e.reason, f"{name} 파일이 XLSX 형식이 아니어서 읽지 못했습니다. XLSX 로 저장해 다시 선택해 주세요.")) from None
             entry["sections"] = {str(k): n for k, v in doc.items() if k != "meta" and (n := _rows_in(v))}
         else:  # OWL: read now as the import reads it, so a file that is not one is refused here, not when the ontology is made
             try:
@@ -1577,53 +1642,90 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._library_files.pop(str(name), None)
         return self.library_files()
 
-    def library_new(self, label: str, start: str, *, key: str = "", modules: list | None = None) -> dict:
+    def library_new(self, label: str, start: str, *, key: str = "", modules: list | None = None, description: str = "") -> dict:
+        """A library made here (library_make), and switched to."""
+        out = self.library_make(label, start, key=key, modules=modules, description=description)
+        self.library_use(out["id"])
+        return out
+
+    def library_make(self, label: str, start: str, *, key: str = "", modules: list | None = None, description: str = "") -> dict:
         """A library made here: from the files held (a definition draft read as one, an OWL vocabulary as a module), on
-        the modules of the library that is open, or with nothing in it. It lives with this session beside the ones the
-        deployment offers; `export_library` takes it out as a studio folder to serve."""
+        the modules of the library that is open, or with nothing in it. It stands beside the ones the deployment offers,
+        its studio held for whoever opens it. Where the server writes (`shelf`) it is a studio folder of its own, read
+        back from there, so the next start finds what was made; otherwise it lives with this session, and
+        `export_library` takes it out as a studio folder to serve."""
         from ontlas.reason.port import open_reasoners
         from ontlas.space import open_space
 
         label = " ".join(str(label or "").split())[:60]
         if not label:
             raise ValueError("이름이 없어 만들지 못했습니다. 이름을 입력해 주세요.")
-        if any(x["label"] == label for x in self.libraries):
-            raise ValueError(words.fix(f"같은 이름의 온톨로지 {label}이(가) 있어 만들지 못했습니다. 다른 이름을 입력해 주세요."))
-        made = [x for x in self.libraries if x.get("made")]
-        if len(made) >= LIBRARIES_MADE_MAX:
-            raise ValueError(f"만든 온톨로지가 {LIBRARIES_MADE_MAX}개 한도에 도달해 만들지 못했습니다. "
-                             "만든 온톨로지를 삭제한 뒤 다시 만들어 주세요.")
-        n = 1 + max([int(x["id"][1:]) for x in made] or [0])
-        key = re.sub(r"[^A-Za-z0-9_-]+", "-", str(key or "")).strip("-").lower()[:40] or f"library-{n}"
-        namespace, report = f"https://example.org/{key}#", None
-        if start == "files":
-            lib, wanted, report = self._library_from_files(key, label, namespace)
-        elif start == "base":
-            cur, comp = self.studio.library, self.studio.composition
-            if cur is None or comp is None:
-                raise ValueError("열려 있는 온톨로지가 모듈로 구성되지 않아 기반으로 쓰지 못했습니다. 다른 시작 방법을 선택해 주세요.")
-            lib = OverlayLibrary(cur.base, list(cur.extra.values()))  # its own copy: edits made there later stay there
-            lib.held = {k: dict(v) for k, v in cur.held.items()}
-            wanted = [str(x) for x in (modules or [])] or [m.name for m in comp.modules]
-            namespace = self.studio.onto.namespace
-        elif start == "empty":
-            lib, wanted = OverlayLibrary(None, []), []
-        else:
-            raise ValueError("시작 방법을 선택하지 않아 만들지 못했습니다. 시작 방법을 선택해 주세요.")
-        try:
-            studio = Studio.from_library(lib, wanted, namespace=namespace, name=key, label=label, use_zen=self.studio.use_zen)
-        except ModuleError as e:
-            raise ValueError(f"모듈 구성이 성립하지 않아 만들지 못했습니다. 선택한 모듈과 파일을 확인해 주세요. {e}") from None
-        studio.space, studio.reasoners = open_space(None), open_reasoners(None)
-        lid = f"s{n}"
-        origin = {"kind": "config", "config": "", "notice": "", "backends": {}, "seeds": []}
-        self.libraries.append({"id": lid, "label": label, "path": "", "origin": origin, "source": "", "made": True,
-                               "modules": len(studio.composition.modules)})
-        self._library_held[lid] = ([{"id": "p1", "label": "기본 파이프라인", "studio": studio, "origin": dict(origin),
-                                     "rows": lib.list(), "log": []}], "p1")
-        self._library_files = {}
-        self.library_use(lid)
+        with MAKING:
+            if any(x["label"] == label for x in self.libraries):
+                raise ValueError(words.fix(f"같은 이름의 온톨로지 {label}이(가) 있어 만들지 못했습니다. 다른 이름을 입력해 주세요."))
+            made = [x for x in self.libraries if x.get("made")]
+            if len(made) >= self.made_max:
+                raise ValueError(f"만든 온톨로지가 {self.made_max}개 한도에 도달해 만들지 못했습니다. "
+                                 "만든 온톨로지를 삭제한 뒤 다시 만들어 주세요.")
+            n = self.shelf.number() if self.shelf is not None else 1 + max([int(x["id"][1:]) for x in made] or [0])
+            key = re.sub(r"[^A-Za-z0-9_-]+", "-", str(key or "")).strip("-").lower()[:40] or f"library-{n}"
+            namespace, report, base = f"https://example.org/{key}#", None, {}
+            if start == "files":
+                lib, wanted, report = self._library_from_files(key, label, namespace)
+            elif start == "base":
+                cur, comp = self.studio.library, self.studio.composition
+                if cur is None or comp is None:
+                    raise ValueError("열려 있는 온톨로지가 모듈로 구성되지 않아 기반으로 쓰지 못했습니다. 다른 시작 방법을 선택해 주세요.")
+                lib = OverlayLibrary(cur.base, list(cur.extra.values()))  # its own copy: edits made there later stay there
+                lib.held = {k: dict(v) for k, v in cur.held.items()}
+                wanted = [str(x) for x in (modules or [])] or [m.name for m in comp.modules]
+                namespace = self.studio.onto.namespace
+                here = next((x for x in self.libraries if x["id"] == self.library_id), None)
+                base = {"base": here["id"], "base_label": here["label"]} if here is not None else {}
+            elif start == "empty":
+                lib, wanted = OverlayLibrary(None, []), []
+            else:
+                raise ValueError("시작 방법을 선택하지 않아 만들지 못했습니다. 시작 방법을 선택해 주세요.")
+            try:
+                studio = Studio.from_library(lib, wanted, namespace=namespace, name=key, label=label, use_zen=self.studio.use_zen)
+            except ModuleError as e:
+                raise ValueError(f"모듈 구성이 성립하지 않아 만들지 못했습니다. 선택한 모듈과 파일을 확인해 주세요. {e}") from None
+            lid = f"s{n}"
+            entry = {"id": lid, "label": label, "path": "", "origin": dict(MADE_ORIGIN), "source": "", "made": True,
+                     "modules": len(studio.composition.modules), "description": " ".join(str(description or "").split())[:200], **base}
+            if self.shelf is not None:
+                studio, entry["path"] = self._library_keep(entry, key, studio, lib)
+            else:
+                studio.space, studio.reasoners = open_space(None), open_reasoners(None)
+            self.libraries.append(entry)
+            self._library_held[lid] = (self._library_pipes(studio, entry["origin"]), "p1")
+            self._library_files = {}
         return {"ok": True, "id": lid, "label": label, "start": start, "made": _made_counts(studio), "report": report}
+
+    def _library_keep(self, entry: dict, key: str, studio: Studio, lib: OverlayLibrary) -> tuple[Studio, str]:
+        """Write a library just made to the shelf as a studio folder and read it back: (its studio, its studio file).
+        Every module of the library it was made in goes with it, to be switched on later; the module the management
+        screens write goes only where this one applies it, so another library's edits are not taken on at its next start."""
+        from ontlas.config import load_studio
+
+        on = [m.name for m in studio.composition.modules]
+        spec = {"library": MODULES, "name": key, "label": entry["label"], "namespace": studio.onto.namespace, "modules": on,
+                **({"zen": True} if studio.use_zen else {}),
+                **({"description": entry["description"]} if entry["description"] else {}),
+                "made": {"id": entry["id"], "by": self.who, "at": datetime.now().isoformat(timespec="seconds"),
+                         **({"base_label": entry["base_label"]} if entry.get("base_label") else {})}}
+        try:
+            path = self.shelf.write(key, spec, [lib.get(n, v) for n in lib.names() if n != WORKSPACE or n in on
+                                                for v in lib.versions(n)])
+        except FileExistsError:
+            raise ValueError(words.fix(f"같은 키의 온톨로지 {key}이(가) 있어 만들지 못했습니다. 다른 키를 입력해 주세요.")) from None
+        except OSError:
+            raise ValueError("서버의 저장 폴더에 쓰지 못해 온톨로지를 만들지 못했습니다. 서버의 저장 폴더를 확인해 주세요.") from None
+        try:
+            return load_studio(path), str(path)
+        except Exception:  # what was written does not read back: it is set aside, not left to be found at the next start
+            self.shelf.remove(key, by=self.who)
+            raise ValueError("저장한 온톨로지를 다시 읽지 못해 만들지 못했습니다. 선택한 모듈과 파일을 확인해 주세요.") from None
 
     def _library_from_files(self, key: str, label: str, namespace: str) -> tuple:
         files = list(self._library_files.values())
@@ -1657,7 +1759,9 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
                              "확인해 주세요.")
         return lib, [m.name for m in mods], _import_report(reps)
 
-    def library_drop(self, lid: str) -> dict:
+    def library_drop(self, lid: str, *, by: str = "") -> dict:
+        """Take a made library away. One the server wrote is moved off its shelf, whole, to be put back
+        (library_restore); one kept with the session ends here."""
         target = next((x for x in self.libraries if x["id"] == lid), None)
         if target is None:
             raise LookupError(f"온톨로지 {lid}")
@@ -1665,11 +1769,53 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
             raise ValueError("서버가 제공하는 온톨로지라 삭제하지 못했습니다. 만든 온톨로지를 선택해 주세요.")
         if lid == self.library_id:
             self.library_use(self.libraries[0]["id"])
+        with MAKING:
+            if target.get("path") and self.shelf is not None:
+                try:
+                    self.shelf.remove(Path(target["path"]).parent.name, by=by or self.who)
+                except FileNotFoundError:  # its folder went by another hand: there is nothing left to move
+                    pass
+                except OSError:
+                    raise ValueError("온톨로지 폴더가 사용 중이어서 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.") from None
+            if target in self.libraries:
+                self.libraries.remove(target)
         self._library_held.pop(lid, None)
         self._library_stores.pop(lid, None)
-        self.libraries.remove(target)
         self.event("library", f"{target['label']} 삭제")
         return {"ok": True}
+
+    def library_deleted(self) -> list[dict]:
+        """The libraries taken off the shelf, the last one first: each can be put back."""
+        rows = [{"id": str(made.get("id") or ""), "label": str(spec.get("label") or home.name),
+                 "at": str((made.get("deleted") or {}).get("at") or ""), "by": str((made.get("deleted") or {}).get("by") or "")}
+                for home, spec in (self.shelf.deleted() if self.shelf is not None else []) for made in [spec.get("made") or {}]]
+        return sorted((r for r in rows if r["id"]), key=lambda r: r["at"], reverse=True)
+
+    def library_restore(self, lid: str) -> dict:
+        """Put a library that was taken away back on the shelf and in the list, as it was: its versions, and where the
+        server keeps a journal the requests, edits and comments made in it."""
+        with MAKING:
+            hit = next(((home, spec) for home, spec in (self.shelf.deleted() if self.shelf is not None else [])
+                        if (spec.get("made") or {}).get("id") == lid), None)
+            if hit is None:
+                raise LookupError(f"온톨로지 {lid}")
+            label = str(hit[1].get("label") or "")
+            if any(x["label"] == label for x in self.libraries):
+                raise ValueError(words.fix(f"같은 이름의 온톨로지 {label}이(가) 있어 복원하지 못했습니다. "
+                                           "그 온톨로지를 삭제한 뒤 다시 복원해 주세요."))
+            if sum(bool(x.get("made")) for x in self.libraries) >= self.made_max:
+                raise ValueError(f"만든 온톨로지가 {self.made_max}개 한도에 도달해 복원하지 못했습니다. "
+                                 "만든 온톨로지를 삭제한 뒤 다시 복원해 주세요.")
+            try:
+                home, spec = self.shelf.restore(hit[0].name)
+            except FileExistsError as e:
+                raise ValueError(words.fix(f"같은 키의 온톨로지 {e}이(가) 있어 복원하지 못했습니다. "
+                                           "그 온톨로지를 삭제한 뒤 다시 복원해 주세요.")) from None
+            except OSError:
+                raise ValueError("서버의 저장 폴더에 쓰지 못해 복원하지 못했습니다. 서버의 저장 폴더를 확인해 주세요.") from None
+            self.libraries.append(_made_entry(home, spec))
+        self.event("library", f"{label} 복원")
+        return {"ok": True, "id": lid, "label": label}
 
     def export_library(self) -> tuple[bytes, str]:
         """The library on screen as a studio folder in a zip: the studio file and the file of each module it applies,
@@ -3171,8 +3317,8 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._ws_kept = state
 
     def restore_pending(self) -> None:
-        """The edits that were being written when the server stopped, made again on the definition it starts with, each
-        by whom and when it was made. Where the definition moved since (an approval the journal holds but the edits had
+        """The edits that were being written when the server stopped, made again on the definition it starts with (the
+        approved versions the journal holds put back first, _restore_approved), each by whom and when it was made. Where the definition moved since (an approval the journal holds but the edits had
         not been made again on), they are made again as after an approval (_ws). A journal from before edits were kept
         holds none of them, and nothing changes."""
         from dataclasses import replace
@@ -3180,9 +3326,10 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         from ontlas.manage import Edit, Workspace, changed_elements, made_again
 
         journal = self.studio.changes.journal
-        comp = self.studio.composition
-        if journal is None or comp is None:
+        if journal is None or self.studio.composition is None:
             return
+        self._restore_approved()
+        comp = self.studio.composition
         records: dict[str, dict] = {}
         state = None
         for r in journal.read():
@@ -3225,6 +3372,38 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         self._ws_kept = {k: state.get(k) for k in ("edits", "held", "undone", "title")}
         self.keep_pending()  # what could not be made again is written down held, as the screen now shows it
 
+    def _restore_approved(self) -> None:
+        """The versions the journal says were approved, where the library does not hold them: a server that keeps a
+        journal and writes no folder, or a folder put back as it first was. Each is put back in the library (in memory,
+        or in the folder where the server writes one) and the modules they changed are brought to their newest, so the
+        version the records name is the definition that runs. Where one no longer goes on, the start stops and says so:
+        records and definition are not left apart."""
+        from ontlas.web.home_api import APPLIES
+
+        ch = self.studio.changes
+        lib = ch.store or self.studio.library
+        order = list(dict.fromkeys(e["change"] for e in ch.audit if e.get("event") == "approved" and e.get("change") in ch.requests))
+        order += [c.id for c in ch.requests.values() if c.status == "approved" and c.id not in order]  # no audit kept for it
+        missing = [c for c in (ch.requests[i] for i in order) if c.status == "approved" and c.version not in lib.versions(c.module)]
+        if not missing:
+            return
+        try:
+            for c in missing:  # in the order they were approved: the last put back is the newest
+                lib.save(ch._module(c))
+            for name in dict.fromkeys(c.module for c in missing if (c.review or {}).get("mode") in APPLIES):
+                now = next((m for m in self.studio.composition.modules if m.name == name), None)
+                newest = lib.get(name)
+                if now is None:
+                    self.studio.attach(newest)
+                elif now.version != newest.version:
+                    self.studio.replace(newest)
+        except Exception as e:  # noqa: BLE001 - whatever a version that no longer fits says: the start stops on it
+            raise ValueError(f"the journal holds approved changes ({', '.join(c.id for c in missing)}) that the library at "
+                             f"{lib.root} lacks and that do not go on it again: {e}. Serve with --library-write from "
+                             "the first approval on, or start with a new journal.") from None
+        self._library_rows = self.studio.library.list()
+        self._reproject()
+
     def _modules_at(self, keys: list[str]) -> list[Module] | None:
         """The modules by their keys (name@version), where the library still has every one."""
         lib = self.studio.changes.store or self.studio.library
@@ -3254,12 +3433,12 @@ class StudioSession(SpaceMixin, PagesMixin, HomeMixin, LexiconMixin):
         items = ", ".join(dict.fromkeys(word(x) for x in c.get("elements") or [e.target]))
         if c.get("why") == "failed":
             text = words.fix(f"정의가 바뀌어 {items} 편집을 다시 적용하지 못했습니다. {_edit_text(str(c.get('error') or ''))} "
-                             "바뀐 내용을 확인한 뒤 다시 적용하거나 버려 주세요.")
+                             "바뀐 내용을 확인한 뒤 덮어쓰거나 폐기해 주세요.")
         elif c.get("change"):
             text = (f"승인된 변경 요청 {c['change']}에서 {items}도 바뀌어 이 편집을 보류했습니다. "
-                    "승인된 내용 위에 다시 적용하거나 버려 주세요.")
+                    "승인된 내용 위에 덮어쓰거나 폐기해 주세요.")
         else:
-            text = f"적용된 정의에서 {items}도 바뀌어 이 편집을 보류했습니다. 바뀐 내용 위에 다시 적용하거나 버려 주세요."
+            text = f"적용된 정의에서 {items}도 바뀌어 이 편집을 보류했습니다. 바뀐 내용 위에 덮어쓰거나 폐기해 주세요."
         return {"id": e.id, "op": e.op, "target": e.target, "label": word(e.target), "by": e.by, "at": e.at,
                 "why": c.get("why", ""), "change": c.get("change", ""), "elements": list(c.get("elements") or []),
                 "args": e.args, "text": text}

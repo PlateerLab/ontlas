@@ -472,8 +472,9 @@
   const qaExpected = (x) => { const q = qaFind(x.id); return x.expected === null || x.expected === undefined || x.expected === '' || (typeof x.expected === 'object' && !Object.keys(x.expected).length) ? (q && (q.keywords || []).length ? `키워드 ${q.keywords.join(', ')}` : '-') : qaSay(x.expected); };
   const qaGates = () => ((S.fl && S.fl.steps) || []).flatMap((s) => s.gates || []);
   // a pass condition as the screens say it: 정답률 ≥ 90%, DB 대조 오류 0
-  const QA_GATE = { 'bind.max_errors': 'Binding 검사 오류', 'bind.max_warnings': 'Binding 검사 경고', 'index.min_found': '문서 검색 적중률', 'query.min_agree': '저장소 간 질의 결과 일치율',
-    'decide.min_agreement': '판정 일치율', 'check.min_accuracy': '정답률', 'check.min_grounded': '근거 제시율', 'check.max_value_errors': '거래 값 오류' };
+  const QA_GATE = { 'define.max_gaps': '결정표 빈 구간', 'define.max_unreachable': '도달 불가 규칙', 'define.max_axiom_conflicts': 'AXIOM 충돌',
+    'bind.max_errors': 'Binding 검사 오류', 'bind.max_warnings': 'Binding 검사 경고', 'index.min_found': '문서 검색 적중률', 'query.min_agree': '저장소 간 질의 결과 일치율',
+    'decide.min_agreement': '판정 일치율', 'check.min_accuracy': '정답률', 'check.min_grounded': '근거 제시율', 'check.max_value_errors': '거래 값 오류', 'check.max_new_wrong': '신규 오답' };
   const qaGateSay = (g) => `${QA_GATE[`${g.stage}.${g.condition}`] || g.label} ${g.condition.startsWith('min_') ? `≥ ${gateValue(g, g.limit)}` : Number(g.limit) === 0 ? '0' : `≤ ${gateValue(g, g.limit)}`}`;
   const qaGate = (stage, cond) => qaGates().find((g) => g.stage === stage && g.condition === cond) || null;
   // what the check found out about a wrong decision answer, under the question in the results

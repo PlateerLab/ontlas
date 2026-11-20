@@ -122,9 +122,13 @@ def test_an_empty_ontology_is_made_and_only_an_admin_may_make_one(session):
     assert NEEDS["entry/ontology/new"] == "admin"
 
 
-def test_switching_the_ontology_a_team_works_in_is_an_editors():
-    # the list and the account offer a viewer only the ontology in use to open or export (10-entry.js entCanOpen)
-    assert NEEDS["library"] == "editor"
+def test_which_ontology_a_person_looks_at_is_their_own_and_putting_one_back_is_an_admins(session):
+    assert "library" not in NEEDS  # anyone signed in opens one: it changes what they look at and no one else's
+    assert NEEDS["entry/ontology/restore"] == "admin"
+    out = call("GET", "entry/ontologies")(session, {}, None)
+    assert out["deleted"] == [] and out["made_max"] == session.made_max and session.state()["made_kept"] is False  # made ones end with this session
+    with pytest.raises(LookupError):
+        call("POST", "entry/ontology/restore")(session, {"id": "s1"}, None)
 
 
 def test_the_persons_list_holds_what_waits_what_happened_and_what_was_settled(session):
@@ -156,12 +160,10 @@ def test_an_ontology_is_exported_by_its_id_and_the_one_in_use_stays_in_use(sessi
     session.library_use("l2")  # the same zip the ontology exports once it is open
     assert export(session, {"id": "l2"}, None)[1:] == (data, ctype, name) and session.export_library() == (data, name)
     session.library_use("l1")
-    # in a team, one not in use asks as much as switching to it: a viewer exports the one in use only
+    # in a team, one not open asks as much as opening it: anyone signed in
     viewer = User("v", "조회", "", ["viewer"])
     assert export(session, {"id": "l1"}, viewer)[0] == 200
-    with pytest.raises(PermissionError):
-        export(session, {"id": "l2"}, viewer)
-    assert export(session, {"id": "l2"}, User("e", "편집", "", ["editor"]))[0] == 200 and session.library_id == "l1"
+    assert export(session, {"id": "l2"}, viewer)[0] == 200 and session.library_id == "l1"
     with pytest.raises(ValueError):
         export(session, {"id": "gone"}, None)
 

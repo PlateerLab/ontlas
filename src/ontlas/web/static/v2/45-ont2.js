@@ -162,8 +162,8 @@
     // edits held aside: an approved request changed the same item, or they no longer hold on the definition as it is now
     const held = ws.conflicts || [];
     const heldBox = held.length ? `<section class="k-card" aria-labelledby="o2held-h"><div class="k-ch"><h2 id="o2held-h">보관된 편집</h2><span class="k-chip warn">${held.length}</span></div>
-      ${held.map((h) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(O2_OP[h.op] || h.op)} · ${esc(h.label || o2EditName(h.target))}</span><span class="k-14">${esc(h.text)}</span><span class="k-s">${who(h) || '-'}</span></span>
-        ${canEdit() ? `<span class="k-h end"><button class="k-btn sm" data-act="o2held" data-id="${esc(h.id)}" data-keep="1"${S.mg.busy ? ' disabled' : ''}>덮어쓰기</button><button class="k-btn sm dan" data-act="o2held" data-id="${esc(h.id)}" data-keep=""${S.mg.busy ? ' disabled' : ''}>버리기</button></span>` : ''}</div>`).join('')}</section>` : '';
+      ${held.map((h) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(O2_OP[h.op] || h.op)} · ${esc(o2EditName(h.target))}</span><span class="k-14">${esc(h.text)}</span><span class="k-s">${who(h) || '-'}</span></span></div>
+        ${canEdit() ? `<div class="k-cb"><div class="k-h end"><button class="k-btn sm" data-act="o2held" data-id="${esc(h.id)}" data-keep="1"${S.mg.busy ? ' disabled' : ''}>덮어쓰기</button><button class="k-btn sm dan" data-act="o2held" data-id="${esc(h.id)}" data-keep=""${S.mg.busy ? ' disabled' : ''}>폐기</button></div></div>` : ''}`).join('')}</section>` : '';
     const yaml = `<div class="k-cb"><pre class="o2-yaml k-x">${esc(ws.yaml)}</pre></div>`;
     const issues = ws.issues.length ? `<div class="k-cb"><p class="k-note bad">${ws.issues.slice(0, 6).map(esc).join('<br>')}</p></div>` : '';
     // what the trial copy could not build or read: a finding the server said in words as it is, the engine's own words
@@ -183,16 +183,17 @@
         ${view === 'yaml' ? yaml : `${els.map(elRow).join('')}${issues}<div class="o2-sub"><span class="k-b k-13">저장 순서 ${ws.edits.length}건</span>${canEdit() ? `<span class="k-push k-h">${ws.edits.length ? '<button class="k-lnk" data-act="mdundo">마지막 변경 되돌리기</button>' : ''}${ws.redo ? '<button class="k-lnk" data-act="mdredo">다시 적용</button>' : ''}</span>` : ''}</div>${edits || '<p class="k-cf line">이전 변경 · YAML 비교 참조</p>'}`}</section>
       <section class="k-card"><div class="k-ch"><h2>회귀 테스트</h2><span class="k-push">${canEdit() ? `<button class="k-btn sm" data-act="mgreview"${(tr && tr.busy) || ws.issues.length ? ' disabled' : ''}>${ki('play', 16, 1.75)}${tried ? '다시 실행' : '지금 실행'}</button>` : ''}${known('flow') ? `<a class="k-lnk" href="#flow">검증 결과${ki('chevR', 14, 1.75)}</a>` : ''}</span></div>${test}</section>
       <section class="k-card"><div class="k-ch"><h2>검토 요청</h2></div><div class="k-cb">
-        ${o2DiscardAll(ws)}${canEdit() ? `<div class="k-wrap g8" style="justify-content:flex-end">${o2DiscardBtn(ws)}<button class="k-btn pri" data-act="mgpropose"${S.mg.busy || ws.issues.length || (tr && tr.busy) ? ' disabled' : ''}>${S.mg.busy ? '등록 중' : selfApply() ? `버전 ${cur.number + 1} 배포` : '검토 요청'}</button></div>` : ''}</div></section></div>`;
+        ${o2AllOk(ws)}${canEdit() ? `<div class="k-wrap g8" style="justify-content:flex-end">${o2AllBtn(ws)}${o2DiscardBtn(ws)}<button class="k-btn pri" data-act="mgpropose"${S.mg.busy || ws.issues.length || (tr && tr.busy) ? ' disabled' : ''}>${S.mg.busy ? '등록 중' : selfApply() ? `버전 ${cur.number + 1} 배포` : '검토 요청'}</button></div>` : ''}</div></section></div>`;
   }
 
   // 폐기: in a team the request being written is everyone's, so a person throws away the edits they wrote; an admin may throw
-  // away everyone's, with 전체 폐기 typed to confirm
+  // away everyone's, with 전체 폐기 typed to confirm as a delete is: the box above the buttons, its button first among them
   const o2Mine = (ws) => (inTeam() ? [...ws.edits, ...(ws.conflicts || [])].filter((e) => e.by === ((S.me && S.me.user) || {}).name).length : ws.edits.length + (ws.conflicts || []).length);
   const o2DiscardBtn = (ws) => (inTeam() && !o2Mine(ws) ? '' : `<button class="k-btn dan" data-act="o2discard"${S.mg.busy ? ' disabled' : ''}>${inTeam() ? `내 편집 폐기 ${o2Mine(ws)}` : '폐기'}</button>`);
   const O2_ALL = '전체 폐기';
-  const o2DiscardAll = (ws) => (inTeam() && isSysAdmin() && ws.edits.length + (ws.conflicts || []).length > o2Mine(ws)
-    ? `<div class="k-h g8" style="justify-content:flex-end;margin-bottom:12px"><label class="k-f" style="flex:0 1 240px">확인 입력 · ${O2_ALL}<input class="k-in" type="text" data-in="o2allok" value="" placeholder="${O2_ALL}" autocomplete="off"></label><button class="k-btn dan" id="o2discardall" data-act="o2discardall" disabled style="align-self:flex-end">모든 사람의 편집 폐기</button></div>` : '');
+  const o2Others = (ws) => inTeam() && isSysAdmin() && ws.edits.length + (ws.conflicts || []).length > o2Mine(ws);
+  const o2AllOk = (ws) => (o2Others(ws) ? `<label class="k-f">확인 입력 · ${O2_ALL}<input class="k-in" type="text" data-in="o2allok" value="" placeholder="${O2_ALL}" autocomplete="off"></label>` : '');
+  const o2AllBtn = (ws) => (o2Others(ws) ? '<button class="k-btn dan" id="o2discardall" data-act="o2discardall" disabled>모든 사람의 편집 폐기</button>' : '');
 
   // a request that was sent: what it changes element by element, what it does to the answers, and the review
   function o2ChangeDetail(cur, h) {
@@ -234,9 +235,10 @@
     const why = !canApprove() ? '승인 권한 없음' : !d.can_decide ? (d.self_approve ? '' : '본인 요청 승인 불가') : sent ? `수정 요청 항목 ${sent}개` : done < items.length ? `미검토 항목 ${items.length - done}개` : '전 항목 검토 완료';
     const review = d.status === 'pending'
       ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.who || '검토자')}${d.who && d.who === d.requested_by ? ' · 작성자' : ''}</span><span class="k-s">검토 요청 ${o2When(d.at)} · 항목 ${done} / ${items.length} 승인${sent ? ` · 수정 요청 ${sent}` : ''}</span></span><span class="k-h end"><span class="k-chip warn">대기</span></span></div>
-         <div class="k-cb" style="padding-top:12px">${decide ? `<label class="k-f">반려 사유<textarea class="k-in" rows="2" data-in="o2why" maxlength="500">${esc(S.o2.ch.why || '')}</textarea></label>${d.module === O2_WS ? `<label class="k-ck mid"><input type="checkbox" data-in="o2back"${S.o2.ch.back ? ' checked' : ''}>작성 중으로 되돌리기<span class="k-s">${esc(d.requested_by || '작성자')}의 작성 중 편집</span></label>` : ''}` : ''}<div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn" data-act="o2reject"${decide ? '' : ' disabled'}>반려</button><button class="k-btn pri" data-act="chgdecide" data-yes="1"${ready ? '' : ' disabled'}>승인 후 버전 ${cur.number + 1} 배포</button></div>
+         <div class="k-cb" style="padding-top:12px">${decide ? `<label class="k-f">반려 사유<textarea class="k-in" rows="2" data-in="o2why" maxlength="500">${esc(S.o2.ch.why || '')}</textarea></label>${d.module === O2_WS ? `<label class="k-ck"><input type="checkbox" data-in="o2back"${S.o2.ch.back ? ' checked' : ''}><span>작성 중으로 되돌리기<br><span class="k-s">${esc(d.requested_by || '작성자')}의 작성 중 편집</span></span></label>` : ''}` : ''}<div class="k-wrap g8" style="justify-content:flex-end"><button class="k-btn" data-act="o2reject"${decide ? '' : ' disabled'}>반려</button><button class="k-btn pri" data-act="chgdecide" data-yes="1"${ready ? '' : ' disabled'}>승인 후 버전 ${cur.number + 1} 배포</button></div>
            <span class="k-s">${esc(why)}</span></div>`
-      : `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.decided_by || '-')}</span><span class="k-s">${d.status === 'approved' ? '승인' : '반려'} ${o2When(d.decided_at)}${d.reason ? ` · ${esc(d.reason)}` : ''}${d.reopened ? ` · 작성 중으로 되돌림 ${o2When(d.reopened)}` : ''}</span></span><span class="k-h end">${d.can_reopen && canEdit() ? `<button class="k-btn sm" data-act="o2reopen"${S.mg.busy ? ' disabled' : ''}>작성 중으로 되돌리기</button>` : ''}<span class="k-chip${d.status === 'approved' ? ' ok' : ''}">${d.status === 'approved' ? '승인' : '반려'}</span></span></div>`;
+      : `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.decided_by || '-')}</span><span class="k-s">${d.status === 'approved' ? '승인' : '반려'} ${o2When(d.decided_at)}${d.reason ? ` · ${esc(d.reason)}` : ''}${d.reopened ? ` · 작성 중으로 되돌림 ${o2When(d.reopened)}` : ''}</span></span><span class="k-h end"><span class="k-chip${d.status === 'approved' ? ' ok' : ''}">${d.status === 'approved' ? '승인' : '반려'}</span></span></div>${d.can_reopen && canEdit()
+        ? `<div class="k-cb"><div class="k-h end"><button class="k-btn" data-act="o2reopen"${S.mg.busy ? ' disabled' : ''}>작성 중으로 되돌리기</button></div></div>` : ''}`;  // under the row, where a waiting request has its buttons
     return `<div class="k-v g16" style="flex:2 1 560px;min-width:0">
       <section class="k-card"><div class="k-ch"><h2><span class="k-code k-mut">${esc(d.id)}</span> ${esc(o2Title(d))}</h2><span class="k-push"><span class="k-chip${tone ? ` ${tone}` : ''}">${esc(word)}</span></span></div>
         <div class="k-cb">${o2Steps(d.status === 'approved' ? (applied ? 5 : 4) : 3)}<p class="k-p">${h && h.summary && h.summary !== o2Title(d) ? `${esc(h.summary)}. ` : ''}요청 ${esc(d.requested_by || '-')}${d.decided_by ? ` · ${d.status === 'approved' ? '승인' : '반려'} ${esc(d.decided_by)}` : ''}${goes.map((w) => ` · ${esc(w)}`).join('')}</p></div></section>
@@ -302,7 +304,7 @@
         S.chg.det = null;
         stale();
         await load();
-        toast(`변경 요청 ${id}${josa(id, '을', '를')} 반려했습니다.${r.reopened ? ` 편집 ${r.reopened.made + r.reopened.held}건을 작성 중으로 되돌렸습니다.` : ''}`);
+        toast(r.reopened ? `변경 요청 ${id}${josa(id, '을', '를')} 반려하고 편집 ${r.reopened.made + r.reopened.held}건을 작성 중으로 되돌렸습니다.` : `변경 요청 ${id}${josa(id, '을', '를')} 반려했습니다.`);
       } catch (e) { render(); fail(e); }
     },
     o2reopen: async () => {  // a rejected request's edits, back in the request being written, each still its writer's
@@ -314,7 +316,7 @@
         Object.assign(S, { changes: null }); S.chg.det = null; stale();
         await load();
         Object.assign(S.o2.ch, { sel: 'draft', tab: '' });
-        toast(`변경 요청 ${id}의 편집 ${r.made + r.held}건을 작성 중으로 되돌렸습니다.${r.held ? ` 보관된 편집 ${r.held}건` : ''}`);
+        toast(`변경 요청 ${id}의 편집 ${[r.made || !r.held ? `${r.made}건을 작성 중으로` : '', r.held ? `${r.held}건을 보관된 편집으로` : ''].filter(Boolean).join(', ')} 되돌렸습니다.`);
         render();
       } catch (e) { S.mg.busy = false; render(); fail(e); }
     },
@@ -402,7 +404,7 @@
       try {
         S.mg.st = await api('manage/conflict', { id: t.dataset.id, keep });
         Object.assign(S.mg, { form: null, review: null }); S.md.yaml = null; S.md.trial = null; S.lx.st = null;
-        toast(keep ? '보관된 편집을 승인된 내용 위에 적용했습니다.' : '보관된 편집을 삭제했습니다.');
+        toast(keep ? '보관된 편집을 승인된 내용에 적용했습니다.' : '보관된 편집을 폐기했습니다.');
       } catch (e) { fail(e); }
       S.mg.busy = false; render();
     },
@@ -412,7 +414,7 @@
       try {
         const r = S.mg.st = await api('manage/discard', {});
         Object.assign(S.mg, { form: null, sel: '', review: null }); S.md.trial = null; S.lx.st = null; S.it = { key: '' };
-        toast(inTeam() ? `내 편집 ${r.discarded}건을 폐기했습니다.${r.kept ? ` 다른 사람의 편집 ${r.kept}건은 남았습니다.` : ''}` : '작성 중인 변경 요청을 폐기했습니다.');
+        toast(inTeam() ? `내 편집 ${r.discarded}건을 폐기했습니다.` : '작성 중인 변경 요청을 폐기했습니다.');
         if (S.tab === 'changes') render(); else location.hash = '#changes';
       } catch (e) { fail(e); }
     },

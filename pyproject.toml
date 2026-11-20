@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ontlas"
-version = "0.25.4"
+version = "0.25.5"
 description = "One space for every kind of data an AI can use: files, documents, vectors, graphs and ontologies, tied to no store, model, domain or platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,6 +27,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
+Homepage = "https://ontlas.com"
 Repository = "https://github.com/PlateerLab/ontlas"
 Changelog = "https://github.com/PlateerLab/ontlas/blob/main/CHANGELOG.md"
 

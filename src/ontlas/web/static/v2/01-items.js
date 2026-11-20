@@ -158,7 +158,7 @@
       <div class="k-v g12" style="padding:16px 24px 24px;border-top:1px solid var(--row)">`;
     // a delete the server would refuse (a use it breaks, a column it goes back to that the source lacks): said with what
     // to do, and nothing to request until then
-    if (it.stop) return `${top}<div class="k-13 k-bad" role="alert">${esc(it.stop)}</div><div class="k-h end"><a class="k-btn" href="#${def.list}">목록으로</a></div></div></section>`;
+    if (it.stop) return `${top}<p class="k-note bad" role="alert">${esc(it.stop)}</p><div class="k-h end"><a class="k-btn" href="#${def.list}">목록으로</a></div></div></section>`;
     const radio = (mode, word, say) => `<label class="k-ck"><input type="radio" name="itmode" value="${mode}" data-in="itmode"${it.mode === mode ? ' checked' : ''}><span>${word}<br><span class="k-s">${say}</span></span></label>`;
     const ok = it.reason.trim() && it.confirm.trim() === code;
     return `${top}
@@ -172,16 +172,18 @@
 
   function itemHistory(kind) {
     const def = ITEM[kind], it = itemState(kind, 'history');
+    // one taken out is put back as an edit of the request being written: where 편집 is for one that is there (the head's
+    // main button, and plain in the bar that names it)
+    const back = (cls) => (it.gone && canEdit() ? `<button class="k-btn${cls}" data-act="itrestore"${it.busy ? ' disabled' : ''}>${it.busy ? '되살리는 중' : '되살리기'}</button>` : '');
     const head = kHead(`${def.word} 이력`, (def.lead && def.lead.history) || `${def.word}의 변경 이력을 조회합니다.`,
-      `<a class="k-btn" href="#${def.list}">목록으로</a>${it.ready && !it.missing && !it.gone && canEdit() && !itemLocked(def, it.x) ? `<a class="k-btn pri" href="${itemHref(kind, 'form', it.id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}`);
+      `<a class="k-btn" href="#${def.list}">목록으로</a>${it.ready && !it.missing ? back(' pri') : ''}${it.ready && !it.missing && !it.gone && canEdit() && !itemLocked(def, it.x) ? `<a class="k-btn pri" href="${itemHref(kind, 'form', it.id)}">${ki('doc', 16, 1.75)}편집</a>` : ''}`);
     if (!it.ready) return head + itemWait();
     if (it.err) return head + itemFailed(def, it);
     if (it.missing) return head + itemGone(def);
     const all = it.hist || [], list = it.hdep ? all.filter((e) => e.deployed) : all;
     const sel = list[Math.min(it.hsel, Math.max(list.length - 1, 0))];
-    // one taken out: named as its history names it, and put back as an edit of the request being written
-    const back = it.gone && canEdit() ? `<button class="k-btn pri" data-act="itrestore"${it.busy ? ' disabled' : ''}>${it.busy ? '되살리는 중' : '되살리기'}</button>` : '';
-    const bar = it.gone ? `<div class="k-bar"><span class="k-s">${esc(def.word)}</span><span class="k-code k-ink">${esc(it.x && def.code ? def.code(it.x) : it.gone.el.split(':').slice(1).join(':'))}</span><span class="k-14">${esc(it.x ? def.name(it.x) : it.gone.label)}</span><span class="k-chip bad">삭제됨</span><span class="k-push">${back}</span></div>`
+    // one taken out: named as its history names it
+    const bar = it.gone ? `<div class="k-bar"><span class="k-s">${esc(def.word)}</span><span class="k-code k-ink">${esc(it.x && def.code ? def.code(it.x) : it.gone.el.split(':').slice(1).join(':'))}</span><span class="k-14">${esc(it.x ? def.name(it.x) : it.gone.label)}</span><span class="k-chip bad">삭제됨</span><span class="k-push">${back('')}</span></div>`
       : itemNamed(def, it, itemActs(kind, it.id, { history: false }));
     const when = (at) => (at ? esc(String(at).slice(5, 16).replace('-', '/').replace('T', ' ')) : '');
     const rows = list.map((e, i) => `<button class="k-row tight${e === sel ? ' on' : ''}" data-act="ithsel" data-i="${i}"${e === sel ? ' aria-current="true"' : ''}><span class="k-h sb"><span class="k-h">${e.ver ? `<span class="k-code k-ink">${esc(e.ver)}</span>` : ''}${e.mark ? `<span class="k-s">${esc(e.mark)}</span>` : ''}${e.cp ? `<span class="k-code k-mut">${esc(e.cp)}</span>` : ''}</span><span class="k-s">${when(e.at)}</span></span><span class="k-14">${esc(e.say)}</span><span class="k-s">${esc(e.who || '')}</span></button>`).join('')
@@ -298,7 +300,7 @@
         const out = await api('item/restore', { element: it.gone.el });
         S.it = { key: '' };
         stale();
-        toast(out.how === 'undone' ? `${itemObj(def.word)} 지운 편집을 취소했습니다.` : '작성 중인 변경 요청에 되살리기를 추가했습니다.');
+        toast(out.how === 'undone' ? `${def.word} 삭제 편집을 취소했습니다.` : '작성 중인 변경 요청에 되살리기를 추가했습니다.');
         location.hash = '#' + (known('changes') ? 'changes?id=draft' : def.list);
       } catch (e) { it.busy = false; render(); fail(e); }
     },

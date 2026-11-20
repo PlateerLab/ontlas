@@ -143,6 +143,9 @@ def guide(video: Path | None) -> dict:
 # these take the session's lock only around its data, or not at all: a model's answer waits tens of seconds, and a
 # password touches the sign-ins only, so it does not queue behind a long measurement of the shared space
 OWN_LOCK = {"space/ask/more", "entry/password"}
+# in a team these are about the libraries themselves (which one a person looks at, one made, one taken away), not about
+# one studio: each takes the lock of the one studio it reads or writes itself (team.TeamSessions)
+TEAM_OWN_LOCK = {"library", "library/new", "library/drop", "entry/ontology/new"}
 
 
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
@@ -408,7 +411,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             sid, s, new = self._session()
             user = self._user()
             try:
-                if route in OWN_LOCK:
+                if team and user is not None:
+                    s = sessions.of(user, method, route)  # the studio of the library this person looks at
+                # a page that says which library it shows writes nothing into another: the person opened one elsewhere
+                # (another window) and this page has not read it yet. Opening one is how a page says it moves on
+                shown = self.headers.get("X-Ontlas-Library")
+                if method == "POST" and shown and shown != s.library_id and route != "library":
+                    raise ValueError("다른 창에서 온톨로지를 전환해 요청을 처리하지 못했습니다. 화면을 새로고침해 주세요.")
+                if route in OWN_LOCK or (team and route in TEAM_OWN_LOCK):
                     out = self._route(method, route, a, s, sid)
                 else:
                     with s.lock:
@@ -563,7 +573,7 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 if route == "integrations":
                     return s.integrations()
                 if route == "monitor":
-                    return {**s.monitor(), "visitors": len(getattr(sessions, "items", {})) or 1}
+                    return {**s.monitor(), "visitors": 1 if team else len(getattr(sessions, "items", {})) or 1}
                 if route == "manage":
                     return s.manage_state()
                 if route == "lexicon":
@@ -666,17 +676,18 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return s.catalog_upload(str(a["path"]), a["data"])
             if route == "files/sample":
                 return s.use_samples()
-            if route == "library":
-                return s.library_use(str(a.get("id", "")))
+            if route == "library":  # in a team the person looks at another library; the studio everyone works in stays
+                return sessions.look(self._user(), str(a.get("id", ""))) if team else s.library_use(str(a.get("id", "")))
             if route == "library/file":
                 return s.library_file(str(a["path"]), a["data"])
             if route == "library/file/drop":
                 return s.library_file_drop(str(a.get("name", "")))
             if route == "library/new":
-                return s.library_new(str(a.get("label", "")), str(a.get("start", "")), key=str(a.get("key", "")),
-                                     modules=a.get("modules") if isinstance(a.get("modules"), list) else None)
+                label, start = str(a.get("label", "")), str(a.get("start", ""))
+                kw = {"key": str(a.get("key", "")), "modules": a.get("modules") if isinstance(a.get("modules"), list) else None}
+                return sessions.make(s, self._user(), label, start, **kw) if team else s.library_new(label, start, **kw)
             if route == "library/drop":
-                return s.library_drop(str(a.get("id", "")))
+                return sessions.drop(self._user(), str(a.get("id", ""))) if team else s.library_drop(str(a.get("id", "")))
             if route == "pipeline":
                 if a.get("op") == "delete":  # taking a data source out is as connecting one: the admin's
                     who = self._user()

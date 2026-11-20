@@ -112,7 +112,7 @@
       const risk = (say, sub, btn) => `<div class="k-row"><span class="k-14 k-g">${say}<br><span class="k-s">${sub}</span></span>${btn}</div>`;
       const danger = `<section class="k-card"><div class="k-ch"><h2>위험 구역</h2></div>
           ${risk('다른 서버로 이전', '온톨로지 파일 내보내기', '<a class="k-btn dan" href="/api/export/library">내보내기</a>')}
-          ${d.made ? risk('삭제', '세션 생성 온톨로지 · 복구 불가', `<button class="k-btn dan" data-act="libdrop" data-id="${esc(d.id)}">삭제</button>`) : ''}
+          ${d.made ? risk('삭제', `${entMadeWord()} 온톨로지 · ${entKept() ? '삭제 후 복원 가능' : '복구 불가'}`, `<button class="k-btn dan" data-act="libdrop" data-id="${esc(d.id)}">삭제</button>`) : ''}
           ${inTeam() ? '' : risk('초기화', S.st.data.kept ? '변경 내용 삭제 · 저장소 파일 유지' : '업로드 자료 · 변경 내용 삭제', '<button class="k-btn dan" data-act="reset">초기화</button>')}
           ${known('ontologies') ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ontologies">온톨로지 선택${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
       return `<div class="k-cols"><div class="k-c3 wide">${basic}${naming}${ai}${targets}</div><div class="k-c2 wide">${approval}${out}${danger}</div></div>
@@ -177,14 +177,14 @@
     return head + admBody('overview', (d) => {
       const made = d.libraries.filter((x) => x.made).length, waits = d.todo.filter((t) => ['action', 'change', 'draft'].includes(t.kind)).length;
       const tend = admTend(d);
-      const stats = `<section class="k-wrap" aria-label="현황">${admStat('온톨로지', String(d.libraries.length), made ? `세션 생성 ${made}` : '서버 등록')}
+      const stats = `<section class="k-wrap" aria-label="현황">${admStat('온톨로지', String(d.libraries.length), made ? `${entMadeWord()} ${made}` : '서버 등록')}
         ${d.users === null ? '' : admStat('사용자', String(d.users), '팀 계정')}${admStat('승인 대기', String(waits), `현재 온톨로지 · 처리 대기 ${d.todo.length + tend.length}건`, waits ? 'warn' : '')}
         ${admStat('연동 대상', d.clients === null ? '-' : String(d.clients), d.rest ? 'REST /v1 · MCP' : '외부 API 사용 안 함')}</section>`;
       const num = (v) => (v === null || v === undefined ? '<span class="k-mut">-</span>' : String(v));
       const rows = d.libraries.map((x) => `<tr><td><button class="k-lnk flat" data-act="admOpen" data-id="${esc(x.id)}">${esc(x.label)}</button></td><td>${esc(admPacksSaid(x))}</td><td>${x.source ? esc(BACKEND_KIND[String(x.source).toLowerCase()] || x.source) : '<span class="k-mut">미연결</span>'}</td>
         <td>${x.levels ? `<span class="k-code k-blue">${esc(admLevel(x.levels))}</span>` : '<span class="k-mut">-</span>'}</td><td>${x.version ? `<span class="k-code k-mut">${esc(x.version)}</span>` : '<span class="k-mut">-</span>'}</td>
         <td>${x.accuracy === null || x.accuracy === undefined ? '<span class="k-mut">-</span>' : admShare(x.accuracy)}</td><td>${num(x.counts && x.counts.objects)}</td><td>${num(x.counts && x.counts.entities)}</td><td>${num(x.counts && x.counts.rules)}</td><td>${num(x.counts && x.counts.pending)}</td>
-        <td>${x.open ? kChip('현재', 'ok') : x.made ? kChip('세션 생성') : ''}</td></tr>`).join('');
+        <td>${x.open ? kChip('현재', 'ok') : x.made ? kChip(entMadeWord(), entKept() ? '' : 'warn') : ''}</td></tr>`).join('');
       const table = `<section class="k-card"><div class="k-ch"><h2>온톨로지</h2><span class="k-s">${d.libraries.length}개</span></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">이름</th><th scope="col">도메인 팩</th><th scope="col">데이터 소스</th><th scope="col">성숙도</th><th scope="col">운영 버전</th><th scope="col">정답률</th><th scope="col">Object</th><th scope="col">Entity</th><th scope="col">규칙</th><th scope="col">승인 대기</th><th scope="col">상태</th></tr></thead><tbody>${rows}</tbody></table></div>
         </section>`;
       const line = (href, title, detail, chip) => `<a class="k-row" href="#${href}"><span class="k-col"><span class="k-ink k-14">${esc(title)}</span>${detail ? `<span class="k-s">${esc(detail)}</span>` : ''}</span><span class="k-h end">${chip}</span>${ki('chevR', 16, 1.75)}</a>`;
@@ -491,7 +491,7 @@
       admCsv('ontlas-overview.csv', ['이름', '도메인 팩', '데이터 소스', '성숙도', '운영 버전', '정답률', 'Object', 'Entity', '규칙', '승인 대기', '상태'],
         d.libraries.map((x) => { const c = x.counts || {};
           return [x.label, admPacksSaid(x), x.source ? BACKEND_KIND[String(x.source).toLowerCase()] || x.source : '미연결', x.levels ? admLevel(x.levels) : '', x.version, admShare(x.accuracy),
-            c.objects, c.entities, c.rules, c.pending, x.open ? '현재' : x.made ? '세션 생성' : '']; }));
+            c.objects, c.entities, c.rules, c.pending, x.open ? '현재' : x.made ? entMadeWord() : '']; }));
     },
     admAuditCsv: () => { const d = admGot('audit'); if (d) admCsv('ontlas-audit.csv', ['시각', '사람', '종류', '내용'], d.rows.filter(admAuditHit).map((r) => [r.at, r.by, ADM_KIND[r.kind] || r.kind, r.text])); },
     admDiag: () => {

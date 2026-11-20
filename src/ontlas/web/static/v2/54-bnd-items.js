@@ -155,7 +155,7 @@
     },
     uses: async (x) => {  // what reads the Property, and the column a delete sets it back to, where the connected source can say
       const [rows, back] = await Promise.all([itemUsesOf(ITEM.map, x), api('bnd/reset?element=' + encodeURIComponent(`property:${x.p.object}.${x.p.name}`)).catch(() => null)]);
-      return [...rows, ...((back && back.reverts) || []).map((c) => ({ say: '되돌아갈 컬럼', sub: `${c.table}.${c.column} · ${c.exists ? '컬럼 확인됨' : '소스에 없음'}` }))];
+      return [...rows, ...((back && back.reverts) || []).map((c) => ({ say: '삭제 후 컬럼', sub: `${c.table}.${c.column} · ${c.exists ? '컬럼 확인됨' : '소스에 없음'}` }))];
     },
     drops: (x) => [['update_property', { object: x.p.object, name: x.p.name, column: '', transform: '', source_type: '' }]],
     remove: async (x) => { await bndEdits(ITEM.map.drops(x)); },

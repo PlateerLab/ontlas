@@ -260,3 +260,239 @@ def test_a_word_a_customer_label_gives_that_already_names_another_thing_is_an_en
     same = [t for t in modules[0].terms if t["term"] == "대기"]
     assert [t["concept"] for t in same] == ["object:Order", "value:Giveback.step=Waiting"]
     assert "channels" not in same[0] and same[1]["channels"] == {"고객": "무르기 신청"}
+
+
+def test_an_entity_two_files_both_list_is_one_entity_whichever_comes_first():
+    named = {"entities": [{"name": "Order", "class": "Order", "label_ko": "주문", "definition": "한 번의 결제로 묶인 거래"}]}
+    filled = {"entities": [{"class": "Order", "definition": "", "properties": [
+        {"name": "orderNumber", "label_ko": "주문번호", "kind": "값", "range": "Text", "cardinality": "1", "required": True}]}]}
+    more = {"entities": [{"class": "Order", "properties": [
+        {"name": "orderNumber", "label_ko": "다른 이름", "range": "Integer"},
+        {"name": "note", "label_ko": "메모", "kind": "값", "range": "Text", "cardinality": "0..1"}]}]}
+    made = [from_definitions(docs, "shop", requires=[])[0][0].body["objects"] for docs in ([named, filled, more], [filled, more, named])]
+    assert made[0] == made[1] and list(made[0]) == ["Order"]
+    order = made[0]["Order"]
+    assert order["label"] == "주문" and order["description"] == "한 번의 결제로 묶인 거래" and order["key"] == "orderNumber"
+    assert list(order["properties"]) == ["orderNumber", "note"] and order["properties"]["orderNumber"]["label"] == "주문번호"
+
+
+def test_an_entity_is_filed_under_the_object_its_row_names_by_label_or_by_english_name():
+    """As a rule's Object is read: the label, or the English name as the draft writes it. An Object the draft does not
+    have files the Entity under none."""
+    draft = {"objects": [{"label_ko": "주문", "class": "Order"}, {"label_ko": "손님", "class": "shop:Patron"}],
+             "entities": [{"name": "Receipt", "label_ko": "영수증", "object": "주문"},
+                          {"name": "Basket", "label_ko": "장바구니", "object": "Order"},
+                          {"name": "Member", "label_ko": "단골", "object": "Patron"},
+                          {"name": "Visit", "label_ko": "방문", "object": "shop:Patron"},
+                          {"name": "Coupon", "label_ko": "쿠폰", "object": "손님@shop:Patron"},
+                          {"name": "Shelf", "label_ko": "선반", "object": "창고"},
+                          {"name": "Note", "label_ko": "메모"}],
+             "rules": [{"id": "R-1", "type": "의무", "name": "영수증 발급", "object": "shop:Patron"}]}
+    modules, report = from_definitions([draft], "shop", requires=[])
+    assert {n: o.get("area") for n, o in modules[0].body["objects"].items()} == {
+        "Receipt": "Order", "Basket": "Order", "Member": "Patron", "Visit": "Patron", "Coupon": "Patron", "Shelf": None, "Note": None}
+    assert modules[0].body["rule_cards"][0]["applies_to"] == ["area:Patron"] and not [x for x in report.adjusted if "R-1" in x]
+
+
+# ---- the same draft kept as workbooks: a sheet to a section, named and headed in Korean as a team writes them ----
+
+BOOK = {
+    "안내": [["가게 표준 초안"], ["구성", "Object · Entity · Property · 열거형 · 관계 · 규칙 연결"]],
+    "Object 초안": [
+        ["번호", "Object 표기", "어휘", "정의", "상태 흐름", "주요 Entity", "Entity 수"],
+        [1, "주문@Order", "schema.org", "손님이 물건을 사려고 만든 거래", "접수 → 결제 → 배송 → 완료", "주문@Order, 주문 줄@shop:OrderLine", 2],
+        [2, "손님@shop:Patron", "shop", "가게에서 사는 사람", None, "손님@Person", 1],
+        ["합계", None, None, None, None, None, 3],
+    ],
+    "Entity": [
+        ["Entity", "영문 이름", "클래스", "어휘", "정의"],
+        ["주문", "Order", "Order", "schema.org", "한 번의 결제로 묶인 거래"],
+        ["주문 줄", "OrderLine", "shop:OrderLine", "shop", None],
+        ["손님", "Person", "Person", "schema.org", "—"],
+    ],
+    "Property": [
+        ["Entity 클래스", "Entity", "속성", "한글 이름", "종류", "어휘", "값 유형", "값 유형 (한글)", "개수", "필수"],
+        ["Order", "주문", "orderNumber", "주문번호", "값", "schema.org", "Text", "글", 1, "필수"],
+        ["Order", "주문", "orderStatus", "주문 상태", "열거형", None, "OrderStatus", "주문 상태", 1, "필수"],
+        ["Order", "주문", "shop:giftWrap", "선물 포장", "값", "shop", "Boolean", "참 · 거짓", "0..1", None],
+        ["Order", "주문", "validFrom", "받은 때", "값", None, "DateTime", "일시", "0..1", None],
+        ["Order", "주문", "customer", "주문한 손님", "관계", None, "Person", "손님", 1, None],
+        ["Order", "주문", "orderedItem", "주문 줄", "관계", None, "shop:OrderLine", "주문 줄", "1..n", None],
+        ["shop:OrderLine", "주문 줄", "shop:quantity", "수량", "값", None, "Integer", "정수", 1, "필수"],
+        ["shop:OrderLine", "주문 줄", "validFrom", "담은 날", "값", None, "Date", "날짜", "0..1", None],
+        ["Person", "손님", "identifier", "손님 번호", "값", None, "Text", "글", 1, "필수"],
+        ["Person", "손님", "orderedItem", "자주 사는 것", "값", None, "Text", "글", "0..1", None],
+        ["Person", "손님", "orderStatus", "요즘 형편", "값", None, "Text", "글", "0..1", None],
+        ["Person", "손님", "seller", "단골 가게", "관계", None, "shop:Nowhere", "없는 곳", "0..1", None],
+    ],
+    "열거형": [["열거형", "값 수", "값 (한글)"], ["OrderStatus", 2, "OrderProcessing · 처리 중\nOrderDelivered · 배송 완료"]],
+    "Object 관계": [["주어 Object", "관계 유형", "대상 Object", "개수"], ["주문", "ordered_by", "손님", "N:1"]],
+    "Entity 관계": [["주어 클래스", "속성", "대상 클래스", "개수", "뜻"], ["Order", "customer", "Person", 1, "주문한 손님"]],
+    "규칙 연결": [["규칙 ID", "관련 Entity (클래스)"], ["D-AX-01", "Order"]],
+}
+RULE_BOOK = {
+    "규칙 초안": [
+        ["초안 ID", "계층 제안", "영역", "유형", "규칙 이름", "조건", "결과", "예외 · 비고", "근거", "대표 법령", "근거 종류", "위반 시 · 위험",
+         "확인 수준", "가게 정책서 대조", "관련 Object · Entity", "적용 Object", "검토 상태"],
+        ["D-AX-01", "AXIOM 후보", "무르기", "제한", "무르기 기간 하한", "무르기 기간을 정할 때", "받은 날부터 7일 이내에는 무를 수 있어야 한다", "—",
+         "가게법 제3조", "가게법", "법률", "과태료", "조문 대조 필요", "정책서에 없음", "주문 · 무르기 접수", None, "초안"],
+        ["D-ST-01", "Standard 제안", None, "의무", "늦은 배송 알림", "배송이 늦어질 때", "새 예정일을 알린다", None, "업계 관행", None, None, None,
+         None, None, None, "손님", "초안"],
+        ["D-ST-02", "Standard 제안", None, "의무", "포장 상자 재사용", None, "상자를 다시 쓴다", None, None, None, None, None, None, None, None,
+         "창고", "초안"],
+        ["D-CU-01", "Custom", None, "판정", "단골 무르기", None, "단골은 14일까지 무를 수 있다", None, None, None, None, None, None, None, None,
+         None, "초안"],
+    ],
+    "규칙 연결": [["규칙 ID", "주 Object"], ["D-AX-01", "주문"]],
+    "기준값": [["키", "값", "종류", "쓰는 규칙 (초안 ID)", "쓰는 규칙 수"], ["@undo_days_min", 7, "법정 기준", "D-AX-01", 1],
+            ["@late_fee_rate", "15%", "법정 기준", None, 0], ["@cutoff_time", "14:00", "제안 기본값", None, 0]],
+    "금지 표현": [["품목 · 상황", "표현 예", "구분", "이유", "근거", "쓸 수 있는 조건 · 대체 표현"],
+              ["먹을거리", "병을 고치는 · 약 대신", "금지", "약으로 오인", "먹을거리법 제8조", "성분 사실만 표기"],
+              ["값", "제일 싼", "조건부", "근거 없는 최상급", "가게법 제5조", "조사 기간 · 범위를 함께 표기"]],
+    "근거 법령": [["대표 법령", "규칙 수"], ["가게법", 1]],
+}
+WORD_BOOK = {
+    "안내": [["가게 용어"]],
+    "용어": [["용어", "영문 표기", "연결 개념", "정의", "동의어"], ["선물 포장", "shop:giftWrap", "주문 › 주문", "선물로 싸 주는 것", "포장 서비스"]],
+    "표현 관계": [["관계", "표준 용어 (A)", "다른 표현 (B)", "설명"],
+              ["혼동주의", "주문 줄@shop:OrderLine", "주문", "주문은 묶음, 주문 줄은 그 안의 한 줄"],
+              ["동의어", "손님@Person", "고객, 구매자", None], ["쓰지 않는 표현", "손님@Person", "호갱", None]],
+    "고객 표기": [["관리자 표기 (처리 단계)", "고객 표기", "표준 값"], ["출고확정 · 배송지시", "상품준비중", "OrderProcessing"]],
+    "보존어": [["표현", "종류"], ["안 · 못", "부정어"]],
+    "집계": [["집계"], ["구분", "수"], ["용어", 1]],
+}
+
+
+def workbook(sheets: dict) -> bytes:
+    import io
+
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for title, rows in sheets.items():
+        ws = wb.create_sheet(title)
+        for row in rows:
+            ws.append(row)
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+@pytest.fixture(scope="module")
+def books():
+    from ontlas.exchange.workbook import read_workbook
+
+    return [read_workbook(workbook(sheets), name) for sheets, name in ((BOOK, "draft.xlsx"), (RULE_BOOK, "rules.xlsx"), (WORD_BOOK, "words.xlsx"))]
+
+
+def test_a_draft_kept_as_workbooks_makes_the_modules_its_yaml_makes(made, books):
+    """Every sheet is read as the section of its name and every column as the key its header names, so what comes out is
+    what the same draft as YAML gives: Objects, Entities with their properties and codes, relations, cards, values, terms."""
+    modules, report = made
+    from_books, book_report = from_definitions(books, "shop", requires=[])
+    assert [m.to_dict() for m in from_books] == [m.to_dict() for m in modules]
+    assert sorted(book_report.adjusted) == sorted(report.adjusted)
+    assert books[0]["meta"]["title"] == "가게 표준 초안" and books[0]["meta"]["notation"] == {"schema.org": "https://schema.org/"}
+    assert {k: len(v) for k, v in books[0].items() if k != "meta"} == {"objects": 2, "entities": 3, "enumerations": 1,
+                                                                        "object_relations": 1, "entity_relations": 1, "rule_links": 1}
+    order = books[0]["entities"][0]
+    assert order["properties"][0] == {"name": "orderNumber", "label_ko": "주문번호", "kind": "값", "vocabulary": "schema.org",
+                                      "range": "Text", "cardinality": "1", "required": True}
+    assert books[0]["objects"][0]["entities"] == [{"class": "Order", "label_ko": "주문"}, {"class": "shop:OrderLine", "label_ko": "주문 줄"}]
+    assert "exception" not in books[1]["rules"][0] and "definition" not in books[0]["entities"][2]  # a dash is an empty cell
+    assert books[1]["rules"][0]["policy_check"] == "정책서에 없음"  # whose policy it is may be written before the name
+    assert books[2]["term_relations"][1]["expressions"] == ["고객", "구매자"] and books[2]["customer_labels"][0]["admin_labels"] == ["출고확정", "배송지시"]
+
+
+def test_what_a_workbook_holds_that_was_not_read_is_in_the_report(books):
+    """A sheet that is no section (notes, a tally, a table the import has no place for), a column that is no key of its
+    section and a row that names nothing (a total) are each said, by the sheet's own name."""
+    _, report = from_definitions(books, "shop", requires=[])
+    said = [x for x in report.unsupported if x.startswith("sheet ")]
+    assert "sheet '안내' of draft.xlsx: notes, not a table of rows; only its first line was read, as the draft's title" in said
+    assert "sheet '안내' of words.xlsx: notes, not a table of rows; only its first line was read, as the draft's title" in said
+    assert "sheet 'Object 초안' of draft.xlsx: columns not read: 번호, Entity 수" in said
+    assert "sheet 'Object 초안' of draft.xlsx: 1 of its rows name no item (a total, a note), not read" in said
+    assert "sheet 'Property' of draft.xlsx: columns not read: Entity, 값 유형 (한글)" in said  # the nearer of two headers is the key's
+    assert "sheet '규칙 초안' of rules.xlsx: columns not read: 검토 상태" in said
+    assert "sheet '기준값' of rules.xlsx: columns not read: 쓰는 규칙 수" in said
+    assert "sheet '근거 법령' of rules.xlsx (1 rows): not a section of a draft, not read" in said
+    assert "sheet '보존어' of words.xlsx (1 rows): not a section of a draft, not read" in said
+    assert "sheet '집계' of words.xlsx (2 rows): not a section of a draft, not read" in said
+    assert len(said) == 12 and not any(x.startswith("section ") for x in report.unsupported)
+
+
+def test_a_sheet_is_read_by_its_yaml_keys_too_under_a_title_and_a_synonym_may_hold_a_middle_dot():
+    from ontlas.exchange.workbook import COLUMNS, draft_of, read_workbook
+
+    doc = read_workbook(workbook({"Sheet1": [["가게 말 목록"], [], ["id", "term", "definition", "synonyms", "memo"],
+                                             ["W-1", "무르기", "산 것을 되돌리는 일", "되돌리기, 도로 내기", "나중에"],
+                                             ["W-2", "먼 곳 배송비", None, "섬 · 산골 배송비", None]]}), "terms.xlsx")
+    assert doc["terms"] == [{"id": "W-1", "term": "무르기", "definition": "산 것을 되돌리는 일", "synonyms": ["되돌리기", "도로 내기"]},
+                            {"id": "W-2", "term": "먼 곳 배송비", "synonyms": ["섬 · 산골 배송비"]}]  # the one sheet, by its file's name
+    assert doc["meta"]["not_read"] == ["sheet 'Sheet1' of terms.xlsx: columns not read: memo"]
+    # a sheet named only `relations` is the kind its columns say, as a YAML draft's `relations` is
+    pairs = read_workbook(workbook({"relations": [["relation", "standard", "expressions"], ["동의어", "손님", "고객 · 구매자"]],
+                                    "Properties": [["entity", "name", "range"], ["Parcel", "weight", "Number"]]}), "more.xlsx")
+    assert pairs["term_relations"] == [{"relation": "동의어", "standard": "손님", "expressions": ["고객", "구매자"]}]
+    assert pairs["entities"] == [{"class": "Parcel", "properties": [{"name": "weight", "range": "Number"}]}]  # an Entity by its properties alone
+    assert draft_of([]) == {}
+    for section, keys in COLUMNS.items():  # a name is one key's within a section
+        names = [n.lower() for spelled in keys.values() for n in spelled]
+        assert len(names) == len(set(names)), section
+
+
+def test_a_file_that_is_no_workbook_or_holds_no_section_says_why():
+    from ontlas.draft import ReadError
+    from ontlas.exchange.workbook import read_workbook
+
+    with pytest.raises(ReadError) as e:
+        read_workbook(b"not a workbook", "draft.xlsx")
+    assert e.value.reason == "workbook"
+    with pytest.raises(ReadError, match="its sheets: 매출, 메모") as e:
+        read_workbook(workbook({"매출": [["날짜", "금액"], ["2026-01-02", 1200]], "메모": [["한 줄"]]}), "sales.xlsx")
+    assert e.value.reason == "empty"
+
+
+def test_the_command_takes_workbooks(tmp_path, capsys):
+    import json
+
+    pytest.importorskip("yaml")  # a module is written as YAML
+    from ontlas.cli import main
+
+    files = []
+    for sheets, name in ((BOOK, "draft.xlsx"), (RULE_BOOK, "rules.xlsx"), (WORD_BOOK, "words.xlsx")):
+        files.append(tmp_path / name)
+        files[-1].write_bytes(workbook(sheets))
+    assert main(["library", "import-definitions", str(tmp_path / "lib"), "shop", *map(str, files)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["created"] == ["shop@0.1.0", "shop-axiom@0.1.0", "shop-custom@0.1.0"]
+    assert out["elements"]["shop"]["object"] == 3 and out["elements"]["shop"]["term"] == 4 and out["elements"]["shop-axiom"]["rule_card"] == 3
+    assert "sheet '근거 법령' of rules.xlsx (1 rows): not a section of a draft, not read" in out["report"]["unsupported"]
+    assert Library(tmp_path / "lib").get("shop").label == "가게 표준 초안"
+
+
+def test_the_page_takes_a_workbook_as_a_draft_s_file():
+    pytest.importorskip("yaml")
+    pytest.importorskip("rdflib")  # the example studio projects a graph
+    from pathlib import Path
+
+    from ontlas.config import load_studio
+    from ontlas.web import library_entry
+    from ontlas.web.api import StudioSession
+
+    shop = Path(__file__).resolve().parent.parent / "examples" / "library" / "studio.yaml"
+    first = load_studio(shop)
+    session = StudioSession(first)
+    session.libraries = [library_entry("l1", shop, first)]
+    held = session.library_file("draft.xlsx", workbook(BOOK))
+    assert held["files"][0]["kind"] == "definitions" and held["files"][0]["sections"]["entities"] == 3
+    session.library_file("rules.xlsx", workbook(RULE_BOOK))
+    for name, data, why in (("broken.xlsx", b"PK no workbook", "XLSX 형식이 아니어서"),
+                            ("sales.xlsx", workbook({"매출": [["날짜", "금액"], ["2026-01-02", 1200]]}), "정의 목록이 없어")):
+        with pytest.raises(ValueError, match=why):
+            session.library_file(name, data)
+    assert [f["name"] for f in session.library_files()["files"]] == ["draft.xlsx", "rules.xlsx"]
+    out = session.library_new("가게 표준", "files", key="shop")
+    assert out["made"]["areas"] == 2 and out["made"]["objects"] == 3 and out["made"]["links"] == 2 and out["made"]["cards"] == 6
+    assert out["made"]["parameters"] == 3 and any(x.startswith("sheet '근거 법령'") for x in out["report"]["unsupported"]["lines"])

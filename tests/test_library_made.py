@@ -172,7 +172,7 @@ def test_in_a_team_studio_an_admin_makes_and_drops_libraries():
     from ontlas.web.team import NEEDS
 
     assert {NEEDS[r] for r in ("library/file", "library/file/drop", "library/new", "library/drop")} == {"admin"}
-    assert NEEDS["library"] == "editor"  # opening one stays with those who work in it
+    assert "library" not in NEEDS  # which one a person looks at is their own: anyone signed in opens one
 
 
 def test_over_http_a_file_is_the_body_and_the_zip_comes_back():

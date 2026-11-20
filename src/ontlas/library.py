@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ontlas.modules import KINDS, SECTIONS, SINGULAR, Module, ModuleError, Requirement, version_key
 
 APPLIED = "applied.yaml"  # beside the modules, written by a studio that keeps what was switched on and off
+STUDIO_FILE = "studio.yaml"  # a studio folder's own file, its modules under MODULES beside it
+MODULES = "library"
+DELETED = ".deleted"  # on a shelf: where a library taken away is moved, whole
 
 
 class Library:
@@ -207,3 +212,96 @@ class OverlayLibrary(Library):
 
     def delete(self, name: str, version: str = "") -> None:
         raise ModuleError("modules held in memory are not deleted from here")
+
+
+class Shelf:
+    """Where a server that writes keeps the libraries made on its page: a studio folder each under one root
+    (<root>/<key>/studio.yaml, its modules under <root>/<key>/library), found again at the next start. One taken away
+    is moved whole under <root>/.deleted and can be put back: a folder that was served is never deleted from here."""
+
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+
+    @staticmethod
+    def _read(home: Path) -> dict | None:
+        import yaml
+
+        try:
+            spec = yaml.safe_load((home / STUDIO_FILE).read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return None
+        return spec if isinstance(spec, dict) else None
+
+    @staticmethod
+    def _write(home: Path, spec: dict) -> None:
+        import yaml
+
+        (home / STUDIO_FILE).write_text(yaml.safe_dump(spec, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+    def _under(self, root: Path) -> list[tuple[Path, dict]]:
+        if not root.is_dir():
+            return []
+        found = [(p, self._read(p)) for p in sorted(root.iterdir()) if p.is_dir() and not p.name.startswith(".")]
+        return [(p, spec) for p, spec in found if spec is not None]
+
+    def kept(self) -> list[tuple[Path, dict]]:
+        """Every library on the shelf: its folder and its studio file as read."""
+        return self._under(self.root)
+
+    def deleted(self) -> list[tuple[Path, dict]]:
+        return self._under(self.root / DELETED)
+
+    def number(self) -> int:
+        """The number the next library is made with: one past every number given so far, so one that was taken away
+        never shares its id with a later one."""
+        from ontlas.journal import next_number
+
+        return next_number([str((spec.get("made") or {}).get("id") or "") for _, spec in [*self.kept(), *self.deleted()]], "s")
+
+    def write(self, key: str, spec: dict, modules: list[Module]) -> Path:
+        """A new library as a studio folder; the path of its studio file. It is written beside the shelf's others and
+        moved into place whole, so one cut off midway is never found half written."""
+        home = self.root / key
+        if home.exists():
+            raise FileExistsError(key)
+        tmp = self.root / f".new-{key}"
+        if tmp.exists():  # what a write that was cut off left
+            shutil.rmtree(tmp)
+        lib = Library(tmp / MODULES)
+        for m in modules:
+            lib.save(m)
+        self._write(tmp, spec)
+        os.replace(tmp, home)
+        return home / STUDIO_FILE
+
+    def remove(self, key: str, *, by: str = "") -> Path:
+        """Take a library off the shelf: its folder moves under .deleted, with who took it away and when."""
+        home = self.root / key
+        spec = self._read(home)
+        if spec is None:
+            raise FileNotFoundError(key)
+        now = datetime.now()
+        to = self.root / DELETED / f"{key}.{now:%Y%m%d%H%M%S}"
+        n = 1
+        while to.exists():
+            n += 1
+            to = to.with_name(f"{key}.{now:%Y%m%d%H%M%S}-{n}")
+        to.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(home, to)
+        deleted = {"at": now.isoformat(timespec="seconds"), "by": by}
+        self._write(to, {**spec, "made": {**(spec.get("made") or {}), "deleted": deleted}})
+        return to
+
+    def restore(self, name: str) -> tuple[Path, dict]:
+        """Put back a library that was taken away, under the key it had: its folder and its studio file."""
+        hit = next(((p, spec) for p, spec in self.deleted() if p.name == name), None)
+        if hit is None:
+            raise FileNotFoundError(name)
+        src, spec = hit
+        home = self.root / name.rsplit(".", 1)[0]
+        if home.exists():
+            raise FileExistsError(home.name)
+        spec = {**spec, "made": {k: v for k, v in (spec.get("made") or {}).items() if k != "deleted"}}
+        os.replace(src, home)
+        self._write(home, spec)
+        return home, spec

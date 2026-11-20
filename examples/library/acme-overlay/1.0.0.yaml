@@ -51,12 +51,16 @@ remove:
 rule_cards:
   - id: acme-vip-window
     type: decide
+    category: 반품
     statement: VIP 고객은 배송 완료 후 14일까지 반품할 수 있습니다.
-    applies_to: [object:OrderItem, object:Customer]
+    applies_to: [area:Claim, object:OrderItem, object:Customer]
+    related: 반품 처리 기록
     conditions: [고객 등급 VIP, 주문상품 상태 정상, 반품 가능 카테고리]
     result: 배송 완료 후 14일 이내이면 반품 가능
     params: {days: 14}
     source: ACME 운영 정책 4.1
+    source_kind: 고객사 정책
+    policy_check: 정책서와 일치
     owner: 고객경험팀
     status: approved
     legal_review: done

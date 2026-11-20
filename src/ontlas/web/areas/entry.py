@@ -2,8 +2,8 @@
 from another, and what waits on the person, what happened and what was settled.
 
 An ontology is a library the deployment offers (a studio file) or one made on the page. The one open and the ones this
-session opened before are read from their studios; one not opened yet is read from its files alone, without opening
-what it reads from, so the list never waits on a source.
+session opened before (in a team, the ones anyone has open) are read from their studios; one not opened yet is read
+from its files alone, without opening what it reads from, so the list never waits on a source.
 """
 from __future__ import annotations
 
@@ -19,20 +19,12 @@ WRONG_PER_MINUTE = 5
 _wrong: dict[str, list[float]] = {}  # user id -> when a wrong current password was given, to slow guessing down
 
 
-def _held_studio(s, x: dict):
-    """The studio of a library this session holds: the one open, or one it opened or made before."""
-    if x["id"] == s.library_id:
-        return s.studio
-    held = s._library_held.get(x["id"])
-    if not held:
-        return None
-    pipes, pid = held
-    return next(p for p in pipes if p["id"] == pid)["studio"]
-
-
 def _held_log(s, x: dict) -> list[dict]:
     if x["id"] == s.library_id:
         return s.log
+    if s.team is not None:
+        other = s.team.items.get(x["id"])
+        return list(other.log[:1]) if other is not None else []
     held = s._library_held.get(x["id"])
     if not held:
         return []
@@ -42,10 +34,15 @@ def _held_log(s, x: dict) -> list[dict]:
 
 def _light(s, x: dict):
     """(the definition, the modules applied, the library's rows, a description) of a library not opened yet, from its
-    files: the studio file and the modules it names, composed. Kept for the session; None where it cannot be read."""
+    files: the studio file and the modules it names, composed. Kept for the session while its studio file stands as it
+    was (one taken away and put back is written again, and read again); None where it cannot be read."""
     kept = s.__dict__.setdefault("_entry_light", {})
-    if x["id"] in kept:
-        return kept[x["id"]]
+    try:
+        sig = Path(x["path"]).stat().st_mtime_ns
+    except OSError:
+        sig = 0
+    if kept.get(x["id"], (None,))[0] == sig:
+        return kept[x["id"]][1]
     out = None
     try:
         import yaml
@@ -71,7 +68,7 @@ def _light(s, x: dict):
             out = (o, [], [], str(spec.get("description") or ""), 0)
     except Exception:  # a file that no longer reads: the row keeps its name and says nothing more
         out = None
-    kept[x["id"]] = out
+    kept[x["id"]] = (sig, out)
     return out
 
 
@@ -110,7 +107,7 @@ def _one(s, x: dict) -> dict:
     from ontlas.bindings import entity_level
 
     current = x["id"] == s.library_id
-    studio = _held_studio(s, x)
+    studio = s.library_studio(x["id"])
     out: dict[str, Any] = {"id": x["id"], "label": x["label"], "made": bool(x.get("made")), "current": current,
                            "held": studio is not None, "source": x.get("source", ""), "description": str(x.get("description") or ""),
                            "base": "", "modules": [], "counts": None, "maturity": None, "version": "", "last": None}
@@ -156,28 +153,26 @@ def _one(s, x: dict) -> dict:
 
 @get("entry/ontologies")
 def ontologies(s, a, who) -> dict:
-    """Every ontology there is to choose, each with what it is made of and how far it has come."""
-    from ontlas.web.api import LIBRARIES_MADE_MAX, plain
+    """Every ontology there is to choose, each with what it is made of and how far it has come. Where the server
+    keeps the ones made here, those who make them also read the ones taken away, to put one back."""
+    from ontlas.web.api import plain
 
     made = sum(bool(x.get("made")) for x in s.libraries)
-    return plain({"ontologies": [_one(s, x) for x in s.libraries], "current": s.library_id, "made": made,
-                  "made_max": LIBRARIES_MADE_MAX})
+    return plain({"ontologies": [_one(s, x) for x in list(s.libraries)], "current": s.library_id, "made": made,
+                  "made_max": s.made_max,
+                  "deleted": s.library_deleted() if who is None or who.may("admin") else []})
 
 
 @get("entry/export")
 def export(s, a, who):
-    """One ontology's definitions as a zip, read by its id: the one in use stays in use, for the person and for the team.
-    One not in use asks as much as switching to it does. The zip is the one the open ontology exports (export/library)."""
+    """One ontology's definitions as a zip, read by its id: the one the person looks at stays the one they look at.
+    The zip is the one the open ontology exports (export/library)."""
     from types import SimpleNamespace
-
-    from ontlas.web.team import NEEDS
 
     x = next((y for y in s.libraries if y["id"] == str(a.get("id") or "")), None)
     if x is None:
         raise ValueError("온톨로지를 찾지 못해 내보내지 못했습니다. 온톨로지 목록을 다시 열어 주세요.")
-    if x["id"] != s.library_id:
-        routes.require(who, NEEDS["library"])
-    studio = _held_studio(s, x)
+    studio = s.library_studio(x["id"])
     if studio is None:  # not opened yet: composed from its files, as the list reads it
         light = _light(s, x) if x.get("path") else None
         if light is None:
@@ -195,28 +190,32 @@ def ontology_new(s, a, who) -> dict:
     if start not in ("pack", "base", "files", "empty"):
         raise ValueError("시작 방법을 선택하지 않아 생성하지 못했습니다. 시작 방법을 선택해 주세요.")
     came = s.library_id
-    base = None
+    base, modules = None, None
     if start in ("pack", "base"):
         base = next((x for x in s.libraries if x["id"] == str(a.get("base") or came)), None)
         if base is None:
             raise ValueError("기반 온톨로지를 찾지 못해 생성하지 못했습니다. 기반 온톨로지를 다시 선택해 주세요.")
-        modules = [str(m) for m in (a.get("modules") or [])] if start == "pack" else []
+        modules = [str(m) for m in (a.get("modules") or [])] if start == "pack" else None
         if start == "pack" and not modules:
             raise ValueError("적용할 모듈이 없어 생성하지 못했습니다. 도메인 팩 모듈을 하나 이상 선택해 주세요.")
-        if base["id"] != came:
-            s.library_use(base["id"])
+    said = {"key": str(a.get("key") or ""), "modules": modules, "description": str(a.get("description") or "")}
+    label, start = str(a.get("label") or ""), "base" if base is not None else start
+    if s.team is not None:  # made in the base's own studio; only the person who made it goes on to look at it
+        return s.team.make(s, who, label, start, base=base["id"] if base is not None else "", **said)
+    if base is not None and base["id"] != came:
+        s.library_use(base["id"])
     try:
-        out = s.library_new(str(a.get("label") or ""), "base" if base is not None else start, key=str(a.get("key") or ""),
-                            modules=modules if start == "pack" else None)
+        return s.library_new(label, start, **said)
     except Exception:
         if s.library_id != came:  # nothing was made: the person is back on the ontology they were on
             s.library_use(came)
         raise
-    made = next(x for x in s.libraries if x["id"] == out["id"])
-    made["description"] = " ".join(str(a.get("description") or "").split())[:200]
-    if base is not None:
-        made["base"], made["base_label"] = base["id"], base["label"]
-    return out
+
+
+@post("entry/ontology/restore", needs="admin")
+def ontology_restore(s, a, who) -> dict:
+    """An ontology that was taken away, put back as it was."""
+    return s.library_restore(str(a.get("id") or ""))
 
 
 def _decided(s) -> list[dict]:

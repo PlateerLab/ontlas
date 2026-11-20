@@ -2,7 +2,7 @@ module: commerce-law
 version: 1.0.0
 kind: axiom
 label: 법령 기준 (예시)
-description: 가상의 소비자 보호 법령을 예시로 옮긴 AXIOM 규칙입니다. 배송 전 반품 불가 규칙을 법령 기준으로 두고, 반품 기간이 7일보다 짧지 않은지 확인합니다. 판정에서 가장 먼저 확인하며, 고객사 모듈과 관리 변경으로 바꾸거나 지울 수 없습니다.
+description: 전자상거래 소비자 보호 법령을 예시로 옮긴 AXIOM 규칙입니다. 배송 전 반품 불가 규칙을 법령 기준으로 두고, 반품 기간이 7일보다 짧지 않은지 확인합니다. 판정에서 가장 먼저 확인하며, 고객사 모듈과 관리 변경으로 바꾸거나 지울 수 없습니다.
 requires: [commerce]
 
 extend:
@@ -20,13 +20,18 @@ extend:
 rule_cards:
   - id: law-return-min-days
     type: decide
+    category: 반품
     statement: 단순 변심 반품은 배송 완료 후 7일까지 받아야 합니다. 반품 기간을 7일보다 짧게 정할 수 없습니다.
-    applies_to: [object:OrderItem, parameter:return_window_days]
+    applies_to: [area:Claim, object:OrderItem, parameter:return_window_days]
+    related: 카테고리
     conditions: [단순 변심으로 반품을 신청]
     result: 배송 완료 후 7일 이내이면 반품 가능
     exceptions: [반품할 수 없는 카테고리(위생 상품 등)]
     params: {min_days: 7}
     source: 소비자 보호 법령 (예시) 청약철회 조항
+    law: 전자상거래 등에서의 소비자보호에 관한 법률 제17조
+    source_kind: 법률
+    policy_check: 정책서와 일치
     owner: 법무팀
     status: approved
     legal_review: done
@@ -34,31 +39,44 @@ rule_cards:
     check: {parameter: return_window_days, min: 7}
   - id: law-delivered-first
     type: decide
+    category: 반품
     statement: 배송이 끝나지 않은 주문상품은 반품 대상이 아닙니다. 배송 전에는 주문 취소로 처리합니다.
-    applies_to: [object:OrderItem]
+    applies_to: [area:Claim, object:OrderItem]
     conditions: [배송 완료 일시가 없음]
     result: 반품 불가
     source: 소비자 보호 법령 (예시) 청약철회 조항
+    law: 전자상거래 등에서의 소비자보호에 관한 법률 제17조
+    source_kind: 법률
+    policy_check: 정책서와 일치
     owner: 법무팀
     status: approved
     legal_review: done
     implements: [decision:returnEligibility#not-delivered]
   - id: law-refund-cap
     type: compute
+    category: 환불
     statement: 환불 금액은 0원보다 작을 수 없고 결제 금액을 넘을 수 없습니다.
-    applies_to: [object:OrderItem]
+    applies_to: [area:Payment, object:OrderItem]
+    related: 결제 · 환불
     result: 0 ≤ 환불 금액 ≤ 결제 금액
     source: 소비자 보호 법령 (예시) 환불 조항
+    law: 전자상거래 등에서의 소비자보호에 관한 법률 제18조
+    source_kind: 법률
+    policy_check: 관련 내용 있음
     owner: 정산팀
     status: approved
     legal_review: done
     implements: [function:refundEstimate]
   - id: law-price-shown
     type: display
+    category: 가격 표시
     statement: 결제 화면에 보이는 판매가는 실제로 결제하는 판매가와 같아야 합니다.
-    applies_to: [object:CheckoutRecord, property:Sku.price]
+    applies_to: [area:Product, object:CheckoutRecord, property:Sku.price]
     result: 표시 판매가 = 단품 판매가
     source: 소비자 보호 법령 (예시) 가격 표시 조항
+    law: 전자상거래 등에서의 소비자보호에 관한 법률 제13조
+    source_kind: 법률
+    policy_check: 정책서에 없음
     owner: 상품운영팀
     status: review
     legal_review: pending

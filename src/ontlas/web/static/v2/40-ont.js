@@ -276,7 +276,7 @@
     const fns = [...new Map((rest || []).flatMap((c) => (c.implements || []).filter((r) => r && r.kind === 'function')).map((r) => [r.ref, r])).values()];
     const fnLink = (f) => (f.found && canEdit() ? `<a href="${itemHref('param', 'form', f.ref)}">${esc(f.label)}</a>` : esc(f.label));
     const restBox = `<section class="ont-rest" aria-labelledby="ont-rs-h"><div class="k-h sb"><h2 id="ont-rs-h">Restriction</h2><a class="k-lnk" href="#semrules">편집</a></div>
-      ${rest === null ? '<p class="k-p s">불러오는 중입니다.</p>' : rest.length ? `${shown.map((c) => `<p class="k-14" style="margin:0;line-height:1.55">${esc(c.statement || c.result || c.id)}</p>`).join('')}<p class="k-warn k-13" style="margin:0">규칙 ${esc(shown.map((c) => c.id).join(', '))}${rest.length > 3 ? ` 외 ${rest.length - 3}` : ''}</p>${fns.length ? `<p class="k-13" style="margin:0">연결 함수 · ${fns.map(fnLink).join(', ')}</p>` : ''}`
+      ${rest === null ? '<p class="k-p s">불러오는 중입니다.</p>' : rest.length ? `${shown.map((c) => `<p class="k-14" style="margin:0;line-height:1.55">${esc(c.statement || c.result || c.id)}</p>`).join('')}<p class="k-warn k-13" style="margin:0">규칙 ${esc(shown.map((c) => c.id).join(', '))}${rest.length > 3 ? ` 외 ${rest.length - 3}` : ''}</p>${fns.length ? `<p class="k-warn k-13" style="margin:0">연결 함수 · ${fns.map(fnLink).join(', ')}</p>` : ''}`
         : `<p class="k-14" style="margin:0;line-height:1.55">적용된 Restriction이 없습니다.</p>${cards.length ? `<p class="k-s" style="margin:0">적용 규칙 ${cards.length}개</p>` : ''}`}</section>`;
     const prep = `<section class="ont-prep" aria-labelledby="ont-cp-h"><h2 id="ont-cp-h">연결 준비 정보</h2>
       ${ontKv('식별 키 후보', o.key ? `<span class="k-code">${esc(o.key)}</span>` : '-')}${ontKv('소스 후보', o.table ? `<span class="k-code">${esc(o.table)}</span>${o.rows !== null && o.rows !== undefined ? ` · ${show(o.rows)}행` : ''}` : '-')}${ontKv('계산 Property', o.computed ? `${o.computed}개` : '없음')}</section>`;
@@ -705,10 +705,11 @@
         const fixed = p.inherited || p.calc, off = p.del || fixed ? ' disabled' : '';
         const cell = (k, more = '') => `<input class="k-in sm${k === 'name' ? ' mono' : ''}" type="text" data-in="ontPf" data-i="${i}" data-k="${k}" value="${esc(p[k])}" aria-label="${{ name: '이름', label: '한글', values: '허용값' }[k]}"${more}>`;
         const v = S.ont.vocab, words = [['ext', `확장${v && v.prefix ? ` ${v.prefix}:` : ''}`], ['schema', 'schema.org'], ...(p.vocab0 === 'other' ? [['other', p.vword]] : [])];
-        const voc = fixed || !v || v.failed ? ontVocChip(o ? o.name : '', p.was, true)
+        const voc = fixed || !v || v.failed ? `<span>${ontVocChip(o ? o.name : '', p.was, true)}</span>`
           : `<select class="k-in sm" data-in="ontPf" data-i="${i}" data-k="vocab" aria-label="어휘"${off}>${words.map(([k, w]) => opt(k, w, p.vocab)).join('')}</select>`;
-        return `<tr${p.del ? ' style="opacity:.5"' : ''}><td class="tight">${cell('name', p.was ? ' disabled' : ' placeholder="예: return_reason"')}</td><td class="tight">${voc}</td><td class="tight">${cell('label', `${off} placeholder="예: 반품 사유"`)}</td>
-          <td class="tight"><select class="k-in sm" style="min-width:124px" data-in="ontPf" data-i="${i}" data-k="type" aria-label="타입"${off}>${TYPES.map((t) => opt(t, t, p.type)).join('')}</select></td>
+        // the vocabulary under the name it qualifies: side by side the two leave neither wide enough to be read
+        return `<tr${p.del ? ' style="opacity:.5"' : ''}><td class="tight"><div class="k-v g4">${cell('name', p.was ? ' disabled' : ' placeholder="예: return_reason"')}${voc}</div></td><td class="tight">${cell('label', `${off} placeholder="예: 반품 사유"`)}</td>
+          <td class="tight"><select class="k-in sm" data-in="ontPf" data-i="${i}" data-k="type" aria-label="타입"${off}>${TYPES.map((t) => opt(t, t, p.type)).join('')}</select></td>
           <td class="tight">${p.calc ? '<span class="k-s">계산값</span>' : p.inherited ? `<span class="k-s">상속 · ${esc(mgLabel(p.inherited))}</span>` : `<span class="k-h nw">${cell('values', `${off} placeholder="쉼표로 구분"`)}<label class="k-ck mid k-13" style="white-space:nowrap"><input type="checkbox" data-in="ontPf" data-i="${i}" data-k="required"${p.required ? ' checked' : ''}${off || (p.key ? ' disabled' : '')}>필수</label></span>`}</td>
           <td class="tight r">${p.key ? '<span class="k-chip">식별 키</span>' : fixed ? '' : `<button class="k-lnk" type="button" data-act="ontPdel" data-i="${i}">${p.del ? '삭제 취소' : '삭제'}</button>`}</td></tr>`;
       };
@@ -722,7 +723,7 @@
         <label class="k-f">상위 Entity<select class="k-in" data-in="itf" data-k="parent"><option value="">없음</option>${m.objects.filter((x) => x.name !== d.name).map((x) => opt(x.name, ontName(x), d.parent)).join('')}</select></label>
         ${o ? `<label class="k-f">상태${ontStatus(d.status)}</label>` : ''}`)}
         <section class="k-card"><div class="k-ch"><h2>Property</h2><span class="k-chip">${d.props.filter((p) => !p.del).length}</span><span class="k-pha k-push"><button class="k-lnk" type="button" data-act="ontPadd">${ki('plus', 16, 1.75)}Property</button></span></div>
-        <div class="k-x"><table class="k-t"><thead><tr><th scope="col">이름</th><th scope="col">어휘</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col"></th></tr></thead><tbody>${d.props.map(row).join('') || '<tr><td colspan="6" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+        <div class="k-x"><table class="k-t ont-pt" style="--ont-name:${Math.min(Math.max(17, ...d.props.map((p) => p.name.length)), 28)}ch"><thead><tr><th scope="col">이름 · 어휘</th><th scope="col">한글</th><th scope="col">타입</th><th scope="col">허용값 · 제약</th><th scope="col"></th></tr></thead><tbody>${d.props.map(row).join('') || '<tr><td colspan="5" class="mut">등록된 Property가 없습니다.</td></tr>'}</tbody></table></div></section>`;
     },
     checks: (d, o) => {
       const m = S.mg.st, name = d.name.trim(), bad = ontNamed(name), live = d.props.filter((p) => !p.del);

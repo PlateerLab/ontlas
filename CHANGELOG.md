@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.25.5
+
+- **The logo is the name alone.** Ontlas, at every width, on the screens and on the page `ontlas preview` writes.
+- **An ontology made on the page is kept.** On a server started with `--library-write`, 온톨로지 만들기 writes the new
+  ontology as a studio folder (under `made/` beside the studio file, or `--libraries DIR`; up to `--libraries-max`,
+  30 by default) and reads it back at each start, with its own journal. Deleting one moves its folder aside, and
+  삭제한 온톨로지 on 온톨로지 선택 puts it back.
+- **In a team each person opens the ontology they look at.** Opening or making one moves no one else, and a viewer may
+  switch too. Each ontology has its own lock and its own journal, so requests, approvals and unsent edits made in a
+  second ontology survive a restart as the first one's did. A write from a window still showing another ontology is
+  refused and the window reads again. What is done to the server's users is in the first journal and shown in 감사
+  로그 whichever ontology is open.
+- **A journal alone puts approved versions back.** Started with `--journal` and no `--library-write`, a server used
+  to come back saying the later version while holding the first definition; approved versions are now applied again
+  from the journal at each start.
+- **Definition drafts are read from Excel.** 온톨로지 만들기 › 파일에서 가져오기 and `ontlas library import-definitions`
+  take an `.xlsx` whose sheets are the draft's sections and whose first row names the columns, in the draft's keys or
+  their Korean names; the report lists the sheets and columns that were not read. The same Entity in two files or two
+  sheets is merged instead of the later one replacing the earlier.
+- **The screens added in 0.25.4 use the kit's parts and words throughout**: filters that cut their value, chips and
+  notes of other colours, buttons out of place on narrow screens, notices of two sentences. The ontology list opens
+  over the screen instead of being cut at the menu's edge, and an item form no longer breaks when the ontology is
+  switched while it is open.
+- Importing definitions groups an Entity under an Object named in English as well as in Korean; the glossary import
+  takes a closing bracket note written against the word. The example library's rule cards carry the fields added in
+  0.25.4, and the README and its images follow the screens as they are.
+
 ## 0.25.4
 
 - **What a team enters is kept.** In a team (`--users` with `--journal`), approving one request no longer drops the

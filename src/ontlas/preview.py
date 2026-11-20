@@ -36,10 +36,8 @@ body { font-family:"Pretendard","Malgun Gothic",-apple-system,sans-serif; color:
 body.single .screen { display:none; margin:0; border-radius:0; box-shadow:none; }
 body.single .screen.on { display:grid; }
 .top { grid-column:1 / 3; display:flex; align-items:center; gap:14px; padding:0 22px; border-bottom:1px solid var(--line); }
-.brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:16px; color:var(--navy);
-  white-space:nowrap; }
-.logo { width:28px; height:28px; border-radius:8px; background:var(--navy);
-  display:grid; place-items:center; color:#fff; font-size:13px; font-weight:800; }
+.brand { font-family:"IBM Plex Sans KR","Pretendard","Malgun Gothic",sans-serif; font-size:24px; font-weight:600;
+  letter-spacing:-.02em; line-height:1; color:#171717; white-space:nowrap; }  /* the logo is the name alone, as the page's */
 .top .chip { margin-left:4px; }
 .top .grow { flex:1; }
 .top .who { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
@@ -180,7 +178,7 @@ def _frame(screen_id: str, active: str, studio: Studio, body: str, counts: dict[
     else:
         ident = f'<span class="chip b">{_e(o.label or o.name)}</span><span class="chip">버전 {_e(o.version)}</span>'
     return f"""<section class="screen" id="{screen_id}">
-  <div class="top"><div class="brand"><div class="logo">O</div>Ontlas</div>
+  <div class="top"><div class="brand">Ontlas</div>
     {ident}
     <div class="grow"></div>{backends}<div class="who"><div class="avatar">운영</div>운영자</div></div>
   <aside class="side"><h6>Ontlas</h6>{nav}</aside>
@@ -339,7 +337,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
         f'<span class="chip">{_e(lk.label or lk.name)} · {_e(o.obj(lk.target if lk.source == selected else lk.source).label)}'
         f'</span>' for lk in links)
     body = f"""
-<div class="head"><div><h1>온톨로지</h1><div class="sub">Entity, 관계, 속성 정의와 원천 테이블 Mapping을 확인합니다</div></div>
+<div class="head"><div><h1>온톨로지</h1><div class="sub">Entity, 관계, 속성 정의와 데이터 소스 테이블 Mapping을 확인합니다</div></div>
   <div class="right"><span class="btn ghost">OWL 내보내기</span><span class="btn ghost">SHACL</span>
   <span class="btn ghost">R2RML</span><span class="btn primary">변경 제안</span></div></div>
 <div class="stats">{stat_html}</div>
@@ -348,7 +346,7 @@ def _screen_ontology(studio: Studio, selected: str, counts) -> str:
     <div class="cb" style="flex:1;padding:10px 12px">{_schema_svg(studio, selected)}</div></div>
   <div class="card"><div class="ch">{_e(obj.label)} <span class="muted mono" style="font-weight:600">{_e(obj.name)}</span>
     <div class="right"><span class="chip b">키 {_e(obj.key)}</span><span class="chip mono">{_e(obj.table)}</span></div></div>
-    <div class="cb"><table><tr><th>속성</th><th>타입</th><th>원천 컬럼</th><th>모듈</th></tr>{rows}</table>{states}{aligned}
+    <div class="cb"><table><tr><th>속성</th><th>타입</th><th>데이터 소스 컬럼</th><th>모듈</th></tr>{rows}</table>{states}{aligned}
     <div style="margin-top:14px"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:6px">관계</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">{link_html}</div></div></div></div>
 </div>"""
@@ -576,13 +574,17 @@ def _screen_decision(studio: Studio, name: str, key: str, counts) -> str:
             rows_.append(f'<div class="check">{mark}<b style="min-width:122px">{_e(title)}</b>'
                          f'<span class="muted">{_e(text)}</span></div>')
         checks = "".join(rows_)
-        status = {"pending": ('warn', "승인 대기"), "rejected": ("", "반려"), "executed": ("ok", "원천 반영")}[p.status]
+        # writing to the data source is off unless the studio turns it on: an approved request then ends recorded
+        status = {"pending": ('warn', "승인 대기"), "rejected": ("", "반려"), "executed": ("ok", "데이터 소스 반영"),
+                  "recorded": ("warn", "쓰기 꺼짐 · 실행 결과만 기록"), "stale": ("warn", "재검사 필요"),
+                  "failed": ("warn", "실행 실패")}.get(p.status, ("", p.status))
+        after = "승인 후 데이터 소스 반영" if studio.actions.write else "데이터 소스 쓰기 꺼짐 · 승인 후 실행 결과만 기록"
         log = "".join(f'<div><span class="muted">{_e(a.event)}</span><span>{_e(a.actor)}</span>'
                       f'<span class="muted mono">{_e(a.proposal)}</span></div>' for a in studio.actions.audit[-3:])
         action_html = f"""<div class="card" style="flex:1"><div class="ch">{_e(action.label or action.name)}
   <span class="muted mono" style="font-weight:600">{_e(action.name)}</span><div class="right">
   <span class="chip {status[0]}">{status[1]}</span></div></div><div class="cb">
-  <div class="muted" style="font-size:12.5px;margin-bottom:8px">Agent 요청입니다. 승인한 요청만 원천 DB에 반영합니다.</div>
+  <div class="muted" style="font-size:12.5px;margin-bottom:8px">Agent 요청 · {after}</div>
   {checks}<div style="display:flex;gap:8px;margin:12px 0 10px"><span class="btn primary" style="flex:1;text-align:center">승인</span>
   <span class="btn" style="flex:1;text-align:center">반려</span></div>
   <div class="muted" style="font-size:12px;font-weight:700;margin-bottom:2px">감사 로그</div><div class="log">{log}</div></div></div>"""
@@ -639,7 +641,7 @@ def _screen_map(studio: Studio, counts) -> str:
                 owner, prop = a.id.split(":", 1)[1].split(".", 1)
                 title, sub = a.label, f"{owner}.{prop}"
             elif a.kind == "column":
-                title, sub = a.label, "원천 컬럼"
+                title, sub = a.label, "데이터 소스 컬럼"
             else:
                 title, sub = a.label, a.id.split(":", 1)[1]
             row.append((a.id, title, sub, a.id == start))
@@ -701,4 +703,7 @@ def render(studio: Studio, *, query: str = "", decision: str = "", key: str = ""
     return ("<!doctype html><html lang='ko'><head><meta charset='utf-8'><title>Ontlas</title>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/"
-            f"pretendard.min.css'><style>{CSS}</style></head><body>{''.join(screens)}{script}</body></html>")
+            "pretendard.min.css'>"
+            # the face of the logo, as the studio page loads it
+            "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.2.8/600.css'>"
+            f"<style>{CSS}</style></head><body>{''.join(screens)}{script}</body></html>")

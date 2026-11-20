@@ -330,6 +330,21 @@ def test_a_pair_table_reads_which_word_is_above_the_words_a_channel_shows_and_th
     assert [c["label"] for c in conflicts(clash) if c["kind"] == "label"] == ["준비 중"]
 
 
+def test_a_memo_in_brackets_is_no_part_of_the_word_with_or_without_a_space_before_it():
+    rows = ("구분,용어 A,용어 B,관계,설명,근거,확인 필요\n"
+            "고객 표기,회수 완료,되돌림 진행(안내서는 회수 완료),채널 표기,,,\n"
+            "분류,묶음 배송,합배송(옛 표기); 합포장 (창고 표기),동의어,,,\n"
+            "분류,간편 결제,결제(PG) 대행 (승인 기준),관련어,,,\n")
+    entries, rep = merge(read_glossary(rows.encode("utf-8"), "seed.csv"), [], None, source="seed.csv")
+    by = {e["term"]: e for e in entries}
+    back = by["회수 완료"]
+    assert back["channels"] == {"고객": "되돌림 진행"} and back["note"] == "고객 되돌림 진행 · 안내서는 회수 완료"
+    assert by["묶음 배송"]["synonyms"] == ["합배송", "합포장"] and by["묶음 배송"]["note"] == "합배송 · 옛 표기 · 합포장 · 창고 표기"
+    # brackets inside a word stay with it: the memo is the brackets that end the word
+    assert by["간편 결제"]["related"] == ["결제(PG) 대행"] and by["간편 결제"]["note"] == "결제(PG) 대행 · 승인 기준"
+    assert [(x["with"], x["memo"]) for x in rep["synonym"]] == [("합배송", "옛 표기"), ("합포장", "창고 표기")]
+
+
 def test_a_term_list_and_a_seed_file_are_read_too():
     g = read_glossary("용어,영문,정의,유의어\n적립금,Reward Point,돌려주는 포인트,마일리지; 포인트\n,빈 줄,,\n".encode("utf-8"),
                       "terms.csv")

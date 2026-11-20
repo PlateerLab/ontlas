@@ -361,7 +361,7 @@ def gates(measured: dict[str, Any], settings: FlowSettings) -> list[GateResult]:
               ("define", "max_unreachable"): (measured.get("define") or {}).get("unreachable"),
               ("define", "max_axiom_conflicts"): (measured.get("define") or {}).get("axiom_conflicts"),
               ("check", "max_new_wrong"): (measured.get("check") or {}).get("new_wrong"),
-("bind", "max_errors"): (measured.get("bind") or {}).get("errors"),
+              ("bind", "max_errors"): (measured.get("bind") or {}).get("errors"),
               ("bind", "max_warnings"): (measured.get("bind") or {}).get("warnings"),
               ("index", "min_found"): (measured.get("index") or {}).get("share"),
               ("query", "min_agree"): (measured.get("query") or {}).get("share"),

@@ -39,6 +39,12 @@
 .ont-cmt:first-child { border-top:0; padding-top:0; }
 .ont-flow { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; }
 #ontdefsave[hidden] { display:none; }
+/* the Properties of the Entity form: a box keeps the room its words are read in (a name whole: as long as the longest
+   of the Entity's, and no shorter than the example a new one shows), a choice its longest word, and where the card is
+   narrower than that the table scrolls inside it */
+.ont-pt td.tight input.k-in { min-width:calc(5em + 26px); }
+.ont-pt td.tight input[data-k=name] { min-width:calc(var(--ont-name, 17ch) + 26px); }
+.ont-pt td.tight select.k-in { min-width:max-content; }
 
 /* 그래프 탐색: Objects as filled circles, Entities as outlined ones, a Relation as an arrow with its name */
 .ont-wsbar { display:flex; align-items:center; gap:8px; padding:8px 16px; background:#fff; border-bottom:1px solid var(--line); flex:none; }

@@ -1,4 +1,5 @@
-"""Import definitions drafted outside the studio: the tables a team keeps as YAML or JSON before any of it is a module.
+"""Import definitions drafted outside the studio: the tables a team keeps as YAML, JSON or a workbook (`exchange.workbook`)
+before any of it is a module.
 
 A draft names Objects, the Entities under them with their properties, enumerations, relations, rules with the layer
 each is meant for, the named values rules read and a glossary. Several files make one draft; a key is read by its
@@ -11,6 +12,7 @@ Nothing is guessed: what has no place in a module is named in the report, not dr
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 from ontlas.exchange.owl import ExchangeReport
@@ -126,6 +128,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
                 notes = {**v, **notes}  # the first file's title stands
                 said = v.get("notation")
                 notation += [str(x) for x in (said.values() if isinstance(said, dict) else [said] if said else [])]
+                rep.unsupported += [str(x) for x in v.get("not_read") or []]  # the sheets and columns a workbook's reading left
             elif k == "relations" and isinstance(v, dict):  # {object_level: [...], entity_level: [...]}
                 for level, rows in v.items():
                     merged.setdefault("entity_relations" if "entity" in level else "object_relations", []).extend(rows or [])
@@ -174,6 +177,12 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
             area_of_class[str(_get(e, "class", "name") if isinstance(e, dict) else e)] = ident
         rep.preserved.append(f"object {ident}")
 
+    def area_named(said: Any) -> str:
+        """The Object a row names: by its label, or by its English name as a draft writes it (`Order`, `shop:Order`,
+        `주문@Order`)."""
+        ko, _, en = _text(said).partition("@")
+        return area_of_label.get(ko.strip()) or next((a for a in (ko.strip(), _split(en or ko)[1]) if a in areas), "")
+
     # ---- enumerations: the codes a property allows, each with its name ----
     enums = {str(n.get("name")): [(str(v.get("value")), _text(_get(v, "label_ko", "label"))) if isinstance(v, dict) else (str(v), "")
                                   for v in n.get("values") or []] for n in merged.get("enumerations", [])}
@@ -184,16 +193,29 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
     type_of: dict[str, str] = {}  # an Entity as written (with and without its prefix) → its identifier
     pending_links: list[tuple[str, dict]] = []
     enum_of: dict[tuple[str, str], str] = {}  # (Entity, property) → the enumeration it takes, as a glossary may name it
+    # an Entity two files (or two sheets) both list is one Entity: its first row stands, a later one gives what that left
+    # empty, and their properties add up
+    listed: dict[str, dict] = {}
     for e in merged.get("entities", []):
+        first = listed.get(str(_get(e, "class", "name")))
+        if first is None:
+            listed[str(_get(e, "class", "name"))] = dict(e)
+            continue
+        have = {str(p.get("name")) for p in first.get("properties") or []}
+        more = [p for p in e.get("properties") or [] if str(p.get("name")) not in have]
+        first.update({f: v for f, v in e.items() if f != "properties" and first.get(f) in (None, "")})
+        if more:
+            first["properties"] = [*(first.get("properties") or []), *more]
+    for e in listed.values():
         raw = str(_get(e, "name", "class"))
         prefix, local = _split(raw)
         ident = types.take(local, f"{prefix}_{local}", raw)
         type_of[raw] = type_of[str(_get(e, "class", default=raw))] = ident
         type_of.setdefault(local, ident)
-    for e in merged.get("entities", []):
+    for e in listed.values():
         raw = str(_get(e, "name", "class"))
         ident = type_of[raw]
-        area = area_of_class.get(raw) or area_of_class.get(str(e.get("class") or "")) or area_of_label.get(_text(e.get("object")), "")
+        area = area_of_class.get(raw) or area_of_class.get(str(e.get("class") or "")) or area_named(e.get("object"))
         said = [_text(_get(e, "definition", "description"))]
         if _text(e.get("rule_requirements")):  # what the rules need of it, as its author put it
             said.append(f"규칙이 요구하는 것: {_text(e['rule_requirements'])}")
@@ -361,7 +383,7 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
         named = values_of_rule.get(str(_get(r, "id", "rule")), {})
         card: dict[str, Any] = {"id": rid, "type": ctype, "statement": title or result, "status": "draft"}
         said = _text(r.get("object")) or object_of_rule.get(str(_get(r, "id", "rule")), "")  # its Object, by label or name
-        area = area_of_label.get(said) or (said if said in areas else "")
+        area = area_named(said)
         if said and not area:
             rep.adjusted.append(f"rule {rid}: Object '{said}' is not in the draft, left off what it applies to")
         applies = ([f"area:{area}"] if area else []) + [f"object:{x}" for x in entities_of_rule.get(str(_get(r, "id", "rule")), [])] + \
@@ -545,3 +567,15 @@ def from_definitions(docs: list[dict], name: str, *, label: str = "", version: s
     if cards["custom"]:
         out.append(module(f"{name}-custom", "customer", f"{title} · Custom", {"rule_cards": cards["custom"]}, [name]))
     return out, rep
+
+
+def read_draft(path: str | Path) -> dict:
+    """One file of a draft as the mapping of sections it is: the sheets of a workbook, else YAML (which JSON is)."""
+    from ontlas.exchange.workbook import WORKBOOKS, read_workbook
+
+    p = Path(path)
+    if p.suffix.lower() in WORKBOOKS:
+        return read_workbook(p.read_bytes(), p.name)
+    import yaml
+
+    return yaml.safe_load(p.read_text(encoding="utf-8"))

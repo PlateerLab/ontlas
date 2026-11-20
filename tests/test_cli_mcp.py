@@ -66,6 +66,29 @@ def test_preview_page(graph_studio):
     assert "Backend 결과 일치" in html and "order_items.delivered_at" in html
 
 
+def test_preview_page_names_the_product_as_the_page_does_and_says_what_an_approved_request_does(graph_studio):
+    """The logo is the name alone. Writing to the data source is off unless the studio turns it on: the request card
+    says which, and a request approved while it is off shows as recorded."""
+    from ontlas.actions import Actor
+    from ontlas.preview import render
+
+    kw = {"query": "revenueByCategory", "decision": "returnEligibility", "key": "I1001"}
+    html = render(graph_studio, **kw)
+    assert '<div class="brand">Ontlas</div>' in html and 'class="logo"' not in html and "원천" not in html
+    assert "승인 대기" in html and "Agent 요청 · 데이터 소스 쓰기 꺼짐 · 승인 후 실행 결과만 기록" in html
+    ask = graph_studio.actions.request
+
+    def approved(*a, **k):  # the request the page makes, approved by a person before the page shows it
+        p = ask(*a, **k)
+        return graph_studio.actions.approve(p.id, approver=Actor("operator", "human", ["operator"]))
+
+    graph_studio.actions.request = approved
+    assert '<span class="chip warn">쓰기 꺼짐 · 실행 결과만 기록</span>' in render(graph_studio, **kw)
+    graph_studio.actions.request = ask
+    graph_studio.actions.write = True
+    assert "Agent 요청 · 승인 후 데이터 소스 반영" in render(graph_studio, **kw)
+
+
 def test_mcp_server_lists_and_calls_tools(studio):
     pytest.importorskip("mcp")
     from ontlas.mcp_server import build_server

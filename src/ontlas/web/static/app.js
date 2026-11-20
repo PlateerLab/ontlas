@@ -185,12 +185,20 @@
   const elementText = (id) => { const [kind, ...rest] = String(id).split(':'); return `${ELEMENT[kind] || kind} ${rest.join(':')}`; };
   const modLabel = (name) => (S.st.library.find((r) => r.name === name) || {}).label || name;
 
+  // every request says which ontology this page shows. A person who opened another one in another window is on that
+  // one now: a write from this page is refused then, and the page reads the ontology the person is on (libraryMoved)
+  const shownLibrary = () => (S.st && S.st.library_id ? { 'X-Ontlas-Library': S.st.library_id } : {});
+  const LIB_MOVED = '다른 창에서 온톨로지를 전환해 화면을 다시 불러옵니다.';
+  const libraryElsewhere = (r, j) => r.status === 400 && /^다른 창에서 온톨로지를/.test((j && j.error) || '');
+  let libMoving = null;
+
   async function api(path, body) {
-    const opt = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ontlas-Request': '1' }, body: JSON.stringify(body) };
+    const opt = body === undefined ? { headers: shownLibrary() } : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Ontlas-Request': '1', ...shownLibrary() }, body: JSON.stringify(body) };
     const r = await fetch('/api/' + path, opt);
     let j = {};
     try { j = await r.json(); } catch (_) { /* empty body */ }
     if (r.status === 401 && S.me && S.me.team && path !== 'login') { S.me.user = null; renderLogin(); }
+    if (libraryElsewhere(r, j)) { libraryMoved(); throw Object.assign(new Error(LIB_MOVED), { status: r.status, body: j }); }
     if (!r.ok) throw Object.assign(new Error(j.error || `서버 오류로 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`), { status: r.status, body: j });
     return j;
   }
@@ -750,7 +758,7 @@
     if (empty.length) { toast(`${empty.map((p) => p.label || p.name).join(', ')} 값이 없어 요청하지 못했습니다. 값을 입력해 주세요.`, true); return; }
     try {
       const out = await api('request', { action: name, key: r.key, params, role: r.role, kind: 'human' });
-      const said = { pending: '검사를 통과했습니다. 할 일에서 승인을 기다립니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족해 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' }[out.proposal.status];
+      const said = { pending: '검사를 통과했습니다. 할 일에서 승인을 기다립니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다.' }[out.proposal.status];
       toast(said || `검사를 통과하지 못해 요청이 반려되었습니다. ${out.proposal.checks.filter((c) => !c.passed).map((c) => c.title).join(', ')}`, !said);
       S.home.box = null; S.pa = null; S.d.res = null; S.q.res = null; S.d.keys = {};
       r.act = ''; r.params = {}; r.res = null;
@@ -764,7 +772,7 @@
       if (!out.ok) throw new Error(out.error);
       S.home.box = null; S.pa = null; S.rec.res = null; S.d.res = null; S.d.proposal = null; S.q.res = null; S.qa = null; S.fl = null; S.d.keys = {};
       await load();
-      toast(!yes ? 'Action 요청을 반려했습니다.' : out.proposal && out.proposal.status === 'recorded' ? 'Action 요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' : 'Action 요청을 승인했습니다.');
+      toast(!yes ? 'Action 요청을 반려했습니다.' : out.proposal && out.proposal.status === 'recorded' ? 'Action 요청을 승인했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다.' : 'Action 요청을 승인했습니다.');
     } catch (e) { fail(e); }
   }
 
@@ -2592,7 +2600,7 @@
 
   function librariesCard() {
     const libs = S.st.libraries || [];
-    const row = (x) => `<tr class="${x.id === S.st.library_id ? 'sel' : ''}"><td><b>${esc(x.label)}</b>${x.made ? ' <span class="chip sm">세션 생성</span>' : ''}</td><td style="text-align:right">${count(x.modules)}</td><td>${esc(x.source ? (BACKEND_KIND[x.source] || x.source) : '미연결')}</td>
+    const row = (x) => `<tr class="${x.id === S.st.library_id ? 'sel' : ''}"><td><b>${esc(x.label)}</b>${x.made ? ` <span class="chip sm${entKept() ? '' : ' warn'}">${entMadeWord()}</span>` : ''}</td><td style="text-align:right">${count(x.modules)}</td><td>${esc(x.source ? (BACKEND_KIND[x.source] || x.source) : '미연결')}</td>
       <td style="text-align:right;white-space:nowrap">${x.id === S.st.library_id ? '<span class="chip sm ok">사용 중</span> <a class="btn sm ghost" href="/api/export/library" download title="스튜디오 파일과 적용 모듈 파일(zip)">내려받기</a>' : `<button class="btn sm" data-act="libuse" data-id="${esc(x.id)}">열기</button>`}${x.made && canMakeLibrary() ? ` <button class="btn sm ghost" data-act="libdrop" data-id="${esc(x.id)}">삭제</button>` : ''}</td></tr>`;
     return `<div class="card" style="margin-bottom:14px"><div class="ch">라이브러리 <span class="chip sm">${libs.length}</span><div class="right"><span class="muted hide-sm" style="font-size:12px">라이브러리마다 정의, 데이터, 적용 내역을 따로 유지합니다</span>${canMakeLibrary() && !S.lib.open ? '<button class="btn sm" data-act="libnew">새 라이브러리</button>' : ''}</div></div>
       <div class="cb scroll" style="padding:0"><table class="tight"><tr><th>온톨로지</th><th style="text-align:right">모듈</th><th>데이터 소스</th><th></th></tr>${libs.map(row).join('')}</table></div>
@@ -3684,7 +3692,7 @@ ${controls}${body}`;
       const limits = (p.limits || []).length ? `<div class="hint" style="margin-top:8px">${p.approved_by === 'auto' ? '자동 승인 기준을 충족해 바로 실행했습니다.' : waitWord(p)} ${p.limits.map((l) => `${esc(p.labels[l.subject] || l.subject)} ${esc(({ percent: '변화율', delta: '변화폭', max: '값', min: '값' })[l.kind])} ${l.value === null ? '-' : show(Math.round(l.value * 100) / 100)}${l.kind === 'percent' ? '%' : ''} / 기준 ${show(l.limit)}${l.kind === 'percent' ? '%' : ''}`).join(' · ')}</div>` : '';
       const call = p.call && (p.call.status || p.call.error) ? `<div class="hint" style="margin-top:8px">외부 호출 ${p.call.error ? esc(p.call.error) : `${esc(p.call.method)} ${esc(p.call.url)} · ${esc(p.call.status)}`}</div>` : '';
       const done = (p.status === 'executed' ? '<div class="hint" style="margin-top:10px">데이터 소스와 그래프 저장소에 반영했습니다.</div>'
-        : p.status === 'recorded' ? '<div class="hint" style="margin-top:10px">실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).</div>'
+        : p.status === 'recorded' ? '<div class="hint" style="margin-top:10px">데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다.</div>'
         : (p.status === 'rolled_back' ? `<div class="hint" style="margin-top:10px">${esc(p.rolled_back_by)} 님이 실행 전 값으로 되돌렸습니다.</div>` : '')) + call;
       state = `<div class="sec" style="display:flex;align-items:center;gap:8px">요청 ${esc(p.id)} · ${esc(p.requested_by)}<span class="chip ${cls}" style="margin-left:auto">${label}</span></div>${checks}${diff ? `<div class="sec">변경 값</div>${diff}` : ''}${buttons}${done}`;
     }
@@ -3762,7 +3770,7 @@ ${controls}${body}`;
       d.proposal = r.proposal; S.pa = null;
       d.audit = (await api('audit')).audit;
       render();
-      const said = { pending: '검사를 통과했습니다. 승인 대기 중입니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족해 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' }[r.proposal.status];
+      const said = { pending: '검사를 통과했습니다. 승인 대기 중입니다.', executed: '자동 승인 기준을 충족해 바로 실행했습니다.', recorded: '자동 승인 기준을 충족했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다.' }[r.proposal.status];
       toast(said || '검사를 통과하지 못해 요청이 반려되었습니다. 검사 결과를 확인해 주세요.', !said);
     } catch (e) { fail(e); }
   }
@@ -3775,7 +3783,7 @@ ${controls}${body}`;
       S.q.res = null; S.qa = null; S.bind = null; S.fl = null; S.d.keys = {};
       await load();
       await startDecide();
-      toast(!yes ? 'Action 요청을 반려했습니다.' : r.proposal && r.proposal.status === 'recorded' ? 'Action 요청을 승인하고 실행 결과를 기록했습니다(데이터 소스 쓰기 꺼짐).' : 'Action 요청을 승인했습니다.');
+      toast(!yes ? 'Action 요청을 반려했습니다.' : r.proposal && r.proposal.status === 'recorded' ? 'Action 요청을 승인했으나 데이터 소스 쓰기가 꺼져 있어 실행 결과만 기록했습니다.' : 'Action 요청을 승인했습니다.');
     } catch (e) { fail(e); }
   }
 
@@ -4514,9 +4522,10 @@ ${controls}${body}`;
       try {
         if (lim.file_bytes && f.size > lim.file_bytes) throw new Error(`${baseName(rel)}: 파일 크기가 ${bytes(lim.file_bytes)} 한도를 초과해 업로드하지 못했습니다. 파일을 나누어 다시 업로드해 주세요.`);
         const path = (c.folder ? c.folder + '/' : '') + rel;
-        const r = await fetch('/api/upload?path=' + encodeURIComponent(path), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Ontlas-Request': '1' }, body: f });
+        const r = await fetch('/api/upload?path=' + encodeURIComponent(path), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Ontlas-Request': '1', ...shownLibrary() }, body: f });
         let j = {};
         try { j = await r.json(); } catch (_) { /* empty body */ }
+        if (libraryElsewhere(r, j)) { libraryMoved(); c.up = null; return; }  // the rest are not sent: they were meant for the ontology this page showed
         if (!r.ok) throw new Error(j.error || `서버 오류로 파일을 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`);
         if (j.skipped) skipped += 1; else sent += 1;
       } catch (e) { fail(e); }
@@ -6075,13 +6084,29 @@ ${controls}${body}`;
     S.ind = { target: '', inputs: {} };
   }
 
+  async function libraryRead() {  // the library the person is on, read anew: nothing shown of the one before stays
+    clearViews();
+    Object.assign(S.home, { box: null, ov: null });
+    S.mg.st = null; S.ver = null; S.lx.st = null; S.sem.st = null;
+    S.it = { key: '' };  // an item's screen held what it read of the library before: it reads its item again
+    await load();
+  }
+  // the person opened another ontology in another window and this page wrote into the one it still shows: the write
+  // was refused (see api), and the page reads the one the person is on now, once however many writes were refused
+  function libraryMoved() {
+    if (!libMoving) {
+      libMoving = libraryRead().then(() => { if (S.tab !== 'home') location.hash = '#home'; toast(LIB_MOVED, true); })
+        .catch(() => { /* reading failed: the refusal the caller says stays on the screen */ }).finally(() => { libMoving = null; });
+    }
+    return libMoving;
+  }
+
   async function libraryUse(id) {  // another library: its own definition, data and pipelines
     try {
       await api('library', { id });
-      clearViews();
-      Object.assign(S.home, { box: null, ov: null });
-      S.mg.st = null; S.ver = null; S.lx.st = null; S.sem.st = null;
-      await load();
+      const read = libraryRead();
+      libMoving = read.catch(() => {});  // a write the screen before still sent is refused meanwhile: this reading is the one it waits for
+      try { await read; } finally { libMoving = null; }
       const label = (S.st.libraries.find((x) => x.id === id) || {}).label || '온톨로지';
       toast(`${label}${josa(label, '으로', '로')} 전환했습니다.`);
       return true;
@@ -6103,9 +6128,10 @@ ${controls}${body}`;
     let added = 0;
     for (const file of files) {
       try {
-        const r = await fetch('/api/library/file?path=' + encodeURIComponent(file.name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Ontlas-Request': '1' }, body: file });
+        const r = await fetch('/api/library/file?path=' + encodeURIComponent(file.name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Ontlas-Request': '1', ...shownLibrary() }, body: file });
         let j = {};
         try { j = await r.json(); } catch (_) { /* empty body */ }
+        if (libraryElsewhere(r, j)) { libraryMoved(); f.up = false; return; }
         if (!r.ok) throw new Error(j.error || `서버 오류로 파일을 읽지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`);
         f.files = j; added += 1;
       } catch (e) { fail(e); }
@@ -6136,7 +6162,7 @@ ${controls}${body}`;
 
   async function libraryDrop(id) {
     const x = (S.st.libraries || []).find((y) => y.id === id);
-    if (!x || !window.confirm(`${x.label} 온톨로지를 삭제합니다. 삭제 후 복구할 수 없습니다.`)) return;
+    if (!x || !window.confirm(`${x.label} 온톨로지를 삭제합니다. ${entKept() ? '삭제한 온톨로지 목록에서 복원할 수 있습니다.' : '삭제 후 복구할 수 없습니다.'}`)) return;
     const here = id === S.st.library_id;
     try {
       await api('library/drop', { id });

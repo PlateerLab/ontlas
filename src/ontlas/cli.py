@@ -429,7 +429,7 @@ def _main(argv: list[str] | None = None) -> int:
     x = lib.add_parser("import-definitions", help="modules from definitions drafted outside: Objects, Entities, rules, a glossary")
     x.add_argument("root")
     x.add_argument("name")
-    x.add_argument("files", nargs="+", help="the draft's YAML or JSON files, read as one draft")
+    x.add_argument("files", nargs="+", help="the draft's YAML, JSON or .xlsx files, read as one draft")
     x.add_argument("--label", default="")
     x.add_argument("--version", default="0.1.0")
     x.add_argument("--namespace", default="")
@@ -596,7 +596,14 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--video", default="", help="a demo .mp4 shown beside the manual (chapters from x.chapters.json)")
     s.add_argument("--rows", type=int, default=10_000, help="rows read from each uploaded table")
     s.add_argument("--users", default="", help="a users file: one studio the team shares, behind a sign-in")
-    s.add_argument("--library-write", action="store_true", help="save approved module versions to the library folder")
+    s.add_argument("--library-write", action="store_true", help="save approved module versions to the library folder, and "
+                                                                "keep the libraries made on the page (see --libraries)")
+    s.add_argument("--libraries", default="", metavar="DIR",
+                   help="folder that keeps the libraries made on the page across restarts, a studio folder each, with "
+                        "--library-write (default: made/ beside the studio file); a deleted one is moved to DIR/.deleted")
+    s.add_argument("--libraries-max", type=int, default=0, metavar="N",
+                   help="libraries made on the page the server keeps (default 30); without --library-write each "
+                        "visitor keeps 3 until their session ends")
     s.add_argument("--sync", type=float, default=0, help="re-read the source every N seconds and update the graphs")
     s.add_argument("--quiet", action="store_true")
 
@@ -695,9 +702,9 @@ def _main(argv: list[str] | None = None) -> int:
                                     requires=a.requires)
             _out({"created": m.key, "report": rep.to_dict()})
         elif a.lib_cmd == "import-definitions":
-            import yaml
+            from ontlas.exchange.definitions import read_draft
 
-            docs = [yaml.safe_load(Path(f).read_text(encoding="utf-8")) for f in a.files]
+            docs = [read_draft(f) for f in a.files]
             ms, rep = lib.import_definitions(docs, a.name, label=a.label, version=a.version, namespace=a.namespace,
                                              requires=a.requires, vocabulary=a.vocabulary)
             from collections import Counter
@@ -790,10 +797,13 @@ def _main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"--api-agents: each agent needs a name of its own, not {names}")
         if a.journal and not a.users:
             raise SystemExit("--journal keeps the records of one studio a team shares; give it --users as well")
+        if (a.libraries or a.libraries_max) and not a.library_write:
+            raise SystemExit("--libraries and --libraries-max are for a server that writes; give it --library-write as well")
         serve_config(a.config, llm=llm, data=data, host=a.host, port=a.port, limit=a.sessions, idle=a.idle,
                      quiet=a.quiet, video=Path(a.video) if a.video else None, users=Path(a.users) if a.users else None,
                      sync=a.sync, library_write=a.library_write, api=api or None,
-                     journal=Path(a.journal) if a.journal else None, libraries=[Path(x) for x in a.library])
+                     journal=Path(a.journal) if a.journal else None, libraries=[Path(x) for x in a.library],
+                     made=Path(a.libraries) if a.libraries else None, made_max=a.libraries_max)
         return 0
     if a.cmd == "users":
         from ontlas.web.team import Users

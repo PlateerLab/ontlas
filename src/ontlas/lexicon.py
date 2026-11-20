@@ -43,7 +43,8 @@ RELATIONS = {"동의어": "synonym", "유의어": "synonym", "이음동의어": 
 CHANNEL = "고객"  # the channel a channel word is for when its row names none, as a definition draft's customer words are kept
 _TO = re.compile(r"(?:→|->|⇒)\s*([^\s()\[\],]+)")  # 채널 표기 (BO→FO): the words are what FO calls the term
 _CODED = re.compile(r"^([A-Za-z]{1,8}\d{2,}\s+[A-Za-z0-9]{1,8})\s+(\S.*)$")  # OM005 11 주문접수: a code group and code first
-_MEMO = re.compile(r"^(.*?\S)\s+\((.+)\)$")  # 반품진행중 (정책서는 회수완료): a word, and a memo written after it
+# 반품진행중 (정책서는 회수완료): a word, and the memo in the brackets that end it, with or without a space before them
+_MEMO = re.compile(r"^(.*?\S)\s*\(((?:[^()]|\([^()]*\))+)\)$")
 _SIDE = re.compile(r"상위|하위")
 PAIR_HEADERS = {
     "kind": ["구분", "분류", "category", "kind", "group"],

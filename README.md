@@ -8,7 +8,7 @@ The name is *ontology* and *atlas*: a map of what a company knows, drawn once an
 pip install "ontlas[all]"     # or pip install ontlas for the core alone, with no dependencies (JSON files, no YAML)
 ```
 
-A live demo on fictional shop data: https://ontlas.js-96.com
+A live demo on fictional shop data: https://ontlas.com
 
 - **Every kind of data in one place.** Files, databases, documents, embeddings, graphs and ontologies sit in one space and know about each other.
 - **Nothing is tied to a store.** Graph databases, vector databases, reasoners, embedding models and query languages are adapters, and a conformance test says whether a swap changed the answers.
@@ -72,8 +72,8 @@ The space sits between the systems a business already runs and the people and ag
 | One shared definition | Objects, properties, relations, states, rules and roles are defined once over the source tables, in versioned module files a person can read and review |
 | The same question on every store | One query compiles to SQL, Cypher, GQL, SPARQL, SQL/PGQ or Gremlin, and a conformance run compares the rows each store returns |
 | Decisions with their grounds | Decision tables decide, not a language model; each answer carries the rule, the clause it cites, the source columns and the module version |
-| Action under control | Roles scope rows and mask properties; an agent only files a request, nothing is written until a person approves it, and an executed action can be rolled back |
-| Changes that are tried first | A new module version runs on a copy of the studio against the database check, backend agreement, validation questions and past decisions before it can be approved |
+| Action under control | Roles scope rows and mask properties; an agent only files a request and a person approves it, the source is written only on a server started to write, and an executed action can be rolled back |
+| Changes that are tried first | A new module version runs on a copy of the studio against the rule checks, the database check, backend agreement, validation questions and past decisions before it can be approved |
 | One domain across systems and customers | A standard stays as it is; a new system gets a binding and a customer's differences get a module of their own (see [Adapt a domain](#adapt-a-domain)) |
 
 A language model is optional. It turns plain questions into the ontology query and policy text into draft decision
@@ -116,26 +116,32 @@ Open http://127.0.0.1:7710. Each visitor gets a studio of their own, and the lib
 that offers more than one ontology (`--library`) opens on 온톨로지 선택; picking one opens its 홈, and the list at the top
 left of every screen switches between them afterwards. 홈 shows where the ontology stands: how far its definition has
 come (L0 개념 to L3 검증), its four parts with their numbers, the Objects, what waits, and the six steps of starting.
-The menu holds 홈, AI 초안 생성 and five parts: Semantic Layer, Ontology, Data Binding, Quality and 운영.
+The menu holds 홈, AI 초안 생성 and five parts: Semantic Layer, Ontology, Data Binding, Quality and Operations.
 
 **2. Define the ontology (Ontology).** A definition has three levels: an **Object** is a top-level
 classification (주문, 상품, 결제: an area of the business with a definition of its own), an **Entity** is a concept under
 it (주문, 주문상품) and a **Property** is a value an Entity carries. None of it needs data. Object lists the Objects
 with their Entities, rules, maturity and owner; Entity is a tree of Entities by Object with the chosen one's
-definition, grounds, readers, YAML and comments, its Properties, restrictions and state transitions; 그래프 탐색 draws
-Objects, Entities and Relations as a graph whose edges are edited beside it, with the diagram workspace one button
-away. Every item has its own screens: **추가 · 편집** (a form that checks while you type), **삭제** (what uses the item is
-listed before anything is asked) and **이력** (each change with its fields before and after, who and why). Saving
-does not change the ontology in use: the edit joins the change request being written (step 6).
+definition, grounds, readers, YAML and comments, its Properties with the vocabulary each comes from, restrictions and
+state transitions with their conditions; 그래프 탐색 draws Objects, Entities and Relations as a graph whose edges are
+edited beside it, with the diagram workspace one button away. Every item has its own screens: **추가 · 편집** (a form
+that checks while you type), **삭제** (what uses the item is listed, and the delete is tried first, so one that would
+fail later is refused there with the reason) and **이력** (each change with its fields before and after, who and why;
+이 시점으로 되돌리기 writes an earlier version's values into the change request, 다른 버전과 비교 shows what differs between
+two versions, and a deleted item keeps its history, with 되살리기). Saving does not change the ontology in use: the edit
+joins the change request being written (step 6).
 
 **3. Rules (Semantic Layer).** 규칙 opens on the three layers a rule belongs to, AXIOM (laws and integrity, checked
-first), Custom (a customer's) and Standard (the common ones), with the rule cards and decision table rules in one list
-(see [Rules in three layers](#rules-in-three-layers)). 판정 테스트 decides on values typed in and shows the path the
-decision took through the layers; the checks name overlaps, unreachable rules and gaps; the parameters, metrics and
-functions the rules read are listed below. A Standard or Custom rule is edited and removed on its own screens; an
-AXIOM card is changed as a change request to the module that defines it. The decision table editor (cells in plain
-words, rows by dragging, the hit policy, boundary values and past cases recomputed) opens from the rule. 규칙 초안
-lists the drafts that wait, with what each stands on, and a reviewer approves, corrects or takes one out.
+first), Custom (a customer's) and Standard (the common ones), with the rule cards and decision table rules in one list,
+filtered by Object, by layer and by what the cards are filed under (분류, 근거 종류, 정책서 대조; see
+[Rules in three layers](#rules-in-three-layers)). 판정 테스트 decides on values typed in and shows the path the
+decision took through the layers; the checks name overlaps, unreachable rules, gaps and rules tied in priority; the
+parameters, metrics and functions the rules read are listed below, each with what uses it. A Standard or Custom rule
+is edited and removed on its own screens, and removing a decision table rule shows the rule that takes over its range
+or the gap it leaves; an AXIOM card is changed as a change request to the module that defines it. The decision table
+editor (cells in plain words, rows by dragging, the hit policy, boundary values and past cases recomputed) opens from
+the rule; under 우선순위 each rule carries a number, and the lowest one that matches decides. 규칙 초안 lists the drafts
+that wait, with what each stands on, and a reviewer approves, corrects or takes one out.
 
 **4. Connect data (Data Binding), when you want live values.** Definitions, rules and decisions on typed values
 work without it. 자료 업로드 in the top bar takes files and whole folders; each file says what it became (table data, a
@@ -144,7 +150,9 @@ from tables and definition sheets, a decision table from policy text) that are r
 데이터 소스 connects a database, Mapping sets each Property against its column and says where they differ,
 Entity Binding binds an Entity and shows the SQL it makes with a preview of rows, 질의 keeps the registered queries (each
 read into nine store languages, run as an access policy) and Action the things an agent may ask to be done, with their
-preconditions and approval. From the command line:
+preconditions and approval. A data source is written only on a server started with `--action-write`: without it an
+approved Action is recorded with what it would have changed, the source stays as it was, and the screen says 쓰기 꺼짐 ·
+실행 결과만 기록. From the command line:
 
 ```bash
 ontlas draft examples/files/*.csv --name shop --label "가상 쇼핑몰" --lang ko -o my-studio    # from files
@@ -157,9 +165,10 @@ ontlas serve my-studio/studio.yaml
 A database needs `pip install "ontlas[postgres]"` (or `[mysql]`, `[oracle]`, `[mssql]`). A draft reads every table in full to
 profile it, so point it at a copy or a replica with a read-only account, not at a busy production database.
 
-**5. Check it (Quality).** 검증 질문 keeps the questions with known answers by kind (정의 · 판정 · 값 조회), with a
+**5. Check it (Quality).** 검증 질문 keeps the questions with known answers by kind (정의형 · 판정형 · 값 조회형), with a
 held-out set apart; 검증 runs them, says why a wrong one is wrong, and shows the pass conditions as measured, which are
-edited there.
+edited there. Four of them are on from the start: no gap in a decision table, no rule that can never apply, no
+conflict with an AXIOM rule or bound, and no question a change newly answers wrong.
 
 ```bash
 ontlas bindings my-studio/studio.yaml       # the definition against the database
@@ -171,8 +180,10 @@ ontlas gates my-studio/studio.yaml          # the flow's pass conditions, measur
 **6. Review and approve (Ontology › 변경 요청 · 버전).** The edits saved on the item screens wait as the change
 request being written: what changes, in the order saved, each undone on its own, tried on a copy, then filed. A filed
 request opens with each element before and after, what reads it, comments, the regression test and the pass
-conditions, and is rejected or approved into a new version; the versions are listed with compare, export and rollback.
-The author cannot approve their own in a team. The same review from the command line:
+conditions, and is rejected or approved into a new version; a rejected one can be taken back into the edits being
+written, and the versions are listed with compare, export and rollback. In a team the author cannot approve their own,
+and approving one request keeps the edits others have not filed yet (see [A team studio](#a-team-studio)). The same
+review from the command line:
 
 ```bash
 ontlas review examples/library/studio.yaml acme-1.1.0.yaml   # a module version tried on a copy, against the flow's conditions
@@ -180,9 +191,10 @@ ontlas review examples/library/studio.yaml acme-1.1.0.yaml   # a module version 
 
 **7. Use it and plug it in (검색 · 질문, Operations › 연동 · API).** The box in the top bar (`Ctrl K`) jumps to any screen,
 Object, decision table or query; 검색 · 질문 answers a question with what it understood, the verdict, the layers it
-went through and its sources. 연동 · API gives the four ways an agent or a platform takes the ontology (REST, the
-OpenAPI document, MCP, a database connection a platform lends), each with something to copy, and a playground that
-calls as a chosen access policy. `ontlas serve --users` gives a team one studio with roles (see
+went through and its sources. 연동 · API lists who calls, each with its access policy (a caller with none is refused),
+gives the four ways an agent or a platform takes the ontology (the MCP server, the REST API, the ontology as a YAML or
+OWL file, a database connection a platform lends), each with something to copy, and has a panel that calls an endpoint
+as a chosen access policy. `ontlas serve --users` gives a team one studio with roles (see
 [A team studio](#a-team-studio)), and `ontlas mcp` and the token REST API give agents and platforms the same studio
 inside a role (see [Agents over MCP](#agents-over-mcp)).
 
@@ -197,7 +209,7 @@ the admin screens; the foot of the menu shows how far the definition has come.
 
 | Part | Screen | Use it to |
 |---|---|---|
-| | 온톨로지 선택 · 온톨로지 만들기 | Pick the ontology to work in, with its domain pack, maturity and version; make one from domain pack modules, an existing ontology, files (definition drafts or an OWL vocabulary) or nothing, and export it as a studio folder |
+| | 온톨로지 선택 · 온톨로지 만들기 | Pick the ontology to work in, with its domain pack, maturity and version; make one from domain pack modules, an existing ontology, files (definition drafts or an OWL vocabulary) or nothing, export it as a studio folder, and delete one made on the page (put back where the server keeps them) |
 | | 홈 | See the maturity in four steps, the four parts, the Objects, what waits and the steps of starting |
 | | AI 초안 생성 | Make drafts from uploaded material and follow them to their review |
 | Semantic Layer | 규칙 | See the rules by layer, try a decision on typed values, read the checks, and keep the parameters, metrics and functions (see step 3) |
@@ -207,20 +219,20 @@ the admin screens; the foot of the menu shows how far the definition has come.
 | | 그래프 탐색 | See and edit Relations as a graph; open the diagram workspace |
 | | 용어 사전 | Keep the terms, the relations between expressions and the customer wording; bring a glossary in |
 | | 개념 초안 | Review the Entities and Relations drawn from uploaded tables |
-| | 모듈 라이브러리 | See the size, the layers with their modules, the versions and the module library; export |
+| | 모듈 라이브러리 | See the size, the layers with their modules, the versions and every module with its switch and its file; export |
 | | 변경 요청 · 버전 | File, review, approve and roll back changes (see step 6) |
 | Data Binding | 데이터 소스 | Connect a database or a platform's connection and see which tables are read |
 | | Mapping | Set Properties against columns and codes, and see where they differ |
 | | Entity Binding | Bind an Entity to a table, with the SQL it makes, a preview and the checks; the records are browsed from here |
 | | 질의 | Keep registered queries, read them into each store's language and run them as an access policy |
-| | Action | Define actions with preconditions and approval, try them, and handle requests |
+| | Action | Define actions with preconditions and approval, try them, handle requests, and see whether the server writes to the source |
 | Quality | 검증 질문 | Keep the questions with known answers and the held-out set |
 | | 검증 | Run the questions, read why a wrong one is wrong, and set the pass conditions |
 | Operations | 저장소 · 엔진 | See every store, query language, reasoner and embedding as measured now |
-| | 연동 · API | Copy the address, command or settings for each way in, and call the API as a policy |
+| | 연동 · API | See who calls and under which policy, copy the address, command or settings for each way in, and call the API as a policy |
 | | 접근 정책 | Say what each caller may read, see and run |
 | | 파이프라인 관제 | See the stages as they change, the log of decisions and the conditions that raise an alert |
-| | 근거 지도 | Cross Objects with the documents that name their Entities and find what has no ground |
+| | 근거 지도 | Cross Objects with the documents that name their Entities and find what has no ground; its tabs hold the documents, the asset explorer and the asset graph |
 | 상단 | 검색 · 질문 · 자료 업로드 · 할 일 · 알림 · 내 계정 | Search or ask, upload material, settle what waits, and see your roles, the guide and the way out |
 | 관리 | 온톨로지 설정 · 멤버 · 권한 | See the names, the quality targets and how approval works; export; see the users and what each role may do |
 | | 시스템 관리 | 관리 현황, 사용자 · 그룹, 인증 · 보안, 도메인 팩, 기준 어휘, AI 운영, 감사 로그 and 시스템, with what the server really holds |
@@ -229,9 +241,9 @@ the admin screens; the foot of the menu shows how far the definition has come.
 
 The screens below are the example library in `examples/library` (common concepts, commerce and its operations, a
 fashion extension, one customer's differences, and the bindings to one database), rendered by `tools/render_screens.py`
-from `ontlas preview` and from a running `ontlas serve`. Nothing on them is drawn by hand: the modules, the compiled
-queries, the rows from both backends, the decision with its evidence and the reach of a column change are what the
-library computed for that example.
+from `ontlas preview` (the library, the query, the decision and the data map) and from a running `ontlas serve` (the
+rest). Nothing on them is drawn by hand: the modules, the compiled queries, the rows from both backends, the decision
+with its evidence and the reach of a column change are what the library computed for that example.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/library.png" alt="Ontology library screen: every domain package with its kind, version, requirements and an on/off switch for this studio, the layers plugged in now, and what unplugging a module would take away" width="920">
@@ -242,11 +254,11 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
 
 <table>
   <tr>
-    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/ontology.png" alt="그래프 탐색: Objects as filled circles, Entities as rings and Relations as arrows with their cardinality, the chosen Relation edited beside the graph"></td>
-    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/query.png" alt="Query screen: one ontology query, its text in eight backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/ontology.png" alt="그래프 탐색: Objects and Entities as nodes coloured by Object, Relations as arrows between them, the layout and zoom controls, and the pane of the chosen item beside the graph"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/query.png" alt="Query screen: one ontology query, its text in nine backend languages, and identical rows from the SQL source and the SPARQL graph"></td>
   </tr>
   <tr>
-    <td><b>Ontology.</b> Every object as a card with its key, representative and computed properties, in a region per module, with relations named and sized; press a card and what it connects to gathers around it, the rest fading. Domain types hang under common concepts (customer and seller under party, order under agreement).</td>
+    <td><b>The ontology as a graph.</b> Objects and their Entities as nodes coloured by Object, Relations as arrows between them. A node or a Relation picked is named in the bar above with its actions and opened in the pane beside the graph, where a Relation is edited; the search finds a node, the chips hide and show kinds, and the layouts are the graph engine's.</td>
     <td><b>One query, every language.</b> The ontology query, its text for PostgreSQL, MySQL, Oracle, SQL Server, Cypher 25, GQL, SPARQL, SQL/PGQ and Gremlin, and the rows from each backend side by side.</td>
   </tr>
   <tr>
@@ -254,7 +266,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
     <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/rules.png" alt="Decision table editor: a table edited in place with its hit policy, the simulator and the tests beside it"></td>
   </tr>
   <tr>
-    <td><b>Model.</b> The workspace: cards on a canvas, a tree by module, and the picked object's form, data, uses, YAML and comments. Draw a relation from card to card, drop a column on a card, give an element a status, try the edits on a copy, file them.</td>
+    <td><b>Model.</b> The workspace: cards on a canvas, a tree by Object or by module, and the picked Entity's form, data, uses, YAML and comments. Draw a relation from card to card, drop a column on a card, give an element a status, try the edits on a copy, file them.</td>
     <td><b>Rules.</b> A decision table edited where it stands, checked for overlaps and gaps as it is edited, and tried on a record with what single change would turn the answer.</td>
   </tr>
   <tr>
@@ -270,7 +282,7 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
     <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/record.png" alt="Record page: one record with its values and columns, its state, linked records, the decisions on it and the documents that mention it"></td>
   </tr>
   <tr>
-    <td><b>Home.</b> Where the space stands and where its people start: the version applied, how far its Entities have come, the milestones and its four parts (rules, ontology, data binding, quality) with their status, a box to search or ask, what waits on them, the measured pass conditions and an Object map, laid out for the role they pick.</td>
+    <td><b>Home.</b> Where the ontology stands: the version in use, how far its definition has come in four steps (L0 개념 to L3 검증), its four parts (rules, ontology, data binding, quality) with their numbers and state, the Objects with their level, what waits, and the six steps of starting.</td>
     <td><b>A record.</b> Values with their columns, the state machine's current and next steps, the actions a role may take, linked records, what the decisions say of it now, the documents that name it, and its history.</td>
   </tr>
   <tr>
@@ -278,8 +290,32 @@ a studio plugs in the ones it needs, and the screen shows what unplugging one wo
     <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/objects.png" alt="Object: the Objects with their Entities, rules, maturity and owner, and the chosen one beside the list"></td>
   </tr>
   <tr>
-    <td><b>Rules in three layers.</b> AXIOM (laws and integrity, checked first), a customer's Custom rules and the common Standard ones, each with the modules that wrote them; every rule card with its statement, source, owner and status, and the AXIOM checks on the values in force.</td>
-    <td><b>Objects.</b> The top-level classifications with their definition, tier, owner and how far their Entities have come (L0 to L3); one opened shows its Entities, relations, decision tables, questions, source and version.</td>
+    <td><b>Rules in three layers.</b> AXIOM (laws and integrity, checked first), a customer's Custom rules and the common Standard ones, with their counts; every rule in one list with its layer, source, version and owner; and beside it a decision tried on typed values, with the path it took through the layers.</td>
+    <td><b>Objects.</b> The top-level classifications with their definition, tier, owner and how far their Entities have come (L0 to L3); one opened shows its Entities, relations, rules, rule drafts, questions, grounds and version.</td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/rule-form.png" alt="규칙 추가 · 편집: a rule card's fields, what saving does, and the checks run while it is typed"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/entity.png" alt="Entity: the Entities by Object, and the chosen one with its definition, grounds, readers, YAML and comments and its Properties"></td>
+  </tr>
+  <tr>
+    <td><b>A rule on its form.</b> The card's statement, layer, the Object it applies to, conditions, result, exceptions, source, owner and type, and what a definition draft files it by (분류, 관련 대상, 대표 법령, 근거 종류, 정책서 대조). Beside it, what saving does (the edit joins the change request being written) and the checks run while it is typed.</td>
+    <td><b>Entities.</b> A tree of Entities by Object, and the chosen one: its definition, grounds, readers, YAML and comments, and each Property with its vocabulary, type, allowed values and source column. Restrictions and state transitions follow below.</td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/lexicon.png" alt="용어 사전: the terms with the definition each names, and the chosen term with its synonyms, the word it must not be taken for, its rules and what uses it"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/changes.png" alt="변경 요청 · 버전: the change request being written with what it changes and the edits in the order saved, the version in use and the one it would make"></td>
+  </tr>
+  <tr>
+    <td><b>The glossary.</b> Each term with its English label, kind, the definition it names and its rules; the chosen one with its synonyms, the word it must not be taken for, what uses it and its owner. The relations between expressions and the customer wording by channel follow below, and 가져오기 brings a glossary file in.</td>
+    <td><b>Change requests and versions.</b> The request being written: what it changes, the edits in the order saved (each undone on its own), the regression test and 검토 요청; above it the version in use and the one this request would make.</td>
+  </tr>
+  <tr>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/actions.png" alt="Action: the actions, and the chosen one with its parameters, precondition, state change, approval and who may ask, marked as writing off"></td>
+    <td><img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/graph.png" alt="레코드 그래프: one record with the records it is linked to, opened relation by relation"></td>
+  </tr>
+  <tr>
+    <td><b>Actions.</b> What an agent may ask to be done: parameters, the decision that must allow it, the state it moves to, how it is approved and who may ask or run it. 쓰기 꺼짐 · 실행 결과만 기록 says this server was not started to write to the source.</td>
+    <td><b>The record graph.</b> From one record, the records it is linked to, opened relation by relation; the path between two records; and what the decisions say of the one picked.</td>
   </tr>
 </table>
 
@@ -429,7 +465,7 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 
 - **Vectors.** It is cut at sections and sentences, embedded, and written to every vector store. Only what changed is embedded; a store that missed a round catches up on the next one. Every vector carries the folder its file is in and the model that made it. A file's embedding can be turned off in the catalog: its documents leave the stores, and so the search, and stay in the document ontology.
 - **Document ontology.** It becomes rows of document, section and concept. Concepts are the names the definitions give (objects, properties, allowed values, decisions, glossary terms) plus the words a document keeps returning to, found without a model. The rows run on the same engine as the domain ontology, so the same compilers and the same conformance apply.
-- **Relations, when asked.** With a model connected, 관계 추출 sends the sentences that name two concepts or more to a reader, their concepts numbered, and keeps a relation only between concepts its sentence names, with that sentence. Relations join the document ontology (`relationsOf`, `relationNames`) and its graph, and an answer lists the ones its shown passages state. They do not change which passages a search finds: on a set of 100 relation questions the ranks were the same with and without them. Readers are a port: `basic` needs only the model, `ontology-build` is xgen-ontology-build's relation formation (`pip install "ontlas[build]"`). A reading runs on the server, stops and resumes, covers a folder or everything, and with `--repositories` is kept next to them; a passage that changes is read again.
+- **Relations, when asked.** With a model connected, 관계 추출 (근거 지도 › 문서) sends the sentences that name two concepts or more to a reader, their concepts numbered, and keeps a relation only between concepts its sentence names, with that sentence. Relations join the document ontology (`relationsOf`, `relationNames`) and its graph, and an answer lists the ones its shown passages state. They do not change which passages a search finds: on a set of 100 relation questions the ranks were the same with and without them. Readers are a port: `basic` needs only the model, `ontology-build` is xgen-ontology-build's relation formation (`pip install "ontlas[build]"`). A reading runs on the server, stops and resumes, covers a folder or everything, and with `--repositories` is kept next to them; a passage that changes is read again.
 
 <table>
   <tr>
@@ -441,15 +477,15 @@ A document that comes in, through the catalog or `space.documents`, goes two way
 A search takes more passages from the store than it returns and orders them by the model's score and the question's own
 words, since the nearest passage to a model is not always the one that says it.
 
-Concepts tie the two together. `ontlas search` returns the passages and the definitions a question names, the object screen
-shows the sections that mention an object, and the map shows which queries a document touches. Without a reading, concepts are tied
+Concepts tie the two together. `ontlas search` returns the passages and the definitions a question names, an Entity's 근거
+tab shows the sections that mention it, and the asset graph shows which queries a document touches. Without a reading, concepts are tied
 by co-mention only: two names in one section. A relation a reader found replaces the co-mention between its two concepts.
 
 Folders are ranges. A search, a question (`folder` on `POST /v1/search` and `POST /v1/answer`, and on the MCP tools), the document
 graph and a reading keep to one folder and the folders under it, and a role's `documents` take file paths and patterns such as
 `정책/*` besides document names.
 
-Vectors of two models do not compare, so changing the embedding model embeds every passage again. On 벡터 · 임베딩 a change first
+Vectors of two models do not compare, so changing the embedding model embeds every passage again. On 저장소 · 엔진 › 벡터 · 임베딩 a change first
 lists what it embeds again (documents, passages, characters) and the time it takes, measured on a few passages with the new model;
 the stores are emptied and filled again only when you go ahead. A model that fails leaves the stores as they were, and the files
 it could not embed say so.
@@ -470,7 +506,7 @@ A question then goes to whatever can settle it, and a model is the last resort:
 | a registered query's name | the query | no |
 | anything else | rules and passages found; a data question becomes a query | words only what was found |
 
-The page's 통합 검색, `POST /v1/answer` and the MCP tool `answer_question` are the same code. `ontlas compare` puts one question file to
+The page's 검색 · 질문, `POST /v1/answer` and the MCP tool `answer_question` are the same code. `ontlas compare` puts one question file to
 one model three ways, with nothing, with the documents alone and through the space, and counts the right answers. What is right comes
 from the file, not from a model:
 
@@ -533,12 +569,17 @@ imported standard keeps its original IRIs as alignments.
 
 A deployment offers one library or several (`ontlas serve studio.yaml --library other/studio.yaml`), and the page switches
 between them, each with its own definition, data and applied drafts. A new one is made on the page (온톨로지 선택 ›
-온톨로지 만들기) three ways: from files (a definition draft's YAML or JSON files read as one draft, or an OWL vocabulary in
-Turtle or RDF/XML as a module), on the modules of the library that is open (those chosen, with what they require), or
-empty. The result says what it holds and, for an import, what was adjusted and what had no place in a module. A library
-made this way lives with the session; 내려받기 gives the library that is open as a studio folder in a zip (the studio file
-and the file of each module it applies), which `ontlas serve` serves and `--library` offers, and that is how it is kept
-and reached over `/v1`. Where approved changes are saved (`--library-write`), each library is written to its own folder.
+온톨로지 만들기) four ways: from a domain pack (the modules chosen, with what they require), on an existing ontology
+(its modules, to add Custom ones over), from files (a definition draft's YAML, JSON or Excel files read as one draft,
+or an OWL vocabulary in Turtle or RDF/XML as a module), or empty, to fill from AI drafts. The result says what it holds
+and, for an import, what was adjusted and what had no place in a module. On a server that writes (`--library-write`) a
+library made this way is the server's: it is kept as a studio folder of its own under `made/` beside the studio file
+(`--libraries DIR` names another folder, `--libraries-max` how many, 30 unless given), everyone on the server sees it,
+and one that is deleted is moved to `.deleted` there and can be put back from the page. In a team each person opens
+the ontology they look at, so opening or making one does not move anyone else. Elsewhere it lives with the
+visitor's session, three at most. 내보내기 gives any library as a studio folder in a zip (the studio file and the file
+of each module it applies), which `ontlas serve` serves and `--library` offers, and that is how one is reached over
+`/v1`. Where approved changes are saved, each library is written to its own folder.
 
 ## Adapt a domain
 
@@ -548,17 +589,17 @@ the rest.
 
 | You have | Path | It becomes |
 |---|---|---|
-| A standard that fits, and the system's tables | `mapping.suggest`, the page's "표준에 연결" | A `binding` module |
+| A standard that fits, and the system's tables | `mapping.suggest`, 표준에 연결 in the page's draft review | A `binding` module |
 | Table and code definitions, a SQL script, an ERD file | `ontlas draft --definitions` | A definition and its `binding`, with no rows needed |
 | A code definition whose codes refer to other codes | The same draft | Decision tables: what each code implies, or what each state allows |
 | A glossary, a message list | The same draft | A `dictionary` module |
 | Data files or a database | `ontlas draft` | A definition and its `binding` |
 | Past outcomes | `induce`, the rules step of a draft | A decision table |
-| Policy text, in any document format | `ontlas policy-draft`, the library's "정책서로 규칙 초안" | A module with a decision table, each rule citing its clause |
+| Policy text, in any document format | `ontlas policy-draft`, the page's 규칙 초안 | A module with a decision table, each rule citing its clause |
 | An OWL or RDFS ontology | `ontlas import-owl`, the page's 온톨로지 만들기 | A starting definition, or a library of its own |
-| Definitions drafted as tables (Objects, Entities, rules by layer, named values, a glossary; YAML or JSON) | `ontlas library import-definitions`, the page's 온톨로지 만들기 | A domain module, an `axiom` module for the rules marked AXIOM, a `customer` module for those marked Custom |
-| Edits on the management screens | Objects, properties, relations, questions | The `workspace` module, of kind `customer` |
-| Knowledge of the domain | A YAML file, or the library's module editor | A module of any kind |
+| Definitions drafted as tables (Objects, Entities, rules by layer, named values, a glossary; YAML, JSON, or an Excel workbook with a sheet for each) | `ontlas library import-definitions`, the page's 온톨로지 만들기 › 파일 가져오기 | A domain module, an `axiom` module for the rules marked AXIOM, a `customer` module for those marked Custom |
+| Edits on the item screens | Objects, Entities, properties, relations, rules, questions | The `workspace` module, of kind `customer` |
+| Knowledge of the domain | A YAML file, or 파일 편집 on 모듈 라이브러리 | A module of any kind |
 
 A definition drafted from one system describes that system. To carry a domain across systems, bind the tables to a
 standard instead: its queries, decisions and questions carry over, less what the tables do not hold. Matching goes by
@@ -569,10 +610,16 @@ table matches its columns and relations again.
 A studio reads one source database today. A draft from definitions alone is checked against an empty database of
 the same shape, which says nothing about real rows: for that, get read-only access to a development database.
 
+A definition draft kept as a workbook is read a sheet per section (Object, Entity, 규칙, 용어, ...), the header row
+naming the columns by the keys the YAML uses or by their Korean names; it needs `pip install "ontlas[xlsx]"`. The
+import's report says what was adjusted and what was left out, and for a workbook that includes every sheet and column
+it did not read.
+
 ### Anything in, one JSON
 
 `ontlas ingest` reads each file through an adapter and rolls everything into one JSON, which `ontlas draft --definitions`
-takes like any other input. On the page, the same adapters read what reaches the catalog, and 변환 결과 shows the JSON.
+takes like any other input. On the page, the same adapters read what reaches the catalog, and 변환 결과 on 자료 업로드 shows
+the JSON.
 
 | Input | Read as |
 |---|---|
@@ -600,7 +647,7 @@ refused with what to export it to.
 
 ## The pipeline board
 
-What is wrong is said as something to act on (`GET issues`), the same on the board, the home, 할 일, 흐름 and 검증. An alert opens a
+What is wrong is said as something to act on (`GET issues`), the same on the board, the home, 할 일 and 검증. An alert opens a
 panel where it was pressed: the items behind it, why they came to be, what they reach and the ways to fix each, marked as fixed
 here (in the workspace, then a change request), applied at once (taking a module off, shown first on a copy, or reading the source
 again) or fixed at the source (with the list to hand over). Alerts that read the same broken column stand under one cause; a
@@ -608,8 +655,9 @@ failure is only gathered under another when what failed reads what is broken. Ch
 a bar saying which problem this is and what is next, and when the change goes in the board measures again and the issue closes.
 When each opened and closed is written to the journal.
 
-관제, under 운영, draws the pipeline as a building: raw data at the bottom, then conversion,
-the ontology, the storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
+파이프라인 관제, under Operations, shows the stages as tiles, with the log of decisions and the conditions that raise an
+alert beside them. 그림 보기 draws the pipeline as a building: raw data at the bottom, then conversion, the ontology, the
+storage adapters, its use, and verification at the top, with the data climbing one belt through the floors.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/monitor.png" alt="파이프라인 관제: the stages as tiles, the log of decisions and the conditions that raise an alert" width="920">
@@ -617,7 +665,7 @@ the ontology, the storage adapters, its use, and verification at the top, with t
 
 Nothing on it is scripted. Every number comes from the space as it is now, so it works on any ontology, including a
 draft from your own files: tables and rows, files by kind, modules, objects and relations, query results compared across
-backends, decision agreement, question accuracy, pass conditions. Numbers refresh every 2 seconds. The flow is measured
+backends, decision agreement, question accuracy, pass conditions. Numbers refresh every 5 seconds. The flow is measured
 again as soon as the definition or the files change, and otherwise every 20 seconds while the board is open.
 
 A stage that misses its pass conditions stops the data at its floor, and a failure that crosses floors is told as a chain
@@ -627,8 +675,8 @@ from where it shows down to the module that brought it:
 질의 ← DB 대조 ← 식품 업종 확장 모듈   (Sku.expires_on, Sku.storage)
 ```
 
-To see that on the example library, choose 장애 테스트: it really applies a module whose columns the database does not have,
-and 복구 takes it off again. A studio file names such modules itself:
+To see that on the example library, open 그림 보기 and choose 장애 테스트: it really applies a module whose columns the
+database does not have, and 복구 takes it off again. A studio file names such modules itself:
 
 ```yaml
 monitor:
@@ -636,8 +684,9 @@ monitor:
     - {label: 식품 업종 모듈 적용, attach: food}
 ```
 
-Each draft you apply becomes a pipeline of its own. The 데이터 list at the top of the page switches between them, the one
-you started with (기본 데이터) included, and 초기화 is no longer the only way back. A visitor keeps up to five.
+For a visitor, each draft applied becomes a pipeline of its own. The 데이터 list on 데이터 소스 switches between them, the
+one you started with (기본 데이터) included, and a visitor keeps up to five. In a team a draft goes into the change request
+being written instead, so everyone stays on one definition.
 
 ## The data catalog
 
@@ -662,7 +711,7 @@ a visitor types reaches the file system, and two copies of a file cost one.
 
 Without `--repositories` the files go with the visitor's session, which suits a public demo. With it they stay in that
 folder across restarts, one set for all visitors. `--file-kb`, `--max-files` and `--total-mb` set the limits, and
-`--allow-connect` adds 경로 입력, which brings in a file or folder from the server's own disk.
+`--allow-connect` adds 서버 경로, which brings in a file or folder from the server's own disk.
 
 ```bash
 ontlas serve studio.yaml --repositories ./repositories --file-kb 51200 --max-files 2000 --total-mb 4096 --allow-connect
@@ -693,6 +742,10 @@ ontlas draft *.csv --rules '{"enum_max": 10, "infer_links": false}' --drop objec
 ontlas serve shop-demo/studio.yaml
 ```
 
+`-o` (`--out`) is the folder the draft is written to: `library/`, `studio.yaml`, and `data.sqlite` when it is drafted
+from files or from definitions alone. A folder that already holds a `studio.yaml` is refused; without `-o` the modules
+are printed and nothing is written.
+
 Nothing in the draft is fixed. The rules above are `DraftRules` (how many distinct values still make a category,
 whether relations are inferred, whether link tables become many-to-many links, the name hints for titles, parents
 and keys, which queries to generate), and `Draft.revise()` takes a person's edits on top: another key column, a
@@ -702,13 +755,14 @@ fit is reported with its table, column and value.
 
 On the example commerce database (primary keys declared, foreign keys not) the draft finds the eight relations of
 the hand-written commerce ontology, the wishlist table as a many-to-many link included, and every generated query
-returns the same rows from SQLite and from the RDF projection. On the page, 초안 생성 does the same for the files in
-the catalog (and, with `--allow-connect`, 'DB 연결' for a database address): the draft builds step by step with
-the reason for each object, key, type and relation, a person sets the rules and edits each step (every edit is
-checked again on the spot, and errors hold the draft back), and the draft is plugged into that visitor's studio.
-Any module, the example ones and a plugged-in draft alike, opens on the library tab as its file: edit its objects,
-decisions, questions or roles, check it, and save it into that visitor's library; a plugged-in module is swapped
-in at once (`Studio.replace`). The library folder itself is not written; download the file to keep it.
+returns the same rows from SQLite and from the RDF projection. On the page, AI 초안 생성 does the same for the files in
+the catalog (and, with `--allow-connect`, 데이터 소스 takes a database address): the candidates wait on 개념 초안, where
+단계별 검토 · 적용 builds the draft step by step with the reason for each object, key, type and relation, a person sets
+the rules and edits each step (every edit is checked again on the spot, and errors hold the draft back), and the
+draft is plugged into that visitor's studio. Any module, the example ones and a plugged-in draft alike, opens from
+모듈 라이브러리 as its file (파일 편집): edit its objects, decisions, questions or roles, check it, and save it into that
+visitor's library; a plugged-in module is swapped in at once (`Studio.replace`). The library folder itself is not
+written; download the file to keep it.
 `examples/files` holds a fictional library's files to try it with.
 
 Table and code definitions, the way projects keep them, name what the draft finds and give coded columns their
@@ -730,15 +784,15 @@ ontlas draft --sqlite shop.db --definitions 코드정의서.xlsx                
 ```
 
 An allowed value carries its name in the definition itself: `values: {"10": 주문접수, "20": 결제완료}`, or `values`
-with `labels`; an extension adds names to the ones given (`values_add: {"30": 배송중}`). On the page the data tab
-takes the same files beside the data (`examples/definitions` holds a fictional pair), and the properties screen
-edits a value and its name as `10=주문접수`.
+with `labels`; an extension adds names to the ones given (`values_add: {"30": 배송중}`). On the page 자료 업로드
+takes the same files beside the data (`examples/definitions` holds a fictional pair), and the diagram workspace's
+Property form takes a value and its name as `10=주문접수`.
 
-Two more ways to start. A decision table drawn from past outcomes (`induce.induce`, the page's rules step): a person
-picks the column that holds what was decided and the inputs, of the same table or one relation away; each leaf of a
-shallow decision tree becomes a rule with how many past cases it covers and gets right, and a five-fold
+Two more ways to start. A decision table drawn from past outcomes (`induce.induce`, the rules step of the draft
+review): a person picks the column that holds what was decided and the inputs, of the same table or one relation away;
+each leaf of a shallow decision tree becomes a rule with how many past cases it covers and gets right, and a five-fold
 cross-validation says how well it decides cases it was not drawn from. And bindings onto a standard instead of new
-types (`mapping.suggest`, the page's "표준에 연결"): every table and column is scored against the standard's types
+types (`mapping.suggest`, 표준에 연결 in the draft review): every table and column is scored against the standard's types
 and properties (names, labels, aligned vocabulary, romanized Korean, types, allowed values, keys), relations come from
 the draft's, and the confirmed matches become a binding module; what the tables do not carry is left out, with the
 queries that need it. On the example commerce database it gives the bindings a person wrote, inherited properties
@@ -748,7 +802,7 @@ included.
   <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/draft.png" alt="AI 초안 생성: what to make, the material it stands on, and the jobs with where their review stands" width="920">
 </p>
 
-<p align="center"><b>A draft from the six files in <code>examples/files</code>, reviewed table by table.</b> Each source table is scored against the standards the draft compares with and bound to the standard object or kept as a new one, with an English name from the standards and the glossaries; the picked table shows its sample rows, why its key is a key and the match evidence. The later steps settle properties, relations, queries and rules the same way before the draft is applied.</p>
+<p align="center"><b>AI 초안 생성 with the eight files of <code>examples/files</code> uploaded.</b> What to draft, the material it stands on (the domain pack, the uploaded files, the definition as it is), the four steps of a draft and the jobs. The candidates are then reviewed on 개념 초안, table by table: each source table is scored against the standards the draft compares with and bound to the standard object or kept as a new one, with an English name from the standards and the glossaries, its sample rows, why its key is a key and the match evidence. The later steps settle properties, relations, queries and rules the same way before the draft is applied.</p>
 
 ## Ask once
 
@@ -808,12 +862,12 @@ studio.run("myOrders", role="customer_agent", principal={"customer_id": "C001"})
 Decision tables export to GoRules JDM (`decide.zen.to_jdm`) and run on the ZEN engine when `use_zen=True`;
 the tests check that ZEN and the built-in engine agree on every case.
 
-Rules stay readable as they grow. All of this is in the module file, and the 규칙 · 지표 screen shows it:
+Rules stay readable as they grow. All of this is in the module file, and 규칙 shows it:
 
 | In a module | What it does |
 |---|---|
-| `hit_policy: priority` | The highest rule wins, and the answer says which rules it overrode |
-| `parameters` | One named value, read as `@name` by rules and expressions, and as `{@name}` inside a rule's text, so a reason says the value in force; a customer module changes it alone |
+| `hit_policy: priority` | Every rule carries a `priority`, and the matching rule with the lowest number decides (1 before 2, an AXIOM rule before any); the answer says which rules it overrode |
+| `parameters` | One named value with its unit, bounds and owner, read as `@name` by rules and expressions, and as `{@name}` inside a rule's text, so a reason says the value in force; a customer module changes it alone |
 | `metrics` | A number with its formula, denominator, time basis and owner |
 | `conflicts` | Two sources that disagree stay open until a person picks one, and the pick is reviewed like any change |
 | transitions | A state change with a guard, side effects and `after`; an action is asked again right before it runs |
@@ -823,6 +877,9 @@ Rules stay readable as they grow. All of this is in the module file, and the 규
 | scoped roles | Reads and writes limited to the signed-in organisation, closed when the scope is missing |
 
 Each decision table is also read for what it leaves open: overlaps, rules that can never apply, and inputs no rule covers.
+The last two, and a rule that goes against an AXIOM rule or bound, stop a change from being approved unless that
+condition is turned off (see
+[Changes are reviewed before they are approved](#changes-are-reviewed-before-they-are-approved)).
 
 Actions check what is given (`{type, required, min, max, values, pattern, max_length}` per parameter), and may send
 an external request after the change is written, only to hosts the studio file allows (`actions: {call_hosts:
@@ -890,9 +947,13 @@ Every decision rule belongs to the layer of the module that wrote it, and a tabl
 
 A module also carries `rule_cards`: the record of each rule, whether a decision row runs it or something else carries it
 out (`type`: decide, compute, transition, restore, order, display, watch, and for what is not run at all duty, ban,
-limit). A card has a statement, what it applies to, conditions, result, exceptions, source, owner, `status` (draft,
-review, approved), `legal_review` (none, pending, done), what breaking it costs (`risk`), how far its source was checked
-(`verification`) and `implements` (`decision:returnEligibility#in-window`, `function:refundEstimate`, ...). An AXIOM card's
+limit). A card has a statement, what it applies to (an Object among them), conditions, result, exceptions, source,
+owner, `status` (draft, review, approved), `legal_review` (none, pending, done), what breaking it costs (`risk`), how far
+its source was checked (`verification`) and `implements` (`decision:returnEligibility#in-window`,
+`function:refundEstimate`, ...). It also keeps what a definition draft files a rule by: its group (`category`), the law
+it rests on and the kind of source (`law`, `source_kind`), how it stands against the policy already written
+(`policy_check`) and what else it concerns (`related`); the page shows them as 분류, 대표 법령, 근거 종류, 정책서 대조 and
+관련 대상, on the rule, its form and the filters. An AXIOM card's
 `check: {parameter: return_window_days, min: 7}` holds on the final values, so a module, an attach or a workspace edit
 that sets the return window to 5 is refused with the card, the value, the bound and who set it. A card of any layer may
 bound a property instead (`check: {property: OrderItem.unit_price, min: 0}`, a price is never negative), and each value a
@@ -952,7 +1013,7 @@ flow:
 ```
 
 `truth` is a column of the case or a request to the system's API, on an allowed host. `answer` is a decision, a function or a
-property. The check screen lists each case that differs, and `ontlas values examples/library/studio.yaml` exits non-zero if any does.
+property. 검증 lists each case that differs (거래 값 불일치), and `ontlas values examples/library/studio.yaml` exits non-zero if any does.
 
 ## Identity across systems
 
@@ -989,6 +1050,11 @@ flow:
     expect: {eligible: approved}
 ```
 
+Four more conditions hold without being written, and a studio file turns one off by setting it to `null`:
+`define: {max_gaps: 0, max_unreachable: 0, max_axiom_conflicts: 0}` (no decision table input that no rule answers, no
+rule that can never apply, no rule or named value that goes against an AXIOM rule or bound) and
+`check: {max_new_wrong: 0}` (no question a change newly answers wrong).
+
 `studio.agreement()` decides every past case again and lists the ones that differ, with the rule that fired.
 A question's answer is grounded when it carries its condition (the rule that matched, or the query), its source
 (the rule's `cite` or its table's, the source column of each value) and the version of the module that answered;
@@ -1016,7 +1082,8 @@ Held-out questions are reported apart from the ones a definition is tuned on (`s
 
 ## Manage objects, properties and relations
 
-The modelling workspace (Ontology › 그래프 탐색 › 다이어그램 작업 공간) is where the definition is changed: the Entities as cards on a canvas
+Each list changes one item at a time on its item screens. The modelling workspace (Ontology › 그래프 탐색 › 다이어그램 작업
+공간) changes the definition as a whole: the Entities as cards on a canvas
 with their keys, properties and named relations, grouped by Object; a tree by Object (or by module) with what is wrong; and the picked
 element's form, data, uses, YAML and comments, each a view of the same element. One switch away the same objects,
 properties and relations stand in three columns with a form under the picked row. Every element carries a status
@@ -1063,8 +1130,13 @@ swapped (결제금액 ≠ 주문금액, with why). A term names its definition (
 label on two definitions, a synonym that is also a pair not to swap, a definition that is not there) are reported, never
 refused. A question is read in the lexicon's preferred words, and an answer names the other word of a pair when one of
 them was used. A glossary comes in as one edit, as a term list or a pair table (구분, 용어 A, 용어 B, 관계, 설명, 근거, 확인
-필요): `ontlas lexicon import 용어집.csv --config studio.yaml -o shop-dictionary.yaml`. Objects take an `owner` and a
-`tier`, Entities and decision tables an `owner`.
+필요): `ontlas lexicon import 용어집.csv --config studio.yaml -o shop-dictionary.yaml`, or 가져오기 on the screen (CSV,
+Excel, YAML or JSON). In a pair row 관계 says what B is to A: 동의어, 약어, 관련어, 상위어 or 하위어 (or 상위 · 하위, where the
+note names the side that is above), 혼동주의, or 채널 표기 for what a channel calls the term (BO→FO in 구분 names the
+channel). A remark in brackets after a word, set off by a space (`주문 합계 (상담 화면 표기)`), is kept as the term's note
+and not as part of its label. The screen lists the
+relations between expressions by kind, broader and narrower apart from the rest, and the customer wording by channel.
+Objects take an `owner` and a `tier`, Entities and decision tables an `owner`.
 
 ## A team studio
 
@@ -1075,14 +1147,23 @@ ontlas serve studio.yaml --users users.yaml --library-write --journal records/jo
 
 With `--users`, people sign in (PBKDF2 hashes, a session cookie that is HttpOnly and SameSite=Strict, writes only
 from the page itself, sign-in attempts limited) and share one studio. viewer reads and asks, editor changes data and
-modules and files requests, approver approves changes and actions, admin also sets the flow. `--library-write` saves
-approved versions to the library folder; `--sync` reads the source again every N seconds and sends each graph the
-change set.
+modules and files requests, approver approves changes and actions and switches a module on or off, admin also sets the
+flow, connects a data source and adds people. `--library-write` saves approved versions to the library folder; `--sync`
+reads the source again every N seconds and sends each graph the change set.
+
+The team works in one place. Everyone's edits go into the change request being written, each with who made it, and
+approving one request does not drop what others have not filed: their edits are applied again on the new version, and
+an edit on an item the approval changed is held (보관된 편집), with who made it and why, for its writer to apply over the
+approved content or drop. An editor discards only their own edits and an admin all of them, a rejected request can be
+taken back into the edits being written, and applying a concept draft adds it to that request instead of moving
+everyone to another pipeline.
 
 The source database keeps what an action wrote, but not who asked for it, who approved it or what it replaced. Add
 `--journal records/journal.jsonl` and requests, approvals, change requests and the audit trail are written there one line
 each, and read back when the server starts: a request still waits, a change can still be rolled back, and the trail is
-whole. One process writes to one file.
+whole. The edits not yet filed, the pass conditions and quality targets set on the page and the AI draft history are
+kept there too. One process writes to one file. What to start a team's server with, and what to back up, is under
+[A server that keeps what a team enters](#a-server-that-keeps-what-a-team-enters).
 
 ## Reason, validate, exchange
 
@@ -1125,7 +1206,7 @@ cat.unused()                                      # what no agent or workflow us
 takes back either an IR object or a registered query name with parameters. The answer is checked against the
 ontology; if it fails, the model is asked again with the list of issues. The model never writes backend
 query text. `llm` is any `(system, prompt) -> str`; `nl.openai_chat(url, model)` makes one for any
-OpenAI-compatible endpoint, and `ontlas serve --llm-url ... --llm-model ...` adds a question box to the page. An answer
+OpenAI-compatible endpoint, and `ontlas serve --llm-url ... --llm-model ...` adds 자연어 질의 to the 질의 screen. An answer
 that checks but finds no rows goes back once with sample values of the properties it compared (only what the role
 may read in clear). `ontlas nl-eval studio.yaml questions.yaml --llm-url ... --llm-model ...` scores a model on your
 own questions by execution: the gold query's rows must be in the answer's;
@@ -1138,8 +1219,9 @@ decision table format and the policy's clauses, and takes back one decision tabl
 (inputs it can read from the target or along a path, tests it can evaluate, outputs the rules set) and checks that
 every rule cites a clause the text numbers; whatever is wrong goes back to the model. The draft is a module of its
 own, and a person files it as a change request, so it is tried on a copy and approved before it decides anything.
-On the page, `ontlas serve --llm-url ... --policies examples/policies` adds "정책서로 규칙 초안" to the library; the
-command is `ontlas policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
+On the page, with `ontlas serve --llm-url ...`, 규칙 초안 drafts from the documents of the catalog or from a clause typed
+in (`--policies examples/policies` puts an example policy one button away); the command is
+`ontlas policy-draft studio.yaml policy.md --target OrderItem --llm-url ... --llm-model ...`. A draft takes a
 minute or more with a model that reasons first, so it runs on the server and the page collects it (up to 5 minutes).
 [`examples/policies/교환정책서.md`](https://github.com/PlateerLab/ontlas/blob/main/examples/policies/교환정책서.md) is a made-up exchange policy.
 
@@ -1159,7 +1241,15 @@ its row filters and masks. A token with no role (no `--api-role`, an agent with 
 `no_policy`, since it would read every row unmasked; `--api-open` lets such a token read everything. It is read-only
 unless started with `--api-write`, and then an action is only a request a person approves; it writes to the source
 only on a server started with `--action-write` (`/v1/space` says which as `action_write`). `/v1` stays off unless a token is set. Started with `--users`, it answers from the studio the team shares: a change a
-person approves holds for it at once, and an action it requests waits on the decision page for a person to approve.
+person approves holds for it at once, and an action it requests waits on Action › 처리 요청 for a person to approve.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/PlateerLab/ontlas/main/assets/screens/connect.png" alt="연동 · API: who calls and under which access policy, whether the REST API and Action writing are on, and the four ways an agent or a platform takes the ontology" width="920">
+</p>
+
+Operations › 연동 · API shows the same from the server's side: each caller with its access policy (정책 없음 · 거부 for a
+token with none), whether the REST API and Action writing are on, the endpoints, and a panel that calls one as a chosen
+policy.
 
 Give each agent a token of its own, so the audit trail says which agent asked and one agent cannot read another's requests.
 Tokens come from the environment, never from the file:
@@ -1296,7 +1386,7 @@ pip install "ontlas[all]"             # + PyYAML, rdflib, sqlglot, pySHACL, owlr
 pip install "ontlas[postgres]"        # + psycopg      ("[neo4j]" for the Neo4j driver)
 pip install "ontlas[mysql]"           # + PyMySQL, sqlglot      ("[oracle]" for oracledb, "[mssql]" for SQL Server)
 pip install "ontlas[pdf]"             # + pypdf, for reading PDF documents
-pip install "ontlas[xlsx]"            # + openpyxl, for drafting from Excel workbooks
+pip install "ontlas[xlsx]"            # + openpyxl, for drafting from Excel workbooks and reading a definition draft kept as one
 pip install "ontlas[gremlin]"         # + gremlinpython, for Gremlin Server
 pip install "ontlas[embed]"           # + fastembed, a multilingual embedding model on this machine
 pip install "ontlas[reasonable]"      # + reasonable, a fast OWL RL engine, off by default
@@ -1371,7 +1461,8 @@ ontlas library show examples/library commerce                     # one package:
 ontlas library create my-lib energy --kind domain --label "에너지 설비" --requires core
 ontlas library import-owl my-lib schema-orders.ttl schema-orders --requires core
 ontlas library import-definitions my-lib shop objects.yaml entities.yaml rules.yaml glossary.yaml --requires core
-# the same on the page: 라이브러리 > 새 라이브러리 (the files, the library that is open, or empty), then 내려받기 for a studio folder to serve
+ontlas library import-definitions my-lib shop draft.xlsx --requires core   # the same draft as a workbook, a sheet per section
+# the same on the page: 온톨로지 선택 > 온톨로지 만들기 (a domain pack, an existing ontology, files or empty), then 내보내기 for a studio folder to serve
 ontlas library diff my-lib fashion 1.0.0 1.1.0                    # what a new version adds, removes, changes
 ontlas library delete my-lib energy --version 0.1.0               # a version out of the library; no version, the whole package
 ontlas library compose examples/library commerce-operations-bindings -o ontology.yaml
@@ -1387,14 +1478,37 @@ ontlas bindings examples/library/studio.yaml                      # the definiti
 | For | Options |
 |---|---|
 | The address | `--host`, `--port`, `--quiet` (no request log) |
-| Visitors | `--sessions` (studios kept at once; the least recent goes first), `--idle` (seconds before an unused one is dropped). With `--users FILE` there is one studio a team shares behind a sign-in, and `--journal FILE` keeps its requests, approvals and audit trail across restarts |
+| Visitors | `--sessions` (studios kept at once; the least recent goes first), `--idle` (seconds before an unused one is dropped). With `--users FILE` the team shares the server's ontologies behind a sign-in, each person opening the one they look at (opening or making one moves no one else), and `--journal FILE` keeps their requests, approvals and audit trail across restarts |
 | What a visitor may bring | `--samples DIR`, `--policies DIR`, `--file-kb`, `--max-files`, `--total-mb`, `--rows`, `--repositories DIR` (files kept across restarts), `--allow-connect` (a database by address, inside your own network only) |
-| Libraries | `--library STUDIO` (another studio file to switch to, repeated for more), `--library-write` (approved module versions saved to the folder of the library they were made in) |
+| Libraries | `--library STUDIO` (another studio file to switch to, repeated for more), `--library-write` (approved module versions saved to the folder of the library they were made in, and the libraries made on the page kept), `--libraries DIR` (where those are kept: `made/` beside the studio file unless given), `--libraries-max N` (how many of them the server keeps, 30 unless given) |
 | `/v1` | `--api-token-env VAR` turns it on; `--api-role`, `--api-principal key=value` and `--api-name` say who the token is, `--api-write` lets it request actions, `--api-agents FILE` gives each agent a token of its own. A token with no role is refused unless `--api-open` |
 | Actions | `--action-write` lets an approved action write to the source; without it the action is recorded and the source left as it is |
 | A language model | `--llm-url`, `--llm-model`, `--llm-key-env VAR`, `--llm-extra JSON` (merged into each chat request) |
 | Embeddings | `--embedder hash`, `fastembed`, or `openai` with `--embedder-url` and `--embedder-model` |
 | The rest | `--sync N` (re-read the source every N seconds), `--video FILE` (a demo beside the guide) |
+
+### A server that keeps what a team enters
+
+Started with the studio file alone, a server gives each visitor a studio of their own and forgets it when the visitor
+goes. A team that shares a server starts it with four options together, and what its people enter is there after a
+restart:
+
+```bash
+ontlas serve studio.yaml --users users.yaml --journal records/journal.jsonl --library-write --repositories ./repositories
+```
+
+| What was entered | Where it stays | Kept by |
+|---|---|---|
+| Approved versions of the definition, and which modules are switched on | The library folder of the studio file, one file per module version (`workspace/0.1.0.yaml` for what was edited on the page) | `--library-write` |
+| Ontologies made on the page (온톨로지 만들기) | `made/` beside the studio file, a studio folder each; `--libraries DIR` names another folder | `--library-write` |
+| Edits saved and not yet filed, change requests with their reviews and decisions, comments, action requests and approvals, the audit trail, the pass conditions and quality targets set on the page, the AI draft history | The journal, one line each: the first ontology's in the `--journal` file, one made on the page in its own folder (`made/<key>/journal.jsonl`), another offered with `--library` beside the journal file. What is done to the server's users is in the `--journal` file, whichever ontology was open | `--journal` |
+| Uploaded files and their folders | The repositories folder | `--repositories` |
+
+Back up those places (the library folder, `made/`, the journal, the repositories folder), and with them the users
+file, which the page writes when a person is added or changes a password. The options belong together: with a journal
+and no `--library-write`, approved versions are put back from the journal at each start and nothing is written to the
+library folder, but a module switched on or off by hand is not kept that way, and without `--repositories` uploaded
+files go with the session.
 
 A studio file names the ontology, the backends and what to project at start:
 
@@ -1442,9 +1556,14 @@ src/ontlas/
   reason/                   # rules · shacl · owl_rl
   exchange/                 # owl · r2rml · importer
   space.py embed.py vectors.py    # documents and their ontology, the embedding port, the vector store port
+  knowledge.py answer.py relations.py   # one index over rules and passages, one question answered, relations read from documents
+  semantic.py lexicon.py functions.py   # rule layers and rule cards, the glossary, functions under a contract
+  manage.py journal.py      # the workspace's edits as one module; what outlives a restart
+  ingest.py definitions.py codetables.py   # anything in, one JSON; table and code definitions; decision tables from codes
   rest.py                   # the token API, its OpenAPI and tool definitions
   catalog.py repository.py nl.py policy.py conformance.py studio.py config.py tools.py mcp_server.py preview.py cli.py
-  web/                      # ontlas serve: api.py (answers from one studio), server.py, team.py, static/ (the page)
+  web/                      # ontlas serve: api.py (answers from one studio), server.py, team.py, routes.py and areas/
+                            # (the routes of each part), static/ (the page; v2/ holds the screens of each part)
 examples/commerce/          # one ontology file, seed data, studio file, demo
 examples/library/           # the same domain as packages, plus shop operations, fashion, food and a customer overlay
 examples/files/             # a fictional shop's CSV files, for drafting from data

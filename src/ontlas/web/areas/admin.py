@@ -85,9 +85,17 @@ def _users():
     return logins.users if logins is not None else None
 
 
+SERVERS = ("user",)  # what is the server's, not one ontology's: who signs in to it
+
+
+def _server_journal(s):
+    """Where what is the server's is kept: the first ontology's journal, whichever one the person looks at."""
+    return (s.team.shared if s.team is not None else s).studio.changes.journal
+
+
 def _note(s, who, what: str, text: str) -> None:
     entry = {"at": datetime.now().isoformat(timespec="seconds"), "by": who.name if who is not None else s.who, "what": what, "text": text}
-    journal = s.studio.changes.journal
+    journal = _server_journal(s) if what in SERVERS else s.studio.changes.journal
     if journal is not None:
         journal.write("admin", entry)
     else:
@@ -97,11 +105,15 @@ def _note(s, who, what: str, text: str) -> None:
 
 def _notes(s) -> list[dict]:
     """What was done on these screens, oldest first: from the journal where the server keeps one, so a restart does
-    not forget it."""
-    journal = s.studio.changes.journal
-    if journal is None:
-        return list(_log)
-    return [r for r in journal.read() if r.get("kind") == "admin"][-LOG_MAX:]
+    not forget it. What was set in the open ontology is read from its own records; what is the server's is read
+    from the first ontology's, so it is there whichever ontology the person looks at."""
+    own, server = s.studio.changes.journal, _server_journal(s)
+    rows = [r for r in own.read() if r.get("kind") == "admin"] if own is not None else list(_log)
+    if server is not None and server is not own:
+        rows = [r for r in rows if r.get("what") not in SERVERS]
+        rows += [r for r in server.read() if r.get("kind") == "admin" and r.get("what") in SERVERS]
+        rows.sort(key=lambda r: str(r.get("at") or ""))
+    return rows[-LOG_MAX:]
 
 
 def _user_rows() -> list[dict]:
@@ -417,9 +429,7 @@ def overview(s, a, who) -> dict:
             # the share of questions the last 검증 answered right, while the definition it was measured on is this one
             got = (s._measured.get("check") or {}) if s._measured_of is s.studio.onto else {}
             row["accuracy"] = got.get("accuracy")
-        elif x["id"] in s._library_held:  # opened earlier in this space: its definition is still in hand
-            pipelines, pid = s._library_held[x["id"]]
-            studio = next(p for p in pipelines if p["id"] == pid)["studio"]
+        elif (studio := s.library_studio(x["id"])) is not None:  # opened earlier in this space, or open in the team: its definition is in hand
             row["counts"], row["packs"] = _counts(studio), _packs(studio)
         rows.append(row)
     box = s.inbox()
@@ -437,7 +447,7 @@ def overview(s, a, who) -> dict:
 def audit(s, a, who) -> dict:
     """Everything this ontology's records hold, newest first: change requests and their decisions, requests for
     actions and what was decided on them, calls from outside, what was done on the admin screens, and the notes the
-    page keeps of what happened in it."""
+    page keeps of what happened in it. What was done to the server's users is among them whichever ontology is open."""
     require(who, "admin")
     st = s.studio
     rows: list[dict] = []
