@@ -1,7 +1,7 @@
 name: Deploy
 
 # When CI passes on a push to main, bring https://ontlas.com up to that commit.
-# The server (go243, behind a Cloudflare Tunnel) takes the request at /_deploy, checks the commit is on main,
+# The server (behind a Cloudflare Tunnel) takes the request at /_deploy, checks the commit is on main,
 # pulls it, reinstalls, restarts ontlas and rolls back if the page stops answering. An older commit is skipped.
 on:
   workflow_run:

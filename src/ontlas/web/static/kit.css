@@ -44,8 +44,7 @@ select { appearance:none; -webkit-appearance:none; -moz-appearance:none; padding
 .app.auth > .k-side, .app.auth > .k-top { display:none; }
 .k-side { grid-row:1 / 3; box-sizing:border-box; background:#fff; border-right:1px solid var(--line); padding:16px 12px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; min-width:0; }
 .k-brand { display:flex; align-items:center; gap:8px; padding:4px 6px; min-height:48px; text-decoration:none; flex:none; }
-.k-brand svg { height:20px; width:auto; display:block; fill:var(--ink); }
-.k-brand span { font-size:18px; font-weight:500; color:var(--ink); line-height:1; }
+.k-brand span { font-size:24px; font-weight:600; letter-spacing:-.02em; color:var(--ink); line-height:1; }  /* the logo is the name alone */
 .k-top { grid-column:2; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 32px; min-height:60px; box-sizing:border-box; background:#fff; border-bottom:1px solid var(--line); min-width:0; }
 .app.bare > .k-top { grid-column:1; gap:8px 16px; }
 .k-crumb { margin:0; font-size:14px; color:var(--muted); flex:1 1 200px; min-width:0; }
@@ -328,7 +327,6 @@ textarea.k-in, .k-f > textarea { padding:8px 12px; min-height:76px; line-height:
   .k-find { flex:1 1 0; overflow:hidden; }
   .k-find > span:first-of-type { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .app.bare > .k-top { gap:8px; }
-  .app.bare .k-brand span { display:none; }
   .k-switch.bare { flex:1 1 0; min-width:0; }
   .k-switch.bare > summary { min-height:44px; }
   .k-tbtn > .w { display:none; }

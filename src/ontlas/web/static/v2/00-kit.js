@@ -106,8 +106,8 @@
     return out;
   }
 
-  const XGEN_MARK = XGEN_WORD.replace('class="xword" viewBox="128 0 72 32"', 'viewBox="128 6 68.4 20" width="68" height="20"');
-  const brand = (href = '#home') => `<a class="k-brand" href="${href}" aria-label="XGEN Ontlas">${XGEN_MARK}<span>Ontlas</span></a>`;
+  // the logo: the product's name alone
+  const brand = (href = '#home') => `<a class="k-brand" href="${href}" aria-label="Ontlas"><span>Ontlas</span></a>`;
 
   function renderTop() {
     const area = areaOf(S.tab), st = S.st;
