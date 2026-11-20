@@ -141,8 +141,10 @@ def guide(video: Path | None) -> dict:
 
 
 # these take the session's lock only around its data, or not at all: a model's answer waits tens of seconds, and a
-# password touches the sign-ins only, so it does not queue behind a long measurement of the shared space
-OWN_LOCK = {"space/ask/more", "entry/password"}
+# person's own account touches the sign-ins only, so it does not queue behind a long measurement of the shared space
+OWN_LOCK = {"space/ask/more", "entry/password", "entry/profile", "entry/2fa/start", "entry/2fa/on", "entry/2fa/off",
+            "entry/device/out"}
+BLOCKED = "허용되지 않은 IP에서 접속해 요청을 처리하지 못했습니다. 관리자에게 문의해 주세요."
 # in a team these are about the libraries themselves (which one a person looks at, one made, one taken away), not about
 # one studio: each takes the lock of the one studio it reads or writes itself (team.TeamSessions)
 TEAM_OWN_LOCK = {"library", "library/new", "library/drop", "entry/ontology/new"}
@@ -150,7 +152,7 @@ TEAM_OWN_LOCK = {"library", "library/new", "library/drop", "entry/ontology/new"}
 
 def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = False, upload_max: int = 1 << 20,
                  video: Path | None = None, logins=None, rest=None):
-    from ontlas.web.team import NEEDS
+    from ontlas.web.team import NEEDS, Refused, agent_of
 
     routes.load()
     body_html = page()
@@ -158,6 +160,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
     team = logins is not None
     etag = hashlib.sha256(body_html).hexdigest()[:16]
     the_guide = guide(video)
+    if team:  # sign-ins are the server's records: kept in the first library's journal, as what admins do to users
+        from ontlas.web.areas.admin import _note
+
+        logins.note = lambda by, text, what="login": _note(sessions.shared, None, what, text, by=by)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "ontlas"
@@ -205,8 +211,23 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
             self._json(code, {"error": message})
 
         def _client(self) -> str:
-            fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            """The visitor's address: as the tunnel in front says it, else the first proxy's, else the socket's."""
+            fwd = (self.headers.get("CF-Connecting-IP") or "").strip() or (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
             return fwd or self.client_address[0]
+
+        def _asked(self, path: str) -> bool:
+            """Says where this request came from to the routes (routes.asked); False where a team's policy does not
+            let that address in. What a page loads, /healthz and /v1 (its own keys) are not asked."""
+            routes.asking(ip=self._client(), device=logins.device(self._token()) if team else "")
+            return not (team and path.startswith("/api/") and not logins.allowed(self._client()))
+
+        def _signed(self, out: dict) -> None:
+            """A step's answer, or the sign-in it ended in: a cookie for as long as the person asked to stay."""
+            if "token" not in out:
+                return self._json(200, out)
+            u, age = out["user"], f"; Max-Age={int(logins.lifetime(True))}" if out["keep"] else ""
+            cookie = f"{LOGIN}={out['token']}; Path=/; HttpOnly; SameSite=Strict{age}{self._secure()}"
+            return self._json(200, {"ok": True, "user": {"id": u.id, "name": u.name, "roles": u.roles}}, extra={"Set-Cookie": cookie})
 
         def _send(self, code: int, data: bytes, ctype: str, *, sid: str = "", new: bool = False,
                   extra: dict | None = None) -> None:
@@ -293,6 +314,8 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._send(200, b"ok", "text/plain; charset=utf-8")
             if url.path.startswith("/v1/"):
                 return self._rest("GET", url.path, {k: v[0] for k, v in parse_qs(url.query).items()})
+            if not self._asked(url.path):
+                return self._json(403, {"error": BLOCKED})
             if url.path in ("/", "/index.html"):
                 sid, _, new = self._session()
                 body = page() if live else body_html
@@ -313,8 +336,14 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._json(200, the_guide)
             if url.path == "/api/me":
                 u = self._user()
-                return self._json(200, {"team": team, "user": {"id": u.id, "name": u.name, "roles": u.roles}
-                                        if u else None})
+                said = {"team": team, "user": {"id": u.id, "name": u.name, "roles": u.roles} if u else None}
+                if team and u is None:  # what the sign-in page offers: the first admin's setting up, or asking to join
+                    setup, policy = logins.need_setup(), logins.policy
+                    said.update(setup=setup, signup=bool(policy["signup"]) and not setup, password_min=policy["password_min"],
+                                keep_days=policy["keep_days"])
+                    if setup:
+                        said["model"] = sessions.shared.llm is not None
+                return self._json(200, said)
             if team and self._user() is None and url.path.startswith("/api/"):
                 return self._json(401, {"error": "로그인하지 않아 요청을 처리하지 못했습니다. 로그인해 주세요."})
             if not url.path.startswith("/api/"):
@@ -352,12 +381,16 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 return self._rest("POST", url.path, body if isinstance(body, dict) else {})
             if not url.path.startswith("/api/"):
                 return self._json(404, {"error": "요청한 주소를 찾을 수 없습니다."})
+            if not self._asked(url.path):
+                return self._refuse(403, BLOCKED)
             if team:
                 if not self._same_origin():
                     return self._refuse(403, "이 페이지에서 보낸 요청이 아니어서 처리하지 못했습니다. 페이지를 새로 열어 "
                                              "다시 시도해 주세요.")
                 if url.path in ("/api/login", "/api/logout"):
                     return self._login(url.path == "/api/login")
+                if url.path in ("/api/setup", "/api/signup"):
+                    return self._join(url.path == "/api/setup")
                 user = self._user()
                 if user is None:
                     return self._refuse(401, "로그인하지 않아 요청을 처리하지 못했습니다. 로그인해 주세요.")
@@ -390,7 +423,10 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                     self._body()  # read what was sent, so the client is not cut off while it sends
                 except ValueError:
                     pass
-                logins.sign_out(self._token())
+                gone = logins.sign_out(self._token())
+                if gone is not None:
+                    u = logins.users.users.get(gone.uid)
+                    logins.say(u.name if u is not None else gone.uid, "로그아웃")
                 return self._json(200, {"ok": True}, extra={"Set-Cookie": f"{LOGIN}=; Path=/; HttpOnly; "
                                                                           f"SameSite=Strict; Max-Age=0{self._secure()}"})
             if not logins.allow_try(self._client()):
@@ -399,13 +435,40 @@ def make_handler(sessions: Sessions, *, ask_limit: RateLimit, quiet: bool = Fals
                 body = self._body()
             except ValueError as e:
                 return self._json(400, {"error": str(e)})
-            hit = logins.sign_in(str(body.get("user", "")), str(body.get("password", "")))
-            if hit is None:
-                return self._json(401, {"error": "아이디 또는 비밀번호가 맞지 않아 로그인하지 못했습니다. 다시 입력해 주세요."})
-            token, u = hit
-            cookie = f"{LOGIN}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{self._secure()}"
-            return self._json(200, {"ok": True, "user": {"id": u.id, "name": u.name, "roles": u.roles}},
-                              extra={"Set-Cookie": cookie})
+            ip, agent = self._client(), agent_of(self.headers.get("User-Agent") or "")
+            try:
+                if body.get("ticket"):  # a step after the password: a code, a code's setting up, a new password
+                    out = logins.go_on(str(body["ticket"]), body, ip=ip, agent=agent)
+                else:
+                    out = logins.begin(str(body.get("user", "")), str(body.get("password", "")), keep=bool(body.get("keep")),
+                                       ip=ip, agent=agent)
+            except Refused as e:
+                return self._json(e.code, {"error": str(e), **e.said})
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            return self._signed(out)
+
+        def _join(self, setting_up: bool) -> None:
+            """The first admin, made with the code the server showed when it started; or one who asks to join."""
+            if not logins.allow_try(self._client()):
+                return self._refuse(429, "요청 시도가 분당 한도를 초과해 처리하지 못했습니다. 1분 뒤 다시 시도해 주세요.")
+            try:
+                body = self._body()
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            uid, name = str(body.get("id") or "").strip(), " ".join(str(body.get("name") or "").split())[:80]
+            email, password = str(body.get("email") or "").strip()[:120], str(body.get("password") or "")
+            try:
+                if not setting_up:
+                    logins.signup(uid, name, email, password)
+                    return self._json(200, {"ok": True, "pending": True})
+                out = logins.finish_setup(str(body.get("code") or ""), uid, name, password, email, ip=self._client(),
+                                          agent=agent_of(self.headers.get("User-Agent") or ""))
+            except Refused as e:
+                return self._json(e.code, {"error": str(e), **e.said})
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            return self._signed(out)
 
         def _api(self, method: str, route: str, a: dict) -> None:
             sid, s, new = self._session()
@@ -864,6 +927,8 @@ def serve(build: Callable[[], StudioSession], *, host: str = "127.0.0.1", port: 
                                               video=video, logins=logins, rest=rest))
     if sync:
         Syncer(sessions, sync).start()
+    if logins is not None:
+        logins.setup_code()  # no admin can sign in yet: the code for 최초 설치 설정, said once at the start
     print(f"ontlas on http://{host}:{port}" + (" (team)" if logins else ""), flush=True)
     try:
         httpd.serve_forever()

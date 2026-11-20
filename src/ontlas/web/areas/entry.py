@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from ontlas.web import routes
+from ontlas.web.areas.admin import _note
 from ontlas.web.routes import get, post
+from ontlas.web.team import EMAIL, HISTORY, POLICY, check_password
+from ontlas.words import fix as with_particles
 
 ROWS_MAX = 30
-PASSWORD_MIN = 10  # team.Users.add asks for as much
 WRONG_PER_MINUTE = 5
 _wrong: dict[str, list[float]] = {}  # user id -> when a wrong current password was given, to slow guessing down
 
@@ -251,41 +253,155 @@ def inbox(s, a, who) -> dict:
     return plain({"box": s.inbox(), "notes": list(s.log)[:ROWS_MAX], "done": _decided(s)})
 
 
+def _two_factor(logins, u) -> dict:
+    return {"on": bool(u is not None and u.totp), "required": bool(logins is not None and logins.policy["two_factor"])}
+
+
 @get("entry/me")
 def me(s, a, who) -> dict:
     """How this server lets people in, as the account screen says it: how long a sign-in lasts, or where nobody signs
-    in how long an unused session is kept, and whether the person can change their own password here."""
+    in how long an unused session is kept, whether the person can change their own password here, their email, their
+    second step and the devices they are signed in on."""
     logins, limits = routes.SERVER.get("logins"), routes.SERVER.get("limits") or {}
-    hours = round(logins.ttl / 3600, 1) if logins is not None else None
+    policy = logins.policy if logins is not None else POLICY
     idle = limits.get("idle") if logins is None else None
-    return {"team": who is not None, "hours": int(hours) if hours is not None and hours == int(hours) else hours,
-            "idle_minutes": round(idle / 60) if idle else None, "password_min": PASSWORD_MIN,
-            "can_change_password": who is not None and logins is not None and logins.users.path is not None}
+    mine = who is not None and logins is not None
+    return {"team": who is not None, "hours": policy["session_hours"] if logins is not None else None,
+            "idle_minutes": round(idle / 60) if idle else None, "password_min": policy["password_min"],
+            "can_change_password": mine and logins.users.path is not None,
+            "email": who.email if mine else "", "two_factor": _two_factor(logins, who if mine else None),
+            "devices": logins.devices(who.id, routes.asked().get("device", "")) if mine else [],
+            "keep_days": policy["keep_days"] if logins is not None else None,
+            "session_hours": policy["session_hours"] if logins is not None else None}
+
+
+def _slowed(uid: str, done: str) -> list[float]:
+    """The wrong passwords this person gave in the last minute; too many and nothing more is tried for now."""
+    import time
+
+    now = time.time()
+    tries = [t for t in _wrong.get(uid, []) if now - t < 60]
+    if len(tries) >= WRONG_PER_MINUTE:
+        raise ValueError(f"현재 비밀번호 입력 오류가 반복되어 {done} 못했습니다. 1분 후 다시 시도해 주세요.")
+    return tries
+
+
+def _wrong_once(uid: str, tries: list[float]) -> None:
+    import time
+
+    _wrong[uid] = [*tries, time.time()]
 
 
 @post("entry/password", needs="viewer")
 def password(s, a, who) -> dict:
-    """The signed-in person's own password, changed with the one they have now. Every sign-in of theirs ends with it."""
-    import time
-
+    """The signed-in person's own password, changed with the one they have now: as long as the policy asks, and none
+    of the last ones again. Every sign-in of theirs ends with it, and a password an admin gave is theirs from now."""
     logins = routes.SERVER.get("logins")
-    if who is None or logins is None or logins.users.path is None:
+    if who is None or logins is None or logins.users.path is None or who.id not in logins.users.users:
         raise ValueError("비밀번호를 변경할 수 없는 계정이어서 변경하지 못했습니다. 시스템 관리자에게 재설정을 요청해 주세요.")
-    now = time.time()
-    tries = [t for t in _wrong.get(who.id, []) if now - t < 60]
-    if len(tries) >= WRONG_PER_MINUTE:
-        raise ValueError("현재 비밀번호 입력 오류가 반복되어 변경하지 못했습니다. 1분 후 다시 시도해 주세요.")
+    u = logins.users.users[who.id]
+    tries = _slowed(u.id, "변경하지")
     current, new = str(a.get("current") or ""), str(a.get("new") or "")
-    if logins.users.verify(who.id, current) is None:
-        _wrong[who.id] = [*tries, now]
+    if not check_password(current, u.password):
+        _wrong_once(u.id, tries)
         raise ValueError("현재 비밀번호가 맞지 않아 변경하지 못했습니다. 다시 입력해 주세요.")
-    if len(new) < PASSWORD_MIN:
-        raise ValueError(f"새 비밀번호가 {PASSWORD_MIN}자보다 짧아 변경하지 못했습니다. {PASSWORD_MIN}자 이상으로 입력해 주세요.")
+    least = logins.policy["password_min"]
+    if len(new) < least:
+        raise ValueError(f"새 비밀번호가 {least}자보다 짧아 변경하지 못했습니다. {least}자 이상으로 입력해 주세요.")
     if new == current:
         raise ValueError("새 비밀번호가 현재 비밀번호와 같아 변경하지 못했습니다. 다른 비밀번호를 입력해 주세요.")
-    logins.users.add(who.id, new, name=who.name, roles=list(who.roles))
-    _wrong.pop(who.id, None)
-    with logins.lock:
-        for token in [t for t, (uid, _) in logins.tokens.items() if uid == who.id]:
-            del logins.tokens[token]
+    if logins.users.reused(u, new):
+        raise ValueError(f"새 비밀번호가 최근에 쓴 비밀번호와 같아 변경하지 못했습니다. 최근 {HISTORY}개와 다른 비밀번호를 입력해 주세요.")
+    with logins.users.lock:
+        logins.users.set_password(u, new)
+        logins.users.save()
+    _wrong.pop(u.id, None)
+    logins.end(u.id)
+    _note(s, who, "login", "비밀번호 변경")
     return {"ok": True}
+
+
+def _mine(who, done: str):
+    """The sign-ins and the record of the person asking; `done` is what was not done without them."""
+    logins = routes.SERVER.get("logins")
+    if who is None or logins is None or who.id not in logins.users.users:
+        raise ValueError(f"로그인한 팀 계정이 없어 {done} 못했습니다. 팀 서버에 로그인해 주세요.")
+    return logins, logins.users.users[who.id]
+
+
+@post("entry/profile", needs="viewer")
+def profile(s, a, who) -> dict:
+    """The signed-in person's own name and email."""
+    logins, u = _mine(who, "프로필을 저장하지")
+    name, email = " ".join(str(a.get("name") or "").split())[:80], str(a.get("email") or "").strip()[:120]
+    if not name:
+        raise ValueError("이름이 비어 있어 저장하지 못했습니다. 이름을 입력해 주세요.")
+    if email and not EMAIL.fullmatch(email):
+        raise ValueError("이메일 형식이 맞지 않아 저장하지 못했습니다. name@example.com 형식으로 입력해 주세요.")
+    if logins.users.email_taken(email, but=u.id):
+        raise ValueError(with_particles(f"이메일 {email}이(가) 이미 등록되어 저장하지 못했습니다. 다른 이메일을 입력해 주세요."))
+    if name == u.name and email == u.email:
+        raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
+    with logins.users.lock:
+        u.name, u.email = name, email
+        logins.users.save()
+    _note(s, who, "user", f"사용자 {u.name}({u.id}) 프로필 변경")
+    return {"ok": True, "name": u.name, "email": u.email}
+
+
+@post("entry/2fa/start", needs="viewer")
+def two_factor_start(s, a, who) -> dict:
+    """A secret for the person's authenticator app, kept ten minutes for the code that turns it on."""
+    logins, u = _mine(who, "2단계 인증을 설정하지")
+    if u.totp:
+        raise ValueError("2단계 인증이 이미 켜져 있어 설정하지 못했습니다. 다시 설정하려면 먼저 꺼 주세요.")
+    return logins.enroll_start(u)
+
+
+@post("entry/2fa/on", needs="viewer")
+def two_factor_on(s, a, who) -> dict:
+    logins, u = _mine(who, "2단계 인증을 켜지")
+    if u.totp:
+        raise ValueError("2단계 인증이 이미 켜져 있어 처리하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.")
+    if not logins.enroll_finish(u, str(a.get("code") or "")):
+        raise ValueError("인증 코드가 맞지 않아 2단계 인증을 켜지 못했습니다. 인증 앱의 6자리 코드를 다시 입력하거나 설정을 다시 시작해 주세요.")
+    _note(s, who, "login", "2단계 인증 켬")
+    return {"ok": True, "two_factor": _two_factor(logins, u)}
+
+
+@post("entry/2fa/off", needs="viewer")
+def two_factor_off(s, a, who) -> dict:
+    """The second step turned off with the person's password, where the policy does not ask everyone for it."""
+    logins, u = _mine(who, "2단계 인증을 끄지")
+    if not u.totp:
+        raise ValueError("2단계 인증이 꺼져 있어 처리하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.")
+    if logins.policy["two_factor"]:
+        raise ValueError("모든 사용자에게 2단계 인증이 필수라 끄지 못했습니다. 관리자에게 문의해 주세요.")
+    tries = _slowed(u.id, "2단계 인증을 끄지")
+    if not check_password(str(a.get("password") or ""), u.password):
+        _wrong_once(u.id, tries)
+        raise ValueError("비밀번호가 맞지 않아 2단계 인증을 끄지 못했습니다. 다시 입력해 주세요.")
+    _wrong.pop(u.id, None)
+    with logins.users.lock:
+        u.totp = ""
+        logins.users.save()
+    _note(s, who, "login", "2단계 인증 끔")
+    return {"ok": True, "two_factor": _two_factor(logins, u)}
+
+
+@post("entry/device/out", needs="viewer")
+def device_out(s, a, who) -> dict:
+    """One device of the person's signed out, or with id "others" every one but the one asking."""
+    logins, u = _mine(who, "로그아웃하지")
+    device, here = str(a.get("id") or ""), routes.asked().get("device", "")
+    if device == "others":
+        ended = logins.end(u.id, but=here)
+        if ended:
+            _note(s, who, "login", f"다른 기기 모두 로그아웃 · {ended}대")
+    else:
+        gone = logins.end_device(u.id, device) if device else None
+        if gone is None:
+            raise ValueError("로그인한 기기를 찾지 못해 로그아웃하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.")
+        ended = 1
+        _note(s, who, "login", "기기 로그아웃" + (f" · {gone.agent}" if gone.agent else ""))
+    return {"ok": True, "ended": ended, "devices": logins.devices(u.id, here)}

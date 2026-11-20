@@ -78,7 +78,8 @@ def _login(base, user, password):
 def test_a_team_signs_in_and_works_in_one_studio_by_role(team):
     base, root, sessions = team
     assert _call(base, "/api/state")[0] == 401
-    assert _call(base, "/api/me")[1] == {"team": True, "user": None}
+    assert _call(base, "/api/me")[1] == {"team": True, "user": None, "setup": True, "signup": False, "password_min": 8, "keep_days": 14,
+                                         "model": False}  # no admin yet
     assert _call(base, "/api/login", {"user": "kim", "password": "nope-nope-1"})[0] == 401
     kim, lee, park = (_login(base, u, f"{u}-password-1") for u in ("kim", "lee", "park"))
     assert _call(base, "/api/me", cookie=kim)[1]["user"]["name"] == "김"
@@ -226,8 +227,8 @@ def test_the_rows_under_an_object_read_in_its_own_words(team):
 
 
 def test_sign_in_attempts_are_limited(team):
-    base, _, _ = team
-    codes = [_call(base, "/api/login", {"user": "kim", "password": "bad-guess-00"})[0] for _ in range(11)]
+    base, _, _ = team  # a name each time: an account locks at five (test_team_login), an address at ten a minute
+    codes = [_call(base, "/api/login", {"user": f"guess{i}", "password": "bad-guess-00"})[0] for i in range(11)]
     assert codes[:10] == [401] * 10 and codes[10] == 429
 
 
@@ -835,7 +836,8 @@ def test_what_is_done_to_the_servers_users_is_kept_once_and_read_from_every_libr
     base, who = start()  # kept in the first library's journal alone, so it is there after a restart and from each
     said = ["사용자 노(noh) 추가 · 역할 편집자", "사용자 노(noh) 변경 · 역할 편집자 → 편집자 · 승인자"]
     kinds = lambda p: [json.loads(x).get("what") for x in p.read_text(encoding="utf-8").splitlines() if '"kind": "admin"' in x]  # noqa: E731
-    assert kinds(journal) == ["user", "user"] and kinds(root / "library" / "made" / "trial" / "journal.jsonl") == ["setting"]
+    assert [k for k in kinds(journal) if k != "login"] == ["user", "user"] and "login" in kinds(journal)  # the sign-ins too
+    assert kinds(root / "library" / "made" / "trial" / "journal.jsonl") == ["setting"]
     assert all("admin" not in p.read_text(encoding="utf-8") for p in journal.parent.glob("journal.second-*.jsonl"))
     assert _at(base, who["han"]) == "l2" and audit("user") == said and audit("setting") == []
     assert _call(base, "/api/library", {"id": made}, cookie=who["han"])[0] == 200

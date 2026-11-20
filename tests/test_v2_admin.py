@@ -327,7 +327,8 @@ def test_a_user_is_added_changed_and_removed_and_the_file_keeps_it(session, rout
 
     admin = people.users.users["root1"]
     save, drop = routes.POST["admin/user/save"], routes.POST["admin/user/drop"]
-    out = save(session, {"id": "new1", "name": "새로 하나", "roles": ["editor", "viewer"], "password": "new-password-1", "new": True}, admin)
+    out = save(session, {"id": "new1", "name": "새로 하나", "roles": ["editor", "viewer"], "password": "new-password-1", "new": True,
+                         "must_change": False}, admin)
     assert next(u for u in out["users"] if u["id"] == "new1")["roles"] == ["viewer", "editor"]  # in the order of the levels
     token, _ = people.sign_in("new1", "new-password-1")
     assert next(u for u in routes.GET["admin/users"](session, {}, admin)["users"] if u["id"] == "new1")["signed_in"]
@@ -335,13 +336,20 @@ def test_a_user_is_added_changed_and_removed_and_the_file_keeps_it(session, rout
     save(session, {"id": "new1", "name": "새로 둘", "roles": ["approver"], "password": "", "new": False}, admin)
     kept = Users.load(tmp_path / "users.yaml").users["new1"]
     assert kept.name == "새로 둘" and kept.roles == ["approver"] and people.sign_in("new1", "new-password-1")  # the password stayed
-    save(session, {"id": "new1", "name": "새로 둘", "roles": ["approver"], "password": "another-password-2", "new": False}, admin)
+    save(session, {"id": "new1", "name": "새로 둘", "roles": ["approver"], "password": "another-password-2", "new": False,
+                   "must_change": False}, admin)
+    assert people.user(token) is None  # a password reset signs the person out
     assert people.sign_in("new1", "new-password-1") is None and people.sign_in("new1", "another-password-2")
+    token, _ = people.sign_in("new1", "another-password-2")
 
-    drop(session, {"id": "new1"}, admin)
-    assert "new1" not in Users.load(tmp_path / "users.yaml").users and people.user(token) is None  # signed out at once
-    said = [r["text"] for r in routes.GET["admin/audit"](session, {}, admin)["rows"] if r["kind"] == "user"]
-    assert len(said) == 4 and "폐기" in said[0] and "추가 · 역할 조회자 · 편집자" in said[-1] and all("관리 하나" == r["by"] for r in routes.GET["admin/audit"](session, {}, admin)["rows"] if r["kind"] == "user")
+    drop(session, {"id": "new1"}, admin)  # kept on the list as disabled, never let in
+    assert Users.load(tmp_path / "users.yaml").users["new1"].state == "disabled" and people.user(token) is None  # signed out at once
+    with pytest.raises(Exception, match="사용이 중지된"):
+        people.sign_in("new1", "another-password-2")
+    rows = routes.GET["admin/audit"](session, {}, admin)["rows"]
+    said = [r["text"] for r in rows if r["kind"] == "user"]
+    assert len(said) == 3 and "폐기" in said[0] and "추가 · 역할 조회자 · 편집자" in said[-1] and all("관리 하나" == r["by"] for r in rows if r["kind"] == "user")
+    assert [r["text"] for r in rows if r["kind"] == "login" and r["by"] == "관리 하나"] == ["비밀번호 변경 · 사용자 새로 둘(new1)"]
 
 
 def test_a_user_that_cannot_be_saved_is_refused_with_the_reason(session, routes, people):

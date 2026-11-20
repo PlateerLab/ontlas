@@ -13,12 +13,14 @@ server asks here before its own table.
 
 A handler takes the session (StudioSession), the arguments (the query of a GET, the JSON body of a POST) and who asks
 (the signed-in team user, or None where nobody signs in), and returns what the route answers. What a POST needs is a
-team level (viewer, editor, approver, admin); a GET that only some may read checks with `require`.
+team level (viewer, editor, approver, admin); a GET that only some may read checks with `require`. Where the request
+came from (its address, the sign-in it came with) is `asked()`.
 """
 from __future__ import annotations
 
 import importlib
 import pkgutil
+import threading
 from typing import Callable
 
 from ontlas.web.team import LEVELS, NEEDS
@@ -60,6 +62,16 @@ def require(who, level: str) -> None:
 
 
 SERVER: dict = {}  # what the server was started with (rest, logins, sessions, limits, ...), for a handler that shows it
+_asking = threading.local()  # each request is answered on a thread of its own: what it came with stays with it
+
+
+def asking(**said) -> None:
+    """The server says where the request this thread answers came from: ip, device (the sign-in it came with)."""
+    _asking.said = said
+
+
+def asked() -> dict:
+    return getattr(_asking, "said", None) or {}
 
 
 def load() -> list:

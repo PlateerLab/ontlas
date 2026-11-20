@@ -197,7 +197,7 @@
     const r = await fetch('/api/' + path, opt);
     let j = {};
     try { j = await r.json(); } catch (_) { /* empty body */ }
-    if (r.status === 401 && S.me && S.me.team && path !== 'login') { S.me.user = null; renderLogin(); }
+    if (r.status === 401 && S.me && S.me.team && !['login', 'setup', 'signup'].includes(path)) { S.me.user = null; renderLogin(); }
     if (libraryElsewhere(r, j)) { libraryMoved(); throw Object.assign(new Error(LIB_MOVED), { status: r.status, body: j }); }
     if (!r.ok) throw Object.assign(new Error(j.error || `서버 오류로 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요. (${r.status})`), { status: r.status, body: j });
     return j;
@@ -215,8 +215,13 @@
   const fail = (e) => toast(e.message || String(e), true);
 
   async function load() {
-    if (!S.me) { try { S.me = await api('me'); } catch (_) { S.me = { team: false, user: null }; } }
-    if (S.me.team && !S.me.user) { renderLogin(); return; }
+    // a team server refuses an address it does not let in before anything else: the sign-in screen says so
+    if (!S.me) { try { S.me = await api('me'); } catch (e) { S.me = e.status === 403 ? { team: true, user: null, blocked: e.message } : { team: false, user: null }; } }
+    if (S.me.team && !S.me.user) {
+      if (S.me.setup && !location.hash) history.replaceState(null, '', '#setup');  // a team server with no admin yet starts with its setup
+      renderLogin();
+      return;
+    }
     if (!S.guide) { try { S.guide = await api('guide'); } catch (_) { S.guide = { video: '', chapters: [] }; } }
     S.st = await api('state');
     if (S.sel && !S.st.graph.nodes.some((n) => n.id === S.sel)) { S.sel = null; S.obj = null; }
@@ -6585,20 +6590,6 @@ ${controls}${body}`;
         toast('실행 전 값으로 되돌렸습니다.');
       } catch (e) { fail(e); }
     },
-    login: async () => {
-      const b = $('[data-act=login]');
-      if (b && b.disabled) return;  // one sign-in at a time: each press counts against the minute's limit
-      if (b) { b.disabled = true; b.dataset.was = b.textContent; b.textContent = '로그인 중'; }
-      try {
-        const r = await api('login', { user: ($('#luser') || {}).value || '', password: ($('#lpw') || {}).value || '' });
-        S.me = { team: true, user: r.user };
-        await load();
-      } catch (e) {
-        fail(e);
-        const now = $('[data-act=login]');
-        if (now) { now.disabled = false; now.textContent = now.dataset.was || '로그인'; }
-      }
-    },
     logout: async () => { try { await api('logout', {}); } catch (_) { /* signed out anyway */ } S.me.user = null; renderLogin(); },
     sync: async () => {
       try {
@@ -7499,7 +7490,6 @@ ${controls}${body}`;
         S.ed.text = t.value;
       }
       if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey) && ev.target.dataset && ev.target.dataset.in === 'text') { ev.preventDefault(); runQuery(); }
-      if (ev.key === 'Enter' && (ev.target.id === 'lpw' || ev.target.id === 'luser')) { ev.preventDefault(); ACT.login(); }
       if (ev.target.id === 'cedit' && ev.key === 'Enter') { ev.preventDefault(); finishEdit(); }
       if (ev.target.id === 'cedit' && ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); S.cat.edit = null; render(); }
     });

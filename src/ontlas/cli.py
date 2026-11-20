@@ -810,7 +810,7 @@ def _main(argv: list[str] | None = None) -> int:
 
         users = Users.load(a.file)
         if a.ucmd == "list":
-            _out([{"id": u.id, "name": u.name, "roles": u.roles} for u in users.users.values()])
+            _out([{"id": u.id, "name": u.name, "roles": u.roles, "email": u.email, "state": u.state} for u in users.users.values()])
             return 0
         password = os.environ.get(a.password_env) or ""
         if not password:

@@ -8,7 +8,7 @@ The name is *ontology* and *atlas*: a map of what a company knows, drawn once an
 pip install "ontlas[all]"     # or pip install ontlas for the core alone, with no dependencies (JSON files, no YAML)
 ```
 
-A live demo on fictional shop data: https://ontlas.com
+Ontlas runs at https://ontlas.com (sign-in required).
 
 - **Every kind of data in one place.** Files, databases, documents, embeddings, graphs and ontologies sit in one space and know about each other.
 - **Nothing is tied to a store.** Graph databases, vector databases, reasoners, embedding models and query languages are adapters, and a conformance test says whether a swap changed the answers.
@@ -1151,6 +1151,43 @@ modules and files requests, approver approves changes and actions and switches a
 flow, connects a data source and adds people. `--library-write` saves approved versions to the library folder; `--sync`
 reads the source again every N seconds and sends each graph the change set.
 
+Signing in works as a company deployment needs it:
+
+- **First run.** A server whose users file has no admin yet (or does not exist) prints a setup code on stderr and
+  writes it beside the users file (`users.setup`). The page opens on 최초 설치 설정, where the code makes the first
+  admin; the code is gone once used.
+- **Sign-in.** A user id or an email, with 로그인 상태 유지 for `keep_days`; otherwise the session lasts `session_hours`.
+  Sign-ins are kept beside the users file (`users.logins.json`, by the sha256 of each token only), so a restart or a
+  redeploy signs no one out. Wrong passwords are counted (실패 n/5) and lock the account for `lock_minutes` after
+  `lock_after` of them; an admin can unlock it sooner.
+- **Two-step sign-in.** Anyone can turn on a six-digit authenticator code (TOTP, with a QR code drawn on the page and no
+  outside service) on 내 계정, and the policy can require it of everyone, who then register at their next sign-in.
+- **Joining.** 회원가입 asks for an account; the person waits as 승인 대기 until an admin approves them
+  with a role or turns them down. The policy can stop taking requests.
+- **Passwords.** One an admin sets is temporary and is changed at the next sign-in. A new password may not repeat the
+  last three. Changing it signs that person out everywhere.
+- **Accounts.** 내 계정 changes the name and email and lists the devices signed in, each of which can be signed out.
+  An admin adds, edits, unlocks and retires people (a retired account stays in the list as 폐기됨 and can be brought
+  back), and resets a lost authenticator.
+- **Policy.** 시스템 관리 › 인증 · 보안 sets the session length, how long 로그인 상태 유지 lasts, the password length, the lock, two-step
+  sign-in for everyone, whether requests to join are taken, and the addresses let in (CIDR ranges; the admin's own
+  address must be among them). The client address is read from `CF-Connecting-IP` or `X-Forwarded-For` first, so run
+  the server behind the proxy that sets them and do not expose its port directly.
+- **Audit.** Sign-ins, sign-outs, failures, locks and every change to an account go into the audit trail (로그인) with
+  the address they came from.
+
+The users file holds the policy beside the people:
+
+```yaml
+users:
+  kim: {name: 김하람, email: kim@example.com, roles: [editor, approver], password: "pbkdf2_sha256$..."}
+policy: {session_hours: 12, keep_days: 14, password_min: 8, lock_after: 5, lock_minutes: 15,
+         two_factor: false, signup: true, allow_ip: []}
+```
+
+The page writes this file; `ontlas users add` on a running server's file is overwritten at the server's next write, so
+add people on the page, or stop the server first. Keep the file as a secret: it holds the authenticator keys.
+
 The team works in one place. Everyone's edits go into the change request being written, each with who made it, and
 approving one request does not drop what others have not filed: their edits are applied again on the new version, and
 an edit on an item the approval changed is held (보관된 편집), with who made it and why, for its writer to apply over the
@@ -1505,7 +1542,8 @@ ontlas serve studio.yaml --users users.yaml --journal records/journal.jsonl --li
 | Uploaded files and their folders | The repositories folder | `--repositories` |
 
 Back up those places (the library folder, `made/`, the journal, the repositories folder), and with them the users
-file, which the page writes when a person is added or changes a password. The options belong together: with a journal
+file, which the page writes when a person is added, signs in wrongly or changes a password, and `users.logins.json`
+beside it, which keeps people signed in. The options belong together: with a journal
 and no `--library-write`, approved versions are put back from the journal at each start and nothing is written to the
 library folder, but a module switched on or off by hand is not kept that way, and without `--repositories` uploaded
 files go with the session.

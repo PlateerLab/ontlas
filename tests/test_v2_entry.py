@@ -183,8 +183,12 @@ def test_a_person_changes_their_own_password_and_every_sign_in_of_theirs_ends(se
     routes.SERVER.update(logins=logins, limits={"idle": 3600})
     entry._wrong.clear()
     try:
+        routes.asking(ip="10.0.0.5", device=logins.device(token))
         said = call("GET", "entry/me")(session, {}, kim)
-        assert said == {"team": True, "hours": 12, "idle_minutes": None, "password_min": 10, "can_change_password": True}
+        devices = said.pop("devices")
+        assert said == {"team": True, "hours": 12, "idle_minutes": None, "password_min": 8, "can_change_password": True,
+                        "email": "", "two_factor": {"on": False, "required": False}, "keep_days": 14, "session_hours": 12}
+        assert [(d["id"], d["current"]) for d in devices] == [(logins.device(token), True)]
         change = call("POST", "entry/password")
         for body in ({"current": "wrong-password-1", "new": "second-password-2"}, {"current": "first-password-1", "new": "short"},
                      {"current": "first-password-1", "new": "first-password-1"}):
@@ -206,12 +210,15 @@ def test_a_person_changes_their_own_password_and_every_sign_in_of_theirs_ends(se
         # where nobody signs in there is no password, and the session's keeping is said instead
         routes.SERVER.clear()
         routes.SERVER.update(logins=None, limits={"idle": 1800})
-        assert call("GET", "entry/me")(session, {}, None) == {"team": False, "hours": None, "idle_minutes": 30, "password_min": 10,
-                                                              "can_change_password": False}
+        assert call("GET", "entry/me")(session, {}, None) == {"team": False, "hours": None, "idle_minutes": 30, "password_min": 8,
+                                                              "can_change_password": False, "email": "",
+                                                              "two_factor": {"on": False, "required": False}, "devices": [],
+                                                              "keep_days": None, "session_hours": None}
         with pytest.raises(ValueError):
             change(session, {"current": "x", "new": "second-password-2"}, None)
         assert NEEDS["entry/password"] == "viewer"
     finally:
         routes.SERVER.clear()
         routes.SERVER.update(kept)
+        routes.asking()
         entry._wrong.clear()

@@ -32,6 +32,8 @@
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>', out: '<path d="M14 5h5v5M19 5l-8 8M10 5H5v14h14v-5"/>',
+    eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.9 9.9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   };
   const ki = (k, size = 16, w = 1.5) => `<svg class="k-i" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-width="${w}" aria-hidden="true">${KI[k] || ''}</svg>`;
 
@@ -234,16 +236,13 @@
   const kBar = (label, code, name, actions) => `<div class="k-bar" role="toolbar" aria-label="${esc(label)}"><span class="k-s">${esc(label)}</span>${code ? `<span class="k-code k-ink">${esc(code)}</span>` : ''}<span class="k-14">${esc(name)}</span><span class="k-push">${actions}</span></div>`;
   const kEmpty = (title, say = '', actions = '') => `<section class="k-empty"><h2>${esc(title)}</h2>${say ? `<p>${esc(say)}</p>` : ''}${actions ? `<div class="k-h">${actions}</div>` : ''}</section>`;
 
-  // sign-in: no menu and no bar, the form in the middle
+  // before signing in: no menu and no bar, the screen of those before signing in the address names, else the sign-in form
   function renderLogin() {
     $('#app').classList.add('auth');
     $('#top').innerHTML = '';
     $('#side').innerHTML = '';
-    $('#main').innerHTML = (V2.login ? V2.login.view() : `<div class="k-auth">${brand('#')}<main><section class="k-card"><div><h1 class="k-h1">로그인</h1></div>
-      <label class="k-f">아이디<input type="text" id="luser" autocomplete="username"></label>
-      <label class="k-f">비밀번호<input type="password" id="lpw" autocomplete="current-password"></label>
-      <button class="k-btn pri wide" data-act="login">로그인</button>
-      </section></main></div>`);
+    const v = V2[location.hash.slice(1).split('?')[0]];
+    $('#main').innerHTML = (v && v.area === 'auth' ? v : V2.login).view();
   }
 
   document.addEventListener('click', (ev) => {  // the list closes when something outside it is chosen

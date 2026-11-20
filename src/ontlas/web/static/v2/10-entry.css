@@ -5,6 +5,23 @@
 .ent-foot { margin:0; font-size:14px; text-align:center; }
 .ent-foot a { color:var(--muted); }
 .ent-foot a:hover { color:var(--ink); }
+/* before signing in: one card, the name and a line on top, the ways to the other screens at its foot */
+.k-auth .k-card.ent-login { padding:40px 32px; }
+.ent-head { display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:8px; text-align:center; }
+.ent-links { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 16px; color:var(--muted); }
+.ent-links a { color:var(--muted); }
+.ent-links a:hover { color:var(--ink); text-decoration:underline; text-underline-offset:3px; }
+.ent-links a.b { color:var(--blue); font-weight:500; }
+.ent-links .k-lnk.flat { color:var(--muted); font-size:14px; font-weight:400; }
+.ent-qr { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
+.ent-key { white-space:normal; word-break:keep-all; font-size:14px; line-height:1.6; }  /* the groups of four stay whole */
+.ent-code { font-family:var(--mono); font-size:18px; letter-spacing:.3em; text-align:center; }
+.ent-tf { padding-top:12px; border-top:1px solid var(--row); }
+/* what a new password must be, each ticked once it holds */
+.ent-req { display:flex; flex-wrap:wrap; gap:2px 12px; font-size:12px; color:var(--muted); }
+.ent-req > span { display:inline-flex; align-items:center; gap:4px; }
+.ent-req > span.ok { color:var(--ok); }
+.ent-match[hidden] { display:none; }
 .ent-card { flex:1 1 380px; max-width:620px; }
 .k-t td.ent-pack { min-width:200px; }
 .ent-kvs { display:flex; flex-direction:column; gap:6px; padding:12px 0; border-top:1px solid var(--row); border-bottom:1px solid var(--row); }
@@ -25,4 +42,4 @@ a.ent-go:hover { color:var(--ink); }
 .k-row > a.ent-go:last-child { color:var(--muted); display:inline-flex; flex:none; }
 .k-row > a.ent-go.k-col:hover .k-ink { text-decoration:underline; text-underline-offset:3px; }
 @media (max-width:1100px) { .ent-tiles { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-@media (max-width:560px) { .ent-tiles { grid-template-columns:minmax(0, 1fr); } .ent-clip1 { max-width:220px; } }
+@media (max-width:560px) { .ent-tiles { grid-template-columns:minmax(0, 1fr); } .ent-clip1 { max-width:220px; } .k-auth .k-card.ent-login { padding:32px 20px; } }

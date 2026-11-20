@@ -1,13 +1,15 @@
 """What the admin screens ask: who signs in to this server and what each role may do, how it keeps people signed in,
 what it is connected to and limited by, the records it keeps, and what the open ontology is made of.
 
-Nearly all of it is read. A user is added, changed or removed here, and the language model is tried once.
+Nearly all of it is read. A user is added, changed, let in, locked out or unlocked here, the policy people sign in
+under is set, and the language model is tried once.
 What only the server holds (its sign-ins, its sessions, its API clients, its limits) is what it was started with:
 routes.SERVER, which the server fills when it starts.
 """
 from __future__ import annotations
 
 import inspect
+import ipaddress
 import platform
 import re
 import threading
@@ -16,13 +18,11 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from ontlas.web.routes import SERVER, get, post, require
-from ontlas.web.team import ITERATIONS, LEVELS, NEEDS, Logins, User
+from ontlas.web.routes import SERVER, asked, get, post, require
+from ontlas.web.team import EMAIL, ITERATIONS, LEVELS, NEEDS, POLICY, USER_ID, Logins, User, ip_allowed
 from ontlas.words import fix as with_particles
 
 STARTED = time.time()
-PASSWORD_MIN = 10  # what team.Users.add asks of a password
-USER_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@-]{1,63}")
 LOG_MAX = 500
 TEST_PER_MINUTE = 6  # tries of the language model a minute, at most
 _log: list[dict] = []  # what was done on these screens, oldest first, where the server keeps no journal
@@ -85,7 +85,7 @@ def _users():
     return logins.users if logins is not None else None
 
 
-SERVERS = ("user",)  # what is the server's, not one ontology's: who signs in to it
+SERVERS = ("user", "login")  # what is the server's, not one ontology's: who signs in to it, and how
 
 
 def _server_journal(s):
@@ -93,9 +93,14 @@ def _server_journal(s):
     return (s.team.shared if s.team is not None else s).studio.changes.journal
 
 
-def _note(s, who, what: str, text: str) -> None:
-    entry = {"at": datetime.now().isoformat(timespec="seconds"), "by": who.name if who is not None else s.who, "what": what, "text": text}
-    journal = _server_journal(s) if what in SERVERS else s.studio.changes.journal
+def _note(s, who, what: str, text: str, *, by: str | None = None, server: bool = False) -> None:
+    """One line of the audit log, with the address the request came from where it is known. `server` keeps a kind
+    that is otherwise the open ontology's (a setting) with what is the server's."""
+    entry = {"at": datetime.now().isoformat(timespec="seconds"), "by": by if by is not None else who.name if who is not None else s.who,
+             "what": what, "text": text, "ip": asked().get("ip", "")}
+    if server:
+        entry["server"] = True
+    journal = _server_journal(s) if what in SERVERS or server else s.studio.changes.journal
     if journal is not None:
         journal.write("admin", entry)
     else:
@@ -110,8 +115,8 @@ def _notes(s) -> list[dict]:
     own, server = s.studio.changes.journal, _server_journal(s)
     rows = [r for r in own.read() if r.get("kind") == "admin"] if own is not None else list(_log)
     if server is not None and server is not own:
-        rows = [r for r in rows if r.get("what") not in SERVERS]
-        rows += [r for r in server.read() if r.get("kind") == "admin" and r.get("what") in SERVERS]
+        rows = [r for r in rows if r.get("what") not in SERVERS and not r.get("server")]
+        rows += [r for r in server.read() if r.get("kind") == "admin" and (r.get("what") in SERVERS or r.get("server"))]
         rows.sort(key=lambda r: str(r.get("at") or ""))
     return rows[-LOG_MAX:]
 
@@ -120,15 +125,28 @@ def _user_rows() -> list[dict]:
     users, logins = _users(), _logins()
     if users is None:
         return []
-    now = time.time()
-    signed: dict[str, float] = {}  # who is signed in, and when they last signed in (a token lasts ttl from then)
-    with logins.lock:
-        for uid, until in logins.tokens.values():
-            if until > now:
-                signed[uid] = max(signed.get(uid, 0.0), until - logins.ttl)
-    return [{"id": u.id, "name": u.name, "roles": list(u.roles), "signed_in": u.id in signed,
-             "signed_at": datetime.fromtimestamp(signed[u.id]).isoformat(timespec="seconds") if u.id in signed else ""}
-            for u in users.users.values()]
+    now, seen = logins.clock(), logins.status()  # seen: who is signed in, when they last signed in and asked anything
+    rows = []
+    for u in users.users.values():
+        at = seen.get(u.id) or {}
+        locked = u.locked(now)
+        rows.append({"id": u.id, "name": u.name, "roles": list(u.roles), "email": u.email, "employee_no": u.employee_no,
+                     "note": u.note, "state": u.state, "locked": locked, "locked_until": u.locked_until if locked else "",
+                     "two_factor": bool(u.totp), "must_change": u.must_change, "signed_in": bool(at.get("live")),
+                     "signed_at": at.get("at", ""), "seen": at.get("seen", "")})
+    return rows
+
+
+def _user_counts(rows: list[dict]) -> dict:
+    return {"users": len(rows), "admins": sum(r["state"] == "active" and "admin" in r["roles"] for r in rows),
+            "locked": sum(r["locked"] for r in rows), "disabled": sum(r["state"] == "disabled" for r in rows),
+            "pending": sum(r["state"] == "pending" for r in rows), "two_factor": sum(r["two_factor"] for r in rows)}
+
+
+def _answer() -> dict:
+    """What a change to the users answers: the list and its counts, as they stand now."""
+    rows = _user_rows()
+    return {"ok": True, "users": rows, "counts": _user_counts(rows)}
 
 
 def _matrix() -> list[dict]:
@@ -144,22 +162,39 @@ def _clients() -> list[dict]:
     return [{"write": not getattr(tools, "read_only", True)} for _, tools in getattr(rest, "clients", None) or []]
 
 
-def _write(users) -> None:
-    """The users file as team.Users.add writes it."""
-    import yaml
-
-    if users.path is None:
-        return
-    body = {"users": {k: {"name": v.name, "password": v.password, "roles": v.roles} for k, v in users.users.items()}}
-    users.path.write_text(yaml.safe_dump(body, allow_unicode=True, sort_keys=False), encoding="utf-8")
-
-
 def _said(roles: list[str]) -> str:
     return " · ".join(ROLE_WORD.get(r, r) for r in roles)
 
 
-def _admins(users, without: str = "") -> int:
-    return sum(1 for u in users.users.values() if "admin" in u.roles and u.id != without)
+STATE_WORD = {"active": "사용", "disabled": "비활성", "pending": "승인 대기"}  # as the user screens name a state
+
+
+def _policy() -> dict:
+    store = _users()
+    policy = store.policy if store is not None else POLICY
+    return {**policy, "allow_ip": list(policy["allow_ip"])}
+
+
+def _store(done: str):
+    """The users file a change is written to; `done` is what was not done without one ("사용자를 저장하지")."""
+    store = _users()
+    if store is None:
+        raise ValueError(f"사용자 파일이 지정되지 않아 {done} 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
+    return store
+
+
+def _person(store, a: dict, done: str):
+    uid = str(a.get("id") or "")
+    if uid not in store.users:
+        raise ValueError(with_particles(f"사용자 {uid}을(를) 찾지 못해 {done} 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    return store.users[uid]
+
+
+def _roles(a: dict) -> list[str]:
+    roles = [str(r) for r in a.get("roles") or []]
+    if not roles or any(r not in LEVELS for r in roles):
+        raise ValueError("역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.")
+    return [lv for lv in LEVELS if lv in roles]
 
 
 # ---- users ---------------------------------------------------------------------------------------------------------
@@ -167,72 +202,150 @@ def _admins(users, without: str = "") -> int:
 @get("admin/users")
 def users(s, a, who) -> dict:
     require(who, "admin")
-    store = _users()
+    store, policy = _users(), _policy()
+    rows = _user_rows()
     return {"team": who is not None or store is not None, "managed": store is not None,
-            "kept": bool(store is not None and store.path is not None), "users": _user_rows(),
-            "me": who.id if who is not None else "", "levels": list(LEVELS), "password_min": PASSWORD_MIN,
-            "matrix": _matrix()}
+            "kept": bool(store is not None and store.path is not None), "users": rows, "counts": _user_counts(rows),
+            "me": who.id if who is not None else "", "levels": list(LEVELS), "password_min": policy["password_min"],
+            "policy": policy, "matrix": _matrix()}
 
 
 @post("admin/user/save", needs="admin")
 def user_save(s, a, who) -> dict:
-    store = _users()
-    if store is None:
-        raise ValueError("사용자 파일이 지정되지 않아 사용자를 저장하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
+    store, logins = _store("사용자를 저장하지"), _logins()
     uid, name = str(a.get("id") or "").strip(), " ".join(str(a.get("name") or "").split())[:80]
-    roles = [str(r) for r in a.get("roles") or []]
     password, new = str(a.get("password") or ""), bool(a.get("new"))
+    email, number = str(a.get("email") or "").strip()[:120], str(a.get("employee_no") or "").strip()[:40]
+    memo, state = str(a.get("note") or "").strip()[:500], str(a.get("state") or "")
+    temporary = bool(a.get("must_change", True))  # a password given here is changed by its owner at the next sign-in
+    least = store.policy["password_min"]
     if not USER_ID.fullmatch(uid):
         raise ValueError("아이디 형식이 맞지 않아 저장하지 못했습니다. 영문, 숫자, . _ @ - 로 2자 이상 입력해 주세요.")
-    if not roles or any(r not in LEVELS for r in roles):
-        raise ValueError("역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.")
-    roles = [lv for lv in LEVELS if lv in roles]
+    roles = _roles(a)
+    if state and state not in ("active", "disabled"):
+        raise ValueError("상태 값이 맞지 않아 저장하지 못했습니다. 사용 또는 비활성 중에서 선택해 주세요.")
     if new and uid in store.users:
         raise ValueError(with_particles(f"아이디 {uid}이(가) 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요."))
     if not new and uid not in store.users:
         raise ValueError(with_particles(f"사용자 {uid}을(를) 찾지 못해 저장하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
-    if (new or password) and len(password) < PASSWORD_MIN:
-        raise ValueError(f"비밀번호가 {PASSWORD_MIN}자보다 짧아 저장하지 못했습니다. {PASSWORD_MIN}자 이상 입력해 주세요.")
-    if not new and "admin" in store.users[uid].roles and "admin" not in roles and not _admins(store, without=uid):
-        raise ValueError("마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
+    if (new or password) and len(password) < least:
+        raise ValueError(f"비밀번호가 {least}자보다 짧아 저장하지 못했습니다. {least}자 이상 입력해 주세요.")
+    if email and not EMAIL.fullmatch(email):
+        raise ValueError("이메일 형식이 맞지 않아 저장하지 못했습니다. name@example.com 형식으로 입력해 주세요.")
+    if store.email_taken(email, but=uid):
+        raise ValueError(with_particles(f"이메일 {email}이(가) 이미 등록되어 저장하지 못했습니다. 다른 이메일을 입력해 주세요."))
+    if not new and "admin" in store.users[uid].roles and store.users[uid].state == "active" and not store.admins(without=uid):
+        if "admin" not in roles:
+            raise ValueError("마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
+        if state == "disabled":
+            raise ValueError("마지막 관리자는 비활성으로 바꿀 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
     if new:
-        store.add(uid, password, name=name, roles=roles)
-        _note(s, who, "user", f"사용자 {name or uid}({uid}) 추가 · 역할 {_said(roles)}")
-    else:
-        from ontlas.web.team import hash_password
-
-        u = store.users[uid]
-        if (name or uid) == u.name and roles == list(u.roles) and not password:
-            raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
-        was = list(u.roles)
-        u.name, u.roles = name or uid, roles
+        with store.lock:
+            u = store.users[uid] = User(uid, name or uid, "", roles, email=email, employee_no=number, note=memo, state=state or "active")
+            store.set_password(u, password, must_change=temporary)
+            store.save()
+        _note(s, who, "user", f"사용자 {u.name}({uid}) 추가 · 역할 {_said(roles)}")
+        return _answer()
+    u = store.users[uid]
+    state = state or u.state
+    changed = [word for word, now, was in (("이름 변경", name or uid, u.name), ("이메일 변경", email, u.email),
+                                           ("사번 변경", number, u.employee_no), ("메모 변경", memo, u.note)) if now != was]
+    if roles != list(u.roles):
+        changed.append(f"역할 {_said(u.roles)} → {_said(roles)}")
+    if state != u.state:
+        changed.append(f"상태 {STATE_WORD[u.state]} → {STATE_WORD[state]}")
+    if not changed and not password:
+        raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
+    with store.lock:
+        u.name, u.roles, u.email, u.employee_no, u.note, u.state = name or uid, roles, email, number, memo, state
         if password:
-            u.password = hash_password(password)
-        _write(store)
-        changed = ("" if was == roles else f" · 역할 {_said(was)} → {_said(roles)}") + (" · 비밀번호 변경" if password else "")
-        _note(s, who, "user", f"사용자 {u.name}({uid}) 변경{changed}")
-    return {"ok": True, "users": _user_rows()}
+            store.set_password(u, password, must_change=temporary)
+        store.save()
+    if password or state == "disabled":  # a password reset or an account stopped: whoever is signed in as them is not
+        logins.end(uid)
+    if changed:
+        _note(s, who, "user", f"사용자 {u.name}({uid}) 변경 · " + " · ".join(changed))
+    if password:
+        _note(s, who, "login", f"{'임시 비밀번호 발급' if temporary else '비밀번호 변경'} · 사용자 {u.name}({uid})")
+    return _answer()
 
 
 @post("admin/user/drop", needs="admin")
 def user_drop(s, a, who) -> dict:
-    store, logins = _users(), _logins()
-    if store is None:
-        raise ValueError("사용자 파일이 지정되지 않아 사용자를 폐기하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
-    uid = str(a.get("id") or "")
-    if uid not in store.users:
-        raise ValueError(with_particles(f"사용자 {uid}을(를) 찾지 못해 폐기하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
-    if who is not None and who.id == uid:
+    """An account no longer used: kept on the list as disabled, never let in, and signed out now. Saving it as active
+    lets it in again."""
+    store = _store("사용자를 폐기하지")
+    u = _person(store, a, "폐기하지")
+    if who is not None and who.id == u.id:
         raise ValueError("본인 계정은 폐기할 수 없어 처리하지 못했습니다. 다른 관리자에게 요청해 주세요.")
-    if "admin" in store.users[uid].roles and not _admins(store, without=uid):
+    if u.state == "disabled":
+        raise ValueError(with_particles(f"사용자 {u.id}은(는) 이미 폐기되어 처리하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    if "admin" in u.roles and u.state == "active" and not store.admins(without=u.id):
         raise ValueError("마지막 관리자는 폐기할 수 없어 처리하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.")
-    gone = store.users.pop(uid)
-    _write(store)
-    with logins.lock:  # whoever is signed in as that person is signed out now
-        for token in [t for t, (owner, _) in logins.tokens.items() if owner == uid]:
-            del logins.tokens[token]
-    _note(s, who, "user", f"사용자 {gone.name}({uid}) 폐기")
-    return {"ok": True, "users": _user_rows()}
+    with store.lock:
+        u.state = "disabled"
+        store.save()
+    _logins().end(u.id)
+    _note(s, who, "user", f"사용자 {u.name}({u.id}) 폐기")
+    return _answer()
+
+
+@post("admin/user/unlock", needs="admin")
+def user_unlock(s, a, who) -> dict:
+    store = _store("잠금 해제하지")
+    u = _person(store, a, "잠금 해제하지")
+    if not u.locked(_logins().clock()) and not u.failures:
+        raise ValueError(with_particles(f"사용자 {u.id}은(는) 잠겨 있지 않아 잠금 해제하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    with store.lock:
+        u.failures, u.locked_until = 0, ""
+        store.save()
+    _note(s, who, "login", f"잠금 해제 · 사용자 {u.name}({u.id})")
+    return _answer()
+
+
+@post("admin/user/2fa/reset", needs="admin")
+def user_2fa_reset(s, a, who) -> dict:
+    """A lost authenticator: the person signs in with a password alone again, or sets up a new one where the policy
+    asks for it."""
+    store = _store("2단계 인증을 초기화하지")
+    u = _person(store, a, "초기화하지")
+    if not u.totp:
+        raise ValueError(with_particles(f"사용자 {u.id}은(는) 2단계 인증을 쓰지 않아 초기화하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    with store.lock:
+        u.totp = ""
+        store.save()
+    _logins().used.pop(u.id, None)
+    _note(s, who, "login", f"2단계 인증 초기화 · 사용자 {u.name}({u.id})")
+    return _answer()
+
+
+@post("admin/user/approve", needs="admin")
+def user_approve(s, a, who) -> dict:
+    """One who asked to join, let in with the roles chosen (viewer where none is)."""
+    store = _store("가입을 승인하지")
+    u = _person(store, a, "승인하지")
+    if u.state != "pending":
+        raise ValueError(with_particles(f"사용자 {u.id}은(는) 승인 대기 상태가 아니어서 승인하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    roles = _roles(a) if a.get("roles") else ["viewer"]
+    with store.lock:
+        u.state, u.roles = "active", roles
+        store.save()
+    _note(s, who, "user", f"가입 승인 · 사용자 {u.name}({u.id}) · 역할 {_said(roles)}")
+    return _answer()
+
+
+@post("admin/user/reject", needs="admin")
+def user_reject(s, a, who) -> dict:
+    """One who asked to join, turned away: taken off the list, so the id and email may be asked for again."""
+    store = _store("가입을 거절하지")
+    u = _person(store, a, "거절하지")
+    if u.state != "pending":
+        raise ValueError(with_particles(f"사용자 {u.id}은(는) 승인 대기 상태가 아니어서 거절하지 못했습니다. 목록을 새로 고친 뒤 다시 시도해 주세요."))
+    with store.lock:
+        store.users.pop(u.id, None)
+        store.save()
+    _note(s, who, "user", f"가입 거절 · 사용자 {u.name}({u.id})")
+    return _answer()
 
 
 # ---- the open ontology: what it is called, how it names things, who answers for what ----------------------------------
@@ -452,8 +565,8 @@ def audit(s, a, who) -> dict:
     st = s.studio
     rows: list[dict] = []
 
-    def add(n: int, at: str, by: str, kind: str, text: str) -> None:
-        rows.append({"at": at, "by": by, "kind": kind, "text": text, "n": n})  # n: its place among records of its kind
+    def add(n: int, at: str, by: str, kind: str, text: str, ip: str = "") -> None:
+        rows.append({"at": at, "by": by, "kind": kind, "text": text, "ip": ip, "n": n})  # n: its place among records of its kind
 
     for n, e in enumerate(st.changes.audit):
         word = CHANGE_EVENT.get(e.get("event"), e.get("event"))
@@ -464,7 +577,7 @@ def audit(s, a, who) -> dict:
         what = " · ".join(str(x) for x in (e["action"], e["target"], e["key"], e["proposal"]) if x)
         add(n, e["at"], e["actor"], "api" if e["kind"] == "agent" else "action", f"{e['event']} · {what}".strip(" ·"))
     for n, e in enumerate(_notes(s)):
-        add(n, e["at"], e["by"], e["what"], e["text"])
+        add(n, e["at"], e["by"], e["what"], e["text"], e.get("ip") or "")
     for n, e in enumerate(reversed(s.log)):
         add(n, e["at"], "", "note", e["text"])
     rows.sort(key=lambda r: (str(r["at"]), r["n"]), reverse=True)  # what happened in the same second keeps its order
@@ -472,7 +585,7 @@ def audit(s, a, who) -> dict:
         del r["n"]
     journal = st.changes.journal
     return {"rows": rows[:LOG_MAX], "total": len(rows), "kept": journal is not None,
-            "counts": {k: sum(1 for r in rows if r["kind"] == k) for k in ("change", "action", "api", "user", "setting", "note")}}
+            "counts": {k: sum(1 for r in rows if r["kind"] == k) for k in ("change", "action", "api", "login", "user", "setting", "note")}}
 
 
 @get("admin/version")
@@ -527,14 +640,76 @@ def system(s, a, who) -> dict:
 @get("admin/security")
 def security(s, a, who) -> dict:
     require(who, "admin")
-    logins = _logins()
-    hours = inspect.signature(Logins.__init__).parameters["hours"].default
+    logins, store, policy = _logins(), _users(), _policy()
     tries = inspect.signature(Logins.allow_try).parameters["per_minute"].default
     return {"team": logins is not None or who is not None, "users": len(_user_rows()) if logins is not None else None,
-            "session_hours": round(logins.ttl / 3600, 1) if logins is not None else hours, "password_min": PASSWORD_MIN,
+            "session_hours": policy["session_hours"], "password_min": policy["password_min"],
             "hash": "PBKDF2-SHA256", "iterations": ITERATIONS, "tries_per_minute": tries,
             "rest": bool(getattr(s.data, "rest", False)), "clients": _clients(), "connect": bool(s.data.allow_connect),
-            "model": s.llm is not None, "kept": s.studio.changes.journal is not None}
+            "model": s.llm is not None, "kept": s.studio.changes.journal is not None,
+            "policy": policy, "editable": bool(store is not None and store.path is not None), "client_ip": asked().get("ip", "")}
+
+
+# what each number of the policy may be, and how the audit log says it: (least, most, name, unit)
+POLICY_RANGES = {"session_hours": (1, 168, "세션 만료", "시간"), "keep_days": (0, 90, "로그인 유지", "일"),
+                 "password_min": (8, 64, "비밀번호 최소 길이", "자"), "lock_after": (3, 20, "잠금 기준 실패 횟수", "회"),
+                 "lock_minutes": (1, 1440, "잠금 시간", "분")}
+POLICY_SWITCHES = {"two_factor": "2단계 인증 필수", "signup": "회원가입 받기"}
+
+
+def _policy_word(key: str, v) -> str:
+    if key in POLICY_SWITCHES or (key == "keep_days" and not v):
+        return "사용" if v else "사용 안 함"
+    if key == "allow_ip":
+        return ", ".join(v) if v else "제한 없음"
+    return f"{v}{POLICY_RANGES[key][3]}"
+
+
+@post("admin/security/save", needs="admin")
+def security_save(s, a, who) -> dict:
+    """The policy people sign in under, in force from the next request. The address it is saved from stays allowed,
+    so an admin cannot shut themselves out."""
+    store = _users()
+    if store is None or store.path is None:
+        raise ValueError("사용자 파일이 서버에 없어 보안 정책을 저장하지 못했습니다. 서버를 --users 옵션으로 시작해 주세요.")
+    given = a.get("policy") if isinstance(a.get("policy"), dict) else {}
+    if set(given) - set(POLICY):
+        raise ValueError("알 수 없는 보안 정책 항목이 있어 저장하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.")
+    was = _policy()
+    policy = {**was, **given}
+    for key, (least, most, word, _) in POLICY_RANGES.items():
+        v = policy[key]
+        if isinstance(v, float) and v.is_integer():
+            v = policy[key] = int(v)
+        if isinstance(v, bool) or not isinstance(v, int) or not least <= v <= most:
+            raise ValueError(f"{word} 값이 {least}~{most} 범위를 벗어나 저장하지 못했습니다. {least}에서 {most} 사이의 정수를 입력해 주세요.")
+    for key, word in POLICY_SWITCHES.items():
+        if not isinstance(policy[key], bool):
+            raise ValueError(f"{word} 값의 형식이 맞지 않아 저장하지 못했습니다. 화면을 새로 고친 뒤 다시 시도해 주세요.")
+    if not isinstance(policy["allow_ip"], list):
+        raise ValueError("허용 IP 대역의 형식이 맞지 않아 저장하지 못했습니다. 한 줄에 대역 하나씩 입력해 주세요.")
+    nets: list[str] = []
+    for x in (str(n).strip() for n in policy["allow_ip"]):
+        try:
+            net = str(ipaddress.ip_network(x, strict=False)) if x else ""
+        except ValueError:
+            raise ValueError(f"허용 IP 대역 {x[:60]}의 형식이 맞지 않아 저장하지 못했습니다. 10.0.0.0/8 또는 10.0.0.5 형식으로 입력해 주세요.") from None
+        if net and net not in nets:
+            nets.append(net)
+    policy["allow_ip"] = nets
+    ip = asked().get("ip", "")
+    if not ip_allowed(ip, nets):
+        raise ValueError(with_particles(f"지금 접속한 IP {ip or '(알 수 없음)'}이(가) 허용 IP 대역에 없어 저장하지 못했습니다. "
+                                        "이 IP가 포함된 대역을 추가해 주세요."))
+    words = {**{k: r[2] for k, r in POLICY_RANGES.items()}, **POLICY_SWITCHES, "allow_ip": "허용 IP 대역"}
+    said = [f"{words[k]} {_policy_word(k, was[k])} → {_policy_word(k, policy[k])}" for k in POLICY if policy[k] != was[k]]
+    if not said:
+        raise ValueError("변경된 내용이 없어 저장하지 못했습니다. 내용을 수정한 뒤 저장해 주세요.")
+    with store.lock:
+        store.policy = policy
+        store.save()
+    _note(s, who, "setting", "보안 정책 변경 · " + " · ".join(said), server=True)
+    return {"ok": True, "policy": _policy()}
 
 
 @get("admin/ai")

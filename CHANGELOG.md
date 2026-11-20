@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.0
+
+Signing in to a team server, as a company deployment needs it (`ontlas serve --users`). A server without `--users`
+is as it was.
+
+- **First run.** With no admin in the users file (or no file yet), the server prints a setup code on stderr and writes
+  it beside the users file (`users.setup`). The page opens on 최초 설치 설정, where the code makes the first admin, who
+  is signed in at once; the code is gone once used.
+- **Sign-in.** One card: a user id or an email, the password with a show button, 로그인 상태 유지, 비밀번호 초기화 and a link
+  to ask for an account. Wrong passwords are counted on the card (실패 n/5) and lock the account for 15 minutes after
+  five by default; an admin can unlock it sooner. A retired account, one waiting for approval and an address not let in are each
+  told so.
+- **Kept signed in across restarts.** Sign-ins are kept beside the users file (`users.logins.json`, by the sha256 of
+  each token only), so a redeploy no longer signs everyone out. 로그인 상태 유지 lasts 14 days by default; otherwise a sign-in
+  lasts 12 hours.
+- **Two-step sign-in.** A six-digit authenticator code (TOTP), turned on from 내 계정 with a QR code drawn on the page
+  (no outside service), or required of everyone by the policy, in which case people register at their next sign-in.
+  A code is not accepted twice.
+- **Asking to join.** 회원가입 makes an account that waits as 승인 대기 until an admin approves it with a role or turns it
+  down. The policy can stop taking requests.
+- **Passwords.** One set by an admin is temporary: it is changed at the next sign-in, before anything else. A new
+  password may not repeat the last three, and changing it signs the person out everywhere.
+- **내 계정.** Name and email, two-step sign-in on and off, and the devices signed in (browser, address, when), each
+  signed out on its own or all but this one.
+- **시스템 관리 › 사용자 · 그룹.** Email, employee number, note and state on each person; counts and a filter for those
+  waiting, locked, retired and with two-step sign-in; approve or turn down a request on its row; unlock; reset a lost
+  authenticator. Retiring someone keeps them in the list as 폐기됨 and signs them out; setting them back to 사용 brings
+  them back.
+- **시스템 관리 › 인증 · 보안.** The policy is edited on the page and applies at once: session length, how long 로그인 상태 유지
+  lasts, password length, the lock, two-step sign-in for everyone, requests to join, and the addresses let in (CIDR
+  ranges, checked on sign-in and on every call of the page; the admin's own address must be among them). The users
+  file keeps it under `policy:`.
+- **감사 로그.** A 로그인 kind: sign-ins, sign-outs, failures, locks, two-step changes, password changes and account
+  changes, each with the address it came from, kept in the first ontology's journal.
+- The client address is read from `CF-Connecting-IP`, then `X-Forwarded-For`, then the socket.
+- A password has at least 8 characters by default (10 before); the policy can ask for more.
+- The README says https://ontlas.com needs a sign-in.
+
 ## 0.25.5
 
 - **The logo is the name alone.** Ontlas, at every width, on the screens and on the page `ontlas preview` writes.

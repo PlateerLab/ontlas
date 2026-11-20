@@ -3,7 +3,8 @@
   // its connections, its limits and the records it keeps. What this version does not have (groups, LDAP, licences,
   // backups) is not drawn. The few things that can be set here are the pass conditions and the users.
   S.adm = { at: '', d: {}, busy: {}, err: {}, flow: null, flowBusy: false, gates: null, typed: {}, dirty: false, saving: false,
-    uq: '', mq: '', aq: '', akind: 'all', aspan: 'all', afrom: '', ato: '', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false, seen: '', st: null };
+    uq: '', mq: '', aq: '', akind: 'all', aspan: 'all', afrom: '', ato: '', pkind: 'all', psel: '', vsel: '', test: null, testing: false, ver: false, seen: '', st: null,
+    ustate: 'all', pol: null, polOf: null, polDirty: false, polSaving: false };
 
   const admSig = () => `${S.st.library_id}|${S.st.pipeline}`;
   // what was read belongs to the ontology it was read from: another one starts empty
@@ -199,8 +200,17 @@
   }
 
   // ---- SYS-04 사용자 · 그룹 -----------------------------------------------------------------------------------------
-  const admUserRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => `<tr><td><b class="k-b" style="white-space:nowrap">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td><td class="nw">${admSigned(u)}</td>
-    <td class="r">${d.managed ? `<a class="k-lnk" href="${itemHref('user', 'form', u.id)}">편집</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="mut">검색 결과가 없습니다.</td></tr>';
+  // where an account stands: waiting for an admin, retired, locked by failed sign-ins, or in use
+  const admUserState = (u) => (u.state === 'pending' ? kChip('승인 대기', 'b') : u.state === 'disabled' ? kChip('폐기됨') : u.locked ? kChip('잠금', 'warn') : kChip('사용', 'ok'))
+    + (u.must_change && u.state !== 'pending' ? ` ${kChip('임시 비밀번호')}` : '');
+  const admLastSeen = (u) => { const at = u.seen || u.signed_at;
+    return `${u.signed_in ? `${kChip('로그인 중', 'ok')} ` : ''}${at ? `<span class="k-s">${esc(admWhen(at))}</span>` : u.signed_in ? '' : '<span class="k-mut">-</span>'}`; };
+  // a request to join, decided in its row: approved with the role picked, or turned down
+  const admDecide = (u) => `<span class="k-h end g6 nw"><select class="k-in sm" style="width:auto" data-uid="${esc(u.id)}" aria-label="${esc(u.name)} 역할">${['viewer', 'editor', 'approver', 'admin'].map((r) => `<option value="${r}">${WORK_ROLE[r]}</option>`).join('')}</select>
+    <button class="k-btn sm pri" data-act="admApprove" data-id="${esc(u.id)}">승인</button><button class="k-btn sm dan" data-act="admReject" data-id="${esc(u.id)}" data-name="${esc(u.name)}">거절</button></span>`;
+  const admUserRows = (d) => d.users.filter((u) => admUserHit(u, S.adm.uq) && (S.adm.ustate !== 'pending' || u.state === 'pending')).map((u) => `<tr><td><b class="k-b" style="white-space:nowrap">${esc(u.name)}</b></td><td><span class="k-code k-mut">${esc(u.id)}</span></td><td>${admRoles(u.roles)}</td>
+    ${d.counts ? `<td class="nw">${admUserState(u)}</td><td>${u.two_factor ? kChip('사용 중', 'ok') : '<span class="k-mut">-</span>'}</td><td class="nw">${admLastSeen(u)}</td>` : `<td class="nw">${admSigned(u)}</td>`}
+    <td class="r">${u.state === 'pending' ? admDecide(u) : d.managed ? `<a class="k-lnk" href="${itemHref('user', 'form', u.id)}">편집</a>` : ''}</td></tr>`).join('') || `<tr><td colspan="${d.counts ? 7 : 5}" class="mut">검색 결과가 없습니다.</td></tr>`;
   // what a role adds to the one below it, in the words of the table of what each may do
   const admAdds = (matrix, role) => matrix.filter((m) => m.needs === role).map((m) => m.label).join(' · ');
 
@@ -213,68 +223,143 @@
         ${V2['sys-auth'] ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#sys-auth">인증 · 보안${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
       if (!d.team) return `${admAlone()}<div class="k-cols"><div class="k-c2">${roles}</div></div>${kNext([['sys-auth', '인증 · 보안'], ['sys-audit', '감사 로그']])}`;
       if (!d.managed) return kEmpty('사용자 목록을 불러오지 못했습니다', '서버 응답에 사용자 목록이 없어 표시하지 못했습니다. 서버를 다시 시작해 주세요.');
-      const stats = `<section class="k-wrap" aria-label="현황">${admStat('사용자', String(d.users.length), d.kept ? '사용자 파일' : '메모리 보관')}${admStat('관리자', String(d.users.filter((u) => u.roles.includes('admin')).length))}
+      const c = d.counts, pol = d.policy || {}, waits = c ? c.pending || 0 : 0;
+      const stats = `<section class="k-wrap" aria-label="현황">${admStat('사용자', String(d.users.length), d.kept ? '사용자 파일' : '메모리 보관')}${admStat('관리자', String(c ? c.admins : d.users.filter((u) => u.roles.includes('admin')).length))}
+        ${c && (waits || pol.signup) ? admStat('승인 대기', String(waits), '회원가입 신청', waits ? 'warn' : '') : ''}
+        ${c ? admStat('잠금 · 폐기됨', String((c.locked || 0) + (c.disabled || 0)), `잠금 ${c.locked || 0} · 폐기됨 ${c.disabled || 0}`) + admStat('2단계 인증', String(c.two_factor || 0), pol.two_factor ? '모든 사용자 필수' : `전체 ${c.users || d.users.length}명 중`) : ''}
         ${admStat('로그인 중', String(d.users.filter((u) => u.signed_in).length))}</section>`;
-      const table = `<section class="k-card" style="flex:3 1 620px"><div class="k-ch"><h2>사용자</h2><span class="k-pha k-push"><label class="k-search" style="flex:0 1 280px">${ki('search', 16, 1.75)}<input type="search" placeholder="이름 · 아이디 검색" aria-label="이름 · 아이디 검색" data-in="admUq" data-box="admusers" value="${esc(S.adm.uq)}"></label></span></div>
-        <div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">이름</th><th scope="col">아이디</th><th scope="col">역할</th><th scope="col">로그인</th><th scope="col"></th></tr></thead><tbody id="admusers">${admUserRows(d)}</tbody></table></div>
+      const seg = c && (waits || S.adm.ustate === 'pending') ? `<div class="k-seg" role="group" aria-label="사용자 상태">${[['all', `전체 ${d.users.length}`], ['pending', `승인 대기 ${waits}`]].map(([k, w]) => `<button class="${S.adm.ustate === k ? 'on' : ''}" data-act="admUstate" data-k="${k}">${w}</button>`).join('')}</div>` : '';
+      const table = `<section class="k-card" style="flex:3 1 620px"><div class="k-ch"><h2>사용자</h2><span class="k-pha k-push">${seg}<label class="k-search" style="flex:0 1 280px">${ki('search', 16, 1.75)}<input type="search" placeholder="이름 · 아이디 검색" aria-label="이름 · 아이디 검색" data-in="admUq" data-box="admusers" value="${esc(S.adm.uq)}"></label></span></div>
+        <div class="k-x"><table class="k-t end adm-mid"><thead><tr><th scope="col">이름</th><th scope="col">아이디</th><th scope="col">역할</th>${c ? '<th scope="col">상태</th><th scope="col">2단계 인증</th><th scope="col">마지막 접속</th>' : '<th scope="col">로그인</th>'}<th scope="col"></th></tr></thead><tbody id="admusers">${admUserRows(d)}</tbody></table></div>
         <p class="k-cf">${d.users.length}명</p></section>`;
       return `${stats}<div class="k-cols">${table}<div class="k-v g24" style="flex:2 1 320px;min-width:0">${roles}</div></div>${kNext([['sys-auth', '인증 · 보안'], ['sys-audit', '감사 로그']])}`;
     });
   }
 
   // 사용자 추가 · 편집: applied at once, kept in the users file
+  // the shortest password the server takes, as its policy says
+  const admMin = (got) => ((got && got.policy) || {}).password_min || (got && got.password_min) || 8;
+  // the admins still able to sign in, without the one being edited
+  const admActiveAdmins = (got, x) => got.users.filter((u) => u.roles.includes('admin') && !['disabled', 'pending'].includes(u.state) && (!x || u.id !== x.id)).length;
+  const ADM_MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   item('user', {
     word: '사용자', area: 'admin', list: 'sys-users', direct: true, may: () => isSysAdmin(), crumb: ['관리', '시스템 관리', '사용자 · 그룹'],
     load: async () => { admAgain('users'); S.adm.d.users = await api('admin/users'); },
     find: (id) => ((admGot('users') || {}).users || []).find((u) => u.id === id) || null,
     code: (x) => x.name, name: (x) => x.id,
-    draft: (x) => ({ id: x ? x.id : '', name: x ? x.name : '', password: '', r_viewer: x ? x.roles.includes('viewer') : true, r_editor: !!x && x.roles.includes('editor'), r_approver: !!x && x.roles.includes('approver'), r_admin: !!x && x.roles.includes('admin') }),
-    form: (d, x) => `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
+    draft: (x) => ({ id: x ? x.id : '', name: x ? x.name : '', password: '', must_change: true, email: x ? x.email || '' : '', employee_no: x ? x.employee_no || '' : '', note: x ? x.note || '' : '',
+      state: x ? x.state || 'active' : 'active', r_viewer: x ? x.roles.includes('viewer') : true, r_editor: !!x && x.roles.includes('editor'), r_approver: !!x && x.roles.includes('approver'), r_admin: !!x && x.roles.includes('admin') }),
+    form: (d, x) => {
+      const got = admGot('users') || {}, more = !!got.counts;  // a server that keeps more than the name and the roles
+      const state = !x || !more ? '' : x.state === 'pending' ? '<label class="k-f">상태<input class="k-in" type="text" value="승인 대기" readonly></label>'
+        : `<label class="k-f">상태<select class="k-in" data-in="itf" data-k="state">${[['active', '사용'], ['disabled', '폐기됨']].map(([k, w]) => `<option value="${k}"${d.state === k ? ' selected' : ''}>${w}</option>`).join('')}</select></label>`;
+      const pw = more ? '임시 비밀번호' : '비밀번호';
+      return `<section class="k-card"><div class="k-ch"><h2>기본 정보</h2></div><div class="k-cb"><div class="k-g2">
         <label class="k-f">이름<input class="k-in" type="text" data-in="itf" data-k="name" value="${esc(d.name)}" autocomplete="off"></label>
         <label class="k-f">아이디<input class="k-in" type="text" data-in="itf" data-k="id" value="${esc(d.id)}"${x ? ' readonly' : ''} autocomplete="off"><span class="k-hint">${x ? '변경 불가' : '영문 · 숫자 · . _ @ - 사용, 2자 이상'}</span></label>
-        <label class="k-f">비밀번호<input class="k-in" type="password" data-in="itf" data-k="password" value="${esc(d.password)}" autocomplete="new-password"><span class="k-hint">${x ? '변경 시에만 입력' : `${(admGot('users') || {}).password_min || 10}자 이상`}</span></label>
-        <div class="k-f">역할<div class="k-wrap g8">${['viewer', 'editor', 'approver', 'admin'].map((r) => `<label class="k-ck pill"><input type="checkbox" data-in="itf" data-k="r_${r}"${d[`r_${r}`] ? ' checked' : ''}>${WORK_ROLE[r]}</label>`).join('')}</div></div></div></div></section>`,
+        ${more ? `<label class="k-f">이메일<input class="k-in" type="email" data-in="itf" data-k="email" value="${esc(d.email)}" autocomplete="off" maxlength="120"></label>
+        <label class="k-f">사번<input class="k-in" type="text" data-in="itf" data-k="employee_no" value="${esc(d.employee_no)}" autocomplete="off" maxlength="40"></label>` : ''}
+        <div class="k-f">${pw}<input class="k-in" type="password" data-in="itf" data-k="password" value="${esc(d.password)}" autocomplete="new-password" aria-label="${pw}"><span class="k-hint">${x ? '변경 시에만 입력' : `${admMin(got)}자 이상`}</span>
+          ${more ? `<label class="k-ck mid k-14"><input type="checkbox" data-in="itf" data-k="must_change"${d.must_change ? ' checked' : ''}>다음 로그인 때 변경</label>` : ''}</div>
+        ${state}
+        <div class="k-f">역할<div class="k-wrap g8">${['viewer', 'editor', 'approver', 'admin'].map((r) => `<label class="k-ck pill"><input type="checkbox" data-in="itf" data-k="r_${r}"${d[`r_${r}`] ? ' checked' : ''}>${WORK_ROLE[r]}</label>`).join('')}</div></div>
+        ${more ? `<label class="k-f k-full">메모<textarea class="k-in" rows="3" data-in="itf" data-k="note" maxlength="500">${esc(d.note)}</textarea></label>` : ''}</div></div></section>`;
+    },
     checks: (d, x) => {
-      const got = admGot('users') || { users: [], password_min: 10 };
+      const got = admGot('users') || { users: [] }, min = admMin(got);
       const roles = ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]);
-      const admins = got.users.filter((u) => u.roles.includes('admin') && (!x || u.id !== x.id)).length;
+      const admins = admActiveAdmins(got, x), mail = d.email.trim().toLowerCase();
       const taken = !x && got.users.some((u) => u.id === d.id.trim());
+      const twin = !!mail && got.users.some((u) => (u.email || '').toLowerCase() === mail && (!x || u.id !== x.id));
       return [
         x ? null : { say: taken ? '이미 사용 중인 아이디' : '아이디 중복 없음', tone: !d.id.trim() ? 'note' : taken ? 'bad' : 'ok', word: !d.id.trim() ? '입력 대기' : '' },
-        { say: `비밀번호 ${got.password_min}자 이상`, tone: !d.password ? (x ? 'note' : 'warn') : d.password.length < got.password_min ? 'bad' : 'ok', word: !d.password ? (x ? '변경 안 함' : '입력 대기') : '' },
+        got.counts && mail ? { say: twin ? '같은 이메일의 사용자 있음' : '같은 이메일의 사용자 없음', tone: twin ? 'bad' : 'ok', error: '같은 이메일의 사용자가 있어 저장하지 못했습니다. 다른 이메일을 입력해 주세요.' } : null,
+        { say: `비밀번호 ${min}자 이상`, tone: !d.password ? (x ? 'note' : 'warn') : d.password.length < min ? 'bad' : 'ok', word: !d.password ? (x ? '변경 안 함' : '입력 대기') : '' },
         { say: '역할 1개 이상', tone: roles.length ? 'ok' : 'bad' },
-        x && x.roles.includes('admin') ? { say: '관리자 1명 이상 유지', tone: d.r_admin || admins ? 'ok' : 'bad' } : null,
+        x && x.roles.includes('admin') ? { say: '관리자 1명 이상 유지', tone: (d.r_admin && d.state !== 'disabled') || admins ? 'ok' : 'bad' } : null,
+        x && x.id === got.me && d.state === 'disabled' ? { say: '본인 계정 폐기 불가', tone: 'bad', error: '본인 계정은 폐기할 수 없어 저장하지 못했습니다. 다른 관리자에게 요청해 주세요.' } : null,
       ].filter(Boolean);
     },
     // what stops a save is said as the cause and what to do, the same sentence the server would answer with
     valid: (d, x) => {
-      const got = admGot('users') || { users: [], password_min: 10 }, min = got.password_min;
-      const admins = got.users.filter((u) => u.roles.includes('admin') && (!x || u.id !== x.id)).length;
+      const got = admGot('users') || { users: [] }, min = admMin(got);
+      const admins = admActiveAdmins(got, x);
       return !d.name.trim() ? '이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.' : !d.id.trim() ? '아이디가 없어 저장하지 못했습니다. 아이디를 입력해 주세요.'
         : !x && got.users.some((u) => u.id === d.id.trim()) ? `아이디 ${d.id.trim()}${josa(d.id.trim(), '이', '가')} 이미 있어 추가하지 못했습니다. 다른 아이디를 입력해 주세요.`
-          : !x && !d.password ? '비밀번호가 없어 저장하지 못했습니다. 비밀번호를 입력해 주세요.'
-            : d.password && d.password.length < min ? `비밀번호가 ${min}자보다 짧아 저장하지 못했습니다. ${min}자 이상 입력해 주세요.`
-              : !['viewer', 'editor', 'approver', 'admin'].some((r) => d[`r_${r}`]) ? '역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.'
-                : x && x.roles.includes('admin') && !d.r_admin && !admins ? '마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.' : '';
+          : d.email.trim() && !ADM_MAIL.test(d.email.trim()) ? '이메일 형식이 맞지 않아 저장하지 못했습니다. 이메일을 다시 입력해 주세요.'
+            : !x && !d.password ? '비밀번호가 없어 저장하지 못했습니다. 비밀번호를 입력해 주세요.'
+              : d.password && d.password.length < min ? `비밀번호가 ${min}자보다 짧아 저장하지 못했습니다. ${min}자 이상 입력해 주세요.`
+                : !['viewer', 'editor', 'approver', 'admin'].some((r) => d[`r_${r}`]) ? '역할이 없어 저장하지 못했습니다. 역할을 하나 이상 선택해 주세요.'
+                  : x && x.roles.includes('admin') && (!d.r_admin || d.state === 'disabled') && !admins ? '마지막 관리자의 관리자 역할은 해제할 수 없어 저장하지 못했습니다. 다른 사용자에게 관리자 역할을 먼저 지정해 주세요.' : '';
     },
     saves: () => [['적용', '저장 즉시'], ['기록', V2['sys-audit'] ? '<a href="#sys-audit">감사 로그</a>' : '감사 로그'], ['되돌리기', '편집으로 다시 수정']],
     save: async (d, x) => {
-      await api('admin/user/save', { id: d.id.trim(), name: d.name.trim(), password: d.password, roles: ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]), new: !x });
+      const more = !!(admGot('users') || {}).counts;
+      await api('admin/user/save', { id: d.id.trim(), name: d.name.trim(), password: d.password, roles: ['viewer', 'editor', 'approver', 'admin'].filter((r) => d[`r_${r}`]), new: !x,
+        ...(more ? { email: d.email.trim(), employee_no: d.employee_no.trim(), note: d.note.trim(), state: d.state === 'pending' ? undefined : d.state, must_change: !!d.password && d.must_change } : {}) });
       admAgain('users'); admAgain('members'); admAgain('audit'); admAgain('overview');
       return { said: x ? '사용자를 저장했습니다.' : '사용자를 추가했습니다.' };
     },
-    side: (d, x) => (!x ? '' : `<section class="k-card"><div class="k-ch"><h2>계정 폐기</h2></div><div class="k-cb"><p class="k-s" style="margin:0">즉시 로그아웃 · 감사 로그 기록</p>
-        <div class="k-wrap g8">${x.id === (admGot('users') || {}).me ? '<span class="k-s">본인 계정 폐기 불가</span>' : `<button class="k-btn dan" data-act="admUserDrop" data-id="${esc(x.id)}" data-name="${esc(x.name)}">폐기</button>`}${V2['sys-audit'] ? `<a class="k-lnk" href="#sys-audit">감사 로그${ki('chevR', 14, 1.75)}</a>` : ''}</div></div></section>`),
+    side: (d, x) => {
+      if (!x) return '';
+      const got = admGot('users') || {};
+      // how the account signs in, with what an admin can undo: a lock from failed sign-ins, a registered authenticator app
+      const sec = !got.counts || x.state === 'pending' ? '' : `<section class="k-card"><div class="k-ch"><h2>로그인 보안</h2></div>${kKv('상태', admUserState(x))}
+        ${x.locked ? kKv('잠금 해제 시각', esc(admWhen(x.locked_until))) : ''}${kKv('2단계 인증', x.two_factor ? kChip('사용 중', 'ok') : '사용 안 함')}${kKv('마지막 접속', admLastSeen(x))}
+        ${x.locked || x.two_factor ? `<div class="k-cb" style="padding-top:12px"><div class="k-wrap g8">${x.locked ? `<button class="k-btn" data-act="admUnlock" data-id="${esc(x.id)}">${ki('lock', 16, 1.75)}잠금 해제</button>` : ''}
+          ${x.two_factor ? `<button class="k-btn" data-act="admTfReset" data-id="${esc(x.id)}" data-name="${esc(x.name)}">2단계 인증 초기화</button>` : ''}</div></div>` : ''}</section>`;
+      const drop = x.state === 'pending' ? '' : `<section class="k-card"><div class="k-ch"><h2>계정 폐기</h2>${x.state === 'disabled' ? `<span class="k-pha k-push">${kChip('폐기됨')}</span>` : ''}</div><div class="k-cb"><p class="k-s" style="margin:0">즉시 로그아웃 · 감사 로그 기록</p>
+        <div class="k-wrap g8">${x.state === 'disabled' ? '' : x.id === got.me ? '<span class="k-s">본인 계정 폐기 불가</span>' : `<button class="k-btn dan" data-act="admUserDrop" data-id="${esc(x.id)}" data-name="${esc(x.name)}">폐기</button>`}${V2['sys-audit'] ? `<a class="k-lnk" href="#sys-audit">감사 로그${ki('chevR', 14, 1.75)}</a>` : ''}</div></div></section>`;
+      return sec + drop;
+    },
   });
 
   // ---- SYS-05 인증 · 보안 -------------------------------------------------------------------------------------------
+  // the policy's numbers: [key, word, unit, least, most, hint]
+  const ADM_POL = [['session_hours', '세션 만료', '시간', 1, 168, '로그인 상태 유지를 선택하지 않은 경우'], ['keep_days', '로그인 상태 유지 기간', '일', 0, 90, '0이면 로그인 상태 유지 사용 안 함'],
+    ['password_min', '로컬 비밀번호 최소 길이', '자', 8, 64, ''], ['lock_after', '계정 잠금 기준', '회', 3, 20, '연속 로그인 실패 횟수'], ['lock_minutes', '계정 잠금 시간', '분', 1, 1440, '']];
+  const admIps = (text) => String(text || '').split(/[\n,]/).map((x) => x.trim()).filter(Boolean);  // one a line, or a comma between
+  // the policy as typed and not saved; read again from the server when nothing was typed
+  function admPol(d) {
+    const A = S.adm;
+    if (!A.pol || (A.polOf !== d && !A.polDirty)) {
+      const p = d.policy || {};
+      A.pol = { ...p, allow_ip: (p.allow_ip || []).join('\n') };
+      A.polOf = d;
+    }
+    return A.pol;
+  }
+  function admPolicyCard(d) {
+    const p = d.policy || {}, kv = (k, v) => kKv(k, v);
+    const facts = `${kKv('비밀번호 보관', `<span class="k-code k-ink">${esc(d.hash)}</span> · ${Number(d.iterations).toLocaleString('ko-KR')}회`)}
+      ${kKv('로그인 시도 제한', `IP당 분당 ${d.tries_per_minute}회`)}${kKv('로그인 쿠키', 'HttpOnly · SameSite=Strict · HTTPS Secure')}${kKv('요청 출처 확인', '타 사이트 요청 차단')}`;
+    if (!d.editable) {  // the users are held in memory only: the policy is what the server started with
+      return `<section class="k-card"><div class="k-ch"><h2>보안 정책</h2><span class="k-pha k-push">${kChip('적용 중', 'ok')}${kChip('변경 불가')}</span></div>
+        ${ADM_POL.map(([k, w, unit]) => kv(w, p[k] === 0 && k === 'keep_days' ? '사용 안 함' : `${esc(p[k])}${unit}`)).join('')}
+        ${kv('2단계 인증', p.two_factor ? '모든 사용자 필수' : '사용자별 설정')}${kv('회원가입', p.signup ? '허용' : '허용 안 함')}${kv('허용 IP 대역', (p.allow_ip || []).length ? `<span class="k-code k-ink">${esc(p.allow_ip.join(' · '))}</span>` : '제한 없음')}${facts}</section>`;
+    }
+    const f = admPol(d);
+    const num = ([k, w, unit, lo, hi, hint]) => `<label class="k-f">${w}<input class="k-in" type="text" inputmode="numeric" data-in="admPol" data-k="${k}" value="${esc(f[k])}"><span class="k-hint">${lo}~${hi}${unit}${hint ? ` · ${hint}` : ''}</span></label>`;
+    const ck = (k, word) => `<label class="k-ck"><input type="checkbox" data-in="admPol" data-k="${k}"${f[k] ? ' checked' : ''}><span>${word}</span></label>`;
+    return `<section class="k-card"><div class="k-ch"><h2>보안 정책</h2><span class="k-pha k-push">${kChip('적용 중', 'ok')}${V2['sys-users'] ? `<a class="k-lnk" href="#sys-users">사용자 · 그룹${ki('chevR', 14, 1.75)}</a>` : ''}</span></div>
+      <div class="k-cb">${ck('two_factor', '모든 사용자에게 2단계 인증 필수')}${ck('signup', '회원가입 허용')}
+        <div class="k-g2">${ADM_POL.map(num).join('')}
+          <label class="k-f k-full">허용 IP 대역<textarea class="k-in mono" rows="3" data-in="admPol" data-k="allow_ip" placeholder="예: 10.0.0.0/8" spellcheck="false">${esc(f.allow_ip)}</textarea>
+            <span class="k-hint">한 줄에 하나씩 입력 · 비우면 모든 IP 허용</span></label></div>
+        ${d.client_ip ? `<div class="k-h k-14"><span class="k-mut">현재 접속 IP</span><span class="k-code k-ink">${esc(d.client_ip)}</span><button class="k-lnk" data-act="admPolIp">현재 IP 추가</button></div>` : ''}</div>
+      ${facts}</section>`;
+  }
   function admAuth() {
-    const head = kHead('인증 · 보안', '로그인 방식, 보안 정책, 외부 통신 범위를 확인합니다.');
+    const d0 = admGot('security'), A = S.adm;
+    const save = d0 && d0.team && d0.policy && d0.editable ? `<button class="k-btn pri" id="admpolsave" data-act="admPolSave"${A.polDirty && !A.polSaving ? '' : ' disabled'}>${A.polSaving ? '저장 중' : '저장'}</button>` : '';
+    const head = kHead('인증 · 보안', d0 && d0.team && d0.policy && d0.editable ? '로그인 방식, 보안 정책, 외부 통신 범위를 관리합니다.' : '로그인 방식, 보안 정책, 외부 통신 범위를 확인합니다.', save);
     return head + admBody('security', (d) => {
+      const p = d.team ? d.policy : null;
       const login = `<section class="k-card"><div class="k-ch"><h2>로그인 방식</h2><span class="k-pha k-push">${d.team ? kChip(d.users === null ? '로컬 계정' : `로컬 계정 · ${d.users}명`, 'ok') : kChip('팀 계정 사용 안 함')}</span></div>
-        ${admFact('로컬 계정', '사용자 파일 기반 아이디 · 비밀번호', d.team ? 'ok' : '', d.team ? '사용' : '사용 안 함')}${admFact('LDAP · SSO', '', '', '사용 안 함')}${admFact('2단계 인증', '', '', '사용 안 함')}${admFact('로그인 없는 접속', '방문자별 개별 공간', d.team ? '' : 'ok', d.team ? '사용 안 함' : '사용')}
+        ${admFact('로컬 계정', '사용자 파일 기반 아이디 · 비밀번호', d.team ? 'ok' : '', d.team ? '사용' : '사용 안 함')}${admFact('LDAP · SSO', '', '', '사용 안 함')}
+        ${p ? admFact('2단계 인증', '인증 앱 6자리 코드', p.two_factor ? 'ok' : '', p.two_factor ? '필수' : '선택') : admFact('2단계 인증', '', '', '사용 안 함')}${admFact('로그인 없는 접속', '방문자별 개별 공간', d.team ? '' : 'ok', d.team ? '사용 안 함' : '사용')}
         ${V2['sys-users'] ? `<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#sys-users">사용자 · 그룹${ki('chevR', 14, 1.75)}</a></div>` : ''}</section>`;
-      const policy = `<section class="k-card"><div class="k-ch"><h2>보안 정책</h2><span class="k-pha k-push">${kChip(d.team ? '적용 중' : '미적용', d.team ? 'ok' : '')}</span></div>
+      const policy = p ? admPolicyCard(d) : `<section class="k-card"><div class="k-ch"><h2>보안 정책</h2><span class="k-pha k-push">${kChip(d.team ? '적용 중' : '미적용', d.team ? 'ok' : '')}</span></div>
         ${kKv('세션 만료', `${d.session_hours}시간`)}${kKv('로컬 비밀번호 최소 길이', `${d.password_min}자`)}${kKv('비밀번호 보관', `<span class="k-code k-ink">${esc(d.hash)}</span> · ${Number(d.iterations).toLocaleString('ko-KR')}회`)}
         ${kKv('로그인 시도 제한', `IP당 분당 ${d.tries_per_minute}회`)}${kKv('로그인 쿠키', 'HttpOnly · SameSite=Strict · HTTPS Secure')}${kKv('요청 출처 확인', '타 사이트 요청 차단')}</section>`;
       const out = `<section class="k-card"><div class="k-ch"><h2>외부 통신</h2></div>
@@ -361,7 +446,8 @@
   const LLM_KIND_WORD = { openai: 'OpenAI 호환 API' };
 
   // ---- SYS-07 감사 로그 ---------------------------------------------------------------------------------------------
-  const ADM_KIND = { change: '정의 · 배포', action: '판정 · 처리', api: 'API', user: '사용자', setting: '설정', note: '활동' };
+  const ADM_KIND = { login: '로그인', change: '정의 · 배포', action: '판정 · 처리', api: 'API', user: '사용자', setting: '설정', note: '활동' };
+  const admKinds = () => Object.entries(ADM_KIND).filter(([k]) => k !== 'login' || inTeam());  // sign-ins are kept where people sign in
   const ADM_SPAN = [['all', '전체 기간'], ['7', '최근 7일'], ['30', '최근 30일'], ['pick', '직접 지정']];
   // a record's time is the server's local time (2026-11-18T08:54:00), read as this browser's local time
   const admInSpan = (at) => {
@@ -371,18 +457,18 @@
     return !!at && new Date(at).getTime() >= Date.now() - Number(A.aspan) * 86400000;
   };
   const admAuditHit = (r) => (S.adm.akind === 'all' || r.kind === S.adm.akind) && admInSpan(r.at) && (!S.adm.aq || `${r.by} ${r.text}`.toLowerCase().includes(S.adm.aq.toLowerCase()));
-  const admAuditRows = (d) => d.rows.filter(admAuditHit).slice(0, 200).map((r) => `<tr><td><span class="k-code k-mut">${esc(admWhen(r.at))}</span></td><td>${r.by ? esc(r.by) : '<span class="k-mut">-</span>'}</td><td>${kChip(ADM_KIND[r.kind] || r.kind)}</td><td>${esc(r.text)}</td></tr>`).join('')
-    || `<tr><td colspan="4" class="mut">${d.rows.length ? '검색 결과가 없습니다.' : '기록이 없습니다.'}</td></tr>`;
+  const admAuditRows = (d) => d.rows.filter(admAuditHit).slice(0, 200).map((r) => `<tr><td><span class="k-code k-mut">${esc(admWhen(r.at))}</span></td><td>${r.by ? esc(r.by) : '<span class="k-mut">-</span>'}</td><td>${kChip(ADM_KIND[r.kind] || r.kind)}</td><td>${esc(r.text)}</td>${inTeam() ? `<td>${r.ip ? `<span class="k-code k-mut">${esc(r.ip)}</span>` : '<span class="k-mut">-</span>'}</td>` : ''}</tr>`).join('')
+    || `<tr><td colspan="${inTeam() ? 5 : 4}" class="mut">${d.rows.length ? '검색 결과가 없습니다.' : '기록이 없습니다.'}</td></tr>`;
   const admAuditFoot = (d) => `${Math.min(d.rows.filter(admAuditHit).length, 200)} / ${d.total}건 · ${d.kept ? '저널 보관' : '메모리 보관'}`;
   function admAudit() {
     const d0 = admGot('audit'), A = S.adm;
-    const head = kHead('감사 로그', '정의 변경, 배포, 판정, 외부 호출, 사용자 관리 기록을 조회합니다.', d0 && d0.rows.length ? '<button class="k-btn" data-act="admAuditCsv">CSV로 내보내기</button>' : '');
+    const head = kHead('감사 로그', `${inTeam() ? '로그인, ' : ''}정의 변경, 배포, 판정, 외부 호출, 사용자 관리 기록을 조회합니다.`, d0 && d0.rows.length ? '<button class="k-btn" data-act="admAuditCsv">CSV로 내보내기</button>' : '');
     return head + admBody('audit', (d) => {
-      const bar = `<div class="k-pha"><div class="k-x"><div class="k-seg" role="group" aria-label="기록 종류"><button class="${A.akind === 'all' ? 'on' : ''}" data-act="admAkind" data-k="all">전체</button>${Object.entries(ADM_KIND).map(([k, w]) => `<button class="${A.akind === k ? 'on' : ''}" data-act="admAkind" data-k="${k}">${w}${d.counts[k] ? `&nbsp;<span class="k-m12">${d.counts[k]}</span>` : ''}</button>`).join('')}</div></div>
+      const bar = `<div class="k-pha"><div class="k-x"><div class="k-seg" role="group" aria-label="기록 종류"><button class="${A.akind === 'all' ? 'on' : ''}" data-act="admAkind" data-k="all">전체</button>${admKinds().map(([k, w]) => `<button class="${A.akind === k ? 'on' : ''}" data-act="admAkind" data-k="${k}">${w}${d.counts[k] ? `&nbsp;<span class="k-m12">${d.counts[k]}</span>` : ''}</button>`).join('')}</div></div>
         <select class="k-in sm" style="width:auto" data-in="admAspan" aria-label="기간">${ADM_SPAN.map(([k, w]) => `<option value="${k}"${A.aspan === k ? ' selected' : ''}>${w}</option>`).join('')}</select>
         ${A.aspan === 'pick' ? `<input class="k-in sm" style="width:auto" type="date" data-in="admAday" data-k="afrom" aria-label="시작일" value="${esc(A.afrom)}"><input class="k-in sm" style="width:auto" type="date" data-in="admAday" data-k="ato" aria-label="종료일" value="${esc(A.ato)}">` : ''}
         <label class="k-search" style="flex:0 1 280px">${ki('search', 16, 1.75)}<input type="search" placeholder="사람 · 내용 검색" aria-label="사람 · 내용 검색" data-in="admAq" value="${esc(A.aq)}"></label></div>`;
-      return `${bar}<section class="k-card"><div class="k-ch"><h2>기록</h2></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">시각</th><th scope="col">사람</th><th scope="col">종류</th><th scope="col">내용</th></tr></thead><tbody id="admaudit">${admAuditRows(d)}</tbody></table></div>
+      return `${bar}<section class="k-card"><div class="k-ch"><h2>기록</h2></div><div class="k-x"><table class="k-t end adm-wide"><thead><tr><th scope="col">시각</th><th scope="col">사람</th><th scope="col">종류</th><th scope="col">내용</th>${inTeam() ? '<th scope="col">IP</th>' : ''}</tr></thead><tbody id="admaudit">${admAuditRows(d)}</tbody></table></div>
         <p class="k-cf" id="admauditfoot">${admAuditFoot(d)}</p></section>${kNext([['sys-users', '사용자 · 그룹'], ['sys-auth', '인증 · 보안'], ['sys-system', '시스템']])}`;
     });
   }
@@ -443,6 +529,14 @@
       if (box && d) box.innerHTML = users ? admUserRows(d) : admMemberRows(d);
     },
     admAq: (t) => { S.adm.aq = t.value; admAuditShow(); },
+    admPol: (t) => {  // the policy as typed: kept until saved, the save button wakes
+      const A = S.adm;
+      if (!A.pol) return;
+      A.pol[t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value;
+      A.polDirty = true;
+      const b = $('#admpolsave');
+      if (b) b.disabled = false;
+    },
     admAspan: (t) => { S.adm.aspan = t.value; render(); },  // 직접 지정 brings the two dates, the others take them away
     admAday: (t) => { S.adm[t.dataset.k] = t.value; admAuditShow(); },
   });
@@ -484,7 +578,14 @@
     admPsel: (t) => { S.adm.psel = t.dataset.n; render(); if (t.tagName === 'BUTTON') admRefocus('admPsel', t.dataset.n); },
     admVsel: (t) => { S.adm.vsel = t.dataset.n; render(); if (t.tagName === 'BUTTON') admRefocus('admVsel', t.dataset.n); },
     admAkind: (t) => { S.adm.akind = t.dataset.k; render(); },
-    admUsersCsv: () => { const d = admGot('users'); if (d) admCsv('ontlas-users.csv', ['아이디', '이름', '역할'], d.users.filter((u) => admUserHit(u, S.adm.uq)).map((u) => [u.id, u.name, u.roles.map((r) => WORK_ROLE[r] || r).join(' · ')])); },
+    admUsersCsv: () => {
+      const d = admGot('users');
+      if (!d) return;
+      const more = !!d.counts, state = (u) => (u.state === 'pending' ? '승인 대기' : u.state === 'disabled' ? '폐기됨' : u.locked ? '잠금' : '사용');
+      admCsv('ontlas-users.csv', ['아이디', '이름', '역할', ...(more ? ['이메일', '사번', '상태', '2단계 인증', '마지막 접속'] : [])],
+        d.users.filter((u) => admUserHit(u, S.adm.uq) && (S.adm.ustate !== 'pending' || u.state === 'pending')).map((u) => [u.id, u.name, u.roles.map((r) => WORK_ROLE[r] || r).join(' · '),
+          ...(more ? [u.email || '', u.employee_no || '', state(u), u.two_factor ? '사용' : '', u.seen || u.signed_at || ''] : [])]));
+    },
     admOverviewCsv: () => {
       const d = admGot('overview');
       if (!d) return;
@@ -493,7 +594,7 @@
           return [x.label, admPacksSaid(x), x.source ? BACKEND_KIND[String(x.source).toLowerCase()] || x.source : '미연결', x.levels ? admLevel(x.levels) : '', x.version, admShare(x.accuracy),
             c.objects, c.entities, c.rules, c.pending, x.open ? '현재' : x.made ? entMadeWord() : '']; }));
     },
-    admAuditCsv: () => { const d = admGot('audit'); if (d) admCsv('ontlas-audit.csv', ['시각', '사람', '종류', '내용'], d.rows.filter(admAuditHit).map((r) => [r.at, r.by, ADM_KIND[r.kind] || r.kind, r.text])); },
+    admAuditCsv: () => { const d = admGot('audit'); if (d) admCsv('ontlas-audit.csv', ['시각', '사람', '종류', '내용', ...(inTeam() ? ['IP'] : [])], d.rows.filter(admAuditHit).map((r) => [r.at, r.by, ADM_KIND[r.kind] || r.kind, r.text, ...(inTeam() ? [r.ip || ''] : [])])); },
     admDiag: () => {
       const d = admGot('system');
       if (!d) return;
@@ -509,6 +610,59 @@
       A.testing = true; render();
       try { A.test = await api('admin/ai/test', {}); toast(A.test.ok ? '언어 모델 연결을 확인했습니다.' : '언어 모델이 응답하지 않아 연결을 확인하지 못했습니다. 모델 서버 상태를 확인해 주세요.', !A.test.ok); } catch (e) { fail(e); }
       A.testing = false; admAgain('ai'); render();
+    },
+    admUstate: (t) => { S.adm.ustate = t.dataset.k; render(); },
+    admApprove: async (t) => {  // with the role picked in its row
+      const pick = [...document.querySelectorAll('#main select[data-uid]')].find((x) => x.dataset.uid === t.dataset.id);
+      try {
+        await api('admin/user/approve', { id: t.dataset.id, roles: [pick ? pick.value : 'viewer'] });
+        ['users', 'members', 'audit', 'overview'].forEach(admAgain);
+        render();
+        toast('회원가입을 승인했습니다.');
+      } catch (e) { fail(e); }
+    },
+    admReject: async (t) => {
+      if (!window.confirm(`${t.dataset.name}의 회원가입 신청을 거절합니다. 신청 내용은 삭제됩니다.`)) return;
+      try {
+        await api('admin/user/reject', { id: t.dataset.id });
+        ['users', 'audit'].forEach(admAgain);
+        render();
+        toast('회원가입 신청을 거절했습니다.');
+      } catch (e) { fail(e); }
+    },
+    admUnlock: async (t) => {
+      try { await api('admin/user/unlock', { id: t.dataset.id }); ['users', 'audit'].forEach(admAgain); S.it = { key: '' }; render(); toast('잠금을 해제했습니다.'); } catch (e) { fail(e); }
+    },
+    admTfReset: async (t) => {
+      if (!window.confirm(`${t.dataset.name}의 2단계 인증을 초기화합니다. 다음 로그인 때 인증 앱을 다시 등록합니다.`)) return;
+      try { await api('admin/user/2fa/reset', { id: t.dataset.id }); ['users', 'audit'].forEach(admAgain); S.it = { key: '' }; render(); toast('2단계 인증을 초기화했습니다.'); } catch (e) { fail(e); }
+    },
+    admPolIp: () => {  // the address this browser comes from, added to the list so the save does not shut it out
+      const A = S.adm, d = admGot('security');
+      if (!A.pol || !d || !d.client_ip) return;
+      const rows = admIps(A.pol.allow_ip);
+      if (!rows.some((x) => x.split('/')[0] === d.client_ip)) rows.push(d.client_ip);  // the server keeps one address as x/32
+      A.pol.allow_ip = rows.join('\n');
+      A.polDirty = true;
+      render();
+    },
+    admPolSave: async () => {
+      const A = S.adm;
+      if (!A.pol || A.polSaving) return;
+      const out = { two_factor: !!A.pol.two_factor, signup: !!A.pol.signup, allow_ip: admIps(A.pol.allow_ip) };
+      for (const [k, w, unit, lo, hi] of ADM_POL) {
+        const text = String(A.pol[k] ?? '').trim();
+        if (!/^\d{1,5}$/.test(text) || Number(text) < lo || Number(text) > hi) { toast(`${w} 값이 ${lo}~${hi}${unit} 범위를 벗어나 저장하지 못했습니다. ${lo}에서 ${hi} 사이의 정수를 입력해 주세요.`, true); return; }
+        out[k] = Number(text);
+      }
+      A.polSaving = true; render();
+      try {
+        await api('admin/security/save', { policy: out });
+        Object.assign(A, { pol: null, polOf: null, polDirty: false });
+        ['security', 'users', 'audit'].forEach(admAgain);
+        toast('보안 정책을 저장했습니다.');
+      } catch (e) { fail(e); }
+      A.polSaving = false; render();
     },
     admUserDrop: async (t) => {
       if (!window.confirm(`사용자 ${t.dataset.name}${josa(t.dataset.name, '을', '를')} 폐기합니다.`)) return;

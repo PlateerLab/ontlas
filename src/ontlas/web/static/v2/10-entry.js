@@ -5,7 +5,8 @@
   // the role shown is the person's role on this server. In a team each person opens the one they look at; the others
   // stay where they are.
 
-  S.ent = { onto: null, sig: '', busy: false, err: '', q: '', kind: 'all', nw: null, more: null, moreFor: null, moreBusy: false, tab: 'todo', filt: 'assigned', out: false, filesBusy: false, acct: null, acctBusy: false, pwBusy: false };
+  S.ent = { onto: null, sig: '', busy: false, err: '', q: '', kind: 'all', nw: null, more: null, moreFor: null, moreBusy: false, tab: 'todo', filt: 'assigned', out: false, filesBusy: false, acct: null, acctBusy: false, pwBusy: false,
+    lg: null, note: null, prof: null, tf: null, tfOff: false };
 
   // ---- what a screen says when it has nothing to show, each with at least one thing to do next -------------------
   const ENT_STATE = {
@@ -287,32 +288,74 @@
   }
 
   // ---- the person's own screens ---------------------------------------------------------------------------------
-  // how this server lets people in (how long a sign-in lasts, whether a password can be changed here), read once
+  // how this server lets people in (how long a sign-in lasts, whether a password can be changed here)
+  // and the person's own account (the devices signed in among them), read again on each opening of 내 계정
   function entAcctNeed() {
     const e = S.ent;
-    if (e.acct || e.acctBusy) return;
+    if (e.acctBusy || (e.acct && !e.acctOld)) return;
     e.acctBusy = true;
+    e.acctOld = false;
     api('entry/me').then((x) => { e.acct = x; }).catch(() => { e.acct = {}; }).finally(() => { e.acctBusy = false; if ((S.tab === 'me' || S.tab === 'reset') && !entOut()) render(); });
   }
   const ENT_ROLE_SAY = { 관리자: '전체 작업 · 온톨로지 생성 · 삭제 · 관리', 승인자: '편집 · 승인 · 배포', 편집자: '정의 · 규칙 편집 · 변경 요청', 조회자: '조회 · 질문' };
+  const ENT_MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // the name and mail as typed and not saved; read again from the account when nothing was typed
+  function entProf() {
+    const e = S.ent, a = e.acct || {}, u = S.me.user || {};
+    if (!e.prof || (!e.prof.dirty && e.prof.of !== e.acct)) e.prof = { of: e.acct, name: u.name || '', email: a.email || '', dirty: false, busy: false };
+    return e.prof;
+  }
+  // the second step of signing in: on with a code from the app, off with the password, kept on where the server requires it
+  function entTwoFactor(acct) {
+    const e = S.ent, tf = acct.two_factor || {};
+    const state = `${tf.on ? kChip('사용 중', 'ok') : kChip('사용 안 함')}${tf.required ? kChip('필수', 'b') : ''}`;
+    const act = e.tf || e.tfOff ? '' : !tf.on ? '<button class="k-lnk" data-act="entTfStart">설정</button>' : tf.required ? '' : '<button class="k-lnk" data-act="entTfOff">해제</button>';
+    const row = kKv('2단계 인증', `<span class="k-h end g6">${state}${act}</span>`);
+    if (e.tf) {
+      return `${row}<div class="k-cb ent-tf"><p class="k-p s">인증 앱으로 QR 코드를 스캔하거나 비밀 키를 입력한 뒤, 앱에 표시된 6자리 코드를 입력해 주세요.</p>${entQr(e.tf.secret, e.tf.uri)}
+        <label class="k-f">앱에 표시된 6자리 코드<input class="k-in ent-code" type="text" id="mecode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></label>
+        <div class="k-h"><button class="k-btn pri" data-act="entTfOn">등록</button><button class="k-btn" data-act="entTfCancel">취소</button></div></div>`;
+    }
+    if (e.tfOff) {
+      return `${row}<div class="k-cb ent-tf"><p class="k-p s">2단계 인증을 해제하려면 현재 비밀번호를 입력해 주세요.</p><label class="k-f">현재 비밀번호${entPwIn('meoffpw', '현재 비밀번호', 'current-password')}</label>
+        <div class="k-h"><button class="k-btn dan" data-act="entTfOffGo">해제</button><button class="k-btn" data-act="entTfCancel">취소</button></div></div>`;
+    }
+    return row;
+  }
+  // where the account is signed in: each one signed out apart, or every one but this
+  function entDevices(acct) {
+    const list = acct.devices || [], others = list.filter((d) => !d.current).length;
+    const row = (d) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(d.agent || '알 수 없는 기기')}</span>
+      <span class="k-s">${esc([d.ip, d.at && `로그인 ${entWhen(d.at)}`, d.seen && `마지막 접속 ${entWhen(d.seen)}`].filter(Boolean).join(' · '))}</span></span>
+      <span class="k-h end">${d.current ? kChip('현재 기기', 'ok') : `<button class="k-lnk" data-act="entDevOut" data-id="${esc(d.id)}">로그아웃</button>`}</span></div>`;
+    return `<section class="k-card"><div class="k-ch"><h2>로그인한 기기</h2>${list.length ? `<span class="k-s">${list.length}대</span>` : ''}</div>
+      ${list.map(row).join('') || '<p class="k-cf line">불러오는 중입니다.</p>'}
+      ${others ? '<div class="k-cb" style="padding-top:12px"><button class="k-btn" data-act="entDevOut" data-id="others" style="align-self:flex-start">다른 기기 모두 로그아웃</button></div>' : ''}</section>`;
+  }
   function viewMe() {
     const team = inTeam(), u = team ? S.me.user : null, libs = S.st.libraries || [], sys = isSysAdmin() && firstAdmin('sys'), acct = S.ent.acct || {};
+    const p = team ? entProf() : null;
     const head = kHead('내 계정', '계정 정보와 역할을 확인합니다.',
-      `<a class="k-btn" href="#inbox">${ki('inbox', 16, 1.75)}할 일 · 알림</a>${team ? '<button class="k-btn" data-act="entLogout">로그아웃</button>' : ''}`);
+      `<a class="k-btn" href="#inbox">${ki('inbox', 16, 1.75)}할 일 · 알림</a>${team ? `<button class="k-btn" data-act="entLogout">로그아웃</button><button class="k-btn pri" id="entprofsave" data-act="entProfSave"${p.dirty && !p.busy ? '' : ' disabled'}>${p.busy ? '저장 중' : '저장'}</button>` : ''}`);
     const profile = `<section class="k-card"><div class="k-ch"><h2>프로필</h2></div><div class="k-cb"><div class="k-g2">
-      <label class="k-f">이름<input class="k-in" type="text" value="${esc(u ? u.name : S.st.who || '방문자')}" readonly>${team ? `<span class="k-hint">${acct.can_change_password ? '이름 변경 · 시스템 관리자' : '이름 · 비밀번호 변경 · 시스템 관리자'}</span>` : ''}</label>
-      ${u ? `<label class="k-f">아이디<input class="k-in mono" type="text" value="${esc(u.id)}" readonly></label>` : ''}</div>
+      ${team ? `<label class="k-f">이름<input class="k-in" type="text" data-in="entProf" data-k="name" value="${esc(p.name)}" maxlength="80" autocomplete="name"></label>
+      <label class="k-f">아이디<input class="k-in mono" type="text" value="${esc(u.id)}" readonly></label>
+      <label class="k-f">이메일<input class="k-in" type="email" data-in="entProf" data-k="email" value="${esc(p.email)}" maxlength="120" autocomplete="email"></label>`
+        : `<label class="k-f">이름<input class="k-in" type="text" value="${esc(S.st.who || '방문자')}" readonly></label>`}</div>
       </div></section>`;
     const guide = known('guide') ? `<a class="k-row" href="#guide"><span class="k-col"><span class="k-ink k-14">사용 안내</span><span class="k-s">화면 안내 · 소개 영상</span></span>${ki('chevR', 16, 1.75)}</a>` : '';
     const reset = isSysAdmin() && !inTeam() ? `<div class="k-row"><span class="k-col"><span class="k-ink k-14">초기화</span><span class="k-s">${S.st.data.kept ? '변경 내용 삭제 · 예시 상태 복원 · 저장소 파일 유지' : '업로드 데이터 · 변경 내용 삭제 · 예시 상태 복원'}</span></span><span class="k-h end"><button class="k-btn dan" data-act="reset">초기화</button></span></div>` : '';
     const help = guide || reset ? `<section class="k-card"><div class="k-ch"><h2>사용 안내 · 세션</h2></div>${guide}${reset}</section>` : '';
-    const security = `<section class="k-card"><div class="k-ch"><h2>로그인 보안</h2></div>${kKv('계정', team ? '로컬 계정' : '로그인 없음 · 방문자 세션')}${team ? kKv('비밀번호', acct.can_change_password ? `<a class="k-lnk" href="#reset">변경${ki('chevR', 14, 1.75)}</a>` : '<span class="k-s">시스템 관리자 변경</span>') + (acct.hours ? kKv('로그인 유지', `${esc(acct.hours)}시간`) : '')
+    const keep = acct.keep_days === undefined ? '' : kKv('로그인 상태 유지 기간', acct.keep_days ? `${esc(acct.keep_days)}일` : '사용 안 함');
+    const hours = acct.session_hours === undefined ? acct.hours : acct.session_hours;
+    const security = `<section class="k-card"><div class="k-ch"><h2>로그인 보안</h2></div>${kKv('계정', team ? '로컬 계정' : '로그인 없음 · 방문자 세션')}${team ? kKv('비밀번호', acct.can_change_password ? `<a class="k-lnk" href="#reset">변경${ki('chevR', 14, 1.75)}</a>` : '<span class="k-s">시스템 관리자 변경</span>')
+        + (acct.two_factor ? entTwoFactor(acct) : '') + keep + (hours ? kKv('세션 만료', `${esc(hours)}시간`) : '')
       : (acct.idle_minutes ? kKv('세션', `미사용 ${esc(acct.idle_minutes)}분 후 종료`) : '')}</section>`;
     const sysRow = `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${team ? (isSysAdmin() ? '시스템 관리자' : '사용자') : '세션 관리자'}</span><span class="k-s">${team ? (isSysAdmin() ? '시스템 역할 · 시스템 관리 전체' : '시스템 역할 · 온톨로지 작업') : '방문자 세션 · 전체 화면'}</span></span>${sys ? `<span class="k-h end"><a class="k-lnk" href="#${V2['sys-users'] ? 'sys-users' : sys}">시스템 관리${ki('chevR', 14, 1.75)}</a></span>` : ''}</div>`;
     const role = workRole();
     const rows = libs.map((x) => `<div class="k-row"><span class="k-col"><span class="k-ink k-14">${esc(x.label)} · ${esc(role)}</span><span class="k-s">작업 역할 · ${esc(ENT_ROLE_SAY[role] || '')}</span></span><span class="k-h end"><button class="k-lnk" data-act="entOpen" data-id="${esc(x.id)}"${entManages() ? ` data-go="${esc(entManages())}"` : ''}>${entManages() ? '온톨로지 관리' : '열기'}${ki('chevR', 14, 1.75)}</button></span></div>`).join('');
     const roles = `<section class="k-card"><div class="k-ch"><h2>역할 · 접근 범위</h2></div>${sysRow}${rows}<div class="k-cb" style="padding-top:12px"><a class="k-lnk flat" href="#ontologies">온톨로지 선택${ki('chevR', 14, 1.75)}</a></div></section>`;
-    return `${head}<div class="k-cols"><div class="k-v g24" style="flex:3 1 520px;min-width:0">${profile}${help}</div><div class="k-c2 wide">${security}${roles}</div></div>`;
+    return `${head}<div class="k-cols"><div class="k-v g24" style="flex:3 1 520px;min-width:0">${profile}${help}</div><div class="k-c2 wide">${security}${team && acct.devices ? entDevices(acct) : ''}${roles}</div></div>`;
   }
   screen('me', { area: 'bare', word: '내 계정', crumb: ['계정', '내 계정'], view: viewMe, after: entAcctNeed });
 
@@ -324,8 +367,8 @@
     if (!a.can_change_password) return `<div class="ent-narrow">${stateBlock('missing', { code: '', title: '비밀번호를 변경할 수 없는 계정입니다', say: '시스템 관리자에게 비밀번호 재설정을 요청해 주세요.', acts: [['#me', '내 계정', 'pri']] })}</div>`;
     return `<div class="ent-auth"><section class="k-card ent-form"><div><h1 class="k-h1" style="line-height:1.3">비밀번호 재설정</h1><p class="k-p" style="margin-top:4px;color:var(--muted)">로컬 계정의 비밀번호를 변경합니다.</p></div>
         <label class="k-f">현재 비밀번호<input class="k-in" type="password" id="entpw0" autocomplete="current-password"></label>
-        <label class="k-f">새 비밀번호<input class="k-in" type="password" id="entpw1" autocomplete="new-password"><span class="k-hint">${esc(a.password_min)}자 이상</span></label>
-        <label class="k-f">새 비밀번호 확인<input class="k-in" type="password" id="entpw2" autocomplete="new-password"></label>
+        <label class="k-f">새 비밀번호<input class="k-in" type="password" id="entpw1" autocomplete="new-password" data-in="entReq">${entReq('entpw1', a.password_min || 8, true)}</label>
+        <label class="k-f">새 비밀번호 확인<input class="k-in" type="password" id="entpw2" autocomplete="new-password" data-in="entSame" data-of="entpw1">${entSame('entpw2')}</label>
         <button class="k-btn pri wide" data-act="entPw"${S.ent.pwBusy ? ' disabled' : ''}>비밀번호 변경</button>
         <span class="k-s">변경 시 모든 기기에서 로그아웃</span></section>
       <p class="ent-foot"><a href="#me">내 계정</a></p></div>`;
@@ -403,23 +446,122 @@
     } });
 
   // ---- sign-in --------------------------------------------------------------------------------------------------
+  // Every screen before signing in is one card in the middle: the name and a line under it, what the screen asks, a box
+  // for what the server answered, and the ways to the other screens at its foot. Signing in can take more than one
+  // step (the code of an authenticator app, registering one, a new password in place of a temporary one): each step is
+  // drawn in the same card with the ticket the step before gave.
   const entSignedIn = () => !(inTeam() && !S.me.user);  // signed in, or nobody signs in on this server
+  const ENT_SUB = '업무 정의와 규칙으로 답하는 온톨로지 플랫폼';
+  const ENT_ID_RULE = '영문, 숫자, 특수문자(. _ @ -)로 2자 이상';
+  const ENT_ID = /^[A-Za-z0-9][A-Za-z0-9._@-]{1,63}$/;  // as the server takes an id (admin.USER_ID)
+  // what a new password must be, ticked as it is typed: the length the server asks (the last three it checks itself)
+  const entReq = (id, min, recent) => `<span class="ent-req" id="${id}req"><span data-min="${min}">${ki('check', 14, 2)}${min}자 이상</span>${recent ? `<span>${ki('check', 14, 2)}최근 사용한 비밀번호 3개와 다름</span>` : ''}</span>`;
+  // whether the password typed again is the same, said under it once something is typed there
+  const entSame = (id) => `<span class="ent-match k-xs" id="${id}same" hidden></span>`;
+  const entMin = () => (S.me && S.me.password_min) || 0;  // known once the server says it before signing in; it checks it anyway
+  const entAuthCard = (body, foot = '', under = '') => `<div class="k-auth mid"><main><section class="k-card ent-login"><div class="ent-head">${brand('#login')}<p class="k-p s">${ENT_SUB}</p></div>
+    ${body}${foot ? `<div class="ent-links k-14">${foot}</div>` : ''}</section>${under}</main></div>`;
+  // a password box with a button that shows what was typed. ph: what it says inside where no label is over it; more: its
+  // own attributes (what checks the requirements as it is typed)
+  const entPwIn = (id, say, auto, ph = '', more = '') => `<span class="k-pw"><input class="k-in" type="password" id="${id}"${ph ? ` placeholder="${esc(ph)}"` : ''} aria-label="${esc(say)}" autocomplete="${auto}"${more}><button type="button" data-act="entEye" data-for="${id}" aria-label="비밀번호 보기" aria-pressed="false">${ki('eye', 18, 1.75)}</button></span>`;
+  // what the server answered, in the box above the button; set in place so what was typed stays
+  const entNoteBox = (id, n) => `<p class="k-note${n ? ` ${n.tone}` : ''}" id="${id}" role="alert"${n ? '' : ' hidden'}>${n ? esc(n.text) : ''}</p>`;
+  function entSay(id, tone, text) {
+    const box = $(`#${id}`);
+    if (id === 'lnote') S.ent.note = { tone, text };
+    if (box) { box.className = `k-note ${tone}`; box.textContent = text; box.hidden = false; }
+  }
+  const entKeyText = (s) => String(s || '').replace(/(.{4})(?=.)/g, '$1 ');
+  // the key an authenticator app takes: as a QR code of its otpauth address, and as text to type
+  function entQr(secret, uri) {
+    let qr = '';
+    try { qr = qrSvg(uri, 168, '인증 앱 등록 QR 코드'); } catch (_) { /* the key as text is enough */ }
+    return `<div class="ent-qr">${qr}<div class="k-v g4" style="flex:1 1 180px;min-width:0"><span class="k-s">비밀 키</span><span class="k-code k-ink ent-key">${esc(entKeyText(secret))}</span>
+      <button class="k-btn sm" type="button" data-act="copycode" data-v="${esc(secret)}" aria-label="비밀 키 복사" style="align-self:flex-start">${ki('copy', 16, 1.75)}복사</button></div></div>`;
+  }
+
+  function entLoginStep(lg) {
+    const go = (word) => `${entNoteBox('lnote', S.ent.note)}<button class="k-btn pri wide" data-act="login">${word}</button>`;
+    const code = '<input class="k-in ent-code" type="text" id="lcode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" aria-label="인증 코드 6자리">';
+    const head = (title, say) => `<div class="k-v g4"><h2 class="k-h2">${title}</h2><p class="k-p s">${say}</p></div>`;
+    if (lg.step === 'code') return `${head('2단계 인증', '인증 앱에 표시된 6자리 코드를 입력해 주세요.')}${code}${go('확인')}`;
+    if (lg.step === 'enroll') {
+      return `${head('2단계 인증 등록', '관리자 설정에 따라 2단계 인증 등록이 필요합니다. 인증 앱으로 QR 코드를 스캔하거나 비밀 키를 입력해 주세요.')}${entQr(lg.secret, lg.uri)}
+        <label class="k-f">앱에 표시된 6자리 코드${code}</label>${go('확인')}`;
+    }
+    return `${head('새 비밀번호 설정', '임시 비밀번호로 로그인하셨습니다. 계속하려면 새 비밀번호를 설정해 주세요.')}
+      <label class="k-f">새 비밀번호${entPwIn('lnew1', '새 비밀번호', 'new-password', '', ' data-in="entReq"')}${entReq('lnew1', lg.password_min || 8, true)}</label>
+      <label class="k-f">새 비밀번호 확인${entPwIn('lnew2', '새 비밀번호 확인', 'new-password', '', ' data-in="entSame" data-of="lnew1"')}${entSame('lnew2')}</label>${go('비밀번호 변경')}`;
+  }
   function viewLogin() {
     if (entSignedIn()) return '';  // the address leads in (after)
-    const expired = S.st && !S.ent.out;  // was inside and did not sign out: the sign-in ran out
-    S.ent.out = false;
-    return `<div class="k-auth">${brand('#')}<main>
-      <section class="k-card"><div><h1 class="k-h1" style="line-height:1.3">로그인</h1></div>
-        ${expired ? '<p class="k-note warn">로그인 유지 시간이 지나 로그아웃되었습니다. 다시 로그인해 주세요.</p>' : ''}
-        <label class="k-f">아이디<input class="k-in" type="text" id="luser" autocomplete="username" autofocus></label>
-        <label class="k-f">비밀번호<input class="k-in" type="password" id="lpw" autocomplete="current-password"></label>
-        <div class="k-h end"><button class="k-lnk flat" type="button" data-act="entForgot">비밀번호 재설정</button></div>
-        <button class="k-btn pri wide" data-act="login">로그인</button></section></main></div>`;
+    const e = S.ent;
+    if (S.st && !e.out) { e.out = true; e.note = { tone: 'warn', text: '로그인 시간이 만료되었습니다. 다시 로그인해 주세요.' }; }  // was inside and did not sign out
+    if (S.me.blocked && !e.note) e.note = { tone: 'bad', text: S.me.blocked };
+    if (e.lg) return entAuthCard(entLoginStep(e.lg), '<button class="k-lnk flat" type="button" data-act="entRestart">다른 계정으로 로그인</button>');
+    const keep = S.me.keep_days === 0 ? '' : '<label class="k-ck mid"><input type="checkbox" id="lkeep" checked>로그인 상태 유지</label>';
+    const join = S.me.signup ? '계정이 없으신가요? <a class="b" href="#signup">회원가입</a>' : '계정이 없으신가요? 관리자에게 요청해 주세요';
+    return entAuthCard(`<input class="k-in" type="text" id="luser" placeholder="아이디 또는 이메일을 입력해 주세요" aria-label="아이디 또는 이메일" autocomplete="username">
+      ${entPwIn('lpw', '비밀번호', 'current-password', '비밀번호를 입력해 주세요')}${keep}${entNoteBox('lnote', e.note)}
+      <button class="k-btn pri wide" data-act="login">로그인</button>`,
+    `<a href="#forgot">비밀번호 초기화</a><span>${join}</span>`, S.me.setup ? '<p class="ent-foot">처음 설치하셨나요? <a href="#setup">최초 설치 설정</a></p>' : '');
   }
-  // signing in on this address, or opening it already inside, goes on to the home: the address is not kept to come back to
-  screen('login', { area: 'auth', word: '로그인', find: false, view: viewLogin, after: () => { if (entSignedIn()) location.replace('#home'); } });
-  document.addEventListener('keydown', (ev) => {  // Enter on the sign-in form is the page's own (one try per press)
-    if (ev.key === 'Enter' && ev.target.id === 'entpw2') { ev.preventDefault(); ACT.entPw(); }
+  // signed in: what was read for whoever was signed in before is read again
+  const entFresh = () => Object.assign(S.ent, { lg: null, note: null, out: false, setupBusy: false, acct: null, prof: null, tf: null, tfOff: false });
+  // the screens before signing in: opened already inside, each goes on to the home (the address is not kept)
+  const entInside = () => { if (entSignedIn()) location.replace('#home'); };
+  screen('login', { area: 'auth', word: '로그인', find: false, view: viewLogin, after: entInside });
+
+  // no mail leaves this server: a new password is a temporary one an admin gives out
+  screen('forgot', { area: 'auth', word: '비밀번호 초기화', find: false, after: entInside,
+    view: () => (entSignedIn() ? '' : entAuthCard(`<div class="k-v g4"><h2 class="k-h2">비밀번호 초기화</h2><p class="k-p s">이메일 발송이 설정되어 있지 않아 비밀번호를 직접 초기화할 수 없습니다.</p></div>
+      <p class="k-note b">관리자에게 임시 비밀번호 발급을 요청해 주세요. 임시 비밀번호로 로그인하면 바로 새 비밀번호를 설정할 수 있습니다.</p>`, '<a href="#login">로그인 화면으로</a>')) });
+
+  // asking for an account: an admin approves it, with the role it gets
+  function viewSignup() {
+    if (entSignedIn()) return '';
+    const foot = '<span>이미 계정이 있으신가요? <a class="b" href="#login">로그인</a></span>';
+    if (!S.me.signup) return entAuthCard('<h2 class="k-h2">회원가입</h2><p class="k-note warn">현재 회원가입을 받지 않고 있습니다. 계정이 필요하면 관리자에게 요청해 주세요.</p>', foot);
+    const box = (id, say, auto, type = 'text', hint = '') => `<label class="k-f"><input class="k-in" type="${type}" id="${id}" placeholder="${say}" aria-label="${say}" autocomplete="${auto}">${hint ? `<span class="k-hint">${esc(hint)}</span>` : ''}</label>`;
+    return entAuthCard(`<h2 class="k-h2">회원가입</h2><p class="k-note b">가입 신청 후 관리자 승인이 완료되면 로그인할 수 있습니다.</p>
+      ${box('snid', '아이디', 'username', 'text', ENT_ID_RULE)}${box('snname', '이름 (선택)', 'name')}${box('snmail', '이메일', 'email', 'email')}
+      <label class="k-f">${entPwIn('snpw1', '비밀번호', 'new-password', '비밀번호', ' data-in="entReq"')}${entReq('snpw1', entMin() || 8, false)}</label>
+      <label class="k-f">${entPwIn('snpw2', '비밀번호 확인', 'new-password', '비밀번호 확인', ' data-in="entSame" data-of="snpw1"')}${entSame('snpw2')}</label>
+      ${entNoteBox('snnote')}<button class="k-btn pri wide" data-act="entSignup">회원가입</button>`, foot);
+  }
+  screen('signup', { area: 'auth', word: '회원가입', find: false, view: viewSignup, after: entInside });
+
+  // the first admin of a team server, made with the code the server wrote when it started
+  function viewSetup() {
+    if (entSignedIn()) return '';
+    if (!S.me.setup) return viewLogin();  // set up already: the sign-in form
+    const m = S.me.model, state = m === undefined ? '' : typeof m === 'object' && m ? m.state : m ? 'idle' : 'off';
+    const ai = state ? `<section class="k-card"><h2 class="k-h2">2 · AI 모델</h2><div class="k-h sb k-14"><span>언어 모델</span>${kChip(ADM_MODEL[state] || state, state === 'ok' ? 'ok' : state === 'bad' ? 'bad' : '')}</div>
+      <p class="k-p s">연결 시험은 로그인 후 관리 › 시스템 관리 › AI 운영에서 할 수 있습니다.</p></section>` : '';
+    return `<div class="k-auth">${brand('#login')}<main>
+      <section class="k-card"><div><h1 class="k-h1" style="line-height:1.3">최초 설치 설정</h1><p class="k-p" style="margin-top:4px;color:var(--muted)">설치 후 처음 한 번만 진행합니다. 시스템 관리자 계정을 만들어 주세요.</p></div></section>
+      <section class="k-card"><h2 class="k-h2">1 · 시스템 관리자</h2>
+        <label class="k-f">설치 코드<input class="k-in mono" type="text" id="sucode" autocomplete="off" spellcheck="false"><span class="k-hint">서버를 시작할 때 표시된 코드입니다. 사용자 파일 옆 .setup 파일에서도 확인할 수 있습니다.</span></label>
+        <label class="k-f">아이디<input class="k-in" type="text" id="suid" autocomplete="username"><span class="k-hint">${ENT_ID_RULE}</span></label>
+        <label class="k-f">이름<input class="k-in" type="text" id="suname" autocomplete="name" maxlength="80"><span class="k-hint">비워 두면 아이디로 표시됩니다.</span></label>
+        <label class="k-f">이메일<input class="k-in" type="email" id="sumail" autocomplete="email"><span class="k-hint">선택 · 로그인할 때 아이디 대신 쓸 수 있습니다.</span></label>
+        <label class="k-f">비밀번호${entPwIn('supw1', '비밀번호', 'new-password', '', ' data-in="entReq"')}${entReq('supw1', entMin() || 8, false)}</label>
+        <label class="k-f">비밀번호 확인${entPwIn('supw2', '비밀번호 확인', 'new-password', '', ' data-in="entSame" data-of="supw1"')}${entSame('supw2')}</label></section>
+      ${ai}${entNoteBox('sunote')}
+      <button class="k-btn pri wide" data-act="entSetup" data-go="ontology-new">설정 마치고 첫 온톨로지 만들기</button>
+      <button class="k-btn wide" data-act="entSetup" data-go="ontologies">설정 마치고 온톨로지 선택</button>
+      <p class="ent-foot">이미 설정하셨나요? <a href="#login">로그인</a></p></main></div>`;
+  }
+  screen('setup', { area: 'auth', word: '최초 설치 설정', find: false, view: viewSetup, after: entInside });
+
+  // before signing in the page draws nothing else: moving between these screens draws the one the address names
+  window.addEventListener('hashchange', () => { if (S.me && S.me.team && !S.me.user) { S.ent.lg = null; renderLogin(); } });
+  document.addEventListener('keydown', (ev) => {  // Enter in a form is that form's button (one try per press)
+    if (ev.key !== 'Enter' || ev.isComposing) return;
+    const id = ev.target.id || '', act = ['luser', 'lpw', 'lcode', 'lnew1', 'lnew2'].includes(id) ? 'login' : id === 'entpw2' ? 'entPw' : /^sn/.test(id) ? 'entSignup'
+      : id === 'mecode' ? 'entTfOn' : id === 'meoffpw' ? 'entTfOffGo' : '';
+    if (/^su/.test(id)) { ev.preventDefault(); $('[data-act=entSetup]').click(); return; }
+    if (act) { ev.preventDefault(); ACT[act](); }
   });
 
   // ---- arriving: the last ontology worked in, or the list to choose from ------------------------------------------
@@ -427,6 +569,7 @@
     const tab = location.hash.slice(1).split('?')[0] || 'home';
     if (S.st && areaOf(tab) === 'work') entRemember(S.st.library_id);
     if (S.st && tab === 'inbox' && !S.home.busy) loadInbox();  // others file and decide in between: the list is read on each opening
+    if (tab === 'me') S.ent.acctOld = true;  // other devices sign in and out in between
   });
   function entLand() {
     if (location.hash.length > 1) return;  // came to a screen by its address
@@ -486,15 +629,146 @@
     entTab: (t) => { S.ent.tab = t.dataset.k; render(); },
     entReload: () => location.reload(),
     entLogout: () => { S.ent.out = true; ACT.logout(); },
-    entForgot: () => {  // before signing in there is nothing to prove who asks: the way on is said
-      $('#main').innerHTML = `<div class="k-auth">${brand('#')}<main><section class="k-card"><div><h1 class="k-h1" style="line-height:1.3">비밀번호 재설정</h1>
-        <p class="k-p" style="margin-top:4px;color:var(--muted)">시스템 관리자에게 비밀번호 재설정을 요청해 주세요.</p></div>
-        <button class="k-btn wide" type="button" data-act="entBack">로그인</button></section></main></div>`;
+    // one press, one try: each counts against the server's limit a minute. The first step sends the account, the steps
+    // after it what they ask for with the ticket the step before gave
+    login: async () => {
+      const e = S.ent, lg = e.lg, b = $('[data-act=login]');
+      if (!b || b.disabled) return;
+      const val = (id) => ($(`#${id}`) || {}).value || '';
+      const say = (tone, text) => { entSay('lnote', tone, text); const f = $('#main input:not([type=checkbox])'); if (f && !f.value) f.focus(); };
+      let body;
+      if (!lg) {
+        body = { user: val('luser').trim(), password: val('lpw'), keep: !!($('#lkeep') || {}).checked };
+        if (!body.user || !body.password) { say('bad', '아이디와 비밀번호를 모두 입력해 주세요.'); return; }
+      } else if (lg.step === 'password') {
+        const next = val('lnew1'), min = lg.password_min || 8;
+        if (next.length < min) { say('bad', `새 비밀번호는 ${min}자 이상이어야 합니다.`); return; }
+        if (next !== val('lnew2')) { say('bad', '비밀번호가 일치하지 않습니다.'); return; }
+        body = { ticket: lg.ticket, new_password: next };
+      } else {
+        const code = val('lcode').replace(/\s/g, '');
+        if (!/^\d{6}$/.test(code)) { say('bad', '인증 코드 6자리를 숫자로 입력해 주세요.'); return; }
+        body = lg.step === 'enroll' ? { ticket: lg.ticket, code, secret: lg.secret } : { ticket: lg.ticket, code };
+      }
+      const was = b.textContent;
+      b.disabled = true; b.textContent = !lg ? '로그인 중' : lg.step === 'password' ? '변경 중' : '확인 중';
+      try {
+        const r = await api('login', body);
+        if (r.step) {
+          Object.assign(e, { lg: r, note: null });
+          renderLogin();
+          const f = $('#main input'); if (f) f.focus();
+          return;
+        }
+        entFresh();
+        S.me = { team: true, user: r.user };
+        await load();
+      } catch (err) {
+        // a locked or stopped account, one not approved yet, an address not let in, a step that waited too long: said on
+        // the first step, started again
+        if (lg && (err.status === 423 || err.status === 403 || (err.body && err.body.expired))) { Object.assign(e, { lg: null, note: { tone: err.status === 423 ? 'warn' : 'bad', text: err.message } }); renderLogin(); return; }
+        say(err.status === 423 ? 'warn' : 'bad', err.message);
+        const now = $('[data-act=login]');
+        if (now) { now.disabled = false; now.textContent = was; }
+      }
     },
-    entBack: () => { S.ent.out = true; renderLogin(); },
+    entRestart: () => { Object.assign(S.ent, { lg: null, note: null }); renderLogin(); },
+    entEye: (t) => {  // what was typed in a password box, shown and hidden again
+      const box = $(`#${t.dataset.for}`);
+      if (!box) return;
+      const on = box.type === 'password';
+      box.type = on ? 'text' : 'password';
+      t.setAttribute('aria-pressed', String(on));
+      t.setAttribute('aria-label', on ? '비밀번호 숨기기' : '비밀번호 보기');
+      t.innerHTML = ki(on ? 'eyeOff' : 'eye', 18, 1.75);
+    },
+    entSignup: async () => {
+      const b = $('[data-act=entSignup]');
+      if (!b || b.disabled) return;
+      const val = (id) => ($(`#${id}`) || {}).value || '', min = entMin() || 8;
+      const body = { id: val('snid').trim(), name: val('snname').trim(), email: val('snmail').trim(), password: val('snpw1') };
+      const wrong = !body.id || !body.email || !body.password ? '필수 항목을 모두 입력해 주세요.'
+        : !ENT_ID.test(body.id) ? '아이디는 영문, 숫자, 특수문자(. _ @ -)로 2자 이상 입력해 주세요.'
+          : !ENT_MAIL.test(body.email) ? '올바른 이메일 주소를 입력해 주세요.'
+            : body.password.length < min ? `비밀번호는 ${min}자 이상이어야 합니다.`
+              : body.password !== val('snpw2') ? '비밀번호가 일치하지 않습니다.' : '';
+      if (wrong) { entSay('snnote', 'bad', wrong); return; }
+      b.disabled = true; b.textContent = '가입 중';
+      try {
+        await api('signup', body);
+        S.ent.note = { tone: 'b', text: '회원가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다.' };
+        location.hash = '#login';
+      } catch (err) { entSay('snnote', 'bad', err.message); b.disabled = false; b.textContent = '회원가입'; }
+    },
+    entSetup: async (t) => {
+      if (S.ent.setupBusy) return;
+      const val = (id) => ($(`#${id}`) || {}).value || '', min = entMin() || 8;
+      const body = { code: val('sucode').trim(), id: val('suid').trim(), name: val('suname').trim(), email: val('sumail').trim(), password: val('supw1') };
+      const wrong = !body.code ? '설치 코드를 입력해 주세요.'
+        : !ENT_ID.test(body.id) ? '아이디는 영문, 숫자, 특수문자(. _ @ -)로 2자 이상 입력해 주세요.'
+          : body.email && !ENT_MAIL.test(body.email) ? '올바른 이메일 주소를 입력해 주세요.'
+            : !body.password ? '비밀번호를 입력해 주세요.'
+              : body.password.length < min ? `비밀번호는 ${min}자 이상이어야 합니다.`
+                : body.password !== val('supw2') ? '비밀번호가 일치하지 않습니다.' : '';
+      if (wrong) { entSay('sunote', 'bad', wrong); return; }
+      S.ent.setupBusy = true;
+      const words = new Map([...document.querySelectorAll('[data-act=entSetup]')].map((x) => [x, x.textContent]));
+      words.forEach((_, x) => { x.disabled = true; });
+      t.textContent = '설정 중';
+      try {
+        const r = await api('setup', body);
+        entFresh();
+        S.me = r.user ? { team: true, user: r.user } : null;  // signed in as the admin just made
+        location.hash = `#${t.dataset.go}`;
+        await load();
+        toast('설치 설정을 마쳤습니다. 시스템 관리자로 로그인했습니다.');
+      } catch (err) {
+        S.ent.setupBusy = false;
+        entSay('sunote', 'bad', err.message);
+        words.forEach((w, x) => { x.disabled = false; x.textContent = w; });
+      }
+    },
+    entProfSave: async () => {
+      const p = entProf();
+      if (p.busy || !p.dirty) return;
+      const name = p.name.trim().replace(/\s+/g, ' '), email = p.email.trim();
+      if (!name) { toast('이름이 없어 저장하지 못했습니다. 이름을 입력해 주세요.', true); return; }
+      if (email && !ENT_MAIL.test(email)) { toast('이메일 형식이 맞지 않아 저장하지 못했습니다. 이메일을 다시 입력해 주세요.', true); return; }
+      p.busy = true; render();
+      try {
+        await api('entry/profile', { name, email });
+        S.me.user.name = name;
+        Object.assign(S.ent, { prof: null, acct: null });
+        toast('프로필을 저장했습니다.');
+      } catch (err) { p.busy = false; fail(err); }
+      render();
+    },
+    entTfStart: async () => {
+      try { S.ent.tf = await api('entry/2fa/start', {}); render(); const f = $('#mecode'); if (f) f.focus(); } catch (err) { fail(err); }
+    },
+    entTfOn: async () => {
+      const code = (($('#mecode') || {}).value || '').replace(/\s/g, '');
+      if (!/^\d{6}$/.test(code)) { toast('인증 코드가 6자리 숫자가 아니어서 확인하지 못했습니다. 인증 앱의 6자리 코드를 입력해 주세요.', true); return; }
+      try { await api('entry/2fa/on', { code }); Object.assign(S.ent, { tf: null, acct: null }); render(); toast('2단계 인증을 설정했습니다.'); } catch (err) { fail(err); }
+    },
+    entTfOff: () => { S.ent.tfOff = true; render(); const f = $('#meoffpw'); if (f) f.focus(); },
+    entTfOffGo: async () => {
+      const password = ($('#meoffpw') || {}).value || '';
+      if (!password) { toast('비밀번호를 입력하지 않아 해제하지 못했습니다. 현재 비밀번호를 입력해 주세요.', true); return; }
+      try { await api('entry/2fa/off', { password }); Object.assign(S.ent, { tfOff: false, acct: null }); render(); toast('2단계 인증을 해제했습니다.'); } catch (err) { fail(err); }
+    },
+    entTfCancel: () => { Object.assign(S.ent, { tf: null, tfOff: false }); render(); },
+    entDevOut: async (t) => {
+      const all = t.dataset.id === 'others';
+      try {
+        await api('entry/device/out', { id: t.dataset.id });
+        S.ent.acct = null; render();
+        toast(all ? '다른 기기에서 모두 로그아웃했습니다.' : '선택한 기기에서 로그아웃했습니다.');
+      } catch (err) { fail(err); }
+    },
     entPw: async () => {
       const e = S.ent, now = ($('#entpw0') || {}).value || '', next = ($('#entpw1') || {}).value || '', again = ($('#entpw2') || {}).value || '';
-      const min = (e.acct && e.acct.password_min) || 10;
+      const min = (e.acct && e.acct.password_min) || 8;
       if (e.pwBusy) return;
       if (!now || !next) { toast('비밀번호를 입력하지 않아 변경하지 못했습니다. 현재 비밀번호와 새 비밀번호를 입력해 주세요.', true); return; }
       if (next !== again) { toast('새 비밀번호와 확인 값이 달라 변경하지 못했습니다. 다시 입력해 주세요.', true); const el = $('#entpw2'); if (el) el.focus(); return; }
@@ -513,6 +787,20 @@
     },
   });
   Object.assign(INPUT, {
+    entReq: (t) => {  // a new password: its length ticked, and the box under the one typed again said again
+      const len = $(`#${t.id}req [data-min]`);
+      if (len) len.classList.toggle('ok', t.value.length >= Number(len.dataset.min));
+      const again = document.querySelector(`#main [data-of="${t.id}"]`);
+      if (again && again.value) INPUT.entSame(again);
+    },
+    entSame: (t) => {
+      const box = $(`#${t.id}same`), same = t.value === (($(`#${t.dataset.of}`) || {}).value || '');
+      if (!box) return;
+      box.hidden = !t.value;
+      box.className = `ent-match k-xs ${same ? 'k-ok' : 'k-bad'}`;
+      box.textContent = same ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.';
+    },
+    entProf: (t) => { const p = entProf(); p[t.dataset.k] = t.value; p.dirty = true; const b = $('#entprofsave'); if (b) b.disabled = false; },
     entQ: (t) => { S.ent.q = t.value; const box = $('#enttbody'); if (box) box.innerHTML = entRows(); },
     entNl: (t) => { entNew().label = t.value; },
     entNk: (t) => { entNew().key = t.value; },
