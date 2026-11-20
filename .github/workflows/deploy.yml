@@ -1,0 +1,71 @@
+name: Deploy
+
+# When CI passes on a push to main, bring https://ontlas.com up to that commit.
+# The server (go243, behind a Cloudflare Tunnel) takes the request at /_deploy, checks the commit is on main,
+# pulls it, reinstalls, restarts ontlas and rolls back if the page stops answering. An older commit is skipped.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ontlas-com
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ontlas.com
+      url: https://ontlas.com
+    env:
+      HOOK: https://ontlas.com/_deploy
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      TOKEN: ${{ secrets.ONTLAS_DEPLOY_TOKEN }}
+    steps:
+      - name: Ask the server to deploy
+        run: |
+          auth() { curl -sS --max-time 30 -K <(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN") "$@"; }
+          echo "commit $SHA"
+          for i in $(seq 1 60); do
+            code=$(auth -o resp.json -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+              -d "{\"sha\":\"$SHA\"}" "$HOOK") || code=000
+            [ "$code" = 202 ] && break
+            if [ "$code" = 409 ] || [ "$code" = 000 ] || [ "${code:0:1}" = 5 ]; then
+              echo "server busy or unreachable ($code), waiting"; sleep 10; continue
+            fi
+            echo "deploy request refused ($code)"; cat resp.json; exit 1
+          done
+          [ "$code" = 202 ] || { echo "the server never took the request"; exit 1; }
+          for i in $(seq 1 180); do
+            auth -o status.json "$HOOK/status?sha=$SHA" || { sleep 5; continue; }
+            state=$(jq -r .state status.json)
+            [ "$state" = running ] || break
+            sleep 5
+          done
+          jq -r .log status.json
+          echo "state: $state"
+          case "$state" in
+            deployed|skipped) ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Check the page answers
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 https://ontlas.com/) || code=000
+            [ "$code" = 200 ] && { echo "https://ontlas.com answers 200"; exit 0; }
+            sleep 5
+          done
+          echo "https://ontlas.com answers $code"; exit 1
